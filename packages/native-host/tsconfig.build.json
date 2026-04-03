@@ -1,13 +1,13 @@
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "lib": ["ES2022"],
     "types": ["node"],
-    "rootDir": "src/native-host",
-    "outDir": ".ts-emit/native-host",
+    "rootDir": "src",
+    "outDir": "out",
     "declaration": false,
     "sourceMap": false,
     "removeComments": false,
@@ -15,7 +15,5 @@
     "skipLibCheck": true,
     "noEmit": false
   },
-  "include": [
-    "src/native-host/**/*.mts"
-  ]
+  "include": ["src/**/*.mts"]
 }

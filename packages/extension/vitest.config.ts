@@ -1,6 +1,15 @@
+import { createRequire } from "node:module";
 import { defineConfig } from "vitest/config";
 
+const require = createRequire(import.meta.url);
+const idbPath = require.resolve("idb/build/index.js");
+
 export default defineConfig({
+  resolve: {
+    alias: {
+      "../vendor/idb.js": idbPath
+    }
+  },
   test: {
     environment: "node",
     coverage: {
@@ -22,8 +31,7 @@ export default defineConfig({
         "src/lib/request-lifecycle.ts",
         "src/lib/root-handle.ts",
         "src/lib/session-controller.ts",
-        "src/lib/storage-layout.ts",
-        "src/native-host/lib.mts"
+        "src/lib/storage-layout.ts"
       ],
       thresholds: {
         statements: 90,

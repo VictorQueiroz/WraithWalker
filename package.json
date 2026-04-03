@@ -2,37 +2,16 @@
   "name": "wraithwalker",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "packageManager": "npm@11.9.0",
+  "workspaces": ["packages/*"],
   "scripts": {
-    "generate:icons": "node --import tsx scripts/generate-icons.ts",
-    "build": "node --import tsx scripts/build.ts",
-    "build:extension": "node --import tsx scripts/build.ts",
-    "build:lib": "node --import tsx scripts/build.ts",
-    "build:dist": "node --import tsx scripts/build.ts",
-    "test": "npm run build && vitest run --coverage",
-    "test:watch": "vitest",
-    "typecheck": "npm run typecheck:extension && npm run typecheck:node && npm run typecheck:tests",
-    "typecheck:extension": "tsc -p tsconfig.extension.json",
-    "typecheck:node": "tsc -p tsconfig.node.json",
-    "typecheck:tests": "tsc -p tsconfig.tests.json",
-    "check:background": "npm run build && node --check dist/background.js",
-    "check:popup": "npm run build && node --check dist/popup.js",
-    "check:options": "npm run build && node --check dist/options.js",
-    "check:offscreen": "npm run build && node --check dist/offscreen.js",
-    "check:native-host": "node --check native-host/host.mjs"
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "generate:icons": "turbo run generate:icons --filter=@wraithwalker/extension"
   },
   "devDependencies": {
-    "@resvg/resvg-js": "^2.6.2",
-    "@types/chrome": "^0.1.38",
-    "@types/node": "^25.5.0",
-    "@vitest/coverage-v8": "^3.2.4",
-    "fake-indexeddb": "^6.2.5",
-    "jsdom": "^29.0.1",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2",
-    "vitest": "^3.2.4"
-  },
-  "dependencies": {
-    "idb": "^8.0.3"
+    "turbo": "^2.5.4",
+    "typescript": "^6.0.2"
   }
 }

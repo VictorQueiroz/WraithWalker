@@ -6,14 +6,16 @@ import {
   type CopySpec,
   createBuildPaths,
   createDistRuntimeCopies,
-  createNativeHostCopies,
   createStaticExtensionCopies
 } from "./build-lib.js";
 
 const execFileAsync = promisify(execFile);
 
+import { createRequire } from "node:module";
+
 const ROOT = process.cwd();
-const TSC_PATH = path.join(ROOT, "node_modules", "typescript", "bin", "tsc");
+const require = createRequire(path.join(ROOT, "package.json"));
+const TSC_PATH = path.join(path.dirname(require.resolve("typescript/package.json")), "bin", "tsc");
 const PATHS = createBuildPaths(ROOT);
 
 async function runTsc(configPath) {
@@ -45,12 +47,7 @@ async function copyFiles(copySpecs: CopySpec[]) {
 
 async function buildRuntime() {
   await fs.rm(PATHS.emitDir, { recursive: true, force: true });
-
-  await runTsc(path.join(ROOT, "tsconfig.build.lib.json"));
-  await runTsc(path.join(ROOT, "tsconfig.build.node.json"));
-  await copyFiles(createNativeHostCopies(PATHS));
-
-  await fs.chmod(path.join(ROOT, "native-host", "host.mjs"), 0o755);
+  await runTsc(path.join(ROOT, "tsconfig.build.json"));
 }
 
 async function buildDist() {

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="extension/assets/logo.svg" alt="WraithWalker logo" width="120" />
+  <img src="packages/extension/static/assets/logo.svg" alt="WraithWalker logo" width="120" />
 </p>
 
 # WraithWalker
@@ -7,6 +7,15 @@
 WraithWalker is a Chrome extension for capturing, storing, and replaying network fixtures directly from your local filesystem. It uses `chrome.debugger` to intercept application requests, lets the browser fetch live responses when no fixture exists yet, persists those responses as editable files, and serves local files back on later requests for debugging and stateful UI testing.
 
 An optional native-messaging host can open the selected capture root in your editor without changing the extension's core capture and replay flow.
+
+## Monorepo Structure
+
+This project is a [Turborepo](https://turbo.build/) monorepo with two packages:
+
+| Package | Description |
+|---------|-------------|
+| [`packages/extension`](packages/extension/) | Chrome extension (service worker, popup, options, offscreen document, and shared library) |
+| [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration |
 
 ## Features
 
@@ -27,14 +36,12 @@ Build the packaged extension first:
 npm run build
 ```
 
-`dist/` is the canonical packaged extension output. It is assembled directly from the TypeScript emit output plus the static extension assets in [`extension/`](extension/).
+`packages/extension/dist/` is the canonical packaged extension output. It is assembled directly from the TypeScript emit output plus the static extension assets in [`packages/extension/static/`](packages/extension/static/).
 
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
 3. Click `Load unpacked`.
-4. Select the [`dist/`](dist/) directory.
-
-The repository root is no longer treated as an unpacked extension target. Static packaging assets live in [`extension/`](extension/), and browser runtime validation targets `dist/`.
+4. Select the [`packages/extension/dist/`](packages/extension/dist/) directory.
 
 ## Initial Setup
 
@@ -48,22 +55,18 @@ The repository root is no longer treated as an unpacked extension target. Static
 
 ## Native Host
 
-Reference files live in [`native-host/README.md`](native-host/README.md) and [`native-host/host.mjs`](native-host/host.mjs). The source of truth for the host now lives in [`src/native-host/host.mts`](src/native-host/host.mts) and [`src/native-host/lib.mts`](src/native-host/lib.mts).
+Reference files live in [`packages/native-host/README.md`](packages/native-host/README.md). The source of truth for the host lives in [`packages/native-host/src/host.mts`](packages/native-host/src/host.mts) and [`packages/native-host/src/lib.mts`](packages/native-host/src/lib.mts).
 
 The host is not packaged automatically. Setup is manual so you can adjust the final path, extension ID, and editor command for your environment.
 
 ## Verification
 
-Run the local checks that do not require dependencies:
+Run the local checks:
 
 ```bash
 npm run build
 npm test
-npm run check:background
-npm run check:popup
-npm run check:options
-npm run check:offscreen
-npm run check:native-host
+npm run typecheck
 ```
 
 ## Dependency Notes

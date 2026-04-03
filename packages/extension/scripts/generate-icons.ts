@@ -3,8 +3,8 @@ import path from "node:path";
 import { Resvg } from "@resvg/resvg-js";
 
 const ROOT = process.cwd();
-const SOURCE_SVG = path.join(ROOT, "extension", "assets", "logo.svg");
-const OUTPUT_DIR = path.join(ROOT, "extension", "assets", "icons");
+const SOURCE_SVG = path.join(ROOT, "static", "assets", "logo.svg");
+const OUTPUT_DIR = path.join(ROOT, "static", "assets", "icons");
 const ICON_SIZES = [16, 32, 48, 128] as const;
 
 async function ensureOutputDir(): Promise<void> {
