@@ -1,0 +1,660 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { STATIC_RESOURCE_MANIFEST_FILE } from "../src/lib/constants.js";
+import { createFixtureDescriptor } from "../src/lib/fixture-mapper.js";
+
+class MemoryFileHandle {
+  bytes: Uint8Array;
+
+  constructor() {
+    this.bytes = new Uint8Array();
+  }
+
+  async getFile() {
+    const bytes = this.bytes;
+    return {
+      text: async () => new TextDecoder().decode(bytes),
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      size: bytes.byteLength
+    };
+  }
+
+  async createWritable() {
+    return {
+      write: async (chunk: string | ArrayBuffer | ArrayBufferView) => {
+        if (typeof chunk === "string") {
+          this.bytes = new TextEncoder().encode(chunk);
+          return;
+        }
+        if (chunk instanceof ArrayBuffer) {
+          this.bytes = new Uint8Array(chunk);
+          return;
+        }
+        if (ArrayBuffer.isView(chunk)) {
+          this.bytes = new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+          return;
+        }
+        throw new Error(`Unsupported write chunk: ${String(chunk)}`);
+      },
+      close: async () => {}
+    };
+  }
+}
+
+class MemoryDirectoryHandle {
+  directories: Map<string, MemoryDirectoryHandle>;
+  files: Map<string, MemoryFileHandle>;
+
+  constructor() {
+    this.directories = new Map();
+    this.files = new Map();
+  }
+
+  async getDirectoryHandle(name: string, { create = false }: { create?: boolean } = {}) {
+    if (!this.directories.has(name)) {
+      if (!create) {
+        throw new Error(`Missing directory: ${name}`);
+      }
+      this.directories.set(name, new MemoryDirectoryHandle());
+    }
+    return this.directories.get(name);
+  }
+
+  async getFileHandle(name: string, { create = false }: { create?: boolean } = {}) {
+    if (!this.files.has(name)) {
+      if (!create) {
+        throw new Error(`Missing file: ${name}`);
+      }
+      this.files.set(name, new MemoryFileHandle());
+    }
+    return this.files.get(name);
+  }
+}
+
+async function writeMemoryFile(rootHandle: MemoryDirectoryHandle, relativePath: string, value: string | ArrayBuffer | ArrayBufferView) {
+  const parts = relativePath.split("/").filter(Boolean);
+  const fileName = parts.pop();
+  let current = rootHandle;
+
+  for (const part of parts) {
+    current = await current.getDirectoryHandle(part, { create: true });
+  }
+
+  const handle = await current.getFileHandle(fileName, { create: true });
+  const writer = await handle.createWritable();
+  await writer.write(value);
+  await writer.close();
+}
+
+async function loadOffscreenModule() {
+  vi.resetModules();
+  globalThis.__WRAITHWALKER_TEST__ = true;
+  return import("../src/offscreen.ts");
+}
+
+afterEach(() => {
+  delete globalThis.__WRAITHWALKER_TEST__;
+  vi.restoreAllMocks();
+});
+
+describe("offscreen entrypoint", () => {
+  it("ignores non-offscreen messages and reports root-state errors through fixture handlers", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      ensureRootSentinel: vi.fn(),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn()
+    });
+
+    await expect(runtime.handleMessage({ type: "session.getState" })).resolves.toBeUndefined();
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.hasFixture",
+        payload: {
+          descriptor: {
+            bodyPath: "fixtures/missing.bin",
+            requestPath: "fixtures/missing.request.json",
+            metaPath: "fixtures/missing.meta.json"
+          }
+        }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "No root directory selected.",
+      permission: undefined
+    });
+  });
+
+  it("returns a root error when no directory handle is stored", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      ensureRootSentinel: vi.fn(),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn()
+    });
+
+    await expect(runtime.handleMessage({ target: "offscreen", type: "fs.ensureRoot" })).resolves.toEqual({
+      ok: false,
+      error: "No root directory selected."
+    });
+  });
+
+  it("writes, detects, and reads fixtures from the selected root", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-1" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+    const descriptor = {
+      bodyPath: "fixtures/app.js",
+      requestPath: "fixtures/app.js.__request.json",
+      metaPath: "fixtures/app.js.__response.json"
+    };
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.writeFixture",
+        payload: {
+          descriptor,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/app.js",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-03T00:00:00.000Z"
+          },
+          response: {
+            body: "console.log('hello');",
+            bodyEncoding: "utf8",
+            meta: {
+              status: 200,
+              statusText: "OK",
+              headers: [{ name: "Content-Type", value: "application/javascript" }],
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              url: "https://cdn.example.com/app.js",
+              method: "GET",
+              capturedAt: "2026-04-03T00:00:00.000Z",
+              bodyEncoding: "utf8",
+              bodySuggestedExtension: "js"
+            }
+          }
+        }
+      })
+    ).resolves.toEqual({
+      ok: true,
+      descriptor,
+      sentinel: { rootId: "root-1" }
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.hasFixture",
+        payload: { descriptor }
+      })
+    ).resolves.toEqual({
+      ok: true,
+      exists: true
+    });
+
+    const readResult = await runtime.handleMessage({
+      target: "offscreen",
+      type: "fs.readFixture",
+      payload: { descriptor }
+    });
+
+    expect(readResult).toMatchObject({
+      ok: true,
+      exists: true,
+      meta: {
+        status: 200
+      },
+      sentinel: {
+        rootId: "root-1"
+      }
+    });
+    expect(readResult && "bodyBase64" in readResult ? readResult.bodyBase64 : undefined).toBeTypeOf("string");
+  });
+
+  it("writes a per-domain JSON manifest for mirrored static assets", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-5" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/static/app.bundle.js?v=123",
+      resourceType: "Script"
+    });
+
+    await runtime.handleMessage({
+      target: "offscreen",
+      type: "fs.writeFixture",
+      payload: {
+        descriptor,
+        request: {
+          topOrigin: "https://app.example.com",
+          url: descriptor.requestUrl,
+          method: "GET",
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: descriptor.bodyHash,
+          queryHash: descriptor.queryHash,
+          capturedAt: "2026-04-03T00:00:00.000Z"
+        },
+        response: {
+          body: "console.log('hello');",
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: descriptor.requestUrl,
+            method: "GET",
+            capturedAt: "2026-04-03T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      }
+    });
+
+    const domainDirectory = await rootHandle.getDirectoryHandle(descriptor.topOriginKey);
+    const manifestHandle = await domainDirectory.getFileHandle(STATIC_RESOURCE_MANIFEST_FILE);
+    const manifest = JSON.parse(await (await manifestHandle.getFile()).text());
+
+    expect(manifest.topOrigin).toBe("https://app.example.com");
+    expect(manifest.resourcesByPathname["/static/app.bundle.js"]).toEqual([
+      expect.objectContaining({
+        requestUrl: descriptor.requestUrl,
+        requestOrigin: "https://cdn.example.com",
+        bodyPath: expect.stringMatching(/^origins\/https__cdn\.example\.com\/assets\/static\/app\.bundle__q-/),
+        requestPath: expect.stringMatching(/__request\.json$/),
+        metaPath: expect.stringMatching(/__response\.json$/),
+        mimeType: "application/javascript",
+        resourceType: "Script"
+      })
+    ]);
+  });
+
+  it("replays simple-mode fixtures from the visible mirrored file even without sidecars", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-6" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/chunk-a.js?v=1",
+      siteMode: "simple"
+    });
+
+    await writeMemoryFile(rootHandle, descriptor.bodyPath, "console.log('simple');");
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.hasFixture",
+        payload: { descriptor }
+      })
+    ).resolves.toEqual({
+      ok: true,
+      exists: true
+    });
+
+    const readResult = await runtime.handleMessage({
+      target: "offscreen",
+      type: "fs.readFixture",
+      payload: { descriptor }
+    });
+
+    expect(readResult).toMatchObject({
+      ok: true,
+      exists: true,
+      request: {
+        url: descriptor.requestUrl,
+        method: "GET"
+      },
+      meta: {
+        status: 200,
+        statusText: "OK",
+        mimeType: "application/javascript"
+      }
+    });
+  });
+
+  it("writes the simple-mode manifest into the hidden metadata tree", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-7" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/chunk-a.js",
+      siteMode: "simple"
+    });
+
+    await runtime.handleMessage({
+      target: "offscreen",
+      type: "fs.writeFixture",
+      payload: {
+        descriptor,
+        request: {
+          topOrigin: "https://app.example.com",
+          url: descriptor.requestUrl,
+          method: "GET",
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: descriptor.bodyHash,
+          queryHash: descriptor.queryHash,
+          capturedAt: "2026-04-03T00:00:00.000Z"
+        },
+        response: {
+          body: "console.log('hello');",
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: descriptor.requestUrl,
+            method: "GET",
+            capturedAt: "2026-04-03T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      }
+    });
+
+    const manifestDir = await rootHandle.getDirectoryHandle(".wraithwalker");
+    const simpleDir = await manifestDir.getDirectoryHandle("simple");
+    const topOriginDir = await simpleDir.getDirectoryHandle(descriptor.topOriginKey);
+    const manifestHandle = await topOriginDir.getFileHandle(STATIC_RESOURCE_MANIFEST_FILE);
+    const manifest = JSON.parse(await (await manifestHandle.getFile()).text());
+
+    expect(manifest.resourcesByPathname["/assets/chunk-a.js"]).toEqual([
+      expect.objectContaining({
+        bodyPath: "cdn.example.com/assets/chunk-a.js",
+        requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/chunk-a.js.__request.json"
+      })
+    ]);
+  });
+
+  it("requests root permission on demand and supports binary fixture bodies", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const requestRootPermission = vi.fn().mockResolvedValue("granted");
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-2" }),
+      queryRootPermission: vi.fn().mockResolvedValueOnce("prompt").mockResolvedValue("granted"),
+      requestRootPermission,
+      base64ToBytes: (value) => Uint8Array.from(Buffer.from(value, "base64")),
+      arrayBufferToBase64: (buffer) => Buffer.from(buffer).toString("base64")
+    });
+    const descriptor = {
+      bodyPath: "fixtures/font.woff2",
+      requestPath: "fixtures/font.request.json",
+      metaPath: "fixtures/font.meta.json"
+    };
+
+    await expect(runtime.getRootState({ requestPermission: true })).resolves.toMatchObject({
+      ok: true,
+      permission: "granted",
+      sentinel: { rootId: "root-2" }
+    });
+    expect(requestRootPermission).toHaveBeenCalledWith(rootHandle);
+
+    await runtime.handleMessage({
+      target: "offscreen",
+      type: "fs.writeFixture",
+      payload: {
+        descriptor,
+        request: {
+          topOrigin: "https://app.example.com",
+          url: "https://cdn.example.com/font.woff2",
+          method: "GET",
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: "",
+          queryHash: "",
+          capturedAt: "2026-04-03T00:00:00.000Z"
+        },
+        response: {
+          body: "AQID",
+          bodyEncoding: "base64",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "font/woff2" }],
+            mimeType: "font/woff2",
+            resourceType: "Font",
+            url: "https://cdn.example.com/font.woff2",
+            method: "GET",
+            capturedAt: "2026-04-03T00:00:00.000Z",
+            bodyEncoding: "base64",
+            bodySuggestedExtension: "woff2"
+          }
+        }
+      }
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.readFixture",
+        payload: { descriptor }
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      exists: true,
+      bodyBase64: "AQID"
+    });
+  });
+
+  it("returns explicit errors for denied root permission and missing fixture files", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const permittedRoot = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(permittedRoot),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-3" }),
+      queryRootPermission: vi.fn().mockResolvedValue("denied"),
+      requestRootPermission: vi.fn().mockResolvedValue("denied")
+    });
+
+    await expect(runtime.getRootState()).resolves.toEqual({
+      ok: false,
+      error: "Root directory access is not granted.",
+      permission: "denied"
+    });
+
+    const readableRuntime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(new MemoryDirectoryHandle()),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-4" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    await expect(
+      readableRuntime.handleMessage({
+        target: "offscreen",
+        type: "fs.readFixture",
+        payload: {
+          descriptor: {
+            bodyPath: "fixtures/absent.bin",
+            requestPath: "fixtures/absent.request.json",
+            metaPath: "fixtures/absent.meta.json"
+          }
+        }
+      })
+    ).resolves.toEqual({
+      ok: true,
+      exists: false
+    });
+  });
+
+  it("returns an explicit error for unknown offscreen messages", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      }
+    });
+
+    await expect(
+      runtime.handleMessage({ target: "offscreen", type: "fs.unknown" })
+    ).resolves.toEqual({
+      ok: false,
+      error: "Unknown offscreen message: fs.unknown"
+    });
+  });
+
+  it("registers a runtime listener that forwards responses", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const listeners = [];
+    const runtimeApi = {
+      onMessage: {
+        addListener: vi.fn((listener) => listeners.push(listener))
+      }
+    };
+    const runtime = createOffscreenRuntime({
+      runtime: runtimeApi,
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined)
+    });
+
+    runtime.register();
+    const sendResponse = vi.fn();
+    const handled = listeners[0]({ target: "offscreen", type: "fs.ensureRoot" }, {}, sendResponse);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(handled).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: "No root directory selected."
+    });
+  });
+
+  it("registers listener branches for ignored and rejected runtime messages", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const listeners = [];
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((listener) => listeners.push(listener))
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockRejectedValue(new Error("Storage failed."))
+    });
+
+    runtime.register();
+    expect(listeners[0]({ type: "session.getState" }, {}, vi.fn())).toBeUndefined();
+
+    const sendResponse = vi.fn();
+    const handled = listeners[0]({ target: "offscreen", type: "fs.ensureRoot" }, {}, sendResponse);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(handled).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: "Storage failed."
+    });
+  });
+
+  it("bootstraps with the default runtime listener", async () => {
+    const { bootstrapOffscreen } = await loadOffscreenModule();
+    const chromeApi = {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      }
+    };
+    globalThis.chrome = chromeApi as any;
+
+    bootstrapOffscreen();
+
+    expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
+  });
+});

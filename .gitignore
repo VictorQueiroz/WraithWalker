@@ -1,0 +1,7 @@
+node_modules/
+coverage/
+.ts-emit/
+dist/
+vendor/
+.DS_Store
+*.log

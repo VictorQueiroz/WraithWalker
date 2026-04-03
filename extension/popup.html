@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WraithWalker</title>
+    <link rel="stylesheet" href="app.css">
+  </head>
+  <body class="popup-shell">
+    <section class="stack">
+      <div class="row spread">
+        <div class="row brand-lockup">
+          <img class="brand-logo" src="assets/logo.svg" alt="WraithWalker logo">
+          <div class="stack tight">
+            <span class="pill">WraithWalker</span>
+            <h2>Session control</h2>
+          </div>
+        </div>
+      </div>
+
+      <div id="session-pill" class="pill" data-state="inactive">Inactive</div>
+
+      <div class="status-grid">
+        <article class="status-card">
+          <div class="meta">Attached tabs</div>
+          <strong id="attached-tabs-count">0</strong>
+        </article>
+        <article class="status-card">
+          <div class="meta">Enabled origins</div>
+          <strong id="enabled-origins-count">0</strong>
+        </article>
+        <article class="status-card">
+          <div class="meta">Root access</div>
+          <strong id="root-status">Unknown</strong>
+        </article>
+        <article class="status-card">
+          <div class="meta">Native helper</div>
+          <strong id="helper-status">Unknown</strong>
+        </article>
+      </div>
+
+      <div class="row">
+        <button id="toggle-session" class="primary" type="button">Start session</button>
+        <button id="open-options" class="secondary" type="button">Options</button>
+      </div>
+      <div class="row">
+        <button id="verify-root" class="secondary" type="button">Check root access</button>
+        <button id="open-editor" class="secondary" type="button">Open in editor</button>
+      </div>
+
+      <div id="message-box" class="muted-box">The extension starts with no active sites.</div>
+
+      <div class="panel stack tight">
+        <div class="meta">Managed exact origins</div>
+        <div id="managed-sites" class="site-list"></div>
+      </div>
+    </section>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["chrome"],
+    "rootDir": "src",
+    "outDir": ".ts-emit",
+    "declaration": false,
+    "sourceMap": false,
+    "removeComments": false,
+    "newLine": "lf",
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/background.ts",
+    "src/popup.ts",
+    "src/options.ts",
+    "src/offscreen.ts",
+    "src/lib/**/*.ts",
+    "src/**/*.d.ts",
+    "types/**/*.d.ts"
+  ]
+}

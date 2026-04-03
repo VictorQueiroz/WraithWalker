@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WraithWalker Settings</title>
+    <link rel="stylesheet" href="app.css">
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="row brand-lockup hero-lockup">
+          <img class="brand-logo hero-logo" src="assets/logo.svg" alt="WraithWalker logo">
+          <span class="pill">WraithWalker</span>
+        </div>
+        <h1>Capture and replay network fixtures with exact-origin control.</h1>
+        <p>
+          Grant site access origin by origin, choose a local root directory, and optionally wire a native helper to open that directory in your editor.
+        </p>
+      </section>
+
+      <section class="grid two">
+        <article class="panel stack">
+          <div class="row spread">
+            <div>
+              <h2>Enabled origins</h2>
+              <p>Each entry requests runtime host access for one exact origin, with a storage mode and dump allowlist regex.</p>
+            </div>
+          </div>
+          <form id="site-form" class="stack">
+            <label class="stack tight">
+              <span>Exact origin</span>
+              <input id="site-origin" name="origin" placeholder="https://app.example.com" autocomplete="off" required>
+            </label>
+            <div class="row">
+              <button class="primary" type="submit">Add origin</button>
+            </div>
+          </form>
+          <div id="sites-empty" class="muted-box">No enabled origins yet.</div>
+          <div id="sites-list" class="site-list"></div>
+        </article>
+
+        <article class="panel stack">
+          <div>
+            <h2>Capture root</h2>
+            <p>Fixtures are stored directly on your file system under the directory you choose here.</p>
+          </div>
+          <div id="root-status" class="muted-box">No root directory selected.</div>
+          <div class="row">
+            <button id="choose-root" class="primary" type="button">Choose root directory</button>
+            <button id="reauthorize-root" class="secondary" type="button">Reauthorize access</button>
+          </div>
+          <pre id="root-meta" class="hidden"></pre>
+        </article>
+      </section>
+
+      <section class="panel stack">
+        <div>
+          <h2>Native helper</h2>
+          <p>
+            The extension uses native messaging only for opening the selected capture root in an editor. The helper is optional.
+          </p>
+        </div>
+        <form id="native-form" class="grid two">
+          <label class="stack tight">
+            <span>Native host name</span>
+            <input id="native-host-name" name="hostName" placeholder="com.wraithwalker.host">
+          </label>
+          <label class="stack tight">
+            <span>Editor command template</span>
+            <input id="native-command-template" name="commandTemplate" placeholder='code "$DIR"'>
+          </label>
+          <label class="stack tight" style="grid-column: 1 / -1;">
+            <span>Absolute root path</span>
+            <input id="native-root-path" name="rootPath" placeholder="/Users/you/wraithwalker-fixtures">
+          </label>
+          <div class="row" style="grid-column: 1 / -1;">
+            <button class="primary" type="submit">Save helper settings</button>
+            <button id="verify-helper" class="secondary" type="button">Verify helper</button>
+          </div>
+        </form>
+        <div id="native-status" class="muted-box">No helper verification has run yet.</div>
+      </section>
+
+      <section class="panel stack">
+        <div>
+          <h2>Reference files</h2>
+          <p>Manual setup instructions for the native-messaging host live in the repository.</p>
+        </div>
+        <div class="kv-list">
+          <div class="kv-item">
+            <strong>`native-host/README.md`</strong>
+            <div class="meta">Setup steps, manifest placement, and extension ID notes.</div>
+          </div>
+          <div class="kv-item">
+            <strong>`native-host/host.mjs`</strong>
+            <div class="meta">Reference Node.js native host with sentinel verification and command templating.</div>
+          </div>
+        </div>
+      </section>
+
+      <div id="flash" class="hidden"></div>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
