@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import manifest from "../extension/manifest.json" with { type: "json" };
+import manifest from "../static/manifest.json" with { type: "json" };
 
 describe("extension manifest", () => {
   it("declares the generated extension icon set", () => {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { openDirectory, substituteDirectory, verifyRoot } from "../src/native-host/lib.mts";
+import { openDirectory, substituteDirectory, verifyRoot } from "../src/lib.mts";
 
 async function createFixtureRoot() {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-"));
