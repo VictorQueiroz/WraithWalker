@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.11.1
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run release:check -- "${{ github.event.release.tag_name }}"
+      - run: npm publish --workspace @wraithwalker/mcp-server
+      - run: npm publish --workspace @wraithwalker/native-host
+      - run: npm publish --workspace @wraithwalker/cli

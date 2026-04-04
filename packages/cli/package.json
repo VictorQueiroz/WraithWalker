@@ -1,19 +1,48 @@
 {
   "name": "@wraithwalker/cli",
   "version": "0.1.0",
-  "private": true,
+  "description": "WraithWalker command-line tooling for fixture roots, context generation, and scenario workflows.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorQueiroz/WraithWalker.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/VictorQueiroz/WraithWalker/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/VictorQueiroz/WraithWalker/issues"
+  },
+  "keywords": [
+    "wraithwalker",
+    "cli",
+    "fixtures",
+    "chrome",
+    "mcp"
+  ],
+  "private": false,
   "type": "module",
+  "files": [
+    "out",
+    "README.md"
+  ],
   "bin": {
     "wraithwalker": "out/cli.mjs"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x out/cli.mjs",
+    "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
-    "@wraithwalker/mcp-server": "*",
-    "@wraithwalker/native-host": "*"
+    "@wraithwalker/mcp-server": "0.1.0",
+    "@wraithwalker/native-host": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

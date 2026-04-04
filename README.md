@@ -161,4 +161,6 @@ npm run typecheck  # type-check all packages
 
 CI runs typecheck, test, and build on every pull request and push to `main` via GitHub Actions.
 
+npm release bootstrap and GitHub Release publishing steps live in [`docs/npm-releases.md`](docs/npm-releases.md).
+
 IndexedDB access uses the [`idb`](https://www.npmjs.com/package/idb) package. Additional reference notes live in [`docs/`](docs/).

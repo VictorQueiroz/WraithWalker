@@ -2,13 +2,17 @@
   "name": "wraithwalker",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@11.9.0",
+  "license": "MIT",
+  "packageManager": "npm@11.11.1",
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "turbo run build",
-    "test": "turbo run test",
+    "test": "npm run test:release && turbo run test",
+    "test:release": "node --test scripts/release.test.mjs",
     "typecheck": "turbo run typecheck",
-    "generate:icons": "turbo run generate:icons --filter=@wraithwalker/extension"
+    "generate:icons": "turbo run generate:icons --filter=@wraithwalker/extension",
+    "release:prepare": "node scripts/release-prepare.mjs",
+    "release:check": "node scripts/release-check.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.4",

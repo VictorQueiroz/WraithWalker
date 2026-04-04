@@ -1,8 +1,30 @@
 {
   "name": "@wraithwalker/mcp-server",
   "version": "0.1.0",
-  "private": true,
+  "description": "MCP server for exposing WraithWalker fixture directories to AI agents.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorQueiroz/WraithWalker.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/VictorQueiroz/WraithWalker/tree/main/packages/mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/VictorQueiroz/WraithWalker/issues"
+  },
+  "keywords": [
+    "wraithwalker",
+    "mcp",
+    "model-context-protocol",
+    "fixtures",
+    "ai"
+  ],
+  "private": false,
   "type": "module",
+  "files": [
+    "out",
+    "README.md"
+  ],
   "exports": {
     "./fixture-reader": "./out/fixture-reader.mjs",
     "./fixture-diff": "./out/fixture-diff.mjs"
@@ -10,8 +32,15 @@
   "bin": {
     "wraithwalker-mcp": "out/server.mjs"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x out/server.mjs",
+    "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },

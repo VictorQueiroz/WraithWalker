@@ -1,13 +1,43 @@
 {
   "name": "@wraithwalker/native-host",
   "version": "0.1.0",
-  "private": true,
+  "description": "Native messaging host for WraithWalker editor integration and scenario management.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorQueiroz/WraithWalker.git",
+    "directory": "packages/native-host"
+  },
+  "homepage": "https://github.com/VictorQueiroz/WraithWalker/tree/main/packages/native-host#readme",
+  "bugs": {
+    "url": "https://github.com/VictorQueiroz/WraithWalker/issues"
+  },
+  "keywords": [
+    "wraithwalker",
+    "native-messaging",
+    "chrome",
+    "editor",
+    "scenarios"
+  ],
+  "private": false,
   "type": "module",
+  "files": [
+    "out",
+    "host-manifest.template.json",
+    "README.md"
+  ],
   "exports": {
     "./lib": "./out/lib.mjs"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x out/host.mjs",
+    "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
     "check": "node --check out/host.mjs"
