@@ -132,6 +132,30 @@ describe("fixture diff", () => {
     expect(diff.changed[0].bodyChanged).toBe(true);
   });
 
+  it("detects API endpoint changes in simple-mode scenarios", async () => {
+    const rootPath = await createRoot();
+    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "POST" };
+
+    // Simple-mode API fixtures live under .wraithwalker/simple/{topOriginKey}/origins/{requestOriginKey}/http/
+    const base = path.join(
+      rootPath, ".wraithwalker", "scenarios", "a",
+      ".wraithwalker", "simple", "https__app.example.com",
+      "origins", "https__api.example.com",
+      "http", "POST", "users__q-abc__b-def"
+    );
+    await fs.mkdir(base, { recursive: true });
+    await fs.writeFile(path.join(base, "response.meta.json"), JSON.stringify(meta), "utf8");
+    await fs.writeFile(path.join(base, "response.body"), '{"created":true}', "utf8");
+
+    // Scenario b: empty
+    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "b"), { recursive: true });
+
+    const diff = await diffScenarios(rootPath, "a", "b");
+    expect(diff.removed).toHaveLength(1);
+    expect(diff.removed[0].method).toBe("POST");
+    expect(diff.removed[0].pathname).toBe("/users");
+  });
+
   it("renders no-differences message", () => {
     const diff = { scenarioA: "a", scenarioB: "b", added: [], removed: [], changed: [] };
     const markdown = renderDiffMarkdown(diff);
