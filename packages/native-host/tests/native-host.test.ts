@@ -3,7 +3,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { openDirectory, substituteDirectory, verifyRoot } from "../src/lib.mts";
+import { listScenarios, openDirectory, saveScenario, substituteDirectory, switchScenario, verifyRoot } from "../src/lib.mts";
 
 async function createFixtureRoot() {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-"));
@@ -68,5 +68,87 @@ describe("native host helpers", () => {
     });
     expect(result.ok).toBe(true);
     expect(result.command).toBe(`true '${rootPath}'`);
+  });
+});
+
+describe("scenario management", () => {
+  async function createFixtureRootWithData() {
+    const rootPath = await createFixtureRoot();
+    // Create some fixture data
+    await fs.mkdir(path.join(rootPath, "cdn.example.com", "assets"), { recursive: true });
+    await fs.writeFile(path.join(rootPath, "cdn.example.com", "assets", "app.js"), "console.log('v1');");
+    return rootPath;
+  }
+
+  it("rejects invalid scenario names", async () => {
+    const rootPath = await createFixtureRoot();
+    await expect(saveScenario({ path: rootPath, expectedRootId: "root-123", name: "" })).rejects.toThrow("Scenario name must be");
+    await expect(saveScenario({ path: rootPath, expectedRootId: "root-123", name: "../escape" })).rejects.toThrow("Scenario name must be");
+    await expect(saveScenario({ path: rootPath, expectedRootId: "root-123", name: "has spaces" })).rejects.toThrow("Scenario name must be");
+  });
+
+  it("saves a scenario by copying fixture directories", async () => {
+    const rootPath = await createFixtureRootWithData();
+    const result = await saveScenario({ path: rootPath, expectedRootId: "root-123", name: "baseline" });
+
+    expect(result).toEqual({ ok: true, name: "baseline" });
+
+    const savedFile = path.join(rootPath, ".wraithwalker", "scenarios", "baseline", "cdn.example.com", "assets", "app.js");
+    const content = await fs.readFile(savedFile, "utf8");
+    expect(content).toBe("console.log('v1');");
+  });
+
+  it("lists available scenarios", async () => {
+    const rootPath = await createFixtureRootWithData();
+
+    // No scenarios yet
+    const empty = await listScenarios({ path: rootPath, expectedRootId: "root-123" });
+    expect(empty).toEqual({ ok: true, scenarios: [] });
+
+    // Save two scenarios
+    await saveScenario({ path: rootPath, expectedRootId: "root-123", name: "alpha" });
+    await saveScenario({ path: rootPath, expectedRootId: "root-123", name: "beta" });
+
+    const result = await listScenarios({ path: rootPath, expectedRootId: "root-123" });
+    expect(result).toEqual({ ok: true, scenarios: ["alpha", "beta"] });
+  });
+
+  it("switches to a saved scenario", async () => {
+    const rootPath = await createFixtureRootWithData();
+
+    // Save v1
+    await saveScenario({ path: rootPath, expectedRootId: "root-123", name: "v1" });
+
+    // Modify the current fixtures
+    await fs.writeFile(path.join(rootPath, "cdn.example.com", "assets", "app.js"), "console.log('v2');");
+
+    // Save v2
+    await saveScenario({ path: rootPath, expectedRootId: "root-123", name: "v2" });
+
+    // Switch back to v1
+    const result = await switchScenario({ path: rootPath, expectedRootId: "root-123", name: "v1" });
+    expect(result).toEqual({ ok: true, name: "v1" });
+
+    const content = await fs.readFile(path.join(rootPath, "cdn.example.com", "assets", "app.js"), "utf8");
+    expect(content).toBe("console.log('v1');");
+  });
+
+  it("rejects switching to a non-existent scenario", async () => {
+    const rootPath = await createFixtureRoot();
+    await expect(switchScenario({ path: rootPath, expectedRootId: "root-123", name: "missing" })).rejects.toThrow('Scenario "missing" does not exist.');
+  });
+
+  it("preserves the .wraithwalker directory when switching scenarios", async () => {
+    const rootPath = await createFixtureRootWithData();
+    await saveScenario({ path: rootPath, expectedRootId: "root-123", name: "test" });
+    await switchScenario({ path: rootPath, expectedRootId: "root-123", name: "test" });
+
+    // .wraithwalker should still exist with sentinel
+    const sentinel = JSON.parse(await fs.readFile(path.join(rootPath, ".wraithwalker", "root.json"), "utf8"));
+    expect(sentinel.rootId).toBe("root-123");
+
+    // Scenario should still be listed
+    const result = await listScenarios({ path: rootPath, expectedRootId: "root-123" });
+    expect(result.scenarios).toContain("test");
   });
 });

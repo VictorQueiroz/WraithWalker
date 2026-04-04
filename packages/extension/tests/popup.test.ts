@@ -18,6 +18,10 @@ function renderPopupMarkup() {
         <button id="editor-dropdown-toggle" type="button">&#9662;</button>
         <div id="editor-dropdown" class="hidden"></div>
       </div>
+      <div id="scenario-list"></div>
+      <input id="scenario-name" type="text" />
+      <button id="save-scenario" type="button">Save</button>
+      <button id="refresh-scenarios" type="button">Refresh</button>
       <div id="message-box"></div>
       <div id="managed-sites"></div>
     </section>
@@ -438,5 +442,65 @@ describe("popup entrypoint", () => {
     // Click outside
     document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(dropdown.classList.contains("hidden")).toBe(true);
+  });
+
+  it("saves a scenario and refreshes the list", async () => {
+    renderPopupMarkup();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce({
+          sessionActive: false, attachedTabIds: [], enabledOrigins: [],
+          rootReady: true, helperReady: false, lastError: ""
+        })
+        .mockResolvedValueOnce({ ok: true, name: "baseline" })
+        .mockResolvedValueOnce({ ok: true, scenarios: ["baseline"] }),
+      openOptionsPage: vi.fn()
+    };
+
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
+
+    (document.querySelector("#scenario-name") as HTMLInputElement).value = "baseline";
+    document.querySelector("#save-scenario")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+
+    expect(runtime.sendMessage).toHaveBeenCalledWith({ type: "scenario.save", name: "baseline" });
+    expect(document.querySelector("#message-box")?.textContent).toContain('Scenario "baseline" saved.');
+    expect(document.querySelector("#scenario-list")?.textContent).toContain("baseline");
+  });
+
+  it("renders scenario list with switch buttons", async () => {
+    renderPopupMarkup();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce({
+          sessionActive: false, attachedTabIds: [], enabledOrigins: [],
+          rootReady: true, helperReady: false, lastError: ""
+        })
+        .mockResolvedValueOnce({ ok: true, scenarios: ["v1", "v2"] })
+        .mockResolvedValueOnce({ ok: true, name: "v1" }),
+      openOptionsPage: vi.fn()
+    };
+
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
+
+    // Trigger refresh
+    document.querySelector("#refresh-scenarios")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+
+    const list = document.querySelector("#scenario-list") as HTMLElement;
+    expect(list.textContent).toContain("v1");
+    expect(list.textContent).toContain("v2");
+
+    // Click switch on first scenario
+    const switchBtn = list.querySelector("button");
+    switchBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+
+    expect(runtime.sendMessage).toHaveBeenCalledWith({ type: "scenario.switch", name: "v1" });
+    expect(document.querySelector("#message-box")?.textContent).toContain('Switched to "v1".');
   });
 });

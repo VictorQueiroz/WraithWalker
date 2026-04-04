@@ -2,7 +2,7 @@ import { getPreferredEditorId as defaultGetPreferredEditorId, setPreferredEditor
 import { DEFAULT_EDITOR_ID, EDITOR_PRESETS, POPUP_REFRESH_INTERVAL_MS } from "./lib/constants.js";
 import type { EditorPreset } from "./lib/constants.js";
 import { queryRequired } from "./lib/dom.js";
-import type { BackgroundMessage, ErrorResult, NativeOpenResult, RootReadyResult } from "./lib/messages.js";
+import type { BackgroundMessage, ErrorResult, NativeOpenResult, RootReadyResult, ScenarioListResult, ScenarioResult } from "./lib/messages.js";
 import type { SessionSnapshot } from "./lib/types.js";
 
 interface RuntimeApi {
@@ -34,6 +34,10 @@ interface PopupElements {
   openEditorButton: HTMLButtonElement;
   editorDropdownToggle: HTMLButtonElement;
   editorDropdown: HTMLDivElement;
+  scenarioList: HTMLDivElement;
+  scenarioNameInput: HTMLInputElement;
+  saveScenarioButton: HTMLButtonElement;
+  refreshScenariosButton: HTMLButtonElement;
 }
 
 function getErrorMessage(result: { error?: string }): string {
@@ -58,7 +62,11 @@ function getElements(documentRef: Document): PopupElements {
     verifyRootButton: queryRequired<HTMLButtonElement>("#verify-root", documentRef),
     openEditorButton: queryRequired<HTMLButtonElement>("#open-editor", documentRef),
     editorDropdownToggle: queryRequired<HTMLButtonElement>("#editor-dropdown-toggle", documentRef),
-    editorDropdown: queryRequired<HTMLDivElement>("#editor-dropdown", documentRef)
+    editorDropdown: queryRequired<HTMLDivElement>("#editor-dropdown", documentRef),
+    scenarioList: queryRequired<HTMLDivElement>("#scenario-list", documentRef),
+    scenarioNameInput: queryRequired<HTMLInputElement>("#scenario-name", documentRef),
+    saveScenarioButton: queryRequired<HTMLButtonElement>("#save-scenario", documentRef),
+    refreshScenariosButton: queryRequired<HTMLButtonElement>("#refresh-scenarios", documentRef)
   };
 }
 
@@ -210,6 +218,63 @@ export async function initPopup({
       elements.editorDropdown.classList.add("hidden");
     }
   });
+
+  async function refreshScenarios(): Promise<void> {
+    try {
+      const result = await sendMessage<ScenarioListResult>(runtime, { type: "scenario.list" });
+      if (!result.ok) {
+        elements.scenarioList.textContent = getErrorMessage(result as ErrorResult);
+        return;
+      }
+      if (result.scenarios.length === 0) {
+        elements.scenarioList.textContent = "No scenarios saved.";
+        return;
+      }
+      elements.scenarioList.replaceChildren(
+        ...result.scenarios.map((name) => {
+          const row = documentRef.createElement("div");
+          row.className = "row spread";
+          row.innerHTML = `<span>${name}</span>`;
+          const btn = documentRef.createElement("button");
+          btn.className = "secondary";
+          btn.textContent = "Switch";
+          btn.style.padding = "4px 10px";
+          btn.style.fontSize = "0.8rem";
+          btn.addEventListener("click", async () => {
+            const switchResult = await sendMessage<ScenarioResult>(runtime, { type: "scenario.switch", name });
+            setMessage(
+              elements,
+              switchResult.ok ? "success" : "error",
+              switchResult.ok ? `Switched to "${name}".` : getErrorMessage(switchResult as ErrorResult)
+            );
+          });
+          row.appendChild(btn);
+          return row;
+        })
+      );
+    } catch {
+      elements.scenarioList.textContent = "Could not load scenarios.";
+    }
+  }
+
+  elements.saveScenarioButton.addEventListener("click", async () => {
+    const name = elements.scenarioNameInput.value.trim();
+    if (!name) return;
+    try {
+      const result = await sendMessage<ScenarioResult>(runtime, { type: "scenario.save", name });
+      if (!result.ok) {
+        setMessage(elements, "error", getErrorMessage(result as ErrorResult));
+        return;
+      }
+      setMessage(elements, "success", `Scenario "${name}" saved.`);
+      elements.scenarioNameInput.value = "";
+      await refreshScenarios();
+    } catch (error) {
+      setMessage(elements, "error", error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  elements.refreshScenariosButton.addEventListener("click", refreshScenarios);
 
   // Load preferred editor and initialize
   const preferredId = await getPreferredEditorId();

@@ -32,11 +32,17 @@ export type SessionMessage =
   | { type: "session.start" }
   | { type: "session.stop" };
 
+export type ScenarioListResult = { ok: true; scenarios: string[] } | ErrorResult;
+export type ScenarioResult = { ok: true; name: string } | ErrorResult;
+
 export type BackgroundMessage =
   | SessionMessage
   | { type: "root.verify" }
   | { type: "native.verify" }
-  | { type: "native.open"; commandTemplate?: string; editorId?: string };
+  | { type: "native.open"; commandTemplate?: string; editorId?: string }
+  | { type: "scenario.list" }
+  | { type: "scenario.save"; name: string }
+  | { type: "scenario.switch"; name: string };
 
 export interface FixtureResponsePayload {
   body: string;
@@ -83,6 +89,8 @@ export type BackgroundMessageResult =
   | RootReadyResult
   | NativeVerifyResult
   | NativeOpenResult
+  | ScenarioListResult
+  | ScenarioResult
   | undefined;
 
 export type FixtureHasResult =

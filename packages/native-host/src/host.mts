@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import process from "node:process";
-import { openDirectory, verifyRoot } from "./lib.mjs";
+import { listScenarios, openDirectory, saveScenario, switchScenario, verifyRoot } from "./lib.mjs";
 
 interface NativeHostMessage {
   type?: string;
   path?: string;
   expectedRootId?: string;
   commandTemplate?: string;
+  name?: string;
 }
 
 export function writeMessage(payload: unknown): void {
@@ -24,6 +25,18 @@ export async function handleMessage(message: NativeHostMessage): Promise<unknown
 
   if (message.type === "openDirectory") {
     return openDirectory(message);
+  }
+
+  if (message.type === "saveScenario") {
+    return saveScenario(message);
+  }
+
+  if (message.type === "switchScenario") {
+    return switchScenario(message);
+  }
+
+  if (message.type === "listScenarios") {
+    return listScenarios(message);
   }
 
   throw new Error(`Unknown message type: ${message.type}`);

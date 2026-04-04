@@ -137,7 +137,10 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
     "session.stop",
     "root.verify",
     "native.verify",
-    "native.open"
+    "native.open",
+    "scenario.list",
+    "scenario.save",
+    "scenario.switch"
   ].includes(type || "");
 }
 
@@ -508,6 +511,35 @@ export function createBackgroundRuntime({
         const result = await openDirectoryInEditor(message.commandTemplate, message.editorId);
         await persistSnapshot();
         return result;
+      }
+      case "scenario.list": {
+        await refreshStoredConfig();
+        const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+          type: "listScenarios",
+          path: state.nativeHostConfig.rootPath,
+          expectedRootId: state.rootSentinel?.rootId
+        });
+        return result as { ok: true; scenarios: string[] };
+      }
+      case "scenario.save": {
+        await refreshStoredConfig();
+        const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+          type: "saveScenario",
+          path: state.nativeHostConfig.rootPath,
+          expectedRootId: state.rootSentinel?.rootId,
+          name: message.name
+        });
+        return result as { ok: true; name: string };
+      }
+      case "scenario.switch": {
+        await refreshStoredConfig();
+        const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+          type: "switchScenario",
+          path: state.nativeHostConfig.rootPath,
+          expectedRootId: state.rootSentinel?.rootId,
+          name: message.name
+        });
+        return result as { ok: true; name: string };
       }
     }
   }
