@@ -6,7 +6,8 @@ import {
   type CopySpec,
   createBuildPaths,
   createDistRuntimeCopies,
-  createStaticExtensionCopies
+  createStaticExtensionCopies,
+  rewriteIdbSpecifiers
 } from "./build-lib.js";
 
 const execFileAsync = promisify(execFile);
@@ -53,11 +54,7 @@ async function buildRuntime() {
 async function rewriteIdbImports(distLibDir: string) {
   const idbFile = path.join(distLibDir, "idb.js");
   const content = await fs.readFile(idbFile, "utf-8");
-  const rewritten = content.replace(
-    /from\s+["']idb["']/g,
-    'from "../vendor/idb.js"'
-  );
-  await fs.writeFile(idbFile, rewritten, "utf-8");
+  await fs.writeFile(idbFile, rewriteIdbSpecifiers(content), "utf-8");
 }
 
 async function buildDist() {
