@@ -489,6 +489,11 @@ describe("background entrypoint", () => {
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
 
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith({
+      target: "offscreen",
+      type: "fs.ensureRoot",
+      payload: { requestPermission: true }
+    });
     expect(chromeApi.debugger.attach).toHaveBeenCalledWith({ tabId: 5 }, "1.3");
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 5 }, "Network.enable");
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 5 }, "Network.setCacheDisabled", { cacheDisabled: true });
