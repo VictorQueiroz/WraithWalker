@@ -50,6 +50,16 @@ async function buildRuntime() {
   await runTsc(path.join(ROOT, "tsconfig.build.json"));
 }
 
+async function rewriteIdbImports(distLibDir: string) {
+  const idbFile = path.join(distLibDir, "idb.js");
+  const content = await fs.readFile(idbFile, "utf-8");
+  const rewritten = content.replace(
+    /from\s+["']idb["']/g,
+    'from "../vendor/idb.js"'
+  );
+  await fs.writeFile(idbFile, rewritten, "utf-8");
+}
+
 async function buildDist() {
   await fs.rm(PATHS.distDir, { recursive: true, force: true });
   await ensureDir(PATHS.distDir);
@@ -59,6 +69,7 @@ async function buildDist() {
   await copyDirectory(PATHS.libEmitDir, path.join(PATHS.distDir, "lib"));
   await ensureDir(PATHS.distVendorDir);
   await copyFile(PATHS.vendorSource, PATHS.distVendorFile);
+  await rewriteIdbImports(path.join(PATHS.distDir, "lib"));
 }
 
 async function main() {
