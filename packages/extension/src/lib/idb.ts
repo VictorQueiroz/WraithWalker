@@ -1,5 +1,5 @@
-import { openDB } from "../vendor/idb.js";
-import type { DBSchema, IDBPDatabase } from "../vendor/idb.js";
+import { openDB } from "idb";
+import type { DBSchema, IDBPDatabase } from "idb";
 import { IDB_NAME, IDB_STORE, IDB_VERSION } from "./constants.js";
 
 interface ExtensionDatabaseSchema extends DBSchema {

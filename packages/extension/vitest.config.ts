@@ -1,15 +1,6 @@
-import { createRequire } from "node:module";
 import { defineConfig } from "vitest/config";
 
-const require = createRequire(import.meta.url);
-const idbPath = require.resolve("idb/build/index.js");
-
 export default defineConfig({
-  resolve: {
-    alias: {
-      "../vendor/idb.js": idbPath
-    }
-  },
   test: {
     environment: "node",
     coverage: {
