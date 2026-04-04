@@ -13,11 +13,22 @@ function renderPopupMarkup() {
       <button id="toggle-session" type="button">Start session</button>
       <button id="open-options" type="button">Options</button>
       <button id="verify-root" type="button">Check root access</button>
-      <button id="open-editor" type="button">Open in editor</button>
+      <div id="editor-split">
+        <button id="open-editor" type="button">Open in VS Code</button>
+        <button id="editor-dropdown-toggle" type="button">&#9662;</button>
+        <div id="editor-dropdown" class="hidden"></div>
+      </div>
       <div id="message-box"></div>
       <div id="managed-sites"></div>
     </section>
   `;
+}
+
+function defaultEditorDeps() {
+  return {
+    getPreferredEditorId: vi.fn().mockResolvedValue("vscode"),
+    setPreferredEditorId: vi.fn().mockResolvedValue(undefined)
+  };
 }
 
 function flushPromises() {
@@ -53,7 +64,7 @@ describe("popup entrypoint", () => {
     };
     const setIntervalFn = vi.fn();
 
-    const popup = await initPopup({ document, runtime, setIntervalFn, refreshIntervalMs: 2500 });
+    const popup = await initPopup({ document, runtime, setIntervalFn, refreshIntervalMs: 2500, ...defaultEditorDeps() });
 
     expect(document.querySelector("#session-pill")?.textContent).toBe("Active");
     expect(document.querySelector("#attached-tabs-count")?.textContent).toBe("2");
@@ -99,7 +110,7 @@ describe("popup entrypoint", () => {
       openOptionsPage: vi.fn()
     };
 
-    await initPopup({ document, runtime, setIntervalFn: vi.fn() });
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
     document.querySelector("#toggle-session")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
 
@@ -127,7 +138,7 @@ describe("popup entrypoint", () => {
       openOptionsPage: vi.fn()
     };
 
-    await initPopup({ document, runtime, setIntervalFn: vi.fn() });
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
     document.querySelector("#open-options")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     document.querySelector("#verify-root")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
@@ -162,11 +173,11 @@ describe("popup entrypoint", () => {
       openOptionsPage: vi.fn()
     };
 
-    await initPopup({ document, runtime, setIntervalFn: vi.fn() });
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
     document.querySelector("#open-editor")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
 
-    expect(runtime.sendMessage).toHaveBeenNthCalledWith(2, { type: "native.open" });
+    expect(runtime.sendMessage).toHaveBeenNthCalledWith(2, { type: "native.open", commandTemplate: 'code "$DIR"' });
     expect(document.querySelector("#message-box")?.textContent).toContain("Editor launch failed.");
   });
 
@@ -185,7 +196,7 @@ describe("popup entrypoint", () => {
       openOptionsPage: vi.fn()
     };
 
-    const popup = await initPopup({ document, runtime, setIntervalFn: vi.fn() });
+    const popup = await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
     popup.renderState({
       sessionActive: false,
       attachedTabIds: [],
@@ -234,7 +245,7 @@ describe("popup entrypoint", () => {
       openOptionsPage: vi.fn()
     };
 
-    await initPopup({ document, runtime, setIntervalFn: vi.fn() });
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
     document.querySelector("#toggle-session")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
 
@@ -276,13 +287,155 @@ describe("popup entrypoint", () => {
       openOptionsPage: vi.fn()
     };
 
-    await initPopup({ document, runtime, setIntervalFn: vi.fn() });
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
     document.querySelector("#verify-root")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
     expect(document.querySelector("#message-box")?.textContent).toContain("root-42");
 
     document.querySelector("#open-editor")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
-    expect(document.querySelector("#message-box")?.textContent).toContain("Editor command dispatched.");
+    expect(document.querySelector("#message-box")?.textContent).toContain("Opened in VS Code.");
+  });
+
+  it("loads the preferred editor and updates the button label", async () => {
+    renderPopupMarkup();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue({
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: false,
+        helperReady: false,
+        lastError: ""
+      }),
+      openOptionsPage: vi.fn()
+    };
+
+    await initPopup({
+      document,
+      runtime,
+      setIntervalFn: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      setPreferredEditorId: vi.fn()
+    });
+
+    expect(document.querySelector("#open-editor")?.textContent).toBe("Open in Cursor");
+  });
+
+  it("shows and hides the editor dropdown on toggle click", async () => {
+    renderPopupMarkup();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue({
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: false,
+        helperReady: false,
+        lastError: ""
+      }),
+      openOptionsPage: vi.fn()
+    };
+
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
+
+    const dropdown = document.querySelector("#editor-dropdown") as HTMLElement;
+    expect(dropdown.classList.contains("hidden")).toBe(true);
+
+    document.querySelector("#editor-dropdown-toggle")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(dropdown.classList.contains("hidden")).toBe(false);
+
+    document.querySelector("#editor-dropdown-toggle")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(dropdown.classList.contains("hidden")).toBe(true);
+  });
+
+  it("switches editor on dropdown item click and persists the choice", async () => {
+    renderPopupMarkup();
+    const { initPopup } = await loadPopupModule();
+    const setPreferredEditorId = vi.fn().mockResolvedValue(undefined);
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce({
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: true,
+          helperReady: false,
+          lastError: ""
+        })
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce({
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: true,
+          helperReady: false,
+          lastError: ""
+        }),
+      openOptionsPage: vi.fn()
+    };
+
+    await initPopup({
+      document,
+      runtime,
+      setIntervalFn: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode"),
+      setPreferredEditorId
+    });
+
+    expect(document.querySelector("#open-editor")?.textContent).toBe("Open in VS Code");
+
+    // Open dropdown, click Cursor
+    document.querySelector("#editor-dropdown-toggle")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const items = document.querySelectorAll(".split-dropdown-item");
+    expect(items.length).toBe(4);
+
+    const cursorItem = Array.from(items).find((item) => item.textContent === "Cursor");
+    cursorItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+
+    expect(document.querySelector("#open-editor")?.textContent).toBe("Open in Cursor");
+    expect(setPreferredEditorId).toHaveBeenCalledWith("cursor");
+
+    // Dropdown should be hidden after selection
+    expect((document.querySelector("#editor-dropdown") as HTMLElement).classList.contains("hidden")).toBe(true);
+
+    // Now clicking open-editor should send the Cursor command template
+    document.querySelector("#open-editor")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+    expect(runtime.sendMessage).toHaveBeenCalledWith({
+      type: "native.open",
+      commandTemplate: 'cursor "$DIR"'
+    });
+    expect(document.querySelector("#message-box")?.textContent).toContain("Opened in Cursor.");
+  });
+
+  it("closes the dropdown when clicking outside", async () => {
+    renderPopupMarkup();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue({
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: false,
+        helperReady: false,
+        lastError: ""
+      }),
+      openOptionsPage: vi.fn()
+    };
+
+    await initPopup({ document, runtime, setIntervalFn: vi.fn(), ...defaultEditorDeps() });
+
+    // Open dropdown
+    document.querySelector("#editor-dropdown-toggle")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const dropdown = document.querySelector("#editor-dropdown") as HTMLElement;
+    expect(dropdown.classList.contains("hidden")).toBe(false);
+
+    // Click outside
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(dropdown.classList.contains("hidden")).toBe(true);
   });
 });

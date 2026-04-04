@@ -45,7 +45,11 @@
       </div>
       <div class="row">
         <button id="verify-root" class="secondary" type="button">Check root access</button>
-        <button id="open-editor" class="secondary" type="button">Open in editor</button>
+        <div class="split-button" id="editor-split">
+          <button id="open-editor" class="secondary split-main" type="button">Open in VS Code</button>
+          <button id="editor-dropdown-toggle" class="secondary split-arrow" type="button" aria-label="Choose editor">&#9662;</button>
+          <div id="editor-dropdown" class="split-dropdown hidden"></div>
+        </div>
       </div>
 
       <div id="message-box" class="muted-box">The extension starts with no active sites.</div>

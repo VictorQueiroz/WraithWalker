@@ -8,7 +8,8 @@ export const DEFAULT_DUMP_ALLOWLIST_PATTERNS: string[] = [DEFAULT_DUMP_ALLOWLIST
 export const STORAGE_KEYS = {
   SITES: "siteConfigs",
   NATIVE_HOST: "nativeHostConfig",
-  LAST_SESSION: "lastSessionSnapshot"
+  LAST_SESSION: "lastSessionSnapshot",
+  PREFERRED_EDITOR: "preferredEditorId"
 } as const;
 
 export const DEFAULT_NATIVE_HOST_CONFIG: NativeHostConfig = {
@@ -59,3 +60,18 @@ export const STATIC_RESOURCE_MANIFEST_FILE = "RESOURCE_MANIFEST.json";
 export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 1;
 
 export const POPUP_REFRESH_INTERVAL_MS = 1500;
+
+export interface EditorPreset {
+  id: string;
+  label: string;
+  commandTemplate: string;
+}
+
+export const EDITOR_PRESETS: EditorPreset[] = [
+  { id: "cursor", label: "Cursor", commandTemplate: 'cursor "$DIR"' },
+  { id: "antigravity", label: "Antigravity", commandTemplate: 'antigravity "$DIR"' },
+  { id: "vscode", label: "VS Code", commandTemplate: 'code "$DIR"' },
+  { id: "windsurf", label: "Windsurf", commandTemplate: 'windsurf "$DIR"' }
+];
+
+export const DEFAULT_EDITOR_ID = "vscode";

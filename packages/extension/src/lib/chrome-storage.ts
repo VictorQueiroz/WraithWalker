@@ -1,4 +1,4 @@
-import { DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "./constants.js";
+import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "./constants.js";
 import { normalizeSiteConfigs } from "./site-config.js";
 import type { NativeHostConfig, SessionSnapshot, SiteConfig, StorageState } from "./types.js";
 
@@ -34,4 +34,13 @@ export async function setNativeHostConfig(nativeHostConfig: NativeHostConfig): P
 
 export async function setLastSessionSnapshot(snapshot: SessionSnapshot): Promise<void> {
   await storageSet({ [STORAGE_KEYS.LAST_SESSION]: snapshot });
+}
+
+export async function getPreferredEditorId(): Promise<string> {
+  const { [STORAGE_KEYS.PREFERRED_EDITOR]: editorId } = await storageGet([STORAGE_KEYS.PREFERRED_EDITOR]);
+  return typeof editorId === "string" && editorId ? editorId : DEFAULT_EDITOR_ID;
+}
+
+export async function setPreferredEditorId(editorId: string): Promise<void> {
+  await storageSet({ [STORAGE_KEYS.PREFERRED_EDITOR]: editorId });
 }

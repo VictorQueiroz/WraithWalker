@@ -36,7 +36,7 @@ export type BackgroundMessage =
   | SessionMessage
   | { type: "root.verify" }
   | { type: "native.verify" }
-  | { type: "native.open" };
+  | { type: "native.open"; commandTemplate?: string };
 
 export interface FixtureResponsePayload {
   body: string;

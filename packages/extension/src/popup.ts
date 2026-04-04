@@ -1,4 +1,6 @@
-import { POPUP_REFRESH_INTERVAL_MS } from "./lib/constants.js";
+import { getPreferredEditorId as defaultGetPreferredEditorId, setPreferredEditorId as defaultSetPreferredEditorId } from "./lib/chrome-storage.js";
+import { DEFAULT_EDITOR_ID, EDITOR_PRESETS, POPUP_REFRESH_INTERVAL_MS } from "./lib/constants.js";
+import type { EditorPreset } from "./lib/constants.js";
 import { queryRequired } from "./lib/dom.js";
 import type { BackgroundMessage, ErrorResult, NativeOpenResult, RootReadyResult } from "./lib/messages.js";
 import type { SessionSnapshot } from "./lib/types.js";
@@ -13,6 +15,9 @@ interface PopupDependencies {
   runtime?: RuntimeApi;
   setIntervalFn?: typeof setInterval;
   refreshIntervalMs?: number;
+  getPreferredEditorId?: typeof defaultGetPreferredEditorId;
+  setPreferredEditorId?: typeof defaultSetPreferredEditorId;
+  editorPresets?: EditorPreset[];
 }
 
 interface PopupElements {
@@ -27,6 +32,8 @@ interface PopupElements {
   openOptionsButton: HTMLButtonElement;
   verifyRootButton: HTMLButtonElement;
   openEditorButton: HTMLButtonElement;
+  editorDropdownToggle: HTMLButtonElement;
+  editorDropdown: HTMLDivElement;
 }
 
 function getErrorMessage(result: { error?: string }): string {
@@ -49,7 +56,9 @@ function getElements(documentRef: Document): PopupElements {
     managedSites: queryRequired<HTMLDivElement>("#managed-sites", documentRef),
     openOptionsButton: queryRequired<HTMLButtonElement>("#open-options", documentRef),
     verifyRootButton: queryRequired<HTMLButtonElement>("#verify-root", documentRef),
-    openEditorButton: queryRequired<HTMLButtonElement>("#open-editor", documentRef)
+    openEditorButton: queryRequired<HTMLButtonElement>("#open-editor", documentRef),
+    editorDropdownToggle: queryRequired<HTMLButtonElement>("#editor-dropdown-toggle", documentRef),
+    editorDropdown: queryRequired<HTMLDivElement>("#editor-dropdown", documentRef)
   };
 }
 
@@ -110,9 +119,39 @@ export async function initPopup({
   document: documentRef = document,
   runtime = chrome.runtime as unknown as RuntimeApi,
   setIntervalFn = setInterval,
-  refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS
+  refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
+  getPreferredEditorId = defaultGetPreferredEditorId,
+  setPreferredEditorId = defaultSetPreferredEditorId,
+  editorPresets = EDITOR_PRESETS
 }: PopupDependencies = {}) {
   const elements = getElements(documentRef);
+  let activeEditor = editorPresets.find((e) => e.id === DEFAULT_EDITOR_ID) || editorPresets[0];
+
+  function updateEditorButton(editor: EditorPreset): void {
+    activeEditor = editor;
+    elements.openEditorButton.textContent = `Open in ${editor.label}`;
+  }
+
+  function renderDropdown(): void {
+    elements.editorDropdown.replaceChildren(
+      ...editorPresets.map((preset) => {
+        const item = documentRef.createElement("button");
+        item.className = "split-dropdown-item";
+        item.textContent = preset.label;
+        item.dataset.editorId = preset.id;
+        if (preset.id === activeEditor.id) {
+          item.dataset.active = "true";
+        }
+        item.addEventListener("click", async () => {
+          updateEditorButton(preset);
+          await setPreferredEditorId(preset.id);
+          elements.editorDropdown.classList.add("hidden");
+          renderDropdown();
+        });
+        return item;
+      })
+    );
+  }
 
   async function refreshState(): Promise<SessionSnapshot> {
     const state = await sendMessage<SessionSnapshot>(runtime, { type: "session.getState" });
@@ -147,14 +186,37 @@ export async function initPopup({
   });
 
   elements.openEditorButton.addEventListener("click", async () => {
-    const result = await sendMessage<NativeOpenResult>(runtime, { type: "native.open" });
+    const result = await sendMessage<NativeOpenResult>(runtime, {
+      type: "native.open",
+      commandTemplate: activeEditor.commandTemplate
+    });
     await refreshState();
     setMessage(
       elements,
       result.ok ? "success" : "error",
-      result.ok ? "Editor command dispatched." : getErrorMessage(result as ErrorResult)
+      result.ok ? `Opened in ${activeEditor.label}.` : getErrorMessage(result as ErrorResult)
     );
   });
+
+  elements.editorDropdownToggle.addEventListener("click", () => {
+    elements.editorDropdown.classList.toggle("hidden");
+  });
+
+  documentRef.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const splitButton = documentRef.querySelector("#editor-split");
+    if (splitButton && !splitButton.contains(target)) {
+      elements.editorDropdown.classList.add("hidden");
+    }
+  });
+
+  // Load preferred editor and initialize
+  const preferredId = await getPreferredEditorId();
+  const preferred = editorPresets.find((e) => e.id === preferredId);
+  if (preferred) {
+    updateEditorButton(preferred);
+  }
+  renderDropdown();
 
   await refreshState();
   setIntervalFn(refreshState, refreshIntervalMs);

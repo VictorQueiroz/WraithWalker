@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_DUMP_ALLOWLIST_PATTERN, DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "../src/lib/constants.js";
 import {
   getNativeHostConfig,
+  getPreferredEditorId,
   getSiteConfigs,
   setLastSessionSnapshot,
   setNativeHostConfig,
+  setPreferredEditorId,
   setSiteConfigs
 } from "../src/lib/chrome-storage.js";
 import type { SiteConfig } from "../src/lib/types.js";
@@ -97,5 +99,20 @@ describe("chrome storage helpers", () => {
     expect(storageSet).toHaveBeenNthCalledWith(1, { [STORAGE_KEYS.SITES]: sites });
     expect(storageSet).toHaveBeenNthCalledWith(2, { [STORAGE_KEYS.NATIVE_HOST]: nativeHostConfig });
     expect(storageSet).toHaveBeenNthCalledWith(3, { [STORAGE_KEYS.LAST_SESSION]: snapshot });
+  });
+
+  it("returns the default editor id when none is stored", async () => {
+    storageGet.mockResolvedValue({});
+    await expect(getPreferredEditorId()).resolves.toBe("vscode");
+  });
+
+  it("returns the stored preferred editor id", async () => {
+    storageGet.mockResolvedValue({ [STORAGE_KEYS.PREFERRED_EDITOR]: "cursor" });
+    await expect(getPreferredEditorId()).resolves.toBe("cursor");
+  });
+
+  it("persists the preferred editor id", async () => {
+    await setPreferredEditorId("windsurf");
+    expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.PREFERRED_EDITOR]: "windsurf" });
   });
 });

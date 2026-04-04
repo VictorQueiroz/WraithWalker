@@ -308,7 +308,7 @@ export function createBackgroundRuntime({
     }
   }
 
-  async function openDirectoryInEditor(): Promise<NativeOpenResult> {
+  async function openDirectoryInEditor(commandTemplate?: string): Promise<NativeOpenResult> {
     const verification = await verifyNativeHostRoot();
     if (!verification.ok) {
       return verification;
@@ -323,7 +323,7 @@ export function createBackgroundRuntime({
         type: "openDirectory",
         path: state.nativeHostConfig.rootPath,
         expectedRootId: state.rootSentinel.rootId,
-        commandTemplate: state.nativeHostConfig.commandTemplate
+        commandTemplate: commandTemplate || state.nativeHostConfig.commandTemplate
       });
 
       if (!response?.ok) {
@@ -492,7 +492,7 @@ export function createBackgroundRuntime({
         return result;
       }
       case "native.open": {
-        const result = await openDirectoryInEditor();
+        const result = await openDirectoryInEditor(message.commandTemplate);
         await persistSnapshot();
         return result;
       }

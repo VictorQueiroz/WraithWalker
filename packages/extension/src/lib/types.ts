@@ -39,6 +39,7 @@ export interface StorageState {
   siteConfigs?: SiteConfig[];
   nativeHostConfig?: Partial<NativeHostConfig>;
   lastSessionSnapshot?: SessionSnapshot;
+  preferredEditorId?: string;
 }
 
 export interface HeaderEntry {
