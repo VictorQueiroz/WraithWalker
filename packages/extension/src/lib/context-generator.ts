@@ -5,6 +5,14 @@ import {
   STATIC_RESOURCE_MANIFEST_FILE
 } from "./constants.js";
 import { originToKey } from "./path-utils.js";
+import {
+  inferTypeNode,
+  mergeTypeNodes,
+  pathToInterfaceName,
+  renderBarrelFile,
+  renderDtsFile,
+  type TypeNode
+} from "./type-extractor.js";
 import type { ResponseMeta, SiteConfig, StaticResourceManifest } from "./types.js";
 
 interface GatewayLike {
@@ -28,6 +36,7 @@ interface ApiEndpointSummary {
   status: number;
   mimeType: string;
   responseShape: string | null;
+  typeNode: TypeNode | null;
 }
 
 interface OriginSummary {
@@ -107,11 +116,13 @@ async function collectApiEndpoints(
       const pathname = meta.url ? new URL(meta.url).pathname : fixtureEntry.name.replace(/__q-.*/, "").replace(/-/g, "/");
 
       let responseShape: string | null = null;
+      let typeNode: TypeNode | null = null;
       if (meta.mimeType?.includes("json")) {
         try {
           const bodyText = await gateway.readText(rootHandle, `${fixtureDir}/response.body`);
           const parsed = JSON.parse(bodyText);
           responseShape = inferJsonShape(parsed);
+          typeNode = inferTypeNode(parsed);
         } catch {
           // Body might not be JSON-parseable
         }
@@ -122,7 +133,8 @@ async function collectApiEndpoints(
         pathname,
         status: meta.status,
         mimeType: meta.mimeType || "",
-        responseShape
+        responseShape,
+        typeNode
       });
     }
   }
@@ -307,7 +319,54 @@ export function createContextGenerator({ rootHandle, gateway, siteConfigs }: Con
       await writer.close();
     }
 
+    // Generate .d.ts files from API response shapes
+    await generateTypes(data);
+
     return markdown;
+  }
+
+  async function writeTextFile(relativePath: string, content: string): Promise<void> {
+    const parts = relativePath.split("/").filter(Boolean);
+    const name = parts.pop()!;
+    let dir = rootHandle;
+    for (const part of parts) {
+      dir = await dir.getDirectoryHandle(part, { create: true });
+    }
+    const fileHandle = await dir.getFileHandle(name, { create: true });
+    const writer = await fileHandle.createWritable();
+    await writer.write(content);
+    await writer.close();
+  }
+
+  async function generateTypes(data: ContextData): Promise<void> {
+    const moduleNames: string[] = [];
+
+    for (const origin of data.origins) {
+      const typedEndpoints = origin.apiEndpoints.filter((ep) => ep.typeNode !== null);
+      if (typedEndpoints.length === 0) continue;
+
+      // Merge endpoints with the same method+pathname
+      const byKey = new Map<string, { name: string; node: TypeNode }>();
+      for (const ep of typedEndpoints) {
+        const interfaceName = pathToInterfaceName(ep.method, ep.pathname);
+        const existing = byKey.get(interfaceName);
+        if (existing && ep.typeNode) {
+          existing.node = mergeTypeNodes(existing.node, ep.typeNode);
+        } else if (ep.typeNode) {
+          byKey.set(interfaceName, { name: interfaceName, node: ep.typeNode });
+        }
+      }
+
+      const declarations = [...byKey.values()];
+      const moduleName = origin.originKey;
+      const dtsContent = renderDtsFile(declarations);
+      await writeTextFile(`.wraithwalker/types/${moduleName}.d.ts`, dtsContent);
+      moduleNames.push(moduleName);
+    }
+
+    if (moduleNames.length > 0) {
+      await writeTextFile(".wraithwalker/types/index.d.ts", renderBarrelFile(moduleNames));
+    }
   }
 
   return { generate };

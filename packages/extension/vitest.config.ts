@@ -23,7 +23,8 @@ export default defineConfig({
         "src/lib/request-lifecycle.ts",
         "src/lib/root-handle.ts",
         "src/lib/session-controller.ts",
-        "src/lib/storage-layout.ts"
+        "src/lib/storage-layout.ts",
+        "src/lib/type-extractor.ts"
       ],
       thresholds: {
         statements: 90,
