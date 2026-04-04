@@ -121,6 +121,89 @@ describe("fixture mapper", () => {
     expect(descriptor.directory).toMatch(/\/root__q-/);
   });
 
+  it("routes simple-mode non-GET asset-like requests through the hidden metadata tree", async () => {
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/static/style.css",
+      resourceType: "Stylesheet",
+      siteMode: "simple"
+    });
+
+    expect(descriptor.siteMode).toBe("simple");
+    expect(descriptor.storageMode).toBe("asset");
+    expect(descriptor.bodyPath).toBe("cdn.example.com/static/style.css");
+    expect(descriptor.metadataOptional).toBe(true);
+  });
+
+  it("routes simple-mode POST requests through the shared API pipeline with metadata prefix", async () => {
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "POST",
+      url: "https://api.example.com/graphql",
+      postData: '{"query":"{viewer{id}}"}',
+      siteMode: "simple"
+    }) as ApiFixtureDescriptor;
+
+    expect(descriptor.siteMode).toBe("simple");
+    expect(descriptor.storageMode).toBe("api");
+    expect(descriptor.directory).toMatch(
+      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/POST\//
+    );
+    expect(descriptor.bodyPath).toMatch(/response\.body$/);
+    expect(descriptor.manifestPath).toBeNull();
+  });
+
+  it("routes simple-mode non-GET requests through the API pipeline with metadata prefix", async () => {
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "PUT",
+      url: "https://cdn.example.com/upload/image.png",
+      siteMode: "simple"
+    }) as ApiFixtureDescriptor;
+
+    expect(descriptor.siteMode).toBe("simple");
+    expect(descriptor.storageMode).toBe("api");
+    expect(descriptor.directory).toMatch(
+      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__cdn\.example\.com\/http\/PUT\//
+    );
+    expect(descriptor.bodyPath).toMatch(/response\.body$/);
+    expect(descriptor.manifestPath).toBeNull();
+  });
+
+  it("uses advanced-mode paths for non-GET requests without metadata prefix", async () => {
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "PUT",
+      url: "https://cdn.example.com/upload/image.png",
+      siteMode: "advanced"
+    }) as ApiFixtureDescriptor;
+
+    expect(descriptor.siteMode).toBe("advanced");
+    expect(descriptor.storageMode).toBe("api");
+    expect(descriptor.directory).toMatch(
+      /^https__app\.example\.com\/origins\/https__cdn\.example\.com\/http\/PUT\//
+    );
+    expect(descriptor.manifestPath).toBeNull();
+  });
+
+  it("advanced-mode API requests have no manifest path", async () => {
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "POST",
+      url: "https://api.example.com/graphql",
+      postData: '{"query":"{viewer{id}}"}',
+      siteMode: "advanced"
+    }) as ApiFixtureDescriptor;
+
+    expect(descriptor.siteMode).toBe("advanced");
+    expect(descriptor.storageMode).toBe("api");
+    expect(descriptor.directory).toMatch(
+      /^https__app\.example\.com\/origins\/https__api\.example\.com\/http\/POST\//
+    );
+    expect(descriptor.manifestPath).toBeNull();
+  });
+
   it("deduplicates headers except for set-cookie", () => {
     const headers = sanitizeResponseHeaders([
       { name: "Content-Type", value: "application/json" },
