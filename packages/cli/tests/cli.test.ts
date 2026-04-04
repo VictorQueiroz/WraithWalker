@@ -11,6 +11,12 @@ import { run as runScenarios } from "../src/commands/scenarios.mts";
 import { run as runStatus } from "../src/commands/status.mts";
 import { run as runContext } from "../src/commands/context.mts";
 
+function withCwd<T>(dir: string, fn: () => T | Promise<T>): Promise<T> {
+  const orig = process.cwd();
+  process.chdir(dir);
+  return Promise.resolve(fn()).finally(() => process.chdir(orig));
+}
+
 async function tmpdir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-cli-"));
 }
@@ -108,22 +114,60 @@ describe("init command", () => {
     const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
     expect(content.rootId).toBeDefined();
   });
+
+  it("defaults to cwd when no directory is specified", async () => {
+    const dir = await tmpdir();
+    await withCwd(dir, () => runInit([]));
+    const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
+    expect(content.rootId).toBeDefined();
+  });
 });
 
 describe("status command", () => {
   it("runs without error on a fixture root", async () => {
     const dir = await createFixtureRoot();
-    const origCwd = process.cwd();
-    process.chdir(dir);
-    try {
-      await runStatus([]);
-    } finally {
-      process.chdir(origCwd);
-    }
+    await withCwd(dir, () => runStatus([]));
+  });
+
+  it("reports endpoint and asset counts", async () => {
+    const dir = await createFixtureRoot();
+
+    // Create an API fixture so endpoint count > 0
+    const meta = {
+      status: 200, statusText: "OK", mimeType: "application/json",
+      resourceType: "XHR", url: "https://api.example.com/users",
+      method: "GET", capturedAt: "2026-04-03T00:00:00.000Z"
+    };
+    await writeJson(
+      path.join(dir, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "users__q-abc__b-def", "response.meta.json"),
+      meta
+    );
+
+    // Create a manifest so asset count > 0
+    await writeJson(
+      path.join(dir, "https__app.example.com", "RESOURCE_MANIFEST.json"),
+      {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-03T00:00:00.000Z",
+        resourcesByPathname: {
+          "/app.js": [{ requestUrl: "https://cdn.example.com/app.js", resourceType: "Script" }]
+        }
+      }
+    );
+
+    await withCwd(dir, () => runStatus([]));
   });
 });
 
 describe("scenarios command", () => {
+  it("lists empty scenarios", async () => {
+    const dir = await createFixtureRoot();
+    await withCwd(dir, () => runScenarios(["list"]));
+    // No assertion needed — "No scenarios saved." printed without error
+  });
+
   it("saves and lists scenarios", async () => {
     const dir = await createFixtureRoot();
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
@@ -161,6 +205,47 @@ describe("scenarios command", () => {
       process.chdir(origCwd);
     }
   });
+
+  it("diffs two scenarios", async () => {
+    const dir = await createFixtureRoot();
+    await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
+    await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
+
+    await withCwd(dir, async () => {
+      await runScenarios(["save", "v1"]);
+      await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v2");
+      await runScenarios(["save", "v2"]);
+      await runScenarios(["diff", "v1", "v2"]);
+    });
+  });
+
+  it("prints usage for unknown subcommands", async () => {
+    const dir = await createFixtureRoot();
+    await withCwd(dir, () => runScenarios(["unknown"]));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
+
+  it("prints usage when save name is missing", async () => {
+    const dir = await createFixtureRoot();
+    await withCwd(dir, () => runScenarios(["save"]));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
+
+  it("prints usage when switch name is missing", async () => {
+    const dir = await createFixtureRoot();
+    await withCwd(dir, () => runScenarios(["switch"]));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
+
+  it("prints usage when diff args are missing", async () => {
+    const dir = await createFixtureRoot();
+    await withCwd(dir, () => runScenarios(["diff"]));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
 });
 
 describe("context command", () => {
@@ -187,6 +272,35 @@ describe("context command", () => {
     const markdown = await generateContext(dir, gw);
 
     expect(markdown).toContain("WraithWalker Fixture Context");
+    expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
+  });
+
+  it("runs the context command with --editor flag", async () => {
+    const dir = await createFixtureRoot();
+
+    const meta = {
+      status: 200, statusText: "OK", mimeType: "application/json",
+      resourceType: "XHR", url: "https://api.example.com/data",
+      method: "GET", capturedAt: "2026-04-03T00:00:00.000Z"
+    };
+    await writeJson(
+      path.join(dir, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "data__q-abc__b-def", "response.meta.json"),
+      meta
+    );
+    await fs.writeFile(
+      path.join(dir, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "data__q-abc__b-def", "response.body"),
+      JSON.stringify({ items: [] })
+    );
+
+    await withCwd(dir, () => runContext(["--editor", "cursor"]));
+
+    expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
+    expect(await fs.readFile(path.join(dir, ".cursorrules"), "utf8")).toContain("WraithWalker");
+  });
+
+  it("runs the context command without --editor flag", async () => {
+    const dir = await createFixtureRoot();
+    await withCwd(dir, () => runContext([]));
     expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
   });
 });
