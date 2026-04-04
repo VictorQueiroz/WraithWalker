@@ -60,7 +60,17 @@ export interface SiteConfigLike {
 }
 
 function originToKey(origin: string): string {
-  return origin.replace(/:/g, "__").replace(/\//g, "");
+  const url = new URL(origin);
+  const protocol = url.protocol.replace(":", "");
+  const port = url.port ? `__${url.port}` : "";
+  return `${protocol}__${url.hostname}${port}`;
+}
+
+function keyToOrigin(key: string): string {
+  const match = key.match(/^(https?)__([^_](?:[^_]|_(?!_))*)(?:__(\d+))?$/);
+  if (!match) return key;
+  const [, protocol, hostname, port] = match;
+  return port ? `${protocol}://${hostname}:${port}` : `${protocol}://${hostname}`;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -174,7 +184,7 @@ export async function readSiteConfigs(rootPath: string): Promise<SiteConfigLike[
   const configs: SiteConfigLike[] = [];
 
   for (const originKey of simpleOrigins) {
-    const origin = originKey.replace(/__/g, "://").replace(/^(https?)\/\//, "$1://");
+    const origin = keyToOrigin(originKey);
     configs.push({ origin, mode: "simple" });
   }
 
@@ -185,7 +195,7 @@ export async function readSiteConfigs(rootPath: string): Promise<SiteConfigLike[
       if (!entry.isDirectory()) continue;
       if (entry.name.startsWith(".")) continue;
       if (entry.name.startsWith("http")) {
-        const origin = entry.name.replace(/__/g, "://").replace(/^(https?)\/\//, "$1://");
+        const origin = keyToOrigin(entry.name);
         if (!configs.some((c) => c.origin === origin)) {
           configs.push({ origin, mode: "advanced" });
         }

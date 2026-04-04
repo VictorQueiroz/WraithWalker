@@ -129,6 +129,21 @@ describe("fixture reader", () => {
     expect(configs.find((c) => c.mode === "advanced")).toBeDefined();
   });
 
+  it("discovers origins with non-standard ports", async () => {
+    const rootPath = await createFixtureRoot();
+
+    // Simple mode with port
+    await fs.mkdir(path.join(rootPath, ".wraithwalker", "simple", "http__localhost__4173"), { recursive: true });
+
+    // Advanced mode with port
+    await fs.mkdir(path.join(rootPath, "https__api.example.com__8443", "origins"), { recursive: true });
+
+    const configs = await readSiteConfigs(rootPath);
+    const origins = configs.map((c) => c.origin).sort();
+    expect(origins).toContain("http://localhost:4173");
+    expect(origins).toContain("https://api.example.com:8443");
+  });
+
   it("returns empty info for origin with no fixtures", async () => {
     const rootPath = await createFixtureRoot();
     const config: SiteConfigLike = { origin: "https://empty.example.com", mode: "advanced" };
