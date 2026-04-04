@@ -1,4 +1,4 @@
-import { DEFAULT_DUMP_ALLOWLIST_PATTERN, DEFAULT_SITE_MODE, LEGACY_SITE_MODE } from "./constants.js";
+import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_SITE_MODE, LEGACY_SITE_MODE } from "./constants.js";
 import { normalizeSiteInput } from "./path-utils.js";
 import type { SiteConfig, SiteMode } from "./types.js";
 
@@ -15,28 +15,40 @@ export function isValidDumpAllowlistPattern(pattern: string): boolean {
   }
 }
 
-export function normalizeDumpAllowlistPattern(pattern: unknown): string {
-  if (typeof pattern !== "string" || !pattern.trim()) {
-    return DEFAULT_DUMP_ALLOWLIST_PATTERN;
-  }
-
-  return isValidDumpAllowlistPattern(pattern)
-    ? pattern
-    : DEFAULT_DUMP_ALLOWLIST_PATTERN;
+export function isValidDumpAllowlistPatterns(patterns: string[]): boolean {
+  return patterns.every(isValidDumpAllowlistPattern);
 }
 
-export function normalizeSiteConfig(siteConfig: Partial<SiteConfig> & { origin: string }): SiteConfig {
+export function normalizeDumpAllowlistPatterns(patterns: unknown): string[] {
+  if (Array.isArray(patterns)) {
+    const valid = patterns.filter(
+      (p): p is string => typeof p === "string" && p.trim() !== "" && isValidDumpAllowlistPattern(p)
+    );
+    return valid.length > 0 ? valid : DEFAULT_DUMP_ALLOWLIST_PATTERNS;
+  }
+
+  // Migrate legacy single-pattern string
+  if (typeof patterns === "string" && patterns.trim() && isValidDumpAllowlistPattern(patterns)) {
+    return [patterns];
+  }
+
+  return DEFAULT_DUMP_ALLOWLIST_PATTERNS;
+}
+
+export function normalizeSiteConfig(siteConfig: Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string }): SiteConfig {
+  // Support legacy single-pattern field during migration
+  const rawPatterns = siteConfig.dumpAllowlistPatterns ?? siteConfig.dumpAllowlistPattern;
   return {
     origin: normalizeSiteInput(siteConfig.origin),
     createdAt: typeof siteConfig.createdAt === "string" && siteConfig.createdAt
       ? siteConfig.createdAt
       : new Date().toISOString(),
     mode: isSiteMode(siteConfig.mode) ? siteConfig.mode : LEGACY_SITE_MODE,
-    dumpAllowlistPattern: normalizeDumpAllowlistPattern(siteConfig.dumpAllowlistPattern)
+    dumpAllowlistPatterns: normalizeDumpAllowlistPatterns(rawPatterns)
   };
 }
 
-export function normalizeSiteConfigs(siteConfigs: Array<Partial<SiteConfig> & { origin: string }>): SiteConfig[] {
+export function normalizeSiteConfigs(siteConfigs: Array<Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string }>): SiteConfig[] {
   return siteConfigs
     .map(normalizeSiteConfig)
     .sort((left, right) => left.origin.localeCompare(right.origin));
@@ -47,7 +59,7 @@ export function createSiteConfig(originInput: string): SiteConfig {
     origin: normalizeSiteInput(originInput),
     createdAt: new Date().toISOString(),
     mode: DEFAULT_SITE_MODE,
-    dumpAllowlistPattern: DEFAULT_DUMP_ALLOWLIST_PATTERN
+    dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS]
   };
 }
 
@@ -67,5 +79,7 @@ export function shouldDumpRequest(siteConfig: SiteConfig, method: string, url: s
     return false;
   }
 
-  return new RegExp(siteConfig.dumpAllowlistPattern).test(requestUrl.pathname);
+  return siteConfig.dumpAllowlistPatterns.some(
+    (pattern) => new RegExp(pattern).test(requestUrl.pathname)
+  );
 }

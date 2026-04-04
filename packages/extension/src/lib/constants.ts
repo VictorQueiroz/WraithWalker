@@ -3,6 +3,7 @@ import type { NativeHostConfig } from "./types.js";
 export const DEFAULT_SITE_MODE = "simple" as const;
 export const LEGACY_SITE_MODE = "advanced" as const;
 export const DEFAULT_DUMP_ALLOWLIST_PATTERN = "\\.m?(js|ts)x?$";
+export const DEFAULT_DUMP_ALLOWLIST_PATTERNS: string[] = [DEFAULT_DUMP_ALLOWLIST_PATTERN];
 
 export const STORAGE_KEYS = {
   SITES: "siteConfigs",

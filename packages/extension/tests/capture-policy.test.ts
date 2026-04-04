@@ -9,7 +9,7 @@ describe("capture policy", () => {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
       mode: "simple",
-      dumpAllowlistPattern: "\\.m?(js|ts)x?$"
+      dumpAllowlistPatterns: ["\\.m?(js|ts)x?$"]
     };
     const policy = createCapturePolicy({
       getSiteConfigForOrigin: (topOrigin) => (topOrigin === siteConfig.origin ? siteConfig : undefined)
@@ -25,7 +25,7 @@ describe("capture policy", () => {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
       mode: "advanced",
-      dumpAllowlistPattern: "\\.css$"
+      dumpAllowlistPatterns: ["\\.css$"]
     };
     const policy = createCapturePolicy({
       getSiteConfigForOrigin: () => siteConfig
@@ -36,6 +36,57 @@ describe("capture policy", () => {
       method: "GET",
       url: "https://cdn.example.com/app.css"
     })).toBe(true);
+    expect(policy.shouldPersist({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/app.js"
+    })).toBe(false);
+  });
+
+  it("matches when any of multiple allowlist patterns match", () => {
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-03T00:00:00.000Z",
+      mode: "simple",
+      dumpAllowlistPatterns: ["\\.css$", "\\.js$", "\\.json$"]
+    };
+    const policy = createCapturePolicy({
+      getSiteConfigForOrigin: () => siteConfig
+    });
+
+    expect(policy.shouldPersist({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/app.css"
+    })).toBe(true);
+    expect(policy.shouldPersist({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/app.js"
+    })).toBe(true);
+    expect(policy.shouldPersist({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/data.json"
+    })).toBe(true);
+    expect(policy.shouldPersist({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/image.png"
+    })).toBe(false);
+  });
+
+  it("rejects when no allowlist patterns match", () => {
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-03T00:00:00.000Z",
+      mode: "simple",
+      dumpAllowlistPatterns: ["\\.css$"]
+    };
+    const policy = createCapturePolicy({
+      getSiteConfigForOrigin: () => siteConfig
+    });
+
     expect(policy.shouldPersist({
       topOrigin: "https://app.example.com",
       method: "GET",

@@ -3,7 +3,7 @@ import { queryRequired } from "./lib/dom.js";
 import type { ErrorResult, NativeVerifyResult } from "./lib/messages.js";
 import { normalizeSiteInput, originToPermissionPattern } from "./lib/path-utils.js";
 import { ensureRootSentinel as defaultEnsureRootSentinel, loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission, requestRootPermission as defaultRequestRootPermission, storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel } from "./lib/root-handle.js";
-import { createSiteConfig, isValidDumpAllowlistPattern } from "./lib/site-config.js";
+import { createSiteConfig, isValidDumpAllowlistPatterns } from "./lib/site-config.js";
 import type { NativeHostConfig, SiteConfig } from "./lib/types.js";
 
 interface PermissionsApi {
@@ -102,6 +102,29 @@ export async function initOptions({
 }: OptionsDependencies = {}) {
   const elements = getElements(documentRef);
 
+  function createAllowlistRow(value: string, container: HTMLDivElement): HTMLDivElement {
+    const row = documentRef.createElement("div");
+    row.className = "row allowlist-row";
+    row.innerHTML = `
+      <input class="allowlist-pattern" type="text" autocomplete="off" placeholder="\\.(js|css)$">
+      <button class="danger remove-allowlist-row" type="button">-</button>
+    `;
+    const input = queryRequired<HTMLInputElement>(".allowlist-pattern", row);
+    input.value = value;
+    queryRequired<HTMLButtonElement>(".remove-allowlist-row", row).addEventListener("click", () => {
+      row.remove();
+      if (!container.querySelector(".allowlist-row")) {
+        container.appendChild(createAllowlistRow("", container));
+      }
+    });
+    return row;
+  }
+
+  function getAllowlistPatterns(wrapper: HTMLElement): string[] {
+    const inputs = wrapper.querySelectorAll<HTMLInputElement>(".allowlist-pattern");
+    return Array.from(inputs).map((input) => input.value.trim()).filter(Boolean);
+  }
+
   function createSiteItem(siteConfig: SiteConfig): HTMLDivElement {
     const wrapper = documentRef.createElement("div");
     wrapper.className = "site-item stack tight";
@@ -120,23 +143,33 @@ export async function initOptions({
           <option value="advanced">Advanced</option>
         </select>
       </label>
-      <label class="stack tight">
-        <span>Dump allowlist regex</span>
-        <input class="site-allowlist" type="text" autocomplete="off">
-      </label>
+      <div class="stack tight">
+        <div class="row spread">
+          <span>Dump allowlist patterns</span>
+          <button class="secondary add-allowlist-row" type="button">+ Add pattern</button>
+        </div>
+        <div class="allowlist-rows"></div>
+      </div>
       <div class="meta">Granted pattern: ${originToPermissionPattern(siteConfig.origin)}</div>
     `;
 
     const modeSelect = queryRequired<HTMLSelectElement>(".site-mode", wrapper);
-    const allowlistInput = queryRequired<HTMLInputElement>(".site-allowlist", wrapper);
     modeSelect.value = siteConfig.mode;
-    allowlistInput.value = siteConfig.dumpAllowlistPattern;
+
+    const allowlistContainer = queryRequired<HTMLDivElement>(".allowlist-rows", wrapper);
+    for (const pattern of siteConfig.dumpAllowlistPatterns) {
+      allowlistContainer.appendChild(createAllowlistRow(pattern, allowlistContainer));
+    }
+
+    queryRequired<HTMLButtonElement>(".add-allowlist-row", wrapper).addEventListener("click", () => {
+      allowlistContainer.appendChild(createAllowlistRow("", allowlistContainer));
+    });
 
     queryRequired<HTMLButtonElement>(".save-site", wrapper).addEventListener("click", async () => {
       try {
         await updateSite(siteConfig.origin, {
           mode: modeSelect.value as SiteConfig["mode"],
-          dumpAllowlistPattern: allowlistInput.value.trim()
+          dumpAllowlistPatterns: getAllowlistPatterns(wrapper)
         });
         setFlash(elements, "success", `Updated ${siteConfig.origin}.`);
       } catch (error) {
@@ -219,9 +252,9 @@ export async function initOptions({
     await setSiteConfigs(nextSites);
   }
 
-  async function updateSite(origin: string, patch: Pick<SiteConfig, "mode" | "dumpAllowlistPattern">): Promise<void> {
-    if (!isValidDumpAllowlistPattern(patch.dumpAllowlistPattern)) {
-      throw new Error("Dump allowlist regex is invalid.");
+  async function updateSite(origin: string, patch: Pick<SiteConfig, "mode" | "dumpAllowlistPatterns">): Promise<void> {
+    if (!isValidDumpAllowlistPatterns(patch.dumpAllowlistPatterns)) {
+      throw new Error("One or more dump allowlist patterns are invalid.");
     }
 
     const sites = await getSiteConfigs();
@@ -230,7 +263,7 @@ export async function initOptions({
         ? {
             ...site,
             mode: patch.mode,
-            dumpAllowlistPattern: patch.dumpAllowlistPattern
+            dumpAllowlistPatterns: patch.dumpAllowlistPatterns
           }
         : site
     ));

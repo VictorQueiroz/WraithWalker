@@ -289,6 +289,23 @@ small,
   color: var(--success);
 }
 
+.allowlist-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.allowlist-row input {
+  flex: 1;
+}
+
+.allowlist-row button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .hidden {
   display: none !important;
 }

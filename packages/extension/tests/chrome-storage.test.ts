@@ -50,7 +50,7 @@ describe("chrome storage helpers", () => {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
         mode: "advanced",
-        dumpAllowlistPattern: DEFAULT_DUMP_ALLOWLIST_PATTERN
+        dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
       }
     ]);
   });
@@ -75,7 +75,7 @@ describe("chrome storage helpers", () => {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
       mode: "simple",
-      dumpAllowlistPattern: DEFAULT_DUMP_ALLOWLIST_PATTERN
+      dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
     }];
     const nativeHostConfig = {
       ...DEFAULT_NATIVE_HOST_CONFIG,

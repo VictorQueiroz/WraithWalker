@@ -325,7 +325,7 @@ describe("request lifecycle", () => {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
         mode: "simple",
-        dumpAllowlistPattern: "\\.m?(js|ts)x?$"
+        dumpAllowlistPatterns: ["\\.m?(js|ts)x?$"]
       }
     });
 
@@ -353,7 +353,7 @@ describe("request lifecycle", () => {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
         mode: "simple",
-        dumpAllowlistPattern: "\\.css$"
+        dumpAllowlistPatterns: ["\\.css$"]
       },
       createFixtureDescriptor: realCreateFixtureDescriptor
     });
@@ -509,7 +509,7 @@ describe("request lifecycle", () => {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
         mode: "simple",
-        dumpAllowlistPattern: "\\.css$"
+        dumpAllowlistPatterns: ["\\.css$"]
       },
       createFixtureDescriptor: realCreateFixtureDescriptor
     });

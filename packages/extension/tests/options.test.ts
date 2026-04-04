@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_DUMP_ALLOWLIST_PATTERN } from "../src/lib/constants.js";
+import { DEFAULT_DUMP_ALLOWLIST_PATTERN, DEFAULT_DUMP_ALLOWLIST_PATTERNS } from "../src/lib/constants.js";
 import type { SiteConfig } from "../src/lib/types.js";
 
 function renderOptionsMarkup() {
@@ -53,7 +53,7 @@ function createStoredSite(overrides: Partial<SiteConfig> = {}): SiteConfig {
     origin: "https://app.example.com",
     createdAt: "2026-04-03T00:00:00.000Z",
     mode: "simple",
-    dumpAllowlistPattern: DEFAULT_DUMP_ALLOWLIST_PATTERN,
+    dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS],
     ...overrides
   };
 }
@@ -111,7 +111,7 @@ describe("options entrypoint", () => {
     expect(queryInput("#native-root-path").value).toBe("/tmp/fixtures");
     expect(document.querySelector("#root-status")?.textContent).toContain("ready");
     expect(querySelect(".site-mode").value).toBe("simple");
-    expect(queryInput(".site-allowlist").value).toBe(DEFAULT_DUMP_ALLOWLIST_PATTERN);
+    expect(queryInput(".allowlist-pattern").value).toBe(DEFAULT_DUMP_ALLOWLIST_PATTERN);
   });
 
   it("adds an origin after host permission is granted", async () => {
@@ -162,7 +162,7 @@ describe("options entrypoint", () => {
       expect.objectContaining({
         origin: "https://app.example.com",
         mode: "simple",
-        dumpAllowlistPattern: DEFAULT_DUMP_ALLOWLIST_PATTERN
+        dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS]
       })
     ]);
     expect(document.querySelector("#flash")?.textContent).toContain("Origin added");
@@ -433,7 +433,7 @@ describe("options entrypoint", () => {
     });
 
     querySelect(".site-mode").value = "advanced";
-    queryInput(".site-allowlist").value = "\\.json$";
+    queryInput(".allowlist-pattern").value = "\\.json$";
     document.querySelector(".save-site")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
 
@@ -441,7 +441,7 @@ describe("options entrypoint", () => {
       expect.objectContaining({
         origin: "https://app.example.com",
         mode: "advanced",
-        dumpAllowlistPattern: "\\.json$"
+        dumpAllowlistPatterns: ["\\.json$"]
       })
     ]);
     expect(document.querySelector("#flash")?.textContent).toContain("Updated https://app.example.com.");
@@ -482,12 +482,12 @@ describe("options entrypoint", () => {
       storeRootHandleWithSentinel: vi.fn()
     });
 
-    queryInput(".site-allowlist").value = "[";
+    queryInput(".allowlist-pattern").value = "[";
     document.querySelector(".save-site")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
 
     expect(setSiteConfigs).not.toHaveBeenCalled();
-    expect(document.querySelector("#flash")?.textContent).toContain("Dump allowlist regex is invalid.");
+    expect(document.querySelector("#flash")?.textContent).toContain("One or more dump allowlist patterns are invalid.");
   });
 
   it("ignores aborted directory picks and reports missing roots during reauthorization", async () => {
@@ -615,5 +615,124 @@ describe("options entrypoint", () => {
     document.querySelector("#verify-helper")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
     expect(document.querySelector("#flash")?.textContent).toContain("Helper verified at 2026-04-03T12:00:00.000Z.");
+  });
+
+  it("renders multiple allowlist pattern rows and saves them all", async () => {
+    renderOptionsMarkup();
+    const { initOptions } = await loadOptionsModule();
+    let sites = [createStoredSite({ dumpAllowlistPatterns: ["\\.js$", "\\.css$"] })];
+    const setSiteConfigs = vi.fn(async (nextSites) => {
+      sites = nextSites;
+    });
+
+    await initOptions({
+      document,
+      windowRef: window,
+      chromeApi: {
+        permissions: { request: vi.fn(), remove: vi.fn() },
+        runtime: { sendMessage: vi.fn() }
+      },
+      getSiteConfigs: vi.fn(async () => [...sites]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        hostName: "", rootPath: "", commandTemplate: 'code "$DIR"',
+        verifiedAt: null, lastVerificationError: "", lastOpenError: ""
+      }),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs,
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    const inputs = document.querySelectorAll<HTMLInputElement>(".allowlist-pattern");
+    expect(inputs.length).toBe(2);
+    expect(inputs[0]?.value).toBe("\\.js$");
+    expect(inputs[1]?.value).toBe("\\.css$");
+
+    document.querySelector(".save-site")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+
+    expect(setSiteConfigs).toHaveBeenCalledWith([
+      expect.objectContaining({
+        dumpAllowlistPatterns: ["\\.js$", "\\.css$"]
+      })
+    ]);
+  });
+
+  it("adds a new allowlist pattern row via the add button", async () => {
+    renderOptionsMarkup();
+    const { initOptions } = await loadOptionsModule();
+    const setSiteConfigs = vi.fn();
+    let sites = [createStoredSite()];
+
+    await initOptions({
+      document,
+      windowRef: window,
+      chromeApi: {
+        permissions: { request: vi.fn(), remove: vi.fn() },
+        runtime: { sendMessage: vi.fn() }
+      },
+      getSiteConfigs: vi.fn(async () => [...sites]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        hostName: "", rootPath: "", commandTemplate: 'code "$DIR"',
+        verifiedAt: null, lastVerificationError: "", lastOpenError: ""
+      }),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(async (nextSites) => { sites = nextSites; }),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    expect(document.querySelectorAll(".allowlist-pattern").length).toBe(1);
+
+    document.querySelector(".add-allowlist-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelectorAll(".allowlist-pattern").length).toBe(2);
+
+    document.querySelector(".add-allowlist-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelectorAll(".allowlist-pattern").length).toBe(3);
+  });
+
+  it("removes an allowlist pattern row and keeps at least one", async () => {
+    renderOptionsMarkup();
+    const { initOptions } = await loadOptionsModule();
+    let sites = [createStoredSite({ dumpAllowlistPatterns: ["\\.js$", "\\.css$"] })];
+
+    await initOptions({
+      document,
+      windowRef: window,
+      chromeApi: {
+        permissions: { request: vi.fn(), remove: vi.fn() },
+        runtime: { sendMessage: vi.fn() }
+      },
+      getSiteConfigs: vi.fn(async () => [...sites]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        hostName: "", rootPath: "", commandTemplate: 'code "$DIR"',
+        verifiedAt: null, lastVerificationError: "", lastOpenError: ""
+      }),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(async (nextSites) => { sites = nextSites; }),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    expect(document.querySelectorAll(".allowlist-row").length).toBe(2);
+
+    // Remove the first row
+    document.querySelector(".remove-allowlist-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelectorAll(".allowlist-row").length).toBe(1);
+    expect(queryInput(".allowlist-pattern").value).toBe("\\.css$");
+
+    // Removing the last row should re-add an empty one
+    document.querySelector(".remove-allowlist-row")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(document.querySelectorAll(".allowlist-row").length).toBe(1);
+    expect(queryInput(".allowlist-pattern").value).toBe("");
   });
 });

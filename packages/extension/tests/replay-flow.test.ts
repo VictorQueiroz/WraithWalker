@@ -131,7 +131,7 @@ describe("capture and replay flow", () => {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
       mode: "simple",
-      dumpAllowlistPattern: DEFAULT_DUMP_ALLOWLIST_PATTERN
+      dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
     };
     const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
       if (method === "Network.getResponseBody") {

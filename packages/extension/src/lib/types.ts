@@ -4,7 +4,7 @@ export interface SiteConfig {
   origin: string;
   createdAt: string;
   mode: SiteMode;
-  dumpAllowlistPattern: string;
+  dumpAllowlistPatterns: string[];
 }
 
 export interface NativeHostConfig {
