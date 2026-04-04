@@ -64,3 +64,10 @@ export function createStaticExtensionCopies(paths: BuildPaths): CopySpec[] {
     targetPath: path.join(paths.distDir, fileName)
   }));
 }
+
+/**
+ * Rewrite bare "idb" specifiers so the browser can resolve the vendor copy.
+ */
+export function rewriteIdbSpecifiers(source: string): string {
+  return source.replace(/from\s+["']idb["']/g, 'from "../vendor/idb.js"');
+}
