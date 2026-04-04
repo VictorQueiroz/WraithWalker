@@ -4,6 +4,7 @@ import process from "node:process";
 import { supportsColor } from "./lib/ansi.mjs";
 import { createThemedOutput } from "./lib/themed-output.mjs";
 import { createPlainOutput } from "./lib/plain-output.mjs";
+import { wraithwalkerTheme } from "./lib/wraithwalker-theme.mjs";
 
 const USAGE = `Usage: wraithwalker <command>
 
@@ -17,7 +18,7 @@ Commands:
   scenarios diff <a> <b>         Compare two scenarios
   serve                          Start the MCP server`;
 
-const output = supportsColor() ? createThemedOutput() : createPlainOutput();
+const output = supportsColor() ? createThemedOutput(wraithwalkerTheme) : createPlainOutput();
 const [command, ...rest] = process.argv.slice(2);
 
 try {
