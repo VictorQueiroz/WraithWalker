@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/extension/static/assets/logo.svg" alt="WraithWalker logo" width="120" />
+  <img src="wraithwalker-banner.png" alt="WraithWalker banner" width="100%" />
 </p>
 
 # WraithWalker
