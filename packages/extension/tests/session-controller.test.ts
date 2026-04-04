@@ -112,6 +112,16 @@ describe("session controller", () => {
     expect(snapshot.sessionActive).toBe(true);
   });
 
+  it("requests filesystem permission when starting a session", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"]
+    });
+
+    await harness.controller.startSession();
+
+    expect(harness.ensureRootReady).toHaveBeenCalledWith({ requestPermission: true });
+  });
+
   it("returns an idle snapshot when root readiness fails", async () => {
     const harness = createControllerHarness({
       enabledOrigins: ["https://app.example.com"],
