@@ -112,15 +112,27 @@ describe("session controller", () => {
     expect(snapshot.sessionActive).toBe(true);
   });
 
+  it("requests filesystem permission when starting a session", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"]
+    });
+
+    await harness.controller.startSession();
+
+    expect(harness.ensureRootReady).toHaveBeenCalledWith({ requestPermission: true });
+  });
+
   it("returns an idle snapshot when root readiness fails", async () => {
     const harness = createControllerHarness({
       enabledOrigins: ["https://app.example.com"],
+      tabs: [{ id: 1, url: "https://app.example.com/dashboard" }],
       rootResult: { ok: false, error: "Root directory access is not granted." }
     });
 
     const snapshot = await harness.controller.startSession();
 
     expect(harness.ensureRootReady).toHaveBeenCalled();
+    expect(harness.attachTab).not.toHaveBeenCalled();
     expect(harness.persistSnapshot).not.toHaveBeenCalled();
     expect(snapshot.sessionActive).toBe(false);
   });
