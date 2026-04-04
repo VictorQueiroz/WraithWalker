@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./lib": "./out/lib.mjs"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x out/host.mjs",
     "test": "vitest run --coverage",

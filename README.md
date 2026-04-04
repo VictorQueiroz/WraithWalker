@@ -110,6 +110,22 @@ This is a [Turborepo](https://turbo.build/) monorepo:
 | [`packages/extension`](packages/extension/) | Chrome extension — service worker, popup, options page, offscreen document, and shared library |
 | [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration and scenario management |
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server for programmatic fixture access, endpoint listing, and scenario diffing |
+| [`packages/cli`](packages/cli/) | CLI tool for fixture root management, context generation, scenarios, and status |
+
+## CLI
+
+The `wraithwalker` CLI manages fixture roots, generates context files, and handles scenarios from the terminal.
+
+```bash
+wraithwalker init [dir]              # Create a fixture root
+wraithwalker status                  # Show origins, endpoints, scenarios
+wraithwalker context [--editor <id>] # Regenerate CLAUDE.md and .d.ts types
+wraithwalker scenarios list          # List saved scenarios
+wraithwalker scenarios save <name>   # Save current fixtures as scenario
+wraithwalker scenarios switch <name> # Switch to a saved scenario
+wraithwalker scenarios diff <a> <b>  # Compare two scenarios
+wraithwalker serve                   # Start the MCP server
+```
 
 ## Native Host
 
@@ -121,7 +137,7 @@ See [`packages/native-host/README.md`](packages/native-host/README.md) for setup
 
 ```bash
 npm run build      # build all packages
-npm test           # run tests (254 tests across 3 packages)
+npm test           # run tests (267 tests across 4 packages)
 npm run typecheck  # type-check all packages
 ```
 

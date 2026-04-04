@@ -1,22 +1,19 @@
 {
-  "name": "@wraithwalker/mcp-server",
+  "name": "@wraithwalker/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    "./fixture-reader": "./out/fixture-reader.mjs",
-    "./fixture-diff": "./out/fixture-diff.mjs"
-  },
   "bin": {
-    "wraithwalker-mcp": "out/server.mjs"
+    "wraithwalker": "out/cli.mjs"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && chmod +x out/server.mjs",
+    "build": "tsc -p tsconfig.build.json && chmod +x out/cli.mjs",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@wraithwalker/mcp-server": "*",
+    "@wraithwalker/native-host": "*"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
