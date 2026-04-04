@@ -4,73 +4,77 @@
 
 # WraithWalker
 
-WraithWalker is a Chrome extension for capturing, storing, and replaying network fixtures directly from your local filesystem. It uses `chrome.debugger` to intercept application requests, lets the browser fetch live responses when no fixture exists yet, persists those responses as editable files, and serves local files back on later requests for debugging and stateful UI testing.
+**Turn any web application into a locally editable, replayable environment.**
 
-An optional native-messaging host can open the selected capture root in your editor without changing the extension's core capture and replay flow.
+WraithWalker is a Chrome extension that captures network responses as plain files on your filesystem and serves them back on subsequent requests. Edit a JSON API response, patch a JS bundle, swap out a stylesheet — then reload the page and see the result. No proxy, no build step, no source access required.
 
-## Monorepo Structure
+## How It Works
 
-This project is a [Turborepo](https://turbo.build/) monorepo with two packages:
+1. **Enable an origin** in the options page (e.g. `https://app.example.com`).
+2. **Start a session** from the toolbar popup.
+3. **Browse normally.** WraithWalker intercepts requests via `chrome.debugger`, lets the browser fetch live responses, and saves them as local files.
+4. **On the next request**, if a matching fixture file exists on disk, WraithWalker serves it instead of hitting the network.
+5. **Edit any fixture** in your editor. The browser picks up your changes on the next load.
 
-| Package | Description |
-|---------|-------------|
-| [`packages/extension`](packages/extension/) | Chrome extension (service worker, popup, options, offscreen document, and shared library) |
-| [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration |
+### Storage Modes
+
+| Mode | Best for | How it stores files |
+|------|----------|-------------------|
+| **Simple** (default) | Readable file trees, quick edits | Mirrors the original URL structure: `cdn.example.com/assets/app.js`. Metadata lives in a hidden `.wraithwalker/` directory. |
+| **Advanced** | Full request/response archival | Groups everything under origin-keyed directories with request and response metadata alongside each fixture. |
+
+### Dump Allowlist Patterns
+
+Each site can have one or more regex patterns controlling which requests get persisted. For example, `\.css$` and `\.js$` will capture only stylesheets and scripts while letting everything else pass through to the live server.
 
 ## Features
 
-- No active domains on install.
-- Exact-origin enablement from the options page using runtime host-permission requests.
-- Global session toggle from the toolbar popup.
-- Capture of HTTP(S) requests from all matching tabs while the session is active.
-- Replay from local fixtures when a matching file already exists.
-- Local fixture storage via File System Access and an offscreen document.
-- Per-domain `RESOURCE_MANIFEST.json` files for mirrored static assets, mapping original pathnames to saved file paths.
-- Reference native-messaging host with sentinel verification before opening the capture directory.
+- **Per-origin control** — enable exactly the origins you need, each with its own storage mode and allowlist patterns.
+- **Capture and replay** — live responses are saved as files; existing files are served back without hitting the network.
+- **Editable fixtures** — files are plain text on your filesystem. Edit them with any tool.
+- **Two storage modes** — Simple mode for human-readable paths, Advanced mode for full archival.
+- **Static asset manifests** — `RESOURCE_MANIFEST.json` maps original URLs to saved file paths for each domain.
+- **Git-friendly** — fixture directories are plain files and folders. Branch, diff, and share them like code.
+- **Editor integration** — an optional native-messaging host opens the capture directory in your editor.
 
-## Load The Extension
+## Getting Started
 
-Build the packaged extension first:
+Build the extension:
 
 ```bash
 npm run build
 ```
 
-`packages/extension/dist/` is the canonical packaged extension output. It is assembled directly from the TypeScript emit output plus the static extension assets in [`packages/extension/static/`](packages/extension/static/).
+Load it into Chrome:
 
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
-3. Click `Load unpacked`.
+3. Click **Load unpacked**.
 4. Select the [`packages/extension/dist/`](packages/extension/dist/) directory.
 
-## Initial Setup
+Then open the extension options page to add origins and choose a root capture directory.
 
-1. Open the extension options page.
-2. Add one or more exact origins such as `https://app.example.com`.
-3. Choose a root capture directory.
-4. Optionally configure:
-   - absolute root path for the native host
-   - native host name
-   - editor command template such as `code "$DIR"`
+## Project Structure
+
+This is a [Turborepo](https://turbo.build/) monorepo:
+
+| Package | Description |
+|---------|-------------|
+| [`packages/extension`](packages/extension/) | Chrome extension — service worker, popup, options page, offscreen document, and shared library |
+| [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration |
 
 ## Native Host
 
-Reference files live in [`packages/native-host/README.md`](packages/native-host/README.md). The source of truth for the host lives in [`packages/native-host/src/host.mts`](packages/native-host/src/host.mts) and [`packages/native-host/src/lib.mts`](packages/native-host/src/lib.mts).
+The native host opens your capture root in an editor. It is optional and not packaged automatically — setup is manual so you can adjust the path, extension ID, and editor command for your environment.
 
-The host is not packaged automatically. Setup is manual so you can adjust the final path, extension ID, and editor command for your environment.
+See [`packages/native-host/README.md`](packages/native-host/README.md) for setup instructions.
 
-## Verification
-
-Run the local checks:
+## Development
 
 ```bash
-npm run build
-npm test
-npm run typecheck
+npm run build      # build all packages
+npm test           # run tests (164 tests, 97%+ coverage)
+npm run typecheck  # type-check all packages
 ```
 
-## Dependency Notes
-
-IndexedDB access now uses the `idb` package. Repository reference and migration notes are in [`docs/idb-reference.md`](docs/idb-reference.md).
-
-Chromium repository reference and DeepWiki query notes for Local Overrides research are in [`docs/chromium-reference.md`](docs/chromium-reference.md).
+IndexedDB access uses the [`idb`](https://www.npmjs.com/package/idb) package. Additional reference notes live in [`docs/`](docs/).
