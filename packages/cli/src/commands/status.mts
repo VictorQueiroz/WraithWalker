@@ -1,7 +1,8 @@
 import { readOriginInfo, readSiteConfigs, listScenarios } from "@wraithwalker/mcp-server/fixture-reader";
 import { findRoot } from "../lib/root.mjs";
+import type { Output } from "../lib/output.mjs";
 
-export async function run(_args: string[]): Promise<void> {
+export async function run(_args: string[], output: Output): Promise<void> {
   const { rootPath, sentinel } = await findRoot();
 
   const configs = await readSiteConfigs(rootPath);
@@ -18,10 +19,11 @@ export async function run(_args: string[]): Promise<void> {
     }
   }
 
-  console.log(`Root:        ${rootPath}`);
-  console.log(`Root ID:     ${sentinel.rootId}`);
-  console.log(`Origins:     ${configs.length}`);
-  console.log(`Endpoints:   ${totalEndpoints}`);
-  console.log(`Assets:      ${totalAssets}`);
-  console.log(`Scenarios:   ${scenarios.length ? scenarios.join(", ") : "none"}`);
+  output.heading("Fixture Root Status");
+  output.keyValue("Root", rootPath);
+  output.keyValue("Root ID", sentinel.rootId);
+  output.keyValue("Origins", configs.length);
+  output.keyValue("Endpoints", totalEndpoints);
+  output.keyValue("Assets", totalAssets);
+  output.keyValue("Scenarios", scenarios.length ? scenarios.join(", ") : "none");
 }

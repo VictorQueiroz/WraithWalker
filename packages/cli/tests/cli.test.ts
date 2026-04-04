@@ -10,6 +10,26 @@ import { run as runInit } from "../src/commands/init.mts";
 import { run as runScenarios } from "../src/commands/scenarios.mts";
 import { run as runStatus } from "../src/commands/status.mts";
 import { run as runContext } from "../src/commands/context.mts";
+import type { Output } from "../src/lib/output.mts";
+
+interface OutputRecord {
+  method: keyof Output;
+  args: unknown[];
+}
+
+function createRecordingOutput(): Output & { records: OutputRecord[] } {
+  const records: OutputRecord[] = [];
+  const methods: Array<keyof Output> = [
+    "banner", "success", "error", "warn", "heading", "keyValue", "info", "listItem", "block", "usage",
+  ];
+  const handler = { records } as Output & { records: OutputRecord[] };
+  for (const method of methods) {
+    (handler as unknown as Record<string, unknown>)[method] = (...args: unknown[]) => {
+      records.push({ method, args });
+    };
+  }
+  return handler;
+}
 
 function withCwd<T>(dir: string, fn: () => T | Promise<T>): Promise<T> {
   const orig = process.cwd();
@@ -110,14 +130,18 @@ describe("root discovery", () => {
 describe("init command", () => {
   it("creates a fixture root in the specified directory", async () => {
     const dir = await tmpdir();
-    await runInit([dir]);
+    const output = createRecordingOutput();
+    await runInit([dir], output);
     const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
     expect(content.rootId).toBeDefined();
+    expect(output.records[0].method).toBe("banner");
+    expect(output.records[1].method).toBe("success");
   });
 
   it("defaults to cwd when no directory is specified", async () => {
     const dir = await tmpdir();
-    await withCwd(dir, () => runInit([]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runInit([], output));
     const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
     expect(content.rootId).toBeDefined();
   });
@@ -126,7 +150,9 @@ describe("init command", () => {
 describe("status command", () => {
   it("runs without error on a fixture root", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runStatus([]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runStatus([], output));
+    expect(output.records[0].method).toBe("heading");
   });
 
   it("reports endpoint and asset counts", async () => {
@@ -157,14 +183,16 @@ describe("status command", () => {
       }
     );
 
-    await withCwd(dir, () => runStatus([]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runStatus([], output));
   });
 });
 
 describe("scenarios command", () => {
   it("lists empty scenarios", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runScenarios(["list"]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["list"], output));
     // No assertion needed — "No scenarios saved." printed without error
   });
 
@@ -173,17 +201,14 @@ describe("scenarios command", () => {
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
-    const origCwd = process.cwd();
-    process.chdir(dir);
-    try {
-      await runScenarios(["save", "baseline"]);
-      await runScenarios(["list"]);
+    const output = createRecordingOutput();
+    await withCwd(dir, async () => {
+      await runScenarios(["save", "baseline"], output);
+      await runScenarios(["list"], output);
+    });
 
-      const scenarios = await fs.readdir(path.join(dir, ".wraithwalker", "scenarios"));
-      expect(scenarios).toContain("baseline");
-    } finally {
-      process.chdir(origCwd);
-    }
+    const scenarios = await fs.readdir(path.join(dir, ".wraithwalker", "scenarios"));
+    expect(scenarios).toContain("baseline");
   });
 
   it("switches between scenarios", async () => {
@@ -191,19 +216,16 @@ describe("scenarios command", () => {
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
-    const origCwd = process.cwd();
-    process.chdir(dir);
-    try {
-      await runScenarios(["save", "v1"]);
+    const output = createRecordingOutput();
+    await withCwd(dir, async () => {
+      await runScenarios(["save", "v1"], output);
       await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v2");
-      await runScenarios(["save", "v2"]);
-      await runScenarios(["switch", "v1"]);
+      await runScenarios(["save", "v2"], output);
+      await runScenarios(["switch", "v1"], output);
+    });
 
-      const content = await fs.readFile(path.join(dir, "cdn.example.com", "app.js"), "utf8");
-      expect(content).toBe("v1");
-    } finally {
-      process.chdir(origCwd);
-    }
+    const content = await fs.readFile(path.join(dir, "cdn.example.com", "app.js"), "utf8");
+    expect(content).toBe("v1");
   });
 
   it("diffs two scenarios", async () => {
@@ -211,38 +233,43 @@ describe("scenarios command", () => {
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
+    const output = createRecordingOutput();
     await withCwd(dir, async () => {
-      await runScenarios(["save", "v1"]);
+      await runScenarios(["save", "v1"], output);
       await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v2");
-      await runScenarios(["save", "v2"]);
-      await runScenarios(["diff", "v1", "v2"]);
+      await runScenarios(["save", "v2"], output);
+      await runScenarios(["diff", "v1", "v2"], output);
     });
   });
 
   it("prints usage for unknown subcommands", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runScenarios(["unknown"]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["unknown"], output));
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined as any;
   });
 
   it("prints usage when save name is missing", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runScenarios(["save"]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["save"], output));
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined as any;
   });
 
   it("prints usage when switch name is missing", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runScenarios(["switch"]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["switch"], output));
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined as any;
   });
 
   it("prints usage when diff args are missing", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runScenarios(["diff"]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["diff"], output));
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined as any;
   });
@@ -292,7 +319,8 @@ describe("context command", () => {
       JSON.stringify({ items: [] })
     );
 
-    await withCwd(dir, () => runContext(["--editor", "cursor"]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runContext(["--editor", "cursor"], output));
 
     expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
     expect(await fs.readFile(path.join(dir, ".cursorrules"), "utf8")).toContain("WraithWalker");
@@ -300,7 +328,8 @@ describe("context command", () => {
 
   it("runs the context command without --editor flag", async () => {
     const dir = await createFixtureRoot();
-    await withCwd(dir, () => runContext([]));
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runContext([], output));
     expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
   });
 });

@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { findRoot } from "../lib/root.mjs";
+import type { Output } from "../lib/output.mjs";
 
-export async function run(_args: string[]): Promise<void> {
+export async function run(_args: string[], _output: Output): Promise<void> {
   const { rootPath } = await findRoot();
   const require = createRequire(import.meta.url);
   const mcpServerPkg = require.resolve("@wraithwalker/mcp-server/fixture-reader");
