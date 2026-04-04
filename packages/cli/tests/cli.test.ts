@@ -24,7 +24,7 @@ function createRecordingOutput(): Output & { records: OutputRecord[] } {
   ];
   const handler = { records } as Output & { records: OutputRecord[] };
   for (const method of methods) {
-    (handler as Record<string, unknown>)[method] = (...args: unknown[]) => {
+    (handler as unknown as Record<string, unknown>)[method] = (...args: unknown[]) => {
       records.push({ method, args });
     };
   }
