@@ -1,0 +1,23 @@
+{
+  "name": "@wraithwalker/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "wraithwalker-mcp": "out/server.mjs"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x out/server.mjs",
+    "test": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "typescript": "^6.0.2",
+    "vitest": "^3.2.4"
+  }
+}
