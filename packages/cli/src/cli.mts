@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { supportsColor } from "./lib/ansi.mjs";
+import { createThemedOutput } from "./lib/themed-output.mjs";
+import { createPlainOutput } from "./lib/plain-output.mjs";
 
 const USAGE = `Usage: wraithwalker <command>
 
@@ -14,36 +17,37 @@ Commands:
   scenarios diff <a> <b>         Compare two scenarios
   serve                          Start the MCP server`;
 
+const output = supportsColor() ? createThemedOutput() : createPlainOutput();
 const [command, ...rest] = process.argv.slice(2);
 
 try {
   switch (command) {
     case "init":
-      await (await import("./commands/init.mjs")).run(rest);
+      await (await import("./commands/init.mjs")).run(rest, output);
       break;
     case "status":
-      await (await import("./commands/status.mjs")).run(rest);
+      await (await import("./commands/status.mjs")).run(rest, output);
       break;
     case "context":
-      await (await import("./commands/context.mjs")).run(rest);
+      await (await import("./commands/context.mjs")).run(rest, output);
       break;
     case "scenarios":
-      await (await import("./commands/scenarios.mjs")).run(rest);
+      await (await import("./commands/scenarios.mjs")).run(rest, output);
       break;
     case "serve":
-      await (await import("./commands/serve.mjs")).run(rest);
+      await (await import("./commands/serve.mjs")).run(rest, output);
       break;
     case "--help":
     case "-h":
     case undefined:
-      console.log(USAGE);
+      output.usage(USAGE);
       break;
     default:
-      console.error(`Unknown command: ${command}\n`);
-      console.log(USAGE);
+      output.error(`Unknown command: ${command}`);
+      output.usage(USAGE);
       process.exitCode = 1;
   }
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  output.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }

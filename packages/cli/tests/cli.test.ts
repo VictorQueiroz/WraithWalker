@@ -10,6 +10,26 @@ import { run as runInit } from "../src/commands/init.mts";
 import { run as runScenarios } from "../src/commands/scenarios.mts";
 import { run as runStatus } from "../src/commands/status.mts";
 import { run as runContext } from "../src/commands/context.mts";
+import type { Output } from "../src/lib/output.mts";
+
+interface OutputRecord {
+  method: keyof Output;
+  args: unknown[];
+}
+
+function createRecordingOutput(): Output & { records: OutputRecord[] } {
+  const records: OutputRecord[] = [];
+  const methods: Array<keyof Output> = [
+    "success", "error", "warn", "heading", "keyValue", "info", "listItem", "block", "usage",
+  ];
+  const handler = { records } as Output & { records: OutputRecord[] };
+  for (const method of methods) {
+    (handler as Record<string, unknown>)[method] = (...args: unknown[]) => {
+      records.push({ method, args });
+    };
+  }
+  return handler;
+}
 
 async function tmpdir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-cli-"));
@@ -104,19 +124,23 @@ describe("root discovery", () => {
 describe("init command", () => {
   it("creates a fixture root in the specified directory", async () => {
     const dir = await tmpdir();
-    await runInit([dir]);
+    const output = createRecordingOutput();
+    await runInit([dir], output);
     const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
     expect(content.rootId).toBeDefined();
+    expect(output.records[0].method).toBe("success");
   });
 });
 
 describe("status command", () => {
   it("runs without error on a fixture root", async () => {
     const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
     const origCwd = process.cwd();
     process.chdir(dir);
     try {
-      await runStatus([]);
+      await runStatus([], output);
+      expect(output.records[0].method).toBe("heading");
     } finally {
       process.chdir(origCwd);
     }
@@ -129,11 +153,12 @@ describe("scenarios command", () => {
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
+    const output = createRecordingOutput();
     const origCwd = process.cwd();
     process.chdir(dir);
     try {
-      await runScenarios(["save", "baseline"]);
-      await runScenarios(["list"]);
+      await runScenarios(["save", "baseline"], output);
+      await runScenarios(["list"], output);
 
       const scenarios = await fs.readdir(path.join(dir, ".wraithwalker", "scenarios"));
       expect(scenarios).toContain("baseline");
@@ -147,13 +172,14 @@ describe("scenarios command", () => {
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
+    const output = createRecordingOutput();
     const origCwd = process.cwd();
     process.chdir(dir);
     try {
-      await runScenarios(["save", "v1"]);
+      await runScenarios(["save", "v1"], output);
       await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v2");
-      await runScenarios(["save", "v2"]);
-      await runScenarios(["switch", "v1"]);
+      await runScenarios(["save", "v2"], output);
+      await runScenarios(["switch", "v1"], output);
 
       const content = await fs.readFile(path.join(dir, "cdn.example.com", "app.js"), "utf8");
       expect(content).toBe("v1");

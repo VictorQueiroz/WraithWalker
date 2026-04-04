@@ -1,9 +1,10 @@
 import path from "node:path";
 import { createRoot } from "../lib/root.mjs";
+import type { Output } from "../lib/output.mjs";
 
-export async function run(args: string[]): Promise<void> {
+export async function run(args: string[], output: Output): Promise<void> {
   const dir = path.resolve(args[0] || process.cwd());
   const sentinel = await createRoot(dir);
-  console.log(`Fixture root ready at ${dir}`);
-  console.log(`Root ID: ${sentinel.rootId}`);
+  output.success(`Fixture root ready at ${dir}`);
+  output.keyValue("Root ID", sentinel.rootId);
 }
