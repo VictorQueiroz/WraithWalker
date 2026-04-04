@@ -1,4 +1,5 @@
 export interface Output {
+  banner(): void;
   success(message: string): void;
   error(message: string): void;
   warn(message: string): void;

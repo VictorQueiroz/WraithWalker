@@ -20,7 +20,7 @@ interface OutputRecord {
 function createRecordingOutput(): Output & { records: OutputRecord[] } {
   const records: OutputRecord[] = [];
   const methods: Array<keyof Output> = [
-    "success", "error", "warn", "heading", "keyValue", "info", "listItem", "block", "usage",
+    "banner", "success", "error", "warn", "heading", "keyValue", "info", "listItem", "block", "usage",
   ];
   const handler = { records } as Output & { records: OutputRecord[] };
   for (const method of methods) {
@@ -134,7 +134,8 @@ describe("init command", () => {
     await runInit([dir], output);
     const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
     expect(content.rootId).toBeDefined();
-    expect(output.records[0].method).toBe("success");
+    expect(output.records[0].method).toBe("banner");
+    expect(output.records[1].method).toBe("success");
   });
 
   it("defaults to cwd when no directory is specified", async () => {

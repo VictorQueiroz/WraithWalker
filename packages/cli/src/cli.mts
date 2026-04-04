@@ -41,6 +41,7 @@ try {
     case "--help":
     case "-h":
     case undefined:
+      output.banner();
       output.usage(USAGE);
       break;
     default:

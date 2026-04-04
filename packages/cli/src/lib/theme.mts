@@ -15,6 +15,10 @@ export interface Theme {
     warn:    string;
     bullet:  string;
   };
+  banner: {
+    art: string[];
+    phrases: string[];
+  };
   indent: string;
   labelWidth: number;
 }

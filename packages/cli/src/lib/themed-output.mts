@@ -2,9 +2,19 @@ import type { Output } from "./output.mjs";
 import type { Theme } from "./theme.mjs";
 
 export function createThemedOutput(theme: Theme): Output {
-  const { palette, icons, indent, labelWidth } = theme;
+  const { palette, icons, indent, labelWidth, banner: bannerData } = theme;
 
   return {
+    banner() {
+      const phrase = bannerData.phrases[Math.floor(Math.random() * bannerData.phrases.length)];
+      console.log();
+      for (const line of bannerData.art) {
+        console.log(palette.heading(line));
+      }
+      console.log();
+      console.log(palette.accent(`  ${phrase}`));
+      console.log();
+    },
     success(message) {
       console.log(palette.success(`${indent}${icons.success} ${message}`));
     },
