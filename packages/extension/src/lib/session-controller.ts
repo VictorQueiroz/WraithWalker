@@ -26,7 +26,7 @@ interface SessionControllerDependencies {
   attachTab: (tabId: number, topOrigin: string) => Promise<void>;
   detachTab: (tabId: number) => Promise<void>;
   refreshStoredConfig: () => Promise<void>;
-  ensureRootReady: () => Promise<RootReadyResult>;
+  ensureRootReady: (opts?: { requestPermission?: boolean }) => Promise<RootReadyResult>;
   closeOffscreenDocument: () => Promise<void>;
   persistSnapshot: () => Promise<void>;
   setLastError: (message: string) => void;
@@ -87,7 +87,7 @@ export function createSessionController({
       return snapshotState();
     }
 
-    const rootResult = await ensureRootReady();
+    const rootResult = await ensureRootReady({ requestPermission: true });
     if (!rootResult.ok) {
       return snapshotState();
     }
