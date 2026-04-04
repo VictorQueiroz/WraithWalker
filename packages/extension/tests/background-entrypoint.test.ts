@@ -619,6 +619,452 @@ describe("background entrypoint", () => {
     expect(runtime.state.lastError).toBe("Storage refresh failed.");
   });
 
+  it("routes Network.requestWillBeSent and Network.responseReceived events", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const requestLifecycle = {
+      handleFetchRequestPaused: vi.fn(),
+      handleNetworkRequestWillBeSent: vi.fn(),
+      handleNetworkResponseReceived: vi.fn(),
+      handleNetworkLoadingFinished: vi.fn(),
+      handleNetworkLoadingFailed: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => requestLifecycle)
+    });
+
+    await runtime.start();
+    await runtime.handleDebuggerEvent({ tabId: 1 }, "Network.requestWillBeSent", { requestId: "req-1" });
+    await runtime.handleDebuggerEvent({ tabId: 1 }, "Network.responseReceived", { requestId: "req-1" });
+
+    expect(requestLifecycle.handleNetworkRequestWillBeSent).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
+    expect(requestLifecycle.handleNetworkResponseReceived).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
+  });
+
+  it("captures lifecycle handler errors into lastError", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const requestLifecycle = {
+      handleFetchRequestPaused: vi.fn().mockRejectedValue(new Error("Fetch handler crashed.")),
+      handleNetworkRequestWillBeSent: vi.fn(),
+      handleNetworkResponseReceived: vi.fn(),
+      handleNetworkLoadingFinished: vi.fn(),
+      handleNetworkLoadingFailed: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => requestLifecycle)
+    });
+
+    await runtime.start();
+    await runtime.handleDebuggerEvent({ tabId: 1 }, "Fetch.requestPaused", { requestId: "fetch-1" });
+
+    expect(runtime.state.lastError).toBe("Fetch handler crashed.");
+  });
+
+  it("reports missing native host name or root path during verification", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "",
+        rootPath: ""
+      }),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig,
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.verifyNativeHostRoot();
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Configure the native host name and absolute root path in the options page first."
+    });
+    expect(setNativeHostConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ verifiedAt: null })
+    );
+  });
+
+  it("catches native message errors during verification", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.sendNativeMessage.mockRejectedValue(new Error("Host not found."));
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig,
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.verifyNativeHostRoot();
+
+    expect(result).toEqual({ ok: false, error: "Host not found." });
+    expect(setNativeHostConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        verifiedAt: null,
+        lastVerificationError: "Host not found."
+      })
+    );
+  });
+
+  it("handles native host returning an error response during verification", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: false, error: "Root mismatch." });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.verifyNativeHostRoot();
+    expect(result).toEqual({ ok: false, error: "Root mismatch." });
+  });
+
+  it("handles native open directory failure response", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.sendNativeMessage
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false, error: "Editor not found." });
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig,
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.openDirectoryInEditor();
+    expect(result).toEqual({ ok: false, error: "Editor not found." });
+    expect(setNativeHostConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ lastOpenError: "Editor not found." })
+    );
+  });
+
+  it("handles native open directory throwing an error", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.sendNativeMessage
+      .mockResolvedValueOnce({ ok: true })
+      .mockRejectedValueOnce(new Error("Connection refused."));
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig,
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.openDirectoryInEditor();
+    expect(result).toEqual({ ok: false, error: "Connection refused." });
+    expect(setNativeHostConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ lastOpenError: "Connection refused." })
+    );
+  });
+
+  it("captures errors from debugger detach handler into lastError", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const sessionController = {
+      startSession: vi.fn(),
+      stopSession: vi.fn().mockRejectedValue(new Error("Stop session failed.")),
+      reconcileTabs: vi.fn(),
+      handleTabStateChange: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig: vi.fn(),
+      createSessionController: vi.fn(() => sessionController),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    runtime.state.sessionActive = true;
+    runtime.state.attachedTabs.set(7, { topOrigin: "https://app.example.com" });
+
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 7 }, "canceled_by_user");
+    await flushPromises();
+
+    expect(runtime.state.lastError).toBe("Stop session failed.");
+  });
+
+  it("does not register listeners twice", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    runtime.registerListeners();
+    runtime.registerListeners();
+
+    expect(chromeApi.debugger.onEvent.addListener).toHaveBeenCalledTimes(1);
+    expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles session.getState, session.stop, and root.verify runtime messages", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    const setLastSessionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const sessionController = {
+      startSession: vi.fn(),
+      stopSession: vi.fn().mockResolvedValue({
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: false,
+        helperReady: false,
+        lastError: ""
+      }),
+      reconcileTabs: vi.fn(),
+      handleTabStateChange: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot,
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => sessionController),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const stateResult = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    expect(stateResult).toHaveProperty("sessionActive", false);
+
+    const stopResult = await runtime.handleRuntimeMessage({ type: "session.stop" });
+    expect(sessionController.stopSession).toHaveBeenCalled();
+
+    const rootResult = await runtime.handleRuntimeMessage({ type: "root.verify" });
+    expect(rootResult).toHaveProperty("ok", true);
+    expect(setLastSessionSnapshot).toHaveBeenCalled();
+
+    const verifyResult = await runtime.handleRuntimeMessage({ type: "native.verify" });
+    expect(verifyResult).toHaveProperty("ok", false);
+    expect(setLastSessionSnapshot).toHaveBeenCalled();
+  });
+
+  it("falls back when getContexts is not available", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.getContexts = undefined;
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      setNativeHostConfig: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.ensureRootReady();
+    expect(chromeApi.offscreen.createDocument).toHaveBeenCalled();
+    expect(result).toHaveProperty("ok", true);
+  });
+
   it("bootstraps with the default chrome dependencies", async () => {
     const { bootstrapBackground } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
