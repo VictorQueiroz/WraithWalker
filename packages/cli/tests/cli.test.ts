@@ -31,6 +31,12 @@ function createRecordingOutput(): Output & { records: OutputRecord[] } {
   return handler;
 }
 
+function withCwd<T>(dir: string, fn: () => T | Promise<T>): Promise<T> {
+  const orig = process.cwd();
+  process.chdir(dir);
+  return Promise.resolve(fn()).finally(() => process.chdir(orig));
+}
+
 async function tmpdir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-cli-"));
 }
@@ -130,41 +136,78 @@ describe("init command", () => {
     expect(content.rootId).toBeDefined();
     expect(output.records[0].method).toBe("success");
   });
+
+  it("defaults to cwd when no directory is specified", async () => {
+    const dir = await tmpdir();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runInit([], output));
+    const content = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker", "root.json"), "utf8"));
+    expect(content.rootId).toBeDefined();
+  });
 });
 
 describe("status command", () => {
   it("runs without error on a fixture root", async () => {
     const dir = await createFixtureRoot();
     const output = createRecordingOutput();
-    const origCwd = process.cwd();
-    process.chdir(dir);
-    try {
-      await runStatus([], output);
-      expect(output.records[0].method).toBe("heading");
-    } finally {
-      process.chdir(origCwd);
-    }
+    await withCwd(dir, () => runStatus([], output));
+    expect(output.records[0].method).toBe("heading");
+  });
+
+  it("reports endpoint and asset counts", async () => {
+    const dir = await createFixtureRoot();
+
+    // Create an API fixture so endpoint count > 0
+    const meta = {
+      status: 200, statusText: "OK", mimeType: "application/json",
+      resourceType: "XHR", url: "https://api.example.com/users",
+      method: "GET", capturedAt: "2026-04-03T00:00:00.000Z"
+    };
+    await writeJson(
+      path.join(dir, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "users__q-abc__b-def", "response.meta.json"),
+      meta
+    );
+
+    // Create a manifest so asset count > 0
+    await writeJson(
+      path.join(dir, "https__app.example.com", "RESOURCE_MANIFEST.json"),
+      {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-03T00:00:00.000Z",
+        resourcesByPathname: {
+          "/app.js": [{ requestUrl: "https://cdn.example.com/app.js", resourceType: "Script" }]
+        }
+      }
+    );
+
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runStatus([], output));
   });
 });
 
 describe("scenarios command", () => {
+  it("lists empty scenarios", async () => {
+    const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["list"], output));
+    // No assertion needed — "No scenarios saved." printed without error
+  });
+
   it("saves and lists scenarios", async () => {
     const dir = await createFixtureRoot();
     await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
     const output = createRecordingOutput();
-    const origCwd = process.cwd();
-    process.chdir(dir);
-    try {
+    await withCwd(dir, async () => {
       await runScenarios(["save", "baseline"], output);
       await runScenarios(["list"], output);
+    });
 
-      const scenarios = await fs.readdir(path.join(dir, ".wraithwalker", "scenarios"));
-      expect(scenarios).toContain("baseline");
-    } finally {
-      process.chdir(origCwd);
-    }
+    const scenarios = await fs.readdir(path.join(dir, ".wraithwalker", "scenarios"));
+    expect(scenarios).toContain("baseline");
   });
 
   it("switches between scenarios", async () => {
@@ -173,19 +216,61 @@ describe("scenarios command", () => {
     await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
 
     const output = createRecordingOutput();
-    const origCwd = process.cwd();
-    process.chdir(dir);
-    try {
+    await withCwd(dir, async () => {
       await runScenarios(["save", "v1"], output);
       await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v2");
       await runScenarios(["save", "v2"], output);
       await runScenarios(["switch", "v1"], output);
+    });
 
-      const content = await fs.readFile(path.join(dir, "cdn.example.com", "app.js"), "utf8");
-      expect(content).toBe("v1");
-    } finally {
-      process.chdir(origCwd);
-    }
+    const content = await fs.readFile(path.join(dir, "cdn.example.com", "app.js"), "utf8");
+    expect(content).toBe("v1");
+  });
+
+  it("diffs two scenarios", async () => {
+    const dir = await createFixtureRoot();
+    await fs.mkdir(path.join(dir, "cdn.example.com"), { recursive: true });
+    await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v1");
+
+    const output = createRecordingOutput();
+    await withCwd(dir, async () => {
+      await runScenarios(["save", "v1"], output);
+      await fs.writeFile(path.join(dir, "cdn.example.com", "app.js"), "v2");
+      await runScenarios(["save", "v2"], output);
+      await runScenarios(["diff", "v1", "v2"], output);
+    });
+  });
+
+  it("prints usage for unknown subcommands", async () => {
+    const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["unknown"], output));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
+
+  it("prints usage when save name is missing", async () => {
+    const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["save"], output));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
+
+  it("prints usage when switch name is missing", async () => {
+    const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["switch"], output));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
+  });
+
+  it("prints usage when diff args are missing", async () => {
+    const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runScenarios(["diff"], output));
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined as any;
   });
 });
 
@@ -213,6 +298,37 @@ describe("context command", () => {
     const markdown = await generateContext(dir, gw);
 
     expect(markdown).toContain("WraithWalker Fixture Context");
+    expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
+  });
+
+  it("runs the context command with --editor flag", async () => {
+    const dir = await createFixtureRoot();
+
+    const meta = {
+      status: 200, statusText: "OK", mimeType: "application/json",
+      resourceType: "XHR", url: "https://api.example.com/data",
+      method: "GET", capturedAt: "2026-04-03T00:00:00.000Z"
+    };
+    await writeJson(
+      path.join(dir, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "data__q-abc__b-def", "response.meta.json"),
+      meta
+    );
+    await fs.writeFile(
+      path.join(dir, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "data__q-abc__b-def", "response.body"),
+      JSON.stringify({ items: [] })
+    );
+
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runContext(["--editor", "cursor"], output));
+
+    expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
+    expect(await fs.readFile(path.join(dir, ".cursorrules"), "utf8")).toContain("WraithWalker");
+  });
+
+  it("runs the context command without --editor flag", async () => {
+    const dir = await createFixtureRoot();
+    const output = createRecordingOutput();
+    await withCwd(dir, () => runContext([], output));
     expect(await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8")).toContain("WraithWalker");
   });
 });
