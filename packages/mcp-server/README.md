@@ -4,15 +4,19 @@ An [MCP](https://modelcontextprotocol.io/) server that exposes WraithWalker fixt
 
 ## Usage
 
-```bash
-npx @wraithwalker/mcp-server /path/to/fixture-root
-```
-
-Or set the `WRAITHWALKER_ROOT` environment variable:
+The easiest way to start the server is via the CLI from any fixture root:
 
 ```bash
-WRAITHWALKER_ROOT=/path/to/fixtures npx @wraithwalker/mcp-server
+wraithwalker serve
 ```
+
+Or run it directly:
+
+```bash
+node packages/mcp-server/out/server.mjs /path/to/fixture-root
+```
+
+The server reads the root path from the first argument, the `WRAITHWALKER_ROOT` environment variable, or falls back to the current directory.
 
 ## Tools
 

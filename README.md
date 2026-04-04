@@ -33,7 +33,7 @@ WraithWalker is designed to bridge captured network fixtures with AI agentic cod
 
 ### Context Generation
 
-When you click **"Open in {Editor}"** from the popup, WraithWalker auto-generates context files in the fixture root before opening your editor:
+When you click **"Open in {Editor}"** from the popup — or run `wraithwalker context` from the CLI — WraithWalker auto-generates context files in the fixture root:
 
 - **`CLAUDE.md`** — API endpoint inventory, inferred response shapes, static asset summary, and suggested agent tasks
 - **`.cursorrules`** — generated for Cursor, `.windsurfrules` for Windsurf
@@ -47,7 +47,7 @@ A split button in the popup lets you choose between **Cursor**, **Antigravity**,
 
 ### Scenario Snapshots
 
-Save the current fixture state as a named scenario (e.g. "logged-in-admin", "empty-cart", "error-state") and switch between them from the popup. Scenarios are stored in `.wraithwalker/scenarios/` and managed by the native host.
+Save the current fixture state as a named scenario (e.g. "logged-in-admin", "empty-cart", "error-state") and switch between them from the popup or CLI. Scenarios are stored in `.wraithwalker/scenarios/`.
 
 ### MCP Server
 
@@ -62,13 +62,17 @@ The `@wraithwalker/mcp-server` package exposes captured fixtures programmaticall
 | `list-scenarios` | Enumerate saved scenario snapshots |
 | `diff-scenarios` | Compare two scenarios — added, removed, and changed endpoints |
 
-Run the MCP server:
+Start the MCP server from a fixture root:
 
 ```bash
-npx @wraithwalker/mcp-server /path/to/fixture-root
+wraithwalker serve
 ```
 
-Or set the `WRAITHWALKER_ROOT` environment variable.
+Or run it directly:
+
+```bash
+node packages/mcp-server/out/server.mjs /path/to/fixture-root
+```
 
 ## Features
 
@@ -79,20 +83,22 @@ Or set the `WRAITHWALKER_ROOT` environment variable.
 - **Static asset manifests** — `RESOURCE_MANIFEST.json` maps original URLs to saved file paths for each domain.
 - **Git-friendly** — fixture directories are plain files and folders. Branch, diff, and share them like code.
 - **Context generation** — auto-generated CLAUDE.md and TypeScript types from captured responses.
-- **Scenario snapshots** — save and switch between named fixture states.
+- **Scenario snapshots** — save and switch between named fixture states from the popup or CLI.
 - **MCP server** — expose fixtures to any MCP-compatible AI agent.
 - **Fixture diffing** — compare scenarios to detect regressions, new endpoints, and contract changes.
+- **CLI tool** — manage fixture roots, generate context, and handle scenarios from the terminal.
 - **Editor integration** — split button for Cursor, Antigravity, VS Code, and Windsurf with an optional native-messaging host.
 
 ## Getting Started
 
-Build the extension:
+Build all packages:
 
 ```bash
+npm install
 npm run build
 ```
 
-Load it into Chrome:
+### Load the Chrome Extension
 
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
@@ -101,16 +107,26 @@ Load it into Chrome:
 
 Then open the extension options page to add origins and choose a root capture directory.
 
+### Use the CLI
+
+Initialize a fixture root and generate context:
+
+```bash
+wraithwalker init /path/to/fixtures
+wraithwalker status
+wraithwalker context --editor cursor
+```
+
 ## Project Structure
 
-This is a [Turborepo](https://turbo.build/) monorepo:
+This is a [Turborepo](https://turbo.build/) monorepo with 4 packages:
 
 | Package | Description |
 |---------|-------------|
 | [`packages/extension`](packages/extension/) | Chrome extension — service worker, popup, options page, offscreen document, and shared library |
 | [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration and scenario management |
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server for programmatic fixture access, endpoint listing, and scenario diffing |
-| [`packages/cli`](packages/cli/) | CLI tool for fixture root management, context generation, scenarios, and status |
+| [`packages/cli`](packages/cli/) | CLI tool — `wraithwalker init`, `status`, `context`, `scenarios`, `serve` |
 
 ## CLI
 
@@ -127,6 +143,8 @@ wraithwalker scenarios diff <a> <b>  # Compare two scenarios
 wraithwalker serve                   # Start the MCP server
 ```
 
+The CLI discovers the nearest fixture root by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one.
+
 ## Native Host
 
 The native host opens your capture root in an editor and manages scenario snapshots (save, switch, list). It is optional and not packaged automatically — setup is manual so you can adjust the path, extension ID, and editor command for your environment.
@@ -137,8 +155,10 @@ See [`packages/native-host/README.md`](packages/native-host/README.md) for setup
 
 ```bash
 npm run build      # build all packages
-npm test           # run tests (267 tests across 4 packages)
+npm test           # run tests (268 tests across 4 packages)
 npm run typecheck  # type-check all packages
 ```
+
+CI runs typecheck, test, and build on every pull request and push to `main` via GitHub Actions.
 
 IndexedDB access uses the [`idb`](https://www.npmjs.com/package/idb) package. Additional reference notes live in [`docs/`](docs/).
