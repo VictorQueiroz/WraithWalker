@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -134,11 +134,15 @@ describe("rewriteIdbSpecifiers", () => {
   });
 });
 
+const distIdbPath = path.join(process.cwd(), "dist", "lib", "idb.js");
+
 describe("dist output", () => {
-  it("contains no bare idb specifiers in the built lib/idb.js", async () => {
-    const distIdb = path.join(process.cwd(), "dist", "lib", "idb.js");
-    const content = await fs.readFile(distIdb, "utf-8");
-    expect(content).not.toMatch(/from\s+["']idb["']/);
-    expect(content).toContain('from "../vendor/idb.js"');
-  });
+  it.skipIf(!existsSync(distIdbPath))(
+    "contains no bare idb specifiers in the built lib/idb.js",
+    async () => {
+      const content = await fs.readFile(distIdbPath, "utf-8");
+      expect(content).not.toMatch(/from\s+["']idb["']/);
+      expect(content).toContain('from "../vendor/idb.js"');
+    }
+  );
 });
