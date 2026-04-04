@@ -263,9 +263,9 @@ export function createBackgroundRuntime({
     await setNativeHostConfig(state.nativeHostConfig);
   }
 
-  async function verifyNativeHostRoot(): Promise<NativeVerifyResult> {
+  async function verifyNativeHostRoot({ requestPermission = false }: { requestPermission?: boolean } = {}): Promise<NativeVerifyResult> {
     await refreshStoredConfig();
-    const rootResult = await ensureRootReady();
+    const rootResult = await ensureRootReady({ requestPermission });
     if (!rootResult.ok) {
       const error = getErrorMessage(rootResult as ErrorResult);
       await updateNativeHostConfig({
@@ -325,7 +325,7 @@ export function createBackgroundRuntime({
   async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
     await generateContext(editorId);
 
-    const verification = await verifyNativeHostRoot();
+    const verification = await verifyNativeHostRoot({ requestPermission: true });
     if (!verification.ok) {
       return verification;
     }
@@ -498,12 +498,12 @@ export function createBackgroundRuntime({
       case "session.stop":
         return sessionController.stopSession();
       case "root.verify": {
-        const result = await ensureRootReady();
+        const result = await ensureRootReady({ requestPermission: true });
         await persistSnapshot();
         return result;
       }
       case "native.verify": {
-        const result = await verifyNativeHostRoot();
+        const result = await verifyNativeHostRoot({ requestPermission: true });
         await persistSnapshot();
         return result;
       }

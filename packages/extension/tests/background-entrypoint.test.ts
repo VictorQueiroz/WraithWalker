@@ -313,6 +313,19 @@ describe("background entrypoint", () => {
     const result = await runtime.handleRuntimeMessage({ type: "native.open" });
 
     expect(chromeApi.offscreen.createDocument).toHaveBeenCalled();
+    expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(1, {
+      target: "offscreen",
+      type: "fs.generateContext",
+      payload: {
+        siteConfigs: [],
+        editorId: undefined
+      }
+    });
+    expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(2, {
+      target: "offscreen",
+      type: "fs.ensureRoot",
+      payload: { requestPermission: true }
+    });
     expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(1, "com.example.host", {
       type: "verifyRoot",
       path: "/tmp/fixtures",
@@ -396,6 +409,56 @@ describe("background entrypoint", () => {
     await expect(sentinelRuntime.openDirectoryInEditor()).resolves.toEqual({
       ok: false,
       error: "Cannot read properties of undefined (reading 'rootId')"
+    });
+  });
+
+  it("requests root permission when handling explicit verify actions", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: true });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.handleRuntimeMessage({ type: "root.verify" });
+    expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(1, {
+      target: "offscreen",
+      type: "fs.ensureRoot",
+      payload: { requestPermission: true }
+    });
+
+    await runtime.handleRuntimeMessage({ type: "native.verify" });
+    expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(2, {
+      target: "offscreen",
+      type: "fs.ensureRoot",
+      payload: { requestPermission: true }
     });
   });
 
