@@ -68,43 +68,53 @@ interface EndpointWithBody {
   fixtureDir: string;
 }
 
+async function scanOriginsTree(originsDir: string, endpoints: Map<string, EndpointWithBody>): Promise<void> {
+  const originKeys = await listDirectoriesIn(originsDir);
+
+  for (const originKey of originKeys) {
+    const httpDir = path.join(originsDir, originKey, "http");
+    const methods = await listDirectoriesIn(httpDir);
+
+    for (const method of methods) {
+      const fixtures = await listDirectoriesIn(path.join(httpDir, method));
+      for (const fixture of fixtures) {
+        const fixtureDir = path.join(httpDir, method, fixture);
+        const meta = await readJsonSafe<ResponseMeta>(path.join(fixtureDir, "response.meta.json"));
+        if (!meta) continue;
+
+        const pathname = meta.url ? new URL(meta.url).pathname : fixture.replace(/__q-.*/, "").replace(/-/g, "/");
+        const key = `${method} ${pathname}`;
+        const bodyContent = await readFileSafe(path.join(fixtureDir, "response.body"));
+
+        endpoints.set(key, {
+          key,
+          method,
+          pathname,
+          status: meta.status,
+          mimeType: meta.mimeType || "",
+          bodyContent,
+          fixtureDir
+        });
+      }
+    }
+  }
+}
+
 async function collectEndpointsFromScenario(scenarioPath: string): Promise<Map<string, EndpointWithBody>> {
   const endpoints = new Map<string, EndpointWithBody>();
 
-  // Walk all top-level origin directories
+  // Walk advanced-mode top-level origin directories
   const topEntries = await listDirectoriesIn(scenarioPath);
   for (const topDir of topEntries) {
     if (topDir.startsWith(".")) continue;
-    const originsDir = path.join(scenarioPath, topDir, "origins");
-    const originKeys = await listDirectoriesIn(originsDir);
+    await scanOriginsTree(path.join(scenarioPath, topDir, "origins"), endpoints);
+  }
 
-    for (const originKey of originKeys) {
-      const httpDir = path.join(originsDir, originKey, "http");
-      const methods = await listDirectoriesIn(httpDir);
-
-      for (const method of methods) {
-        const fixtures = await listDirectoriesIn(path.join(httpDir, method));
-        for (const fixture of fixtures) {
-          const fixtureDir = path.join(httpDir, method, fixture);
-          const meta = await readJsonSafe<ResponseMeta>(path.join(fixtureDir, "response.meta.json"));
-          if (!meta) continue;
-
-          const pathname = meta.url ? new URL(meta.url).pathname : fixture.replace(/__q-.*/, "").replace(/-/g, "/");
-          const key = `${method} ${pathname}`;
-          const bodyContent = await readFileSafe(path.join(fixtureDir, "response.body"));
-
-          endpoints.set(key, {
-            key,
-            method,
-            pathname,
-            status: meta.status,
-            mimeType: meta.mimeType || "",
-            bodyContent,
-            fixtureDir
-          });
-        }
-      }
-    }
+  // Walk simple-mode origin directories under .wraithwalker/simple/
+  const simpleBase = path.join(scenarioPath, ".wraithwalker", "simple");
+  const simpleOrigins = await listDirectoriesIn(simpleBase);
+  for (const originKey of simpleOrigins) {
+    await scanOriginsTree(path.join(simpleBase, originKey, "origins"), endpoints);
   }
 
   return endpoints;
