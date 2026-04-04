@@ -1,4 +1,4 @@
-import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SessionSnapshot } from "./types.js";
+import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SessionSnapshot, SiteConfig } from "./types.js";
 
 export interface ErrorResult {
   ok: false;
@@ -36,7 +36,7 @@ export type BackgroundMessage =
   | SessionMessage
   | { type: "root.verify" }
   | { type: "native.verify" }
-  | { type: "native.open"; commandTemplate?: string };
+  | { type: "native.open"; commandTemplate?: string; editorId?: string };
 
 export interface FixtureResponsePayload {
   body: string;
@@ -67,6 +67,14 @@ export type OffscreenMessage =
         descriptor: FixtureDescriptor;
         request: RequestPayload;
         response: FixtureResponsePayload;
+      };
+    }
+  | {
+      target: "offscreen";
+      type: "fs.generateContext";
+      payload: {
+        siteConfigs: SiteConfig[];
+        editorId?: string;
       };
     };
 

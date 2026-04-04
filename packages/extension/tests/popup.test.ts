@@ -177,7 +177,7 @@ describe("popup entrypoint", () => {
     document.querySelector("#open-editor")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
 
-    expect(runtime.sendMessage).toHaveBeenNthCalledWith(2, { type: "native.open", commandTemplate: 'code "$DIR"' });
+    expect(runtime.sendMessage).toHaveBeenNthCalledWith(2, { type: "native.open", commandTemplate: 'code "$DIR"', editorId: "vscode" });
     expect(document.querySelector("#message-box")?.textContent).toContain("Editor launch failed.");
   });
 
@@ -407,7 +407,8 @@ describe("popup entrypoint", () => {
     await flushPromises();
     expect(runtime.sendMessage).toHaveBeenCalledWith({
       type: "native.open",
-      commandTemplate: 'cursor "$DIR"'
+      commandTemplate: 'cursor "$DIR"',
+      editorId: "cursor"
     });
     expect(document.querySelector("#message-box")?.textContent).toContain("Opened in Cursor.");
   });

@@ -1,4 +1,5 @@
 import type { ErrorResult, FixtureHasResult, FixtureReadResult, FixtureWriteResult, OffscreenMessage, RootReadyResult } from "./lib/messages.js";
+import { createContextGenerator as defaultCreateContextGenerator } from "./lib/context-generator.js";
 import { createFileSystemGateway } from "./lib/file-system-gateway.js";
 import { createFixtureRepository } from "./lib/fixture-repository.js";
 import { ensureRootSentinel as defaultEnsureRootSentinel, loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission, requestRootPermission as defaultRequestRootPermission } from "./lib/root-handle.js";
@@ -53,7 +54,8 @@ function isKnownOffscreenMessage(message: unknown): message is OffscreenMessage 
     "fs.ensureRoot",
     "fs.hasFixture",
     "fs.readFixture",
-    "fs.writeFixture"
+    "fs.writeFixture",
+    "fs.generateContext"
   ].includes(message.type || "");
 }
 
@@ -168,7 +170,7 @@ export function createOffscreenRuntime({
     };
   }
 
-  async function handleMessage(message: unknown): Promise<RootReadyResult | FixtureHasResult | FixtureReadResult | FixtureWriteResult | undefined> {
+  async function handleMessage(message: unknown): Promise<RootReadyResult | FixtureHasResult | FixtureReadResult | FixtureWriteResult | { ok: true } | undefined> {
     if (!isOffscreenTargetMessage(message)) {
       return undefined;
     }
@@ -190,6 +192,17 @@ export function createOffscreenRuntime({
         return handleReadFixture(message.payload);
       case "fs.writeFixture":
         return handleWriteFixture(message.payload);
+      case "fs.generateContext": {
+        const rootState = await getRootState();
+        if (!rootState.ok) return rootState;
+        const generator = defaultCreateContextGenerator({
+          rootHandle: rootState.rootHandle,
+          gateway: fileSystemGateway,
+          siteConfigs: message.payload.siteConfigs
+        });
+        await generator.generate(message.payload.editorId);
+        return { ok: true };
+      }
     }
   }
 

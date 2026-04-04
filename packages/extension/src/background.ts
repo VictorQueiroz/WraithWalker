@@ -308,7 +308,20 @@ export function createBackgroundRuntime({
     }
   }
 
-  async function openDirectoryInEditor(commandTemplate?: string): Promise<NativeOpenResult> {
+  async function generateContext(editorId?: string): Promise<void> {
+    try {
+      await sendOffscreenMessage("fs.generateContext", {
+        siteConfigs: [...state.siteConfigsByOrigin.values()],
+        editorId
+      });
+    } catch {
+      // Context generation failure should not block editor open
+    }
+  }
+
+  async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
+    await generateContext(editorId);
+
     const verification = await verifyNativeHostRoot();
     if (!verification.ok) {
       return verification;
@@ -492,7 +505,7 @@ export function createBackgroundRuntime({
         return result;
       }
       case "native.open": {
-        const result = await openDirectoryInEditor(message.commandTemplate);
+        const result = await openDirectoryInEditor(message.commandTemplate, message.editorId);
         await persistSnapshot();
         return result;
       }

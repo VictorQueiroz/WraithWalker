@@ -97,6 +97,29 @@ export function createFileSystemGateway({
     };
   }
 
+  async function readText(rootHandle: FileSystemDirectoryHandle, relativePath: string): Promise<string> {
+    const handle = await resolveFileHandle(rootHandle, relativePath, false);
+    const file = await handle.getFile();
+    return file.text();
+  }
+
+  async function listDirectory(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string
+  ): Promise<Array<{ name: string; kind: "file" | "directory" }>> {
+    const parts = relativePath.split("/").filter(Boolean);
+    let current = rootHandle;
+    for (const part of parts) {
+      current = await current.getDirectoryHandle(part);
+    }
+
+    const entries: Array<{ name: string; kind: "file" | "directory" }> = [];
+    for await (const [name, handle] of current as unknown as AsyncIterable<[string, { kind: string }]>) {
+      entries.push({ name, kind: handle.kind as "file" | "directory" });
+    }
+    return entries;
+  }
+
   return {
     ensureDirectory,
     resolveFileHandle,
@@ -105,6 +128,8 @@ export function createFileSystemGateway({
     writeBody,
     readJson,
     readOptionalJson,
-    readBody
+    readBody,
+    readText,
+    listDirectory
   };
 }

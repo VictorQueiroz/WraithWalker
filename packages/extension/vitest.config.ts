@@ -13,6 +13,7 @@ export default defineConfig({
         "src/offscreen.ts",
         "src/lib/background-helpers.ts",
         "src/lib/capture-policy.ts",
+        "src/lib/context-generator.ts",
         "src/lib/chrome-storage.ts",
         "src/lib/file-system-gateway.ts",
         "src/lib/fixture-mapper.ts",

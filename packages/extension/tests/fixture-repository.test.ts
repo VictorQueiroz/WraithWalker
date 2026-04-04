@@ -6,6 +6,7 @@ import { createFixtureRepository } from "../src/lib/fixture-repository.js";
 import { STATIC_RESOURCE_MANIFEST_FILE } from "../src/lib/constants.js";
 
 class MemoryFileHandle {
+  readonly kind = "file" as const;
   bytes: Uint8Array;
 
   constructor() {
@@ -44,6 +45,7 @@ class MemoryFileHandle {
 }
 
 class MemoryDirectoryHandle {
+  readonly kind = "directory" as const;
   directories: Map<string, MemoryDirectoryHandle>;
   files: Map<string, MemoryFileHandle>;
 
@@ -70,6 +72,15 @@ class MemoryDirectoryHandle {
       this.files.set(name, new MemoryFileHandle());
     }
     return this.files.get(name);
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<[string, { kind: string }]> {
+    for (const [name, handle] of this.directories) {
+      yield [name, handle as unknown as { kind: string }];
+    }
+    for (const [name, handle] of this.files) {
+      yield [name, handle as unknown as { kind: string }];
+    }
   }
 }
 
@@ -256,5 +267,53 @@ describe("fixture repository", () => {
     const manifest = JSON.parse(await (await manifestHandle.getFile()).text());
 
     expect(manifest.resourcesByPathname["/static/app.js"]).toHaveLength(1);
+  });
+});
+
+describe("file system gateway", () => {
+  function makeGateway() {
+    return createFileSystemGateway({
+      base64ToBytes: (value) => Uint8Array.from(Buffer.from(value, "base64")),
+      arrayBufferToBase64: (buffer) => Buffer.from(buffer).toString("base64")
+    });
+  }
+
+  it("reads a file as UTF-8 text via readText", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const gateway = makeGateway();
+
+    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "data/test.json", { hello: "world" });
+
+    const text = await gateway.readText(asFileSystemDirectoryHandle(rootHandle), "data/test.json");
+    expect(JSON.parse(text)).toEqual({ hello: "world" });
+  });
+
+  it("lists directory entries with correct kinds", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const gateway = makeGateway();
+
+    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "mydir/file-a.json", {});
+    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "mydir/file-b.json", {});
+    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "mydir/sub/nested.json", {});
+
+    const entries = await gateway.listDirectory(asFileSystemDirectoryHandle(rootHandle), "mydir");
+
+    const names = entries.map((e) => e.name).sort();
+    expect(names).toEqual(["file-a.json", "file-b.json", "sub"]);
+
+    const fileEntry = entries.find((e) => e.name === "file-a.json");
+    const dirEntry = entries.find((e) => e.name === "sub");
+    expect(fileEntry?.kind).toBe("file");
+    expect(dirEntry?.kind).toBe("directory");
+  });
+
+  it("lists the root directory when given an empty path", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const gateway = makeGateway();
+
+    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "top-level.json", {});
+
+    const entries = await gateway.listDirectory(asFileSystemDirectoryHandle(rootHandle), "");
+    expect(entries).toEqual([{ name: "top-level.json", kind: "file" }]);
   });
 });

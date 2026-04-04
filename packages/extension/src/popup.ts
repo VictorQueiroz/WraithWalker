@@ -188,7 +188,8 @@ export async function initPopup({
   elements.openEditorButton.addEventListener("click", async () => {
     const result = await sendMessage<NativeOpenResult>(runtime, {
       type: "native.open",
-      commandTemplate: activeEditor.commandTemplate
+      commandTemplate: activeEditor.commandTemplate,
+      editorId: activeEditor.id
     });
     await refreshState();
     setMessage(

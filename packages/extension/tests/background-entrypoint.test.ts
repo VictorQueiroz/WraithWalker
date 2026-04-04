@@ -390,7 +390,9 @@ describe("background entrypoint", () => {
       }))
     });
 
-    chromeApi.runtime.sendMessage.mockResolvedValueOnce({ ok: true, permission: "granted" });
+    chromeApi.runtime.sendMessage
+      .mockResolvedValueOnce({ ok: true })  // fs.generateContext
+      .mockResolvedValueOnce({ ok: true, permission: "granted" });  // fs.ensureRoot
     await expect(sentinelRuntime.openDirectoryInEditor()).resolves.toEqual({
       ok: false,
       error: "Cannot read properties of undefined (reading 'rootId')"
