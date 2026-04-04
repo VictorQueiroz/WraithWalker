@@ -18,7 +18,7 @@ Commands:
   scenarios diff <a> <b>         Compare two scenarios
   serve                          Start the MCP server`;
 
-const output = supportsColor() ? createThemedOutput(wraithwalkerTheme) : createPlainOutput();
+const output = supportsColor() ? createThemedOutput(wraithwalkerTheme) : createPlainOutput(wraithwalkerTheme);
 const [command, ...rest] = process.argv.slice(2);
 
 try {

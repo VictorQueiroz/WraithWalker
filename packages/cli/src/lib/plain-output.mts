@@ -1,31 +1,25 @@
 import type { Output } from "./output.mjs";
+import type { Theme } from "./theme.mjs";
 
-const PLAIN_ART = [
-  "        ___        ",
-  "      /     \\      ",
-  "     |  . .  |     ",
-  "     |   v   |     ",
-  "      \\_   _/      ",
-  "        | |        ",
-  "       _| |_       ",
-];
+export function createPlainOutput(theme: Theme): Output {
+  const { banner: bannerData, labelWidth } = theme;
 
-export function createPlainOutput(): Output {
   return {
     banner() {
+      const phrase = bannerData.phrases[Math.floor(Math.random() * bannerData.phrases.length)];
       console.log();
-      for (const line of PLAIN_ART) {
+      for (const line of bannerData.art) {
         console.log(line);
       }
       console.log();
-      console.log("  WraithWalker");
+      console.log(`  ${phrase}`);
       console.log();
     },
     success(message)        { console.log(message); },
     error(message)          { console.error(message); },
     warn(message)           { console.error(message); },
     heading(message)        { console.log(message); },
-    keyValue(key, value)    { console.log(`${key.padEnd(12)} ${value}`); },
+    keyValue(key, value)    { console.log(`${key.padEnd(labelWidth)} ${value}`); },
     info(message)           { console.log(message); },
     listItem(item)          { console.log(`  ${item}`); },
     block(content)          { console.log(content); },
