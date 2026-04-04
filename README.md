@@ -155,7 +155,7 @@ See [`packages/native-host/README.md`](packages/native-host/README.md) for setup
 
 ```bash
 npm run build      # build all packages
-npm test           # run tests (268 tests across 4 packages)
+npm test           # run tests (279 tests across 4 packages)
 npm run typecheck  # type-check all packages
 ```
 
