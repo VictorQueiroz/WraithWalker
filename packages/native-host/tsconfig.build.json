@@ -8,7 +8,7 @@
     "types": ["node"],
     "rootDir": "src",
     "outDir": "out",
-    "declaration": false,
+    "declaration": true,
     "sourceMap": false,
     "removeComments": false,
     "newLine": "lf",

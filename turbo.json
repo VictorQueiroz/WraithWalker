@@ -7,7 +7,9 @@
     "test": {
       "dependsOn": ["build"]
     },
-    "typecheck": {},
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "generate:icons": {
       "outputs": ["static/assets/icons/**"]
     }
