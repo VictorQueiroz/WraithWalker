@@ -11,6 +11,18 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "useUnknownInCatchVariables": true
+    "useUnknownInCatchVariables": true,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@wraithwalker/core/root": ["packages/core/src/root.mts"],
+      "@wraithwalker/core/fixtures": ["packages/core/src/fixtures.mts"],
+      "@wraithwalker/core/scenarios": ["packages/core/src/scenarios.mts"],
+      "@wraithwalker/core/context": ["packages/core/src/context.mts"],
+      "@wraithwalker/mcp-server/server": ["packages/mcp-server/src/server.mts"],
+      "@wraithwalker/mcp-server/fixture-reader": ["packages/mcp-server/src/fixture-reader.mts"],
+      "@wraithwalker/mcp-server/fixture-diff": ["packages/mcp-server/src/fixture-diff.mts"],
+      "@wraithwalker/native-host/lib": ["packages/native-host/src/lib.mts"]
+    }
   }
 }

@@ -1,8 +1,45 @@
+import { ansi } from "./ansi.mjs";
 import type { Output } from "./output.mjs";
-import type { Theme } from "./theme.mjs";
+import type { StyleToken, ThemeDefinition, ThemeStyles } from "./theme.mjs";
 
-export function createThemedOutput(theme: Theme): Output {
-  const { palette, icons, indent, labelWidth, banner: bannerData } = theme;
+type ThemeFormatterMap = Record<keyof ThemeStyles, (value: string) => string>;
+
+const STYLE_FORMATTERS: Record<StyleToken, (value: string) => string> = {
+  bold: ansi.bold,
+  dim: ansi.dim,
+  black: ansi.black,
+  red: ansi.red,
+  green: ansi.green,
+  yellow: ansi.yellow,
+  blue: ansi.blue,
+  magenta: ansi.magenta,
+  cyan: ansi.cyan,
+  white: ansi.white
+};
+
+function compileFormatter(tokens: StyleToken[]): (value: string) => string {
+  return (value: string) => tokens.reduceRight(
+    (rendered, token) => STYLE_FORMATTERS[token](rendered),
+    value
+  );
+}
+
+function compileThemeFormatters(styles: ThemeStyles): ThemeFormatterMap {
+  return {
+    success: compileFormatter(styles.success),
+    error: compileFormatter(styles.error),
+    warn: compileFormatter(styles.warn),
+    heading: compileFormatter(styles.heading),
+    label: compileFormatter(styles.label),
+    muted: compileFormatter(styles.muted),
+    accent: compileFormatter(styles.accent),
+    usage: compileFormatter(styles.usage)
+  };
+}
+
+export function createThemedOutput(theme: ThemeDefinition): Output {
+  const { icons, indent, labelWidth, banner: bannerData } = theme;
+  const palette = compileThemeFormatters(theme.styles);
 
   return {
     banner() {
@@ -42,6 +79,6 @@ export function createThemedOutput(theme: Theme): Output {
     },
     usage(message) {
       console.error(palette.usage(message));
-    },
+    }
   };
 }

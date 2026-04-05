@@ -71,7 +71,7 @@ wraithwalker serve
 Or run it directly:
 
 ```bash
-node packages/mcp-server/out/server.mjs /path/to/fixture-root
+node packages/mcp-server/out/bin.mjs /path/to/fixture-root
 ```
 
 ## Features
@@ -119,10 +119,11 @@ wraithwalker context --editor cursor
 
 ## Project Structure
 
-This is a [Turborepo](https://turbo.build/) monorepo with 4 packages:
+This is a [Turborepo](https://turbo.build/) monorepo with 5 packages:
 
 | Package | Description |
 |---------|-------------|
+| [`packages/core`](packages/core/) | Shared Node-side domain logic for fixture roots, fixture readers, scenarios, and context generation |
 | [`packages/extension`](packages/extension/) | Chrome extension — service worker, popup, options page, offscreen document, and shared library |
 | [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration and scenario management |
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server for programmatic fixture access, endpoint listing, and scenario diffing |
@@ -145,6 +146,39 @@ wraithwalker serve                   # Start the MCP server
 
 The CLI discovers the nearest fixture root by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one.
 
+### CLI Theming
+
+The CLI theme is data-driven and configurable through layered JSON config:
+
+- Global config:
+  - Linux: `${XDG_CONFIG_HOME:-~/.config}/wraithwalker/config.json`
+  - macOS: `~/Library/Application Support/WraithWalker/config.json`
+  - Windows: `%APPDATA%/WraithWalker/config.json`
+- Project config: `<fixture-root>/.wraithwalker/cli.json`
+
+Project config overrides global config. Themes can customize semantic styles, icons, banner art or phrases, indent, and label width without changing the command layout.
+
+```json
+{
+  "theme": {
+    "name": "wraithwalker",
+    "overrides": {
+      "styles": {
+        "heading": ["bold", "cyan"]
+      },
+      "icons": {
+        "bullet": "•"
+      },
+      "banner": {
+        "phrases": ["Custom phrase"]
+      },
+      "indent": "    ",
+      "labelWidth": 16
+    }
+  }
+}
+```
+
 ## Native Host
 
 The native host opens your capture root in an editor and manages scenario snapshots (save, switch, list). It is optional and not packaged automatically — setup is manual so you can adjust the path, extension ID, and editor command for your environment.
@@ -155,7 +189,7 @@ See [`packages/native-host/README.md`](packages/native-host/README.md) for setup
 
 ```bash
 npm run build      # build all packages
-npm test           # run tests (279 tests across 4 packages)
+npm test           # run release checks and package test suites
 npm run typecheck  # type-check all packages
 ```
 

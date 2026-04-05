@@ -27,10 +27,11 @@
   ],
   "exports": {
     "./fixture-reader": "./out/fixture-reader.mjs",
-    "./fixture-diff": "./out/fixture-diff.mjs"
+    "./fixture-diff": "./out/fixture-diff.mjs",
+    "./server": "./out/server.mjs"
   },
   "bin": {
-    "wraithwalker-mcp": "out/server.mjs"
+    "wraithwalker-mcp": "out/bin.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -39,12 +40,13 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && chmod +x out/server.mjs",
+    "build": "tsc -p tsconfig.build.json && chmod +x out/bin.mjs",
     "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
+    "@wraithwalker/core": "0.1.0",
     "@modelcontextprotocol/sdk": "^1.12.1"
   },
   "devDependencies": {

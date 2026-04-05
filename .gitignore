@@ -3,6 +3,8 @@ coverage/
 .ts-emit/
 dist/
 out/
+packages/*/src/**/*.mjs
+packages/*/src/**/*.d.mts
 vendor/
 .DS_Store
 *.log

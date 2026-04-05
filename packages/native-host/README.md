@@ -2,6 +2,8 @@
 
 This package provides a native-messaging host so the extension can open the capture root in an editor and manage scenario snapshots.
 
+Root verification and scenario operations are backed by `@wraithwalker/core`, so the native host stays aligned with the CLI and MCP server.
+
 ## What It Does
 
 | Message | Description |

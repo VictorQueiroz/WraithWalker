@@ -1,23 +1,23 @@
 {
-  "name": "@wraithwalker/cli",
+  "name": "@wraithwalker/core",
   "version": "0.1.0",
-  "description": "WraithWalker command-line tooling for fixture roots, context generation, and scenario workflows.",
+  "description": "Shared Node-side domain logic for WraithWalker fixture roots, scenarios, and context generation.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/VictorQueiroz/WraithWalker.git",
-    "directory": "packages/cli"
+    "directory": "packages/core"
   },
-  "homepage": "https://github.com/VictorQueiroz/WraithWalker/tree/main/packages/cli#readme",
+  "homepage": "https://github.com/VictorQueiroz/WraithWalker/tree/main/packages/core#readme",
   "bugs": {
     "url": "https://github.com/VictorQueiroz/WraithWalker/issues"
   },
   "keywords": [
     "wraithwalker",
-    "cli",
     "fixtures",
-    "chrome",
-    "mcp"
+    "core",
+    "scenarios",
+    "context"
   ],
   "private": false,
   "type": "module",
@@ -25,8 +25,11 @@
     "out",
     "README.md"
   ],
-  "bin": {
-    "wraithwalker": "out/cli.mjs"
+  "exports": {
+    "./root": "./out/root.mjs",
+    "./fixtures": "./out/fixtures.mjs",
+    "./scenarios": "./out/scenarios.mjs",
+    "./context": "./out/context.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -35,14 +38,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && chmod +x out/cli.mjs",
+    "build": "tsc -p tsconfig.build.json",
     "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
-  },
-  "dependencies": {
-    "@wraithwalker/core": "0.1.0",
-    "@wraithwalker/mcp-server": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

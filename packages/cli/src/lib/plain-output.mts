@@ -1,7 +1,7 @@
 import type { Output } from "./output.mjs";
-import type { Theme } from "./theme.mjs";
+import type { ThemeDefinition } from "./theme.mjs";
 
-export function createPlainOutput(theme: Theme): Output {
+export function createPlainOutput(theme: ThemeDefinition): Output {
   const { banner: bannerData, labelWidth } = theme;
 
   return {

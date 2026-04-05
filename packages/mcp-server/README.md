@@ -13,10 +13,22 @@ wraithwalker serve
 Or run it directly:
 
 ```bash
-node packages/mcp-server/out/server.mjs /path/to/fixture-root
+node packages/mcp-server/out/bin.mjs /path/to/fixture-root
 ```
 
 The server reads the root path from the first argument, the `WRAITHWALKER_ROOT` environment variable, or falls back to the current directory.
+
+## Programmatic API
+
+The package also exports a supported server entrypoint:
+
+```ts
+import { startServer } from "@wraithwalker/mcp-server/server";
+
+await startServer("/path/to/fixture-root");
+```
+
+Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 
 ## Tools
 
@@ -38,7 +50,7 @@ Add to your `.claude/settings.json`:
   "mcpServers": {
     "wraithwalker": {
       "command": "node",
-      "args": ["packages/mcp-server/out/server.mjs", "/path/to/fixture-root"]
+      "args": ["packages/mcp-server/out/bin.mjs", "/path/to/fixture-root"]
     }
   }
 }

@@ -1,73 +1,116 @@
-import { listScenarios } from "@wraithwalker/mcp-server/fixture-reader";
-import { diffScenarios, renderDiffMarkdown } from "@wraithwalker/mcp-server/fixture-diff";
-import { saveScenario, switchScenario, readSentinel } from "@wraithwalker/native-host/lib";
-import { findRoot } from "../lib/root.mjs";
-import type { Output } from "../lib/output.mjs";
+import {
+  diffScenarios,
+  listScenarios,
+  renderDiffMarkdown,
+  saveScenario,
+  switchScenario
+} from "@wraithwalker/core/scenarios";
+import { findRoot } from "@wraithwalker/core/root";
 
-export async function run(args: string[], output: Output): Promise<void> {
-  const [subcommand, ...rest] = args;
+import type { CommandSpec } from "../lib/command.mjs";
+import { UsageError } from "../lib/command.mjs";
 
-  switch (subcommand) {
-    case "list":
-      return listCommand(output);
-    case "save":
-      return saveCommand(output, rest[0]);
-    case "switch":
-      return switchCommand(output, rest[0]);
-    case "diff":
-      return diffCommand(output, rest[0], rest[1]);
-    default:
-      output.usage(`Usage: wraithwalker scenarios {list|save|switch|diff}`);
-      process.exitCode = 1;
+type ScenarioArgs =
+  | { action: "list" }
+  | { action: "save"; name: string }
+  | { action: "switch"; name: string }
+  | { action: "diff"; scenarioA: string; scenarioB: string };
+
+type ScenarioResult =
+  | { action: "list"; scenarios: string[] }
+  | { action: "save"; name: string }
+  | { action: "switch"; name: string }
+  | { action: "diff"; markdown: string };
+
+export const command: CommandSpec<ScenarioArgs, ScenarioResult> = {
+  name: "scenarios",
+  summary: "Manage scenario snapshots",
+  usage: "Usage: wraithwalker scenarios {list|save|switch|diff}",
+  requiresRoot: true,
+  parse(argv) {
+    const [subcommand, ...rest] = argv;
+
+    switch (subcommand) {
+      case "list":
+        return { action: "list" };
+      case "save":
+        if (!rest[0]) {
+          throw new UsageError("Usage: wraithwalker scenarios save <name>");
+        }
+        return { action: "save", name: rest[0] };
+      case "switch":
+        if (!rest[0]) {
+          throw new UsageError("Usage: wraithwalker scenarios switch <name>");
+        }
+        return { action: "switch", name: rest[0] };
+      case "diff":
+        if (!rest[0] || !rest[1]) {
+          throw new UsageError("Usage: wraithwalker scenarios diff <scenarioA> <scenarioB>");
+        }
+        return { action: "diff", scenarioA: rest[0], scenarioB: rest[1] };
+      default:
+        throw new UsageError("Usage: wraithwalker scenarios {list|save|switch|diff}");
+    }
+  },
+  async execute(context, args) {
+    const { rootPath, sentinel } = await findRoot(context.cwd);
+
+    switch (args.action) {
+      case "list":
+        return {
+          action: "list",
+          scenarios: await listScenarios(rootPath)
+        };
+      case "save": {
+        const result = await saveScenario({
+          path: rootPath,
+          expectedRootId: sentinel.rootId,
+          name: args.name
+        });
+        return {
+          action: "save",
+          name: result.name
+        };
+      }
+      case "switch": {
+        const result = await switchScenario({
+          path: rootPath,
+          expectedRootId: sentinel.rootId,
+          name: args.name
+        });
+        return {
+          action: "switch",
+          name: result.name
+        };
+      }
+      case "diff": {
+        const diff = await diffScenarios(rootPath, args.scenarioA, args.scenarioB);
+        return {
+          action: "diff",
+          markdown: renderDiffMarkdown(diff)
+        };
+      }
+    }
+  },
+  render(output, result) {
+    switch (result.action) {
+      case "list":
+        if (result.scenarios.length === 0) {
+          output.info("No scenarios saved.");
+          return;
+        }
+        for (const scenario of result.scenarios) {
+          output.listItem(scenario);
+        }
+        return;
+      case "save":
+        output.success(`Scenario "${result.name}" saved.`);
+        return;
+      case "switch":
+        output.success(`Switched to "${result.name}".`);
+        return;
+      case "diff":
+        output.block(result.markdown);
+    }
   }
-}
-
-async function listCommand(output: Output): Promise<void> {
-  const { rootPath } = await findRoot();
-  const scenarios = await listScenarios(rootPath);
-
-  if (scenarios.length === 0) {
-    output.info("No scenarios saved.");
-    return;
-  }
-
-  for (const name of scenarios) {
-    output.listItem(name);
-  }
-}
-
-async function saveCommand(output: Output, name?: string): Promise<void> {
-  if (!name) {
-    output.usage("Usage: wraithwalker scenarios save <name>");
-    process.exitCode = 1;
-    return;
-  }
-
-  const { rootPath, sentinel } = await findRoot();
-  await saveScenario({ path: rootPath, expectedRootId: sentinel.rootId, name });
-  output.success(`Scenario "${name}" saved.`);
-}
-
-async function switchCommand(output: Output, name?: string): Promise<void> {
-  if (!name) {
-    output.usage("Usage: wraithwalker scenarios switch <name>");
-    process.exitCode = 1;
-    return;
-  }
-
-  const { rootPath, sentinel } = await findRoot();
-  await switchScenario({ path: rootPath, expectedRootId: sentinel.rootId, name });
-  output.success(`Switched to "${name}".`);
-}
-
-async function diffCommand(output: Output, a?: string, b?: string): Promise<void> {
-  if (!a || !b) {
-    output.usage("Usage: wraithwalker scenarios diff <scenarioA> <scenarioB>");
-    process.exitCode = 1;
-    return;
-  }
-
-  const { rootPath } = await findRoot();
-  const diff = await diffScenarios(rootPath, a, b);
-  output.block(renderDiffMarkdown(diff));
-}
+};

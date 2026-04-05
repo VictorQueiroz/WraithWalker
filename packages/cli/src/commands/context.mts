@@ -1,23 +1,47 @@
-import { findRoot } from "../lib/root.mjs";
+import { generateContext } from "@wraithwalker/core/context";
+import { findRoot } from "@wraithwalker/core/root";
+
+import type { CommandSpec } from "../lib/command.mjs";
 import { createFsGateway } from "../lib/fs-gateway.mjs";
-import { generateContext } from "../lib/context-generator.mjs";
-import type { Output } from "../lib/output.mjs";
 
-export async function run(args: string[], output: Output): Promise<void> {
-  let editorId: string | undefined;
+interface ContextArgs {
+  editorId?: string;
+}
 
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--editor" && args[i + 1]) {
-      editorId = args[i + 1];
-      i++;
+interface ContextResult {
+  rootPath: string;
+  editorId?: string;
+}
+
+export const command: CommandSpec<ContextArgs, ContextResult> = {
+  name: "context",
+  summary: "Regenerate CLAUDE.md and .d.ts types",
+  usage: "Usage: wraithwalker context [--editor <id>]",
+  requiresRoot: true,
+  parse(argv) {
+    let editorId: string | undefined;
+
+    for (let index = 0; index < argv.length; index++) {
+      if (argv[index] === "--editor" && argv[index + 1]) {
+        editorId = argv[index + 1];
+        index++;
+      }
+    }
+
+    return { editorId };
+  },
+  async execute(context, args) {
+    const { rootPath } = await findRoot(context.cwd);
+    await generateContext(rootPath, createFsGateway(), args.editorId);
+    return {
+      rootPath,
+      editorId: args.editorId
+    };
+  },
+  render(output, result) {
+    output.success(`Context generated at ${result.rootPath}`);
+    if (result.editorId) {
+      output.keyValue("Editor", result.editorId);
     }
   }
-
-  const { rootPath } = await findRoot();
-  const gateway = createFsGateway();
-  await generateContext(rootPath, gateway, editorId);
-  output.success(`Context generated at ${rootPath}`);
-  if (editorId) {
-    output.keyValue("Editor", editorId);
-  }
-}
+};
