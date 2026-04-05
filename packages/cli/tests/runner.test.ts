@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 const mocks = vi.hoisted(() => ({
   startServer: vi.fn().mockResolvedValue(undefined)
@@ -25,11 +26,10 @@ async function writeJson(filePath: string, data: unknown): Promise<void> {
   await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
 }
 
-async function createFixtureRoot(): Promise<string> {
-  const { createRoot } = await import("@wraithwalker/core/root");
-  const rootPath = await tmpdir();
-  await createRoot(rootPath);
-  return rootPath;
+async function createFixtureRoot() {
+  return createWraithwalkerFixtureRoot({
+    prefix: "wraithwalker-cli-runner-"
+  });
 }
 
 function consoleCapture() {
@@ -102,8 +102,8 @@ describe("cli runner", () => {
   it("applies project config on root commands and ignores it for help", async () => {
     const { runCli } = await loadRunner();
     const homeDir = await tmpdir();
-    const rootPath = await createFixtureRoot();
-    await writeJson(path.join(rootPath, ".wraithwalker", "cli.json"), {
+    const root = await createFixtureRoot();
+    await root.writeCliConfig({
       theme: {
         overrides: {
           banner: {
@@ -116,7 +116,7 @@ describe("cli runner", () => {
 
     const helpCapture = consoleCapture();
     const helpCode = await runCli(["--help"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir,
       platform: "linux",
@@ -129,7 +129,7 @@ describe("cli runner", () => {
     vi.restoreAllMocks();
     const statusCapture = consoleCapture();
     const statusCode = await runCli(["status"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir,
       platform: "linux",
@@ -137,18 +137,18 @@ describe("cli runner", () => {
     });
 
     expect(statusCode).toBe(0);
-    expect(statusCapture.logs).toContain(`Root${" ".repeat(17)}${rootPath}`);
+    expect(statusCapture.logs).toContain(`Root${" ".repeat(17)}${root.rootPath}`);
   });
 
   it("reports invalid project config paths on root commands", async () => {
     const { runCli } = await loadRunner();
-    const rootPath = await createFixtureRoot();
-    const projectConfigPath = path.join(rootPath, ".wraithwalker", "cli.json");
+    const root = await createFixtureRoot();
+    const projectConfigPath = root.resolve(".wraithwalker/cli.json");
     await fs.writeFile(projectConfigPath, "{oops", "utf8");
     const capture = consoleCapture();
 
     const exitCode = await runCli(["status"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
@@ -161,20 +161,15 @@ describe("cli runner", () => {
 
   it("runs context and scenario commands with existing behavior", async () => {
     const { runCli } = await loadRunner();
-    const rootPath = await createFixtureRoot();
+    const root = await createFixtureRoot();
 
-    await writeJson(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+    await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 200,
         statusText: "OK",
         mimeType: "application/json",
@@ -182,43 +177,29 @@ describe("cli runner", () => {
         url: "https://api.example.com/users",
         method: "GET",
         capturedAt: "2026-04-03T00:00:00.000Z"
-      }
-    );
-    await fs.writeFile(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.body"
-      ),
-      JSON.stringify({ users: [{ id: 1 }] }),
-      "utf8"
-    );
-    await fs.mkdir(path.join(rootPath, "cdn.example.com", "assets"), { recursive: true });
-    await fs.writeFile(path.join(rootPath, "cdn.example.com", "assets", "app.js"), "console.log('v1');", "utf8");
+      },
+      body: JSON.stringify({ users: [{ id: 1 }] })
+    });
+    await root.writeText("cdn.example.com/assets/app.js", "console.log('v1');");
 
     expect(await runCli(["context", "--editor", "cursor"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
       isTTY: false
     })).toBe(0);
-    expect(await fs.readFile(path.join(rootPath, ".cursorrules"), "utf8")).toContain("WraithWalker");
+    expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain("WraithWalker");
 
     expect(await runCli(["scenarios", "save", "baseline"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
       isTTY: false
     })).toBe(0);
     expect(await runCli(["scenarios", "switch", "baseline"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
@@ -227,7 +208,7 @@ describe("cli runner", () => {
 
     const capture = consoleCapture();
     expect(await runCli(["scenarios", "diff", "baseline", "baseline"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
@@ -238,11 +219,11 @@ describe("cli runner", () => {
 
   it("reports scenarios usage errors through the runner", async () => {
     const { runCli } = await loadRunner();
-    const rootPath = await createFixtureRoot();
+    const root = await createFixtureRoot();
     const capture = consoleCapture();
 
     const exitCode = await runCli(["scenarios", "save"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
@@ -255,10 +236,10 @@ describe("cli runner", () => {
 
   it("starts the MCP server through the exported API", async () => {
     const { runCli } = await loadRunner();
-    const rootPath = await createFixtureRoot();
+    const root = await createFixtureRoot();
 
     const exitCode = await runCli(["serve"], {
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
       platform: "linux",
@@ -266,6 +247,6 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.startServer).toHaveBeenCalledWith(rootPath);
+    expect(mocks.startServer).toHaveBeenCalledWith(root.rootPath);
   });
 });

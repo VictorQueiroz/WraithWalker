@@ -1,82 +1,113 @@
-import os from "node:os";
-import path from "node:path";
-import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { diffScenarios, renderDiffMarkdown } from "../src/fixture-diff.mts";
-
-async function createRoot(): Promise<string> {
-  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-diff-"));
-  await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios"), { recursive: true });
-  return rootPath;
-}
-
-async function writeScenarioFixture(
-  rootPath: string,
-  scenario: string,
-  originKey: string,
-  method: string,
-  fixture: string,
-  meta: { status: number; mimeType: string; url: string; method: string },
-  body: string
-): Promise<void> {
-  const base = path.join(rootPath, ".wraithwalker", "scenarios", scenario, originKey, "origins", originKey, "http", method, fixture);
-  await fs.mkdir(base, { recursive: true });
-  await fs.writeFile(path.join(base, "response.meta.json"), JSON.stringify(meta), "utf8");
-  await fs.writeFile(path.join(base, "response.body"), body, "utf8");
-}
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 describe("fixture diff", () => {
   it("detects no differences between identical scenarios", async () => {
-    const rootPath = await createRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
-    await writeScenarioFixture(rootPath, "a", "https__app.example.com", "GET", "users__q-abc__b-def", meta, '{"users":[]}');
-    await writeScenarioFixture(rootPath, "b", "https__app.example.com", "GET", "users__q-abc__b-def", meta, '{"users":[]}');
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "a",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta,
+      body: "{\"users\":[]}"
+    });
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "b",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta,
+      body: "{\"users\":[]}"
+    });
 
-    const diff = await diffScenarios(rootPath, "a", "b");
+    const diff = await diffScenarios(root.rootPath, "a", "b");
     expect(diff.added).toHaveLength(0);
     expect(diff.removed).toHaveLength(0);
     expect(diff.changed).toHaveLength(0);
   });
 
   it("detects added endpoints", async () => {
-    const rootPath = await createRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
-    // Scenario a: empty
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "a"), { recursive: true });
-    // Scenario b: has an endpoint
-    await writeScenarioFixture(rootPath, "b", "https__app.example.com", "GET", "users__q-abc__b-def", meta, '{"users":[]}');
+    await root.ensureScenario("a");
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "b",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta,
+      body: "{\"users\":[]}"
+    });
 
-    const diff = await diffScenarios(rootPath, "a", "b");
+    const diff = await diffScenarios(root.rootPath, "a", "b");
     expect(diff.added).toHaveLength(1);
     expect(diff.added[0].pathname).toBe("/users");
     expect(diff.removed).toHaveLength(0);
   });
 
   it("detects removed endpoints", async () => {
-    const rootPath = await createRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
-    await writeScenarioFixture(rootPath, "a", "https__app.example.com", "GET", "users__q-abc__b-def", meta, '{"users":[]}');
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "b"), { recursive: true });
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "a",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta,
+      body: "{\"users\":[]}"
+    });
+    await root.ensureScenario("b");
 
-    const diff = await diffScenarios(rootPath, "a", "b");
+    const diff = await diffScenarios(root.rootPath, "a", "b");
     expect(diff.removed).toHaveLength(1);
     expect(diff.removed[0].pathname).toBe("/users");
     expect(diff.added).toHaveLength(0);
   });
 
   it("detects changed status codes and body content", async () => {
-    const rootPath = await createRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
     const metaA = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
     const metaB = { status: 500, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
-    await writeScenarioFixture(rootPath, "a", "https__app.example.com", "GET", "users__q-abc__b-def", metaA, '{"users":[]}');
-    await writeScenarioFixture(rootPath, "b", "https__app.example.com", "GET", "users__q-abc__b-def", metaB, '{"error":"internal"}');
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "a",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: metaA,
+      body: "{\"users\":[]}"
+    });
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "b",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: metaB,
+      body: "{\"error\":\"internal\"}"
+    });
 
-    const diff = await diffScenarios(rootPath, "a", "b");
+    const diff = await diffScenarios(root.rootPath, "a", "b");
     expect(diff.changed).toHaveLength(1);
     expect(diff.changed[0].statusBefore).toBe(200);
     expect(diff.changed[0].statusAfter).toBe(500);
@@ -104,53 +135,66 @@ describe("fixture diff", () => {
   });
 
   it("handles empty or non-existent scenario directories gracefully", async () => {
-    const rootPath = await createRoot();
-    // Neither scenario exists as populated directories
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "empty-a"), { recursive: true });
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "empty-b"), { recursive: true });
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
+    await root.ensureScenario("empty-a");
+    await root.ensureScenario("empty-b");
 
-    const diff = await diffScenarios(rootPath, "empty-a", "empty-b");
+    const diff = await diffScenarios(root.rootPath, "empty-a", "empty-b");
     expect(diff.added).toHaveLength(0);
     expect(diff.removed).toHaveLength(0);
     expect(diff.changed).toHaveLength(0);
   });
 
   it("handles fixtures with missing body files", async () => {
-    const rootPath = await createRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
-    // Scenario a: has body, scenario b: no body file
-    await writeScenarioFixture(rootPath, "a", "https__app.example.com", "GET", "users__q-abc__b-def", meta, '{"data":1}');
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "a",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta,
+      body: "{\"data\":1}"
+    });
+    await root.writeApiFixture({
+      mode: "advanced",
+      scenario: "b",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta
+    });
 
-    const baseB = path.join(rootPath, ".wraithwalker", "scenarios", "b", "https__app.example.com", "origins", "https__app.example.com", "http", "GET", "users__q-abc__b-def");
-    await fs.mkdir(baseB, { recursive: true });
-    await fs.writeFile(path.join(baseB, "response.meta.json"), JSON.stringify(meta), "utf8");
-    // No response.body
-
-    const diff = await diffScenarios(rootPath, "a", "b");
+    const diff = await diffScenarios(root.rootPath, "a", "b");
     expect(diff.changed).toHaveLength(1);
     expect(diff.changed[0].bodyChanged).toBe(true);
   });
 
   it("detects API endpoint changes in simple-mode scenarios", async () => {
-    const rootPath = await createRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-diff-"
+    });
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "POST" };
 
-    // Simple-mode API fixtures live under .wraithwalker/simple/{topOriginKey}/origins/{requestOriginKey}/http/
-    const base = path.join(
-      rootPath, ".wraithwalker", "scenarios", "a",
-      ".wraithwalker", "simple", "https__app.example.com",
-      "origins", "https__api.example.com",
-      "http", "POST", "users__q-abc__b-def"
-    );
-    await fs.mkdir(base, { recursive: true });
-    await fs.writeFile(path.join(base, "response.meta.json"), JSON.stringify(meta), "utf8");
-    await fs.writeFile(path.join(base, "response.body"), '{"created":true}', "utf8");
+    await root.writeApiFixture({
+      mode: "simple",
+      scenario: "a",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "POST",
+      fixtureName: "users__q-abc__b-def",
+      meta,
+      body: "{\"created\":true}"
+    });
+    await root.ensureScenario("b");
 
-    // Scenario b: empty
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "b"), { recursive: true });
-
-    const diff = await diffScenarios(rootPath, "a", "b");
+    const diff = await diffScenarios(root.rootPath, "a", "b");
     expect(diff.removed).toHaveLength(1);
     expect(diff.removed[0].method).toBe("POST");
     expect(diff.removed[0].pathname).toBe("/users");

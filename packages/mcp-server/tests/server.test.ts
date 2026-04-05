@@ -1,5 +1,3 @@
-import os from "node:os";
-import path from "node:path";
 import { promises as fs } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -7,22 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { startServer } from "../src/server.mts";
-
-async function createFixtureRoot(): Promise<string> {
-  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-mcp-server-"));
-  await fs.mkdir(path.join(rootPath, ".wraithwalker"), { recursive: true });
-  await fs.writeFile(
-    path.join(rootPath, ".wraithwalker", "root.json"),
-    JSON.stringify({ rootId: "root-mcp-server" }),
-    "utf8"
-  );
-  return rootPath;
-}
-
-async function writeJson(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
-}
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 function readTextContent(result: unknown): string {
   if (!result || typeof result !== "object" || !("content" in result) || !Array.isArray(result.content)) {
@@ -63,8 +46,11 @@ afterEach(() => {
 
 describe("mcp server", () => {
   it("registers the expected tools", async () => {
-    const rootPath = await createFixtureRoot();
-    const { client, server } = await connectClient(rootPath);
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server } = await connectClient(root.rootPath);
 
     try {
       const { tools } = await client.listTools();
@@ -83,11 +69,15 @@ describe("mcp server", () => {
   });
 
   it("serves fixture data over MCP tools", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
 
-    await writeJson(
-      path.join(rootPath, ".wraithwalker", "simple", "https__app.example.com", "RESOURCE_MANIFEST.json"),
-      {
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
         schemaVersion: 1,
         topOrigin: "https://app.example.com",
         topOriginKey: "https__app.example.com",
@@ -107,22 +97,15 @@ describe("mcp server", () => {
           }]
         }
       }
-    );
+    });
 
-    await writeJson(
-      path.join(
-        rootPath,
-        ".wraithwalker",
-        "simple",
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+    await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 200,
         statusText: "OK",
         mimeType: "application/json",
@@ -131,99 +114,44 @@ describe("mcp server", () => {
         method: "GET",
         capturedAt: "2026-04-05T00:00:00.000Z"
       }
-    );
+    });
 
-    await fs.mkdir(path.join(rootPath, "cdn.example.com", "assets"), { recursive: true });
-    await fs.writeFile(path.join(rootPath, "cdn.example.com", "assets", "app.js"), "console.log('fixture');", "utf8");
+    await root.writeText("cdn.example.com/assets/app.js", "console.log('fixture');");
 
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "baseline"), { recursive: true });
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "candidate"), { recursive: true });
-    await writeJson(
-      path.join(
-        rootPath,
-        ".wraithwalker",
-        "scenarios",
-        "candidate",
-        ".wraithwalker",
-        "simple",
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+    await root.ensureScenario("baseline");
+    await root.ensureScenario("candidate");
+    await root.writeApiFixture({
+      mode: "simple",
+      scenario: "candidate",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 500,
         mimeType: "application/json",
         url: "https://api.example.com/users",
         method: "GET"
-      }
-    );
-    await fs.writeFile(
-      path.join(
-        rootPath,
-        ".wraithwalker",
-        "scenarios",
-        "candidate",
-        ".wraithwalker",
-        "simple",
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.body"
-      ),
-      "{\"error\":true}",
-      "utf8"
-    );
-    await writeJson(
-      path.join(
-        rootPath,
-        ".wraithwalker",
-        "scenarios",
-        "baseline",
-        ".wraithwalker",
-        "simple",
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+      },
+      body: "{\"error\":true}"
+    });
+    await root.writeApiFixture({
+      mode: "simple",
+      scenario: "baseline",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 200,
         mimeType: "application/json",
         url: "https://api.example.com/users",
         method: "GET"
-      }
-    );
-    await fs.writeFile(
-      path.join(
-        rootPath,
-        ".wraithwalker",
-        "scenarios",
-        "baseline",
-        ".wraithwalker",
-        "simple",
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.body"
-      ),
-      "{\"users\":[]}",
-      "utf8"
-    );
+      },
+      body: "{\"users\":[]}"
+    });
 
-    const { client, server } = await connectClient(rootPath);
+    const { client, server } = await connectClient(root.rootPath);
 
     try {
       const listOriginsResult = await client.callTool({
@@ -297,8 +225,11 @@ describe("mcp server", () => {
   });
 
   it("returns MCP tool errors for invalid requests", async () => {
-    const rootPath = await createFixtureRoot();
-    const { client, server } = await connectClient(rootPath);
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server } = await connectClient(root.rootPath);
 
     try {
       const endpointResult = await client.callTool({

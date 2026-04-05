@@ -1,29 +1,20 @@
-import os from "node:os";
-import path from "node:path";
-import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { listScenarios, readFixtureBody, readOriginInfo, readSiteConfigs, type SiteConfigLike, type StaticResourceManifest } from "../src/fixture-reader.mts";
-
-async function createFixtureRoot(): Promise<string> {
-  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-mcp-"));
-  await fs.mkdir(path.join(rootPath, ".wraithwalker"), { recursive: true });
-  await fs.writeFile(
-    path.join(rootPath, ".wraithwalker", "root.json"),
-    JSON.stringify({ rootId: "root-mcp" }),
-    "utf8"
-  );
-  return rootPath;
-}
-
-async function writeJson(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
-}
+import {
+  listScenarios,
+  readFixtureBody,
+  readOriginInfo,
+  readSiteConfigs,
+  type SiteConfigLike,
+  type StaticResourceManifest
+} from "../src/fixture-reader.mts";
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 describe("fixture reader", () => {
   it("reads origin info with static asset manifest", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
     const manifest: StaticResourceManifest = {
       schemaVersion: 1,
       topOrigin: "https://app.example.com",
@@ -45,13 +36,14 @@ describe("fixture reader", () => {
       }
     };
 
-    await writeJson(
-      path.join(rootPath, ".wraithwalker", "simple", "https__app.example.com", "RESOURCE_MANIFEST.json"),
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
       manifest
-    );
+    });
 
     const config: SiteConfigLike = { origin: "https://app.example.com", mode: "simple" };
-    const info = await readOriginInfo(rootPath, config);
+    const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.origin).toBe("https://app.example.com");
     expect(info.manifest).not.toBeNull();
@@ -59,24 +51,28 @@ describe("fixture reader", () => {
   });
 
   it("reads API endpoints from fixture directories", async () => {
-    const rootPath = await createFixtureRoot();
-    const meta = {
-      status: 200,
-      statusText: "OK",
-      mimeType: "application/json",
-      resourceType: "XHR",
-      url: "https://api.example.com/users",
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
+    await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
       method: "GET",
-      capturedAt: "2026-04-03T00:00:00.000Z"
-    };
-
-    await writeJson(
-      path.join(rootPath, "https__app.example.com", "origins", "https__api.example.com", "http", "GET", "users__q-abc__b-def", "response.meta.json"),
-      meta
-    );
+      fixtureName: "users__q-abc__b-def",
+      meta: {
+        status: 200,
+        statusText: "OK",
+        mimeType: "application/json",
+        resourceType: "XHR",
+        url: "https://api.example.com/users",
+        method: "GET",
+        capturedAt: "2026-04-03T00:00:00.000Z"
+      }
+    });
 
     const config: SiteConfigLike = { origin: "https://app.example.com", mode: "advanced" };
-    const info = await readOriginInfo(rootPath, config);
+    const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.apiEndpoints).toHaveLength(1);
     expect(info.apiEndpoints[0].method).toBe("GET");
@@ -85,69 +81,71 @@ describe("fixture reader", () => {
   });
 
   it("reads fixture body content", async () => {
-    const rootPath = await createFixtureRoot();
-    const bodyPath = path.join(rootPath, "cdn.example.com", "assets", "app.js");
-    await fs.mkdir(path.dirname(bodyPath), { recursive: true });
-    await fs.writeFile(bodyPath, "console.log('hello');");
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
+    await root.writeText("cdn.example.com/assets/app.js", "console.log('hello');");
 
-    const content = await readFixtureBody(rootPath, "cdn.example.com/assets/app.js");
+    const content = await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js");
     expect(content).toBe("console.log('hello');");
   });
 
   it("returns null for missing fixture files", async () => {
-    const rootPath = await createFixtureRoot();
-    const content = await readFixtureBody(rootPath, "nonexistent.js");
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
+    const content = await readFixtureBody(root.rootPath, "nonexistent.js");
     expect(content).toBeNull();
   });
 
   it("lists saved scenarios", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
 
-    // No scenarios
-    expect(await listScenarios(rootPath)).toEqual([]);
+    expect(await listScenarios(root.rootPath)).toEqual([]);
 
-    // Create scenarios
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "v1"), { recursive: true });
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "scenarios", "v2"), { recursive: true });
+    await root.ensureScenario("v1");
+    await root.ensureScenario("v2");
 
-    const scenarios = await listScenarios(rootPath);
+    const scenarios = await listScenarios(root.rootPath);
     expect(scenarios.sort()).toEqual(["v1", "v2"]);
   });
 
   it("discovers site configs from the fixture directory structure", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
 
-    // Create simple mode origin
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "simple", "https__app.example.com"), { recursive: true });
+    await root.ensureOrigin({ mode: "simple", topOrigin: "https://app.example.com" });
+    await root.ensureOrigin({ mode: "advanced", topOrigin: "https://api.example.com" });
 
-    // Create advanced mode origin
-    await fs.mkdir(path.join(rootPath, "https__api.example.com", "origins"), { recursive: true });
-
-    const configs = await readSiteConfigs(rootPath);
+    const configs = await readSiteConfigs(root.rootPath);
     expect(configs).toHaveLength(2);
     expect(configs.find((c) => c.mode === "simple")).toBeDefined();
     expect(configs.find((c) => c.mode === "advanced")).toBeDefined();
   });
 
   it("discovers origins with non-standard ports", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
 
-    // Simple mode with port
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "simple", "http__localhost__4173"), { recursive: true });
+    await root.ensureOrigin({ mode: "simple", topOrigin: "http://localhost:4173" });
+    await root.ensureOrigin({ mode: "advanced", topOrigin: "https://api.example.com:8443" });
 
-    // Advanced mode with port
-    await fs.mkdir(path.join(rootPath, "https__api.example.com__8443", "origins"), { recursive: true });
-
-    const configs = await readSiteConfigs(rootPath);
+    const configs = await readSiteConfigs(root.rootPath);
     const origins = configs.map((c) => c.origin).sort();
     expect(origins).toContain("http://localhost:4173");
     expect(origins).toContain("https://api.example.com:8443");
   });
 
   it("returns empty info for origin with no fixtures", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
     const config: SiteConfigLike = { origin: "https://empty.example.com", mode: "advanced" };
-    const info = await readOriginInfo(rootPath, config);
+    const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.manifest).toBeNull();
     expect(info.apiEndpoints).toHaveLength(0);

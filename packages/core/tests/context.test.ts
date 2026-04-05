@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { generateContext, type FsGateway } from "../src/context.mts";
-import { createRoot } from "../src/root.mts";
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 function createFsGateway(): FsGateway {
   return {
@@ -50,32 +50,22 @@ function createFsGateway(): FsGateway {
   };
 }
 
-async function createFixtureRoot(): Promise<string> {
-  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-core-context-"));
-  await createRoot(rootPath);
-  return rootPath;
-}
-
-async function writeJson(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+async function createFixtureRoot() {
+  return createWraithwalkerFixtureRoot({
+    prefix: "wraithwalker-core-context-"
+  });
 }
 
 describe("context generation", () => {
   it("writes context files and inferred types", async () => {
-    const rootPath = await createFixtureRoot();
-    await writeJson(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+    const root = await createFixtureRoot();
+    await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 200,
         statusText: "OK",
         mimeType: "application/json",
@@ -83,37 +73,25 @@ describe("context generation", () => {
         url: "https://api.example.com/users",
         method: "GET",
         capturedAt: "2026-04-03T00:00:00.000Z"
-      }
-    );
-    await fs.writeFile(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.body"
-      ),
-      JSON.stringify({ users: [{ id: 1 }] }),
-      "utf8"
-    );
+      },
+      body: JSON.stringify({ users: [{ id: 1 }] })
+    });
 
-    const markdown = await generateContext(rootPath, createFsGateway(), "cursor");
+    const markdown = await generateContext(root.rootPath, createFsGateway(), "cursor");
 
     expect(markdown).toContain("WraithWalker Fixture Context");
-    expect(await fs.readFile(path.join(rootPath, "CLAUDE.md"), "utf8")).toContain("GET");
-    expect(await fs.readFile(path.join(rootPath, ".cursorrules"), "utf8")).toContain("WraithWalker");
-    expect(await fs.readFile(path.join(rootPath, ".wraithwalker", "types", "index.d.ts"), "utf8")).toContain("export *");
+    expect(await fs.readFile(path.join(root.rootPath, "CLAUDE.md"), "utf8")).toContain("GET");
+    expect(await fs.readFile(path.join(root.rootPath, ".cursorrules"), "utf8")).toContain("WraithWalker");
+    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker", "types", "index.d.ts"), "utf8")).toContain("export *");
   });
 
   it("uses default context files and describes static-only or empty origins", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createFixtureRoot();
 
-    await writeJson(
-      path.join(rootPath, ".wraithwalker", "simple", "https__app.example.com", "RESOURCE_MANIFEST.json"),
-      {
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
         schemaVersion: 1,
         topOrigin: "https://app.example.com",
         topOriginKey: "https__app.example.com",
@@ -133,17 +111,17 @@ describe("context generation", () => {
           }]
         }
       }
-    );
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "simple", "http__localhost__4173"), { recursive: true });
+    });
+    await root.ensureOrigin({ mode: "simple", topOrigin: "http://localhost:4173" });
 
-    const markdown = await generateContext(rootPath, createFsGateway());
+    const markdown = await generateContext(root.rootPath, createFsGateway());
 
     expect(markdown).toContain("### Static Assets");
     expect(markdown).toContain("Script: 1");
     expect(markdown).toContain("No captured fixtures found for this origin.");
     expect(markdown).not.toContain("## Suggested Agent Tasks");
-    expect(await fs.readFile(path.join(rootPath, "CLAUDE.md"), "utf8")).toContain("Static Assets");
-    await expect(fs.access(path.join(rootPath, ".cursorrules"))).rejects.toThrow();
-    await expect(fs.access(path.join(rootPath, ".wraithwalker", "types", "index.d.ts"))).rejects.toThrow();
+    expect(await fs.readFile(path.join(root.rootPath, "CLAUDE.md"), "utf8")).toContain("Static Assets");
+    await expect(fs.access(path.join(root.rootPath, ".cursorrules"))).rejects.toThrow();
+    await expect(fs.access(path.join(root.rootPath, ".wraithwalker", "types", "index.d.ts"))).rejects.toThrow();
   });
 });

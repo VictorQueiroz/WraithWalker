@@ -1,6 +1,5 @@
 import os from "node:os";
 import path from "node:path";
-import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,22 +9,13 @@ import {
   type SiteConfigLike,
   type StaticResourceManifest
 } from "../src/fixtures.mts";
-import { createRoot } from "../src/root.mts";
-
-async function createFixtureRoot(): Promise<string> {
-  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-core-fixtures-"));
-  await createRoot(rootPath);
-  return rootPath;
-}
-
-async function writeJson(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
-}
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 describe("fixture readers", () => {
   it("reads origin info with a simple-mode manifest", async () => {
-    const rootPath = await createFixtureRoot();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
     const manifest: StaticResourceManifest = {
       schemaVersion: 1,
       topOrigin: "https://app.example.com",
@@ -47,12 +37,13 @@ describe("fixture readers", () => {
       }
     };
 
-    await writeJson(
-      path.join(rootPath, ".wraithwalker", "simple", "https__app.example.com", "RESOURCE_MANIFEST.json"),
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
       manifest
-    );
+    });
 
-    const info = await readOriginInfo(rootPath, {
+    const info = await readOriginInfo(root.rootPath, {
       origin: "https://app.example.com",
       mode: "simple"
     });
@@ -62,21 +53,16 @@ describe("fixture readers", () => {
   });
 
   it("reads simple-mode API endpoints without a manifest and falls back to fixture names", async () => {
-    const rootPath = await createFixtureRoot();
-    await writeJson(
-      path.join(
-        rootPath,
-        ".wraithwalker",
-        "simple",
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 204,
         statusText: "No Content",
         mimeType: "application/json",
@@ -84,9 +70,9 @@ describe("fixture readers", () => {
         method: "GET",
         capturedAt: "2026-04-03T00:00:00.000Z"
       }
-    );
+    });
 
-    const info = await readOriginInfo(rootPath, {
+    const info = await readOriginInfo(root.rootPath, {
       origin: "https://app.example.com",
       mode: "simple"
     });
@@ -103,19 +89,16 @@ describe("fixture readers", () => {
   });
 
   it("reads API endpoint metadata from advanced-mode fixtures", async () => {
-    const rootPath = await createFixtureRoot();
-    await writeJson(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users__q-abc__b-def",
-        "response.meta.json"
-      ),
-      {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
         status: 200,
         statusText: "OK",
         mimeType: "application/json",
@@ -124,31 +107,33 @@ describe("fixture readers", () => {
         method: "GET",
         capturedAt: "2026-04-03T00:00:00.000Z"
       }
-    );
+    });
 
     const config: SiteConfigLike = { origin: "https://app.example.com", mode: "advanced" };
-    const info = await readOriginInfo(rootPath, config);
+    const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.apiEndpoints).toHaveLength(1);
     expect(info.apiEndpoints[0].pathname).toBe("/users");
   });
 
   it("reads fixture bodies and returns null for missing ones", async () => {
-    const rootPath = await createFixtureRoot();
-    const fixturePath = path.join(rootPath, "cdn.example.com", "assets", "app.js");
-    await fs.mkdir(path.dirname(fixturePath), { recursive: true });
-    await fs.writeFile(fixturePath, "console.log('hello');", "utf8");
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    await root.writeText("cdn.example.com/assets/app.js", "console.log('hello');");
 
-    expect(await readFixtureBody(rootPath, "cdn.example.com/assets/app.js")).toBe("console.log('hello');");
-    expect(await readFixtureBody(rootPath, "missing.js")).toBeNull();
+    expect(await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js")).toBe("console.log('hello');");
+    expect(await readFixtureBody(root.rootPath, "missing.js")).toBeNull();
   });
 
   it("discovers site configs from simple and advanced fixture trees", async () => {
-    const rootPath = await createFixtureRoot();
-    await fs.mkdir(path.join(rootPath, ".wraithwalker", "simple", "http__localhost__4173"), { recursive: true });
-    await fs.mkdir(path.join(rootPath, "https__api.example.com__8443", "origins"), { recursive: true });
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    await root.ensureOrigin({ mode: "simple", topOrigin: "http://localhost:4173" });
+    await root.ensureOrigin({ mode: "advanced", topOrigin: "https://api.example.com:8443" });
 
-    const configs = await readSiteConfigs(rootPath);
+    const configs = await readSiteConfigs(root.rootPath);
     const origins = configs.map((config) => config.origin).sort();
 
     expect(origins).toContain("http://localhost:4173");

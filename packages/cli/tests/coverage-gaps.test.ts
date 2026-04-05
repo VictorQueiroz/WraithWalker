@@ -3,8 +3,6 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { createRoot } from "@wraithwalker/core/root";
-
 import {
   getGlobalConfigPath,
   loadGlobalCliConfig,
@@ -14,17 +12,10 @@ import {
 } from "../src/lib/cli-config.mts";
 import { command as scenariosCommand } from "../src/commands/scenarios.mts";
 import { command as statusCommand } from "../src/commands/status.mts";
-
-const SCENARIOS_DIR = path.join(".wraithwalker", "scenarios");
-const STATIC_RESOURCE_MANIFEST_FILE = "RESOURCE_MANIFEST.json";
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 async function tmpdir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-cli-coverage-"));
-}
-
-async function writeJson(filePath: string, data: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
 }
 
 function createOutputRecorder() {
@@ -81,11 +72,10 @@ function createOutputRecorder() {
 describe("cli config coverage gaps", () => {
   it("returns empty configs when global and project files are missing", async () => {
     const homeDir = await tmpdir();
-    const rootPath = await tmpdir();
-    await createRoot(rootPath);
+    const root = await createWraithwalkerFixtureRoot();
 
     await expect(loadGlobalCliConfig({ platform: "linux", env: {}, homeDir })).resolves.toEqual({});
-    await expect(loadProjectCliConfig(rootPath)).resolves.toEqual({});
+    await expect(loadProjectCliConfig(root.rootPath)).resolves.toEqual({});
   });
 
   it("resolves platform-specific config paths", async () => {
@@ -124,11 +114,10 @@ describe("cli config coverage gaps", () => {
     ["indent", { theme: { overrides: { indent: 12 } } }, "theme.overrides.indent must be a string."],
     ["label width", { theme: { overrides: { labelWidth: -1 } } }, "theme.overrides.labelWidth must be a non-negative integer."]
   ])("rejects invalid %s config values", async (_label, config, message) => {
-    const rootPath = await tmpdir();
-    await createRoot(rootPath);
-    await writeJson(path.join(rootPath, ".wraithwalker", "cli.json"), config);
+    const root = await createWraithwalkerFixtureRoot();
+    await root.writeCliConfig(config);
 
-    await expect(loadProjectCliConfig(rootPath)).rejects.toThrow(message);
+    await expect(loadProjectCliConfig(root.rootPath)).rejects.toThrow(message);
   });
 
   it("merges banner and scalar overrides across config layers", () => {
@@ -195,19 +184,21 @@ describe("cli command coverage gaps", () => {
   });
 
   it("lists scenarios from disk and renders each scenario result shape", async () => {
-    const rootPath = await tmpdir();
-    await createRoot(rootPath);
-    await fs.mkdir(path.join(rootPath, SCENARIOS_DIR, "baseline"), { recursive: true });
-    await fs.mkdir(path.join(rootPath, SCENARIOS_DIR, "candidate"), { recursive: true });
+    const root = await createWraithwalkerFixtureRoot();
+    await root.ensureScenario("baseline");
+    await root.ensureScenario("candidate");
 
     const listResult = await scenariosCommand.execute({
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       output: createOutputRecorder().output,
       cliConfig: resolveCliConfig({})
     }, { action: "list" });
 
     expect(listResult.action).toBe("list");
+    if (listResult.action !== "list") {
+      throw new Error(`Expected list action, received ${listResult.action}`);
+    }
     expect([...listResult.scenarios].sort()).toEqual(["baseline", "candidate"]);
 
     const emptyOutput = createOutputRecorder();
@@ -231,12 +222,12 @@ describe("cli command coverage gaps", () => {
   });
 
   it("computes status counts from fixture metadata and manifests", async () => {
-    const rootPath = await tmpdir();
-    const sentinel = await createRoot(rootPath);
+    const root = await createWraithwalkerFixtureRoot();
 
-    await writeJson(
-      path.join(rootPath, "https__app.example.com", STATIC_RESOURCE_MANIFEST_FILE),
-      {
+    await root.writeManifest({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      manifest: {
         schemaVersion: 1,
         topOrigin: "https://app.example.com",
         topOriginKey: "https__app.example.com",
@@ -279,20 +270,15 @@ describe("cli command coverage gaps", () => {
           }]
         }
       }
-    );
+    });
 
-    await writeJson(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "GET",
-        "users",
-        "response.meta.json"
-      ),
-      {
+    await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users",
+      meta: {
         status: 200,
         statusText: "OK",
         mimeType: "application/json",
@@ -301,20 +287,15 @@ describe("cli command coverage gaps", () => {
         method: "GET",
         capturedAt: "2026-04-04T00:00:00.000Z"
       }
-    );
+    });
 
-    await writeJson(
-      path.join(
-        rootPath,
-        "https__app.example.com",
-        "origins",
-        "https__api.example.com",
-        "http",
-        "POST",
-        "login",
-        "response.meta.json"
-      ),
-      {
+    await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "POST",
+      fixtureName: "login",
+      meta: {
         status: 201,
         statusText: "Created",
         mimeType: "application/json",
@@ -323,22 +304,22 @@ describe("cli command coverage gaps", () => {
         method: "POST",
         capturedAt: "2026-04-04T00:00:00.000Z"
       }
-    );
+    });
 
-    await fs.mkdir(path.join(rootPath, SCENARIOS_DIR, "baseline"), { recursive: true });
-    await fs.mkdir(path.join(rootPath, SCENARIOS_DIR, "candidate"), { recursive: true });
+    await root.ensureScenario("baseline");
+    await root.ensureScenario("candidate");
 
     const output = createOutputRecorder();
     const result = await statusCommand.execute({
-      cwd: rootPath,
+      cwd: root.rootPath,
       env: {},
       output: output.output,
       cliConfig: resolveCliConfig({})
     }, {});
 
     expect(result).toEqual({
-      rootPath,
-      rootId: sentinel.rootId,
+      rootPath: root.rootPath,
+      rootId: root.rootId,
       origins: 1,
       endpoints: 2,
       assets: 3,
