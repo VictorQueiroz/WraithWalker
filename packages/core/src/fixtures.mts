@@ -1,7 +1,7 @@
-import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { SCENARIOS_DIR, SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, STATIC_RESOURCE_MANIFEST_FILE } from "./constants.mjs";
+import { createFixtureRootFs, resolveWithinRoot } from "./root-fs.mjs";
 
 export interface StaticResourceManifestEntry {
   requestUrl: string;
@@ -40,6 +40,8 @@ export interface ApiEndpoint {
   status: number;
   mimeType: string;
   fixtureDir: string;
+  metaPath: string;
+  bodyPath: string;
 }
 
 export interface SiteConfigLike {
@@ -56,6 +58,14 @@ export interface OriginInfo {
   apiEndpoints: ApiEndpoint[];
 }
 
+export interface ApiFixture {
+  fixtureDir: string;
+  metaPath: string;
+  bodyPath: string;
+  meta: ResponseMeta;
+  body: string | null;
+}
+
 function originToKey(origin: string): string {
   const url = new URL(origin);
   const protocol = url.protocol.replace(":", "");
@@ -70,44 +80,16 @@ function keyToOrigin(key: string): string {
   return port ? `${protocol}://${hostname}:${port}` : `${protocol}://${hostname}`;
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function readJsonSafe<T>(filePath: string): Promise<T | null> {
-  try {
-    const content = await fs.readFile(filePath, "utf8");
-    return JSON.parse(content) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function listDirectoriesIn(dirPath: string): Promise<string[]> {
-  try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
 async function collectApiEndpoints(rootPath: string, baseRelativePath: string): Promise<ApiEndpoint[]> {
+  const rootFs = createFixtureRootFs(rootPath);
   const endpoints: ApiEndpoint[] = [];
-  const httpDir = path.join(rootPath, baseRelativePath, "http");
-  const methods = await listDirectoriesIn(httpDir);
+  const methods = await rootFs.listOptionalDirectories(path.join(baseRelativePath, "http"));
 
   for (const method of methods) {
-    const fixtures = await listDirectoriesIn(path.join(httpDir, method));
+    const fixtures = await rootFs.listOptionalDirectories(path.join(baseRelativePath, "http", method));
     for (const fixture of fixtures) {
-      const fixtureDir = path.join(httpDir, method, fixture);
-      const metaPath = path.join(fixtureDir, "response.meta.json");
-      const meta = await readJsonSafe<ResponseMeta>(metaPath);
+      const fixtureRelativeDir = path.join(baseRelativePath, "http", method, fixture);
+      const meta = await rootFs.readOptionalJson<ResponseMeta>(path.join(fixtureRelativeDir, "response.meta.json"));
       if (!meta) continue;
 
       const pathname = meta.url
@@ -119,7 +101,9 @@ async function collectApiEndpoints(rootPath: string, baseRelativePath: string): 
         pathname,
         status: meta.status,
         mimeType: meta.mimeType || "",
-        fixtureDir: path.join(baseRelativePath, "http", method, fixture)
+        fixtureDir: fixtureRelativeDir,
+        metaPath: path.join(fixtureRelativeDir, "response.meta.json"),
+        bodyPath: path.join(fixtureRelativeDir, "response.body")
       });
     }
   }
@@ -128,21 +112,21 @@ async function collectApiEndpoints(rootPath: string, baseRelativePath: string): 
 }
 
 export async function readOriginInfo(rootPath: string, siteConfig: SiteConfigLike): Promise<OriginInfo> {
+  const rootFs = createFixtureRootFs(rootPath);
   const originKey = originToKey(siteConfig.origin);
   const isSimple = siteConfig.mode === "simple";
 
   const manifestRelative = isSimple
     ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, STATIC_RESOURCE_MANIFEST_FILE)
     : path.join(originKey, STATIC_RESOURCE_MANIFEST_FILE);
-  const manifestAbsolute = path.join(rootPath, manifestRelative);
-  const manifest = await readJsonSafe<StaticResourceManifest>(manifestAbsolute);
+  const manifest = await rootFs.readOptionalJson<StaticResourceManifest>(manifestRelative);
 
   const originsBaseRelative = isSimple
-    ? path.join(rootPath, SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, "origins")
-    : path.join(rootPath, originKey, "origins");
+    ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, "origins")
+    : path.join(originKey, "origins");
 
   const apiEndpoints: ApiEndpoint[] = [];
-  const originDirs = await listDirectoriesIn(originsBaseRelative);
+  const originDirs = await rootFs.listOptionalDirectories(originsBaseRelative);
   for (const dir of originDirs) {
     const relativeBasePath = isSimple
       ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, "origins", dir)
@@ -155,43 +139,61 @@ export async function readOriginInfo(rootPath: string, siteConfig: SiteConfigLik
     origin: siteConfig.origin,
     originKey,
     mode: siteConfig.mode,
-    manifestPath: (await fileExists(manifestAbsolute)) ? manifestRelative : null,
+    manifestPath: (await rootFs.exists(manifestRelative)) ? manifestRelative : null,
     manifest,
     apiEndpoints
   };
 }
 
+export function resolveFixturePath(rootPath: string, relativePath: string): string | null {
+  return resolveWithinRoot(rootPath, relativePath);
+}
+
 export async function readFixtureBody(rootPath: string, relativePath: string): Promise<string | null> {
-  const absolute = path.join(rootPath, relativePath);
-  try {
-    return await fs.readFile(absolute, "utf8");
-  } catch {
+  return createFixtureRootFs(rootPath).readOptionalText(relativePath);
+}
+
+export async function readApiFixture(rootPath: string, fixtureDir: string): Promise<ApiFixture | null> {
+  const rootFs = createFixtureRootFs(rootPath);
+  const metaPath = path.join(fixtureDir, "response.meta.json");
+  const bodyPath = path.join(fixtureDir, "response.body");
+
+  if (!rootFs.resolve(metaPath) || !rootFs.resolve(bodyPath)) {
     return null;
   }
+
+  const meta = await rootFs.readOptionalJson<ResponseMeta>(metaPath);
+  if (!meta) {
+    return null;
+  }
+
+  return {
+    fixtureDir,
+    metaPath,
+    bodyPath,
+    meta,
+    body: await rootFs.readOptionalText(bodyPath)
+  };
 }
 
 export async function readSiteConfigs(rootPath: string): Promise<SiteConfigLike[]> {
-  const simpleOriginsDir = path.join(rootPath, SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE);
-  const simpleOrigins = await listDirectoriesIn(simpleOriginsDir);
+  const rootFs = createFixtureRootFs(rootPath);
+  const simpleOrigins = await rootFs.listOptionalDirectories(path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE));
 
   const configs: SiteConfigLike[] = [];
   for (const originKey of simpleOrigins) {
     configs.push({ origin: keyToOrigin(originKey), mode: "simple" });
   }
 
-  try {
-    const topEntries = await fs.readdir(rootPath, { withFileTypes: true });
-    for (const entry of topEntries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name === path.dirname(SCENARIOS_DIR)) continue;
-      if (!entry.name.startsWith("http")) continue;
-      const origin = keyToOrigin(entry.name);
-      if (!configs.some((config) => config.origin === origin)) {
-        configs.push({ origin, mode: "advanced" });
-      }
+  const topEntries = await rootFs.listOptionalDirectory("");
+  for (const entry of topEntries) {
+    if (entry.kind !== "directory") continue;
+    if (entry.name === path.dirname(SCENARIOS_DIR)) continue;
+    if (!entry.name.startsWith("http")) continue;
+    const origin = keyToOrigin(entry.name);
+    if (!configs.some((config) => config.origin === origin)) {
+      configs.push({ origin, mode: "advanced" });
     }
-  } catch {
-    // Root path may not exist yet.
   }
 
   return configs;

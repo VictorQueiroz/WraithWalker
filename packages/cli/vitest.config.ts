@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@wraithwalker/core/root": fileURLToPath(new URL("../core/src/root.mts", import.meta.url)),
+      "@wraithwalker/core/root-fs": fileURLToPath(new URL("../core/src/root-fs.mts", import.meta.url)),
       "@wraithwalker/core/fixtures": fileURLToPath(new URL("../core/src/fixtures.mts", import.meta.url)),
       "@wraithwalker/core/scenarios": fileURLToPath(new URL("../core/src/scenarios.mts", import.meta.url)),
       "@wraithwalker/core/context": fileURLToPath(new URL("../core/src/context.mts", import.meta.url)),

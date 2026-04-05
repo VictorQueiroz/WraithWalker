@@ -32,6 +32,7 @@ function createChromeApi() {
     },
     tabs: {
       query: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 99 }),
       onUpdated: createEvent(),
       onRemoved: createEvent()
     },
@@ -337,8 +338,178 @@ describe("background entrypoint", () => {
       expectedRootId: "root-1",
       commandTemplate: 'code "$DIR"'
     });
+    expect(chromeApi.tabs.create).not.toHaveBeenCalled();
     expect(setNativeHostConfig).toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
+  });
+
+  it("opens the directory through an editor URL template when one is available", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage
+      .mockResolvedValueOnce({ ok: true }) // fs.generateContext
+      .mockResolvedValueOnce({
+        ok: true,
+        sentinel: { rootId: "root-1" },
+        permission: "granted"
+      });
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        rootPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig,
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "vscode" });
+
+    expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(1, {
+      target: "offscreen",
+      type: "fs.generateContext",
+      payload: {
+        siteConfigs: [],
+        editorId: "vscode"
+      }
+    });
+    expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(2, {
+      target: "offscreen",
+      type: "fs.ensureRoot",
+      payload: { requestPermission: true }
+    });
+    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+      url: "vscode://file//tmp/fixtures/"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+    expect(setNativeHostConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ lastOpenError: "" })
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("falls back to the native helper when URL-template launch fails", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.create.mockRejectedValueOnce(new Error("External protocol handler failed."));
+    chromeApi.runtime.sendMessage
+      .mockResolvedValueOnce({ ok: true }) // fs.generateContext
+      .mockResolvedValueOnce({
+        ok: true,
+        sentinel: { rootId: "root-1" },
+        permission: "granted"
+      });
+    chromeApi.runtime.sendNativeMessage
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true });
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures",
+        urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig,
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.openDirectoryInEditor();
+
+    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+      url: "custom://open?folder=%2Ftmp%2Ffixtures"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(1, "com.example.host", {
+      type: "verifyRoot",
+      path: "/tmp/fixtures",
+      expectedRootId: "root-1"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(2, "com.example.host", {
+      type: "openDirectory",
+      path: "/tmp/fixtures",
+      expectedRootId: "root-1",
+      commandTemplate: 'code "$DIR"'
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns the URL-template launch error when no native fallback is configured", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.create.mockRejectedValueOnce(new Error("No application is registered for the URL."));
+    chromeApi.runtime.sendMessage
+      .mockResolvedValueOnce({ ok: true }) // fs.generateContext
+      .mockResolvedValueOnce({
+        ok: true,
+        sentinel: { rootId: "root-1" },
+        permission: "granted"
+      });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "",
+        rootPath: "/tmp/fixtures",
+        urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.openDirectoryInEditor();
+
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      error: "No application is registered for the URL."
+    });
   });
 
   it("surfaces native verification failures and root-sentinel errors", async () => {

@@ -16,6 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@wraithwalker/core/root": ["packages/core/src/root.mts"],
+      "@wraithwalker/core/root-fs": ["packages/core/src/root-fs.mts"],
       "@wraithwalker/core/fixtures": ["packages/core/src/fixtures.mts"],
       "@wraithwalker/core/scenarios": ["packages/core/src/scenarios.mts"],
       "@wraithwalker/core/context": ["packages/core/src/context.mts"],

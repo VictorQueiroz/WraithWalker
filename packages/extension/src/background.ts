@@ -1,9 +1,10 @@
 import { buildSessionSnapshot } from "./lib/background-helpers.js";
 import { getNativeHostConfig as defaultGetNativeHostConfig, getSiteConfigs as defaultGetSiteConfigs, setLastSessionSnapshot as defaultSetLastSessionSnapshot, setNativeHostConfig as defaultSetNativeHostConfig } from "./lib/chrome-storage.js";
-import { DEFAULT_NATIVE_HOST_CONFIG, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
-import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult } from "./lib/messages.js";
+import { DEFAULT_NATIVE_HOST_CONFIG, EDITOR_PRESETS, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
+import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
+import type { EditorPreset } from "./lib/constants.js";
 import type { AttachedTabState, NativeHostConfig, RequestEntry, RootSentinel, SessionSnapshot, SiteConfig } from "./lib/types.js";
 
 const DEBUGGER_VERSION = "1.3";
@@ -43,6 +44,7 @@ interface DebuggerApi {
 
 interface TabsApi {
   query(queryInfo: Record<string, unknown>): Promise<Array<{ id?: number; url?: string }>>;
+  create(createProperties: { url: string }): Promise<{ id?: number }>;
   onUpdated: {
     addListener(listener: (tabId: number, changeInfo: Record<string, unknown>, tab: { id?: number; url?: string }) => void): void;
   };
@@ -150,6 +152,25 @@ function getErrorMessage(result: { error?: string }): string {
 
 function isTestMode(): boolean {
   return Boolean((globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean }).__WRAITHWALKER_TEST__);
+}
+
+function findEditorPreset(editorId?: string): EditorPreset | undefined {
+  return EDITOR_PRESETS.find((preset) => preset.id === editorId);
+}
+
+function normalizePathForUrl(rootPath: string): string {
+  return rootPath.replaceAll("\\", "/");
+}
+
+function buildEditorLaunchUrl(urlTemplate: string, rootPath: string, rootId: string): string {
+  const normalizedPath = normalizePathForUrl(rootPath);
+  const url = urlTemplate
+    .replaceAll("$DIR_COMPONENT", encodeURIComponent(normalizedPath))
+    .replaceAll("$DIR_URI", encodeURI(normalizedPath))
+    .replaceAll("$ROOT_ID", encodeURIComponent(rootId))
+    .replaceAll("$DIR", normalizedPath);
+
+  return new URL(url).toString();
 }
 
 export function createBackgroundRuntime({
@@ -263,11 +284,17 @@ export function createBackgroundRuntime({
     await setNativeHostConfig(state.nativeHostConfig);
   }
 
-  async function verifyNativeHostRoot({ requestPermission = false }: { requestPermission?: boolean } = {}): Promise<NativeVerifyResult> {
+  async function verifyNativeHostRoot({
+    requestPermission = false,
+    rootResult
+  }: {
+    requestPermission?: boolean;
+    rootResult?: RootReadySuccess;
+  } = {}): Promise<NativeVerifyResult> {
     await refreshStoredConfig();
-    const rootResult = await ensureRootReady({ requestPermission });
-    if (!rootResult.ok) {
-      const error = getErrorMessage(rootResult as ErrorResult);
+    const resolvedRoot = rootResult || await ensureRootReady({ requestPermission });
+    if (!resolvedRoot.ok) {
+      const error = getErrorMessage(resolvedRoot as ErrorResult);
       await updateNativeHostConfig({
         verifiedAt: null,
         lastVerificationError: error
@@ -288,7 +315,7 @@ export function createBackgroundRuntime({
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "verifyRoot",
         path: state.nativeHostConfig.rootPath,
-        expectedRootId: rootResult.sentinel.rootId
+        expectedRootId: resolvedRoot.sentinel.rootId
       });
 
       if (!response?.ok) {
@@ -322,23 +349,60 @@ export function createBackgroundRuntime({
     }
   }
 
+  async function openDirectoryViaUrlTemplate(urlTemplate: string, rootPath: string, rootSentinel: RootSentinel): Promise<NativeOpenResult> {
+    try {
+      await chromeApi.tabs.create({
+        url: buildEditorLaunchUrl(urlTemplate, rootPath, rootSentinel.rootId)
+      });
+      await updateNativeHostConfig({ lastOpenError: "" });
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await updateNativeHostConfig({ lastOpenError: message });
+      return { ok: false, error: message };
+    }
+  }
+
   async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
+    await refreshStoredConfig();
     await generateContext(editorId);
 
-    const verification = await verifyNativeHostRoot({ requestPermission: true });
-    if (!verification.ok) {
-      return verification;
+    const rootResult = await ensureRootReady({ requestPermission: true });
+    if (!rootResult.ok) {
+      return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
     }
 
-    if (!state.rootSentinel) {
-      return { ok: false, error: "Root sentinel is not available." };
+    const rootPath = state.nativeHostConfig.rootPath.trim();
+    if (!rootPath) {
+      const error = "Configure the absolute root path in the options page first.";
+      await updateNativeHostConfig({ lastOpenError: error });
+      return { ok: false, error };
+    }
+
+    const preset = findEditorPreset(editorId);
+    const urlTemplate = (state.nativeHostConfig.urlTemplate || preset?.urlTemplate || "").trim();
+
+    if (urlTemplate) {
+      const urlResult = await openDirectoryViaUrlTemplate(urlTemplate, rootPath, rootResult.sentinel);
+      if (urlResult.ok) {
+        return urlResult;
+      }
+
+      if (!state.nativeHostConfig.hostName) {
+        return urlResult;
+      }
+    }
+
+    const verification = await verifyNativeHostRoot({ rootResult });
+    if (!verification.ok) {
+      return verification;
     }
 
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "openDirectory",
-        path: state.nativeHostConfig.rootPath,
-        expectedRootId: state.rootSentinel.rootId,
+        path: rootPath,
+        expectedRootId: rootResult.sentinel.rootId,
         commandTemplate: commandTemplate || state.nativeHostConfig.commandTemplate
       });
 

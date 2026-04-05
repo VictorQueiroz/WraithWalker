@@ -1,8 +1,11 @@
 export { listScenarios } from "@wraithwalker/core/scenarios";
 export {
+  readApiFixture,
   readFixtureBody,
   readOriginInfo,
+  resolveFixturePath,
   readSiteConfigs,
+  type ApiFixture,
   type ApiEndpoint,
   type OriginInfo,
   type ResponseMeta,

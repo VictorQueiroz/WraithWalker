@@ -1,4 +1,3 @@
-import { promises as fs } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -59,6 +58,7 @@ describe("mcp server", () => {
         "list-endpoints",
         "list-origins",
         "list-scenarios",
+        "read-endpoint-fixture",
         "read-fixture",
         "read-manifest"
       ]);
@@ -113,7 +113,8 @@ describe("mcp server", () => {
         url: "https://api.example.com/users",
         method: "GET",
         capturedAt: "2026-04-05T00:00:00.000Z"
-      }
+      },
+      body: "{\"users\":[{\"id\":1}]}"
     });
 
     await root.writeText("cdn.example.com/assets/app.js", "console.log('fixture');");
@@ -179,14 +180,34 @@ describe("mcp server", () => {
         method: string;
         pathname: string;
         status: number;
+        fixtureDir: string;
       }>;
       expect(endpoints).toEqual([
         expect.objectContaining({
           method: "GET",
           pathname: "/users",
-          status: 200
+          status: 200,
+          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
         })
       ]);
+
+      const endpointFixtureResult = await client.callTool({
+        name: "read-endpoint-fixture",
+        arguments: { fixtureDir: endpoints[0].fixtureDir }
+      });
+      const endpointFixture = JSON.parse(readTextContent(endpointFixtureResult)) as {
+        fixtureDir: string;
+        meta: { status: number; url: string };
+        body: string | null;
+      };
+      expect(endpointFixture).toEqual(expect.objectContaining({
+        fixtureDir: endpoints[0].fixtureDir,
+        meta: expect.objectContaining({
+          status: 200,
+          url: "https://api.example.com/users"
+        }),
+        body: "{\"users\":[{\"id\":1}]}"
+      }));
 
       const fixtureResult = await client.callTool({
         name: "read-fixture",
@@ -229,6 +250,7 @@ describe("mcp server", () => {
       prefix: "wraithwalker-mcp-server-",
       rootId: "root-mcp-server"
     });
+    await root.ensureScenario("baseline");
     const { client, server } = await connectClient(root.rootPath);
 
     try {
@@ -246,6 +268,20 @@ describe("mcp server", () => {
       expect(fixtureResult.isError).toBe(true);
       expect(readTextContent(fixtureResult)).toBe("File not found: missing.txt");
 
+      const invalidFixturePathResult = await client.callTool({
+        name: "read-fixture",
+        arguments: { path: "../package.json" }
+      });
+      expect(invalidFixturePathResult.isError).toBe(true);
+      expect(readTextContent(invalidFixturePathResult)).toContain("Invalid fixture path: ../package.json");
+
+      const invalidEndpointFixtureResult = await client.callTool({
+        name: "read-endpoint-fixture",
+        arguments: { fixtureDir: "../escape" }
+      });
+      expect(invalidEndpointFixtureResult.isError).toBe(true);
+      expect(readTextContent(invalidEndpointFixtureResult)).toContain("Invalid fixture directory: ../escape");
+
       const manifestResult = await client.callTool({
         name: "read-manifest",
         arguments: { origin: "https://missing.example.com" }
@@ -253,12 +289,50 @@ describe("mcp server", () => {
       expect(manifestResult.isError).toBe(true);
       expect(readTextContent(manifestResult)).toContain("Origin \"https://missing.example.com\" not found.");
 
+      await root.ensureOrigin({ mode: "advanced", topOrigin: "https://empty.example.com" });
+      const emptyManifestResult = await client.callTool({
+        name: "read-manifest",
+        arguments: { origin: "https://empty.example.com" }
+      });
+      expect(emptyManifestResult.isError).toBe(true);
+      expect(readTextContent(emptyManifestResult)).toContain("No manifest found for \"https://empty.example.com\".");
+
       const diffResult = await client.callTool({
         name: "diff-scenarios",
         arguments: { scenarioA: "missing-a", scenarioB: "missing-b" }
       });
-      expect(diffResult.isError).not.toBe(true);
-      expect(readTextContent(diffResult)).toContain("No differences found.");
+      expect(diffResult.isError).toBe(true);
+      expect(readTextContent(diffResult)).toContain('Scenario "missing-a" does not exist.');
+      expect(readTextContent(diffResult)).toContain("Available scenarios: baseline");
+
+      const invalidScenarioResult = await client.callTool({
+        name: "diff-scenarios",
+        arguments: { scenarioA: "../escape", scenarioB: "baseline" }
+      });
+      expect(invalidScenarioResult.isError).toBe(true);
+      expect(readTextContent(invalidScenarioResult)).toContain("Scenario name must be 1-64 alphanumeric");
+      expect(readTextContent(invalidScenarioResult)).not.toContain("Available scenarios:");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("reports missing scenarios clearly when none are saved", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const diffResult = await client.callTool({
+        name: "diff-scenarios",
+        arguments: { scenarioA: "missing-a", scenarioB: "missing-b" }
+      });
+      expect(diffResult.isError).toBe(true);
+      expect(readTextContent(diffResult)).toContain('Scenario "missing-a" does not exist.');
+      expect(readTextContent(diffResult)).toContain("No saved scenarios are available.");
     } finally {
       await client.close();
       await server.close();

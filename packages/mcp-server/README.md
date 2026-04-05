@@ -35,11 +35,12 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `list-origins` | — | List all captured origins with endpoint and asset counts |
-| `list-endpoints` | `origin` | List API endpoints for a specific origin |
-| `read-fixture` | `path` | Read a fixture response body by relative path |
+| `list-endpoints` | `origin` | List API endpoints for a specific origin, including the `fixtureDir` to inspect |
+| `read-endpoint-fixture` | `fixtureDir` | Read the response metadata and body for a fixture returned by `list-endpoints` |
+| `read-fixture` | `path` | Read a fixture response body by relative path, restricted to the fixture root |
 | `read-manifest` | `origin` | Read the RESOURCE_MANIFEST.json for an origin |
 | `list-scenarios` | — | List saved scenario snapshots |
-| `diff-scenarios` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints |
+| `diff-scenarios` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
 
 ## Claude Code Configuration
 

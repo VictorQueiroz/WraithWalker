@@ -56,11 +56,12 @@ The `@wraithwalker/mcp-server` package exposes captured fixtures programmaticall
 | Tool | Description |
 |------|-------------|
 | `list-origins` | Summarize all captured origins |
-| `list-endpoints` | API endpoints for a given origin |
-| `read-fixture` | Read a fixture response body by path |
+| `list-endpoints` | API endpoints for a given origin, including a fixture directory identifier |
+| `read-endpoint-fixture` | Read response metadata and body for a listed API endpoint fixture |
+| `read-fixture` | Read a fixture response body by root-bounded relative path |
 | `read-manifest` | Read RESOURCE_MANIFEST.json for an origin |
 | `list-scenarios` | Enumerate saved scenario snapshots |
-| `diff-scenarios` | Compare two scenarios — added, removed, and changed endpoints |
+| `diff-scenarios` | Compare two scenarios — added, removed, and changed endpoints, with missing-scenario validation |
 
 Start the MCP server from a fixture root:
 

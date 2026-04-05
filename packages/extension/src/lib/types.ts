@@ -11,6 +11,7 @@ export interface NativeHostConfig {
   hostName: string;
   rootPath: string;
   commandTemplate: string;
+  urlTemplate?: string;
   verifiedAt: string | null;
   lastVerificationError: string;
   lastOpenError: string;

@@ -1,5 +1,4 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { createFixtureRootFs } from "@wraithwalker/core/root-fs";
 
 export interface FsGateway {
   exists(rootPath: string, relativePath: string): Promise<boolean>;
@@ -12,53 +11,37 @@ export interface FsGateway {
 }
 
 export function createFsGateway(): FsGateway {
+  function rootFs(rootPath: string) {
+    return createFixtureRootFs(rootPath);
+  }
+
   return {
     async exists(rootPath, relativePath) {
-      try {
-        await fs.access(path.join(rootPath, relativePath));
-        return true;
-      } catch {
-        return false;
-      }
+      return rootFs(rootPath).exists(relativePath);
     },
 
     async readJson(rootPath, relativePath) {
-      const content = await fs.readFile(path.join(rootPath, relativePath), "utf8");
-      return JSON.parse(content);
+      return rootFs(rootPath).readJson(relativePath);
     },
 
     async readOptionalJson(rootPath, relativePath) {
-      try {
-        const content = await fs.readFile(path.join(rootPath, relativePath), "utf8");
-        return JSON.parse(content);
-      } catch {
-        return null;
-      }
+      return rootFs(rootPath).readOptionalJson(relativePath);
     },
 
     async readText(rootPath, relativePath) {
-      return fs.readFile(path.join(rootPath, relativePath), "utf8");
+      return rootFs(rootPath).readText(relativePath);
     },
 
     async writeText(rootPath, relativePath, content) {
-      const absolute = path.join(rootPath, relativePath);
-      await fs.mkdir(path.dirname(absolute), { recursive: true });
-      await fs.writeFile(absolute, content, "utf8");
+      await rootFs(rootPath).writeText(relativePath, content);
     },
 
     async writeJson(rootPath, relativePath, value) {
-      const absolute = path.join(rootPath, relativePath);
-      await fs.mkdir(path.dirname(absolute), { recursive: true });
-      await fs.writeFile(absolute, JSON.stringify(value, null, 2), "utf8");
+      await rootFs(rootPath).writeJson(relativePath, value);
     },
 
     async listDirectory(rootPath, relativePath) {
-      const dirPath = relativePath ? path.join(rootPath, relativePath) : rootPath;
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-      return entries.map((e) => ({
-        name: e.name,
-        kind: e.isDirectory() ? "directory" as const : "file" as const
-      }));
+      return rootFs(rootPath).listDirectory(relativePath);
     }
   };
 }

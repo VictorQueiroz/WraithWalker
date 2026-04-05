@@ -128,4 +128,18 @@ describe("scenario diffing", () => {
     expect(markdown).toContain("## Removed Endpoints");
     expect(markdown).toContain("Summary: 0 added, 1 removed, 0 changed");
   });
+
+  it("rejects missing or invalid scenario names before diffing", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-scenarios-"
+    });
+    await root.ensureScenario("baseline");
+
+    await expect(diffScenarios(root.rootPath, "baseline", "missing")).rejects.toThrow(
+      'Scenario "missing" does not exist.'
+    );
+    await expect(diffScenarios(root.rootPath, "../escape", "baseline")).rejects.toThrow(
+      "Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters."
+    );
+  });
 });

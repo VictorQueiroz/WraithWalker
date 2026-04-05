@@ -56,9 +56,9 @@
 
       <section class="panel stack">
         <div>
-          <h2>Native helper</h2>
+          <h2>Editor Launch And Native Helper</h2>
           <p>
-            The extension uses native messaging only for opening the selected capture root in an editor. The helper is optional.
+            Opening the capture root in an editor can use a browser URL template first and fall back to the native helper command. The native helper is still used for scenario save, switch, and list operations.
           </p>
         </div>
         <form id="native-form" class="grid two">
@@ -69,6 +69,11 @@
           <label class="stack tight">
             <span>Editor command template</span>
             <input id="native-command-template" name="commandTemplate" placeholder='code "$DIR"'>
+          </label>
+          <label class="stack tight" style="grid-column: 1 / -1;">
+            <span>Editor URL template (optional)</span>
+            <input id="native-url-template" name="urlTemplate" placeholder="vscode://file/$DIR_URI/">
+            <span class="meta">Supported placeholders: <code>$DIR</code>, <code>$DIR_URI</code>, <code>$DIR_COMPONENT</code>, <code>$ROOT_ID</code>.</span>
           </label>
           <label class="stack tight" style="grid-column: 1 / -1;">
             <span>Absolute root path</span>

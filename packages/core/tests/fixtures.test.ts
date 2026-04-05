@@ -3,9 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  readApiFixture,
   readFixtureBody,
   readOriginInfo,
   readSiteConfigs,
+  resolveFixturePath,
   type SiteConfigLike,
   type StaticResourceManifest
 } from "../src/fixtures.mts";
@@ -124,6 +126,45 @@ describe("fixture readers", () => {
 
     expect(await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js")).toBe("console.log('hello');");
     expect(await readFixtureBody(root.rootPath, "missing.js")).toBeNull();
+    expect(resolveFixturePath(root.rootPath, "cdn.example.com/assets/app.js")).toBe(root.resolve("cdn.example.com/assets/app.js"));
+    expect(resolveFixturePath(root.rootPath, "../package.json")).toBeNull();
+    expect(await readFixtureBody(root.rootPath, "../package.json")).toBeNull();
+  });
+
+  it("reads API fixtures by their listed directory", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    const fixture = await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "POST",
+      fixtureName: "orders__q-abc__b-def",
+      meta: {
+        status: 201,
+        statusText: "Created",
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/orders",
+        method: "POST",
+        capturedAt: "2026-04-03T00:00:00.000Z"
+      },
+      body: "{\"created\":true}"
+    });
+
+    expect(await readApiFixture(root.rootPath, fixture.fixtureDir)).toEqual({
+      fixtureDir: fixture.fixtureDir,
+      metaPath: fixture.metaPath,
+      bodyPath: fixture.bodyPath,
+      meta: expect.objectContaining({
+        status: 201,
+        method: "POST",
+        url: "https://api.example.com/orders"
+      }),
+      body: "{\"created\":true}"
+    });
+    expect(await readApiFixture(root.rootPath, "../escape")).toBeNull();
   });
 
   it("discovers site configs from simple and advanced fixture trees", async () => {

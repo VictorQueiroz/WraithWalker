@@ -1,10 +1,19 @@
+import path from "node:path";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
-import { listScenarios, readFixtureBody, readOriginInfo, readSiteConfigs } from "./fixture-reader.mjs";
+import {
+  listScenarios,
+  readApiFixture,
+  readFixtureBody,
+  readOriginInfo,
+  readSiteConfigs,
+  resolveFixturePath
+} from "./fixture-reader.mjs";
 
 export interface StartServerOptions {
   transport?: Transport;
@@ -64,7 +73,8 @@ export async function startServer(
         method: endpoint.method,
         pathname: endpoint.pathname,
         status: endpoint.status,
-        mimeType: endpoint.mimeType
+        mimeType: endpoint.mimeType,
+        fixtureDir: endpoint.fixtureDir
       }));
 
       return {
@@ -78,6 +88,13 @@ export async function startServer(
     "Read a fixture response body by its file path relative to the fixture root",
     { path: z.string().describe("Relative path to the fixture file (e.g., cdn.example.com/assets/app.js)") },
     async ({ path: filePath }) => {
+      if (!resolveFixturePath(rootPath, filePath)) {
+        return {
+          content: [{ type: "text" as const, text: `Invalid fixture path: ${filePath}. Paths must stay within the fixture root.` }],
+          isError: true
+        };
+      }
+
       const content = await readFixtureBody(rootPath, filePath);
       if (content === null) {
         return {
@@ -88,6 +105,32 @@ export async function startServer(
 
       return {
         content: [{ type: "text" as const, text: content }]
+      };
+    }
+  );
+
+  server.tool(
+    "read-endpoint-fixture",
+    "Read the response metadata and body for an API fixture returned by list-endpoints",
+    { fixtureDir: z.string().describe("Fixture directory returned by list-endpoints") },
+    async ({ fixtureDir }) => {
+      if (!resolveFixturePath(rootPath, path.join(fixtureDir, "response.meta.json"))) {
+        return {
+          content: [{ type: "text" as const, text: `Invalid fixture directory: ${fixtureDir}. Paths must stay within the fixture root.` }],
+          isError: true
+        };
+      }
+
+      const fixture = await readApiFixture(rootPath, fixtureDir);
+      if (!fixture) {
+        return {
+          content: [{ type: "text" as const, text: `Endpoint fixture not found: ${fixtureDir}` }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(fixture, null, 2) }]
       };
     }
   );
@@ -146,8 +189,17 @@ export async function startServer(
           content: [{ type: "text" as const, text: renderDiffMarkdown(diff) }]
         };
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const scenarios = message.includes("does not exist.")
+          ? await listScenarios(rootPath)
+          : null;
+        const availableSuffix = scenarios
+          ? scenarios.length > 0
+            ? ` Available scenarios: ${scenarios.join(", ")}`
+            : " No saved scenarios are available."
+          : "";
         return {
-          content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+          content: [{ type: "text" as const, text: `Error: ${message}${availableSuffix}` }],
           isError: true
         };
       }

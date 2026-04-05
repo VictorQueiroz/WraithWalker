@@ -127,5 +127,9 @@ describe("theme output", () => {
     expect(await gateway.listDirectory(rootPath, "notes")).toEqual([
       { name: "readme.txt", kind: "file" }
     ]);
+    expect(await gateway.exists(rootPath, "../escape.txt")).toBe(false);
+    await expect(gateway.writeText(rootPath, "../escape.txt", "nope")).rejects.toThrow(
+      'Path "../escape.txt" must stay within the fixture root.'
+    );
   });
 });

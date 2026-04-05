@@ -49,6 +49,7 @@ interface OptionsElements {
   flash: HTMLDivElement;
   nativeHostNameInput: HTMLInputElement;
   nativeCommandTemplateInput: HTMLInputElement;
+  nativeUrlTemplateInput: HTMLInputElement;
   nativeRootPathInput: HTMLInputElement;
   verifyHelperButton: HTMLButtonElement;
 }
@@ -76,6 +77,7 @@ function getElements(documentRef: Document): OptionsElements {
     flash: queryRequired<HTMLDivElement>("#flash", documentRef),
     nativeHostNameInput: queryRequired<HTMLInputElement>("#native-host-name", documentRef),
     nativeCommandTemplateInput: queryRequired<HTMLInputElement>("#native-command-template", documentRef),
+    nativeUrlTemplateInput: queryRequired<HTMLInputElement>("#native-url-template", documentRef),
     nativeRootPathInput: queryRequired<HTMLInputElement>("#native-root-path", documentRef),
     verifyHelperButton: queryRequired<HTMLButtonElement>("#verify-helper", documentRef)
   };
@@ -216,11 +218,15 @@ export async function initOptions({
     const nativeConfig = await getNativeHostConfig();
     elements.nativeHostNameInput.value = nativeConfig.hostName;
     elements.nativeCommandTemplateInput.value = nativeConfig.commandTemplate;
+    elements.nativeUrlTemplateInput.value = nativeConfig.urlTemplate || "";
     elements.nativeRootPathInput.value = nativeConfig.rootPath;
 
     const chunks: string[] = [];
     if (nativeConfig.verifiedAt) {
       chunks.push(`Last verified: ${nativeConfig.verifiedAt}`);
+    }
+    if (nativeConfig.urlTemplate) {
+      chunks.push("URL launch template: configured");
     }
     if (nativeConfig.lastVerificationError) {
       chunks.push(`Verification error: ${nativeConfig.lastVerificationError}`);
@@ -332,7 +338,8 @@ export async function initOptions({
       ...(await getNativeHostConfig()),
       hostName: elements.nativeHostNameInput.value.trim(),
       rootPath: elements.nativeRootPathInput.value.trim(),
-      commandTemplate: elements.nativeCommandTemplateInput.value.trim()
+      commandTemplate: elements.nativeCommandTemplateInput.value.trim(),
+      urlTemplate: elements.nativeUrlTemplateInput.value.trim()
     };
 
     await setNativeHostConfig(nextConfig);

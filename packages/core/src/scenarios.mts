@@ -1,8 +1,8 @@
-import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { SCENARIOS_DIR } from "./constants.mjs";
 import { readSentinel } from "./root.mjs";
+import { createFixtureRootFs, type FixtureRootFs } from "./root-fs.mjs";
 
 export interface ScenarioRootOptions {
   path?: string;
@@ -69,81 +69,59 @@ async function verifyRootPath({ path: rootPath, expectedRootId }: ScenarioRootOp
   return rootPath;
 }
 
-async function copyEntryRecursive(src: string, dest: string): Promise<void> {
-  const stat = await fs.lstat(src);
-
-  if (!stat.isDirectory()) {
-    await fs.mkdir(path.dirname(dest), { recursive: true });
-    await fs.copyFile(src, dest);
-    return;
-  }
-
-  await fs.mkdir(dest, { recursive: true });
-  const entries = await fs.readdir(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      await copyEntryRecursive(srcPath, destPath);
-    } else {
-      await fs.copyFile(srcPath, destPath);
-    }
-  }
-}
-
 function isScenarioSafe(name: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name);
 }
 
-async function listFixtureEntries(rootPath: string): Promise<string[]> {
-  const entries = await fs.readdir(rootPath);
-  return entries.filter((entry) => entry !== ".wraithwalker");
-}
-
-async function listDirectoriesIn(dirPath: string): Promise<string[]> {
-  try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
+function validateScenarioName(name: string | undefined): string {
+  if (!name || !isScenarioSafe(name)) {
+    throw new Error("Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters.");
   }
+
+  return name;
 }
 
-async function readJsonSafe<T>(filePath: string): Promise<T | null> {
-  try {
-    return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
-  } catch {
-    return null;
+async function requireScenarioDir(rootPath: string, name: string | undefined): Promise<string> {
+  const scenarioName = validateScenarioName(name);
+  const scenarioDir = path.join(SCENARIOS_DIR, scenarioName);
+  const scenarioStat = await createFixtureRootFs(rootPath).stat(scenarioDir);
+  if (!scenarioStat?.isDirectory()) {
+    throw new Error(`Scenario "${scenarioName}" does not exist.`);
   }
+
+  return scenarioDir;
 }
 
-async function readFileSafe(filePath: string): Promise<string | null> {
-  try {
-    return await fs.readFile(filePath, "utf8");
-  } catch {
-    return null;
-  }
+async function listFixtureEntries(rootFs: FixtureRootFs): Promise<string[]> {
+  const entries = await rootFs.listOptionalDirectory("");
+  return entries
+    .filter((entry) => entry.name !== ".wraithwalker")
+    .map((entry) => entry.name);
 }
 
-async function scanOriginsTree(originsDir: string, endpoints: Map<string, EndpointWithBody>): Promise<void> {
-  const originKeys = await listDirectoriesIn(originsDir);
+async function scanOriginsTree(
+  rootFs: FixtureRootFs,
+  originsDir: string,
+  endpoints: Map<string, EndpointWithBody>
+): Promise<void> {
+  const originKeys = await rootFs.listOptionalDirectories(originsDir);
 
   for (const originKey of originKeys) {
     const httpDir = path.join(originsDir, originKey, "http");
-    const methods = await listDirectoriesIn(httpDir);
+    const methods = await rootFs.listOptionalDirectories(httpDir);
 
     for (const method of methods) {
-      const fixtures = await listDirectoriesIn(path.join(httpDir, method));
+      const fixtures = await rootFs.listOptionalDirectories(path.join(httpDir, method));
       for (const fixture of fixtures) {
         const fixtureDir = path.join(httpDir, method, fixture);
-        const meta = await readJsonSafe<ResponseMeta>(path.join(fixtureDir, "response.meta.json"));
+        const meta = await rootFs.readOptionalJson<ResponseMeta>(path.join(fixtureDir, "response.meta.json"));
         if (!meta) continue;
 
         const pathname = meta.url
           ? new URL(meta.url).pathname
           : fixture.replace(/__q-.*/, "").replace(/-/g, "/");
         const key = `${method} ${pathname}`;
-        const bodyContent = await readFileSafe(path.join(fixtureDir, "response.body"));
+        const bodyContent = await rootFs.readOptionalText(path.join(fixtureDir, "response.body"));
 
         endpoints.set(key, {
           key,
@@ -158,26 +136,29 @@ async function scanOriginsTree(originsDir: string, endpoints: Map<string, Endpoi
   }
 }
 
-async function collectEndpointsFromScenario(scenarioPath: string): Promise<Map<string, EndpointWithBody>> {
+async function collectEndpointsFromScenario(
+  rootFs: FixtureRootFs,
+  scenarioPath: string
+): Promise<Map<string, EndpointWithBody>> {
   const endpoints = new Map<string, EndpointWithBody>();
 
-  const topEntries = await listDirectoriesIn(scenarioPath);
+  const topEntries = await rootFs.listOptionalDirectories(scenarioPath);
   for (const topDir of topEntries) {
     if (topDir.startsWith(".")) continue;
-    await scanOriginsTree(path.join(scenarioPath, topDir, "origins"), endpoints);
+    await scanOriginsTree(rootFs, path.join(scenarioPath, topDir, "origins"), endpoints);
   }
 
   const simpleBase = path.join(scenarioPath, ".wraithwalker", "simple");
-  const simpleOrigins = await listDirectoriesIn(simpleBase);
+  const simpleOrigins = await rootFs.listOptionalDirectories(simpleBase);
   for (const originKey of simpleOrigins) {
-    await scanOriginsTree(path.join(simpleBase, originKey, "origins"), endpoints);
+    await scanOriginsTree(rootFs, path.join(simpleBase, originKey, "origins"), endpoints);
   }
 
   return endpoints;
 }
 
 export async function listScenarios(rootPath: string): Promise<string[]> {
-  return listDirectoriesIn(path.join(rootPath, SCENARIOS_DIR));
+  return createFixtureRootFs(rootPath).listOptionalDirectories(SCENARIOS_DIR);
 }
 
 export async function saveScenario({
@@ -186,20 +167,19 @@ export async function saveScenario({
   name
 }: ScenarioOperationOptions): Promise<{ ok: true; name: string }> {
   const verifiedRootPath = await verifyRootPath({ path: rootPath, expectedRootId });
-  if (!name || !isScenarioSafe(name)) {
-    throw new Error("Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters.");
-  }
+  const rootFs = createFixtureRootFs(verifiedRootPath);
+  const scenarioName = validateScenarioName(name);
 
-  const scenarioDir = path.join(verifiedRootPath, SCENARIOS_DIR, name);
-  await fs.rm(scenarioDir, { recursive: true, force: true });
-  await fs.mkdir(scenarioDir, { recursive: true });
+  const scenarioDir = path.join(SCENARIOS_DIR, scenarioName);
+  await rootFs.remove(scenarioDir, { recursive: true, force: true });
+  await rootFs.ensureDir(scenarioDir);
 
-  const entries = await listFixtureEntries(verifiedRootPath);
+  const entries = await listFixtureEntries(rootFs);
   for (const entry of entries) {
-    await copyEntryRecursive(path.join(verifiedRootPath, entry), path.join(scenarioDir, entry));
+    await rootFs.copyRecursive(entry, path.join(scenarioDir, entry));
   }
 
-  return { ok: true, name };
+  return { ok: true, name: scenarioName };
 }
 
 export async function switchScenario({
@@ -208,35 +188,32 @@ export async function switchScenario({
   name
 }: ScenarioOperationOptions): Promise<{ ok: true; name: string }> {
   const verifiedRootPath = await verifyRootPath({ path: rootPath, expectedRootId });
-  if (!name || !isScenarioSafe(name)) {
-    throw new Error("Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters.");
-  }
+  const rootFs = createFixtureRootFs(verifiedRootPath);
+  const scenarioName = validateScenarioName(name);
+  const scenarioDir = await requireScenarioDir(verifiedRootPath, scenarioName);
 
-  const scenarioDir = path.join(verifiedRootPath, SCENARIOS_DIR, name);
-  const scenarioStat = await fs.stat(scenarioDir).catch(() => null);
-  if (!scenarioStat?.isDirectory()) {
-    throw new Error(`Scenario "${name}" does not exist.`);
-  }
-
-  const currentEntries = await listFixtureEntries(verifiedRootPath);
+  const currentEntries = await listFixtureEntries(rootFs);
   for (const entry of currentEntries) {
-    await fs.rm(path.join(verifiedRootPath, entry), { recursive: true, force: true });
+    await rootFs.remove(entry, { recursive: true, force: true });
   }
 
-  const scenarioEntries = await fs.readdir(scenarioDir);
+  const scenarioEntries = await rootFs.listDirectory(scenarioDir);
   for (const entry of scenarioEntries) {
-    await copyEntryRecursive(path.join(scenarioDir, entry), path.join(verifiedRootPath, entry));
+    await rootFs.copyRecursive(path.join(scenarioDir, entry.name), entry.name);
   }
 
-  return { ok: true, name };
+  return { ok: true, name: scenarioName };
 }
 
 export async function diffScenarios(rootPath: string, scenarioA: string, scenarioB: string): Promise<FixtureDiff> {
-  const pathA = path.join(rootPath, SCENARIOS_DIR, scenarioA);
-  const pathB = path.join(rootPath, SCENARIOS_DIR, scenarioB);
+  const rootFs = createFixtureRootFs(rootPath);
+  const validatedScenarioA = validateScenarioName(scenarioA);
+  const validatedScenarioB = validateScenarioName(scenarioB);
+  const pathA = await requireScenarioDir(rootPath, validatedScenarioA);
+  const pathB = await requireScenarioDir(rootPath, validatedScenarioB);
 
-  const endpointsA = await collectEndpointsFromScenario(pathA);
-  const endpointsB = await collectEndpointsFromScenario(pathB);
+  const endpointsA = await collectEndpointsFromScenario(rootFs, pathA);
+  const endpointsB = await collectEndpointsFromScenario(rootFs, pathB);
 
   const added: EndpointRef[] = [];
   const removed: EndpointRef[] = [];
@@ -278,7 +255,7 @@ export async function diffScenarios(rootPath: string, scenarioA: string, scenari
     }
   }
 
-  return { scenarioA, scenarioB, added, removed, changed };
+  return { scenarioA: validatedScenarioA, scenarioB: validatedScenarioB, added, removed, changed };
 }
 
 export function renderDiffMarkdown(diff: FixtureDiff): string {

@@ -19,6 +19,7 @@ function renderOptionsMarkup() {
     <form id="native-form">
       <input id="native-host-name" />
       <input id="native-command-template" />
+      <input id="native-url-template" />
       <input id="native-root-path" />
       <button type="submit">Save</button>
     </form>
@@ -93,6 +94,7 @@ describe("options entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures",
         commandTemplate: 'code "$DIR"',
+        urlTemplate: "vscode://file/$DIR_URI/",
         verifiedAt: "2026-04-03T00:00:00.000Z",
         lastVerificationError: "",
         lastOpenError: ""
@@ -108,6 +110,7 @@ describe("options entrypoint", () => {
 
     expect(document.querySelector("#sites-list")?.textContent).toContain("https://app.example.com");
     expect(queryInput("#native-host-name").value).toBe("com.example.host");
+    expect(queryInput("#native-url-template").value).toBe("vscode://file/$DIR_URI/");
     expect(queryInput("#native-root-path").value).toBe("/tmp/fixtures");
     expect(document.querySelector("#root-status")?.textContent).toContain("ready");
     expect(querySelect(".site-mode").value).toBe("simple");
@@ -544,6 +547,7 @@ describe("options entrypoint", () => {
         hostName: "",
         rootPath: "",
         commandTemplate: 'code "$DIR"',
+        urlTemplate: "",
         verifiedAt: null,
         lastVerificationError: "",
         lastOpenError: ""
@@ -552,6 +556,7 @@ describe("options entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures",
         commandTemplate: 'cursor "$DIR"',
+        urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
         verifiedAt: "2026-04-03T12:00:00.000Z",
         lastVerificationError: "",
         lastOpenError: ""
@@ -560,6 +565,7 @@ describe("options entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures",
         commandTemplate: 'cursor "$DIR"',
+        urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
         verifiedAt: "2026-04-03T12:00:00.000Z",
         lastVerificationError: "",
         lastOpenError: ""
@@ -568,6 +574,7 @@ describe("options entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures",
         commandTemplate: 'cursor "$DIR"',
+        urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
         verifiedAt: "2026-04-03T12:00:00.000Z",
         lastVerificationError: "",
         lastOpenError: ""
@@ -599,6 +606,7 @@ describe("options entrypoint", () => {
     queryInput("#native-host-name").value = "com.example.host";
     queryInput("#native-root-path").value = "/tmp/fixtures";
     queryInput("#native-command-template").value = 'cursor "$DIR"';
+    queryInput("#native-url-template").value = "cursor://workspace?folder=$DIR_COMPONENT";
     document.querySelector("#native-form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flushPromises();
 
@@ -606,6 +614,7 @@ describe("options entrypoint", () => {
       hostName: "com.example.host",
       rootPath: "/tmp/fixtures",
       commandTemplate: 'cursor "$DIR"',
+      urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
       verifiedAt: "2026-04-03T12:00:00.000Z",
       lastVerificationError: "",
       lastOpenError: ""

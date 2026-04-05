@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   listScenarios,
+  readApiFixture,
   readFixtureBody,
   readOriginInfo,
   readSiteConfigs,
+  resolveFixturePath,
   type SiteConfigLike,
   type StaticResourceManifest
 } from "../src/fixture-reader.mts";
@@ -96,6 +98,39 @@ describe("fixture reader", () => {
     });
     const content = await readFixtureBody(root.rootPath, "nonexistent.js");
     expect(content).toBeNull();
+    expect(resolveFixturePath(root.rootPath, "../package.json")).toBeNull();
+  });
+
+  it("reads an API fixture by its fixture directory", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-"
+    });
+    const fixture = await root.writeApiFixture({
+      mode: "advanced",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "PUT",
+      fixtureName: "profile__q-abc__b-def",
+      meta: {
+        status: 202,
+        statusText: "Accepted",
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/profile",
+        method: "PUT",
+        capturedAt: "2026-04-03T00:00:00.000Z"
+      },
+      body: "{\"queued\":true}"
+    });
+
+    expect(await readApiFixture(root.rootPath, fixture.fixtureDir)).toEqual(expect.objectContaining({
+      fixtureDir: fixture.fixtureDir,
+      body: "{\"queued\":true}",
+      meta: expect.objectContaining({
+        status: 202,
+        method: "PUT"
+      })
+    }));
   });
 
   it("lists saved scenarios", async () => {
