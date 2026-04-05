@@ -15,7 +15,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      include: ["src/fixture-reader.mts", "src/fixture-diff.mts"],
+      include: ["src/**/*.mts"],
       thresholds: {
         statements: 90,
         lines: 90,

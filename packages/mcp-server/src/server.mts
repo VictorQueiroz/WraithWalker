@@ -1,11 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import { listScenarios, readFixtureBody, readOriginInfo, readSiteConfigs } from "./fixture-reader.mjs";
 
-export async function startServer(rootPath: string): Promise<void> {
+export interface StartServerOptions {
+  transport?: Transport;
+}
+
+export async function startServer(
+  rootPath: string,
+  options: StartServerOptions = {}
+): Promise<McpServer> {
   const server = new McpServer({
     name: "wraithwalker",
     version: "0.1.0"
@@ -146,6 +154,7 @@ export async function startServer(rootPath: string): Promise<void> {
     }
   );
 
-  const transport = new StdioServerTransport();
+  const transport = options.transport ?? new StdioServerTransport();
   await server.connect(transport);
+  return server;
 }
