@@ -23,6 +23,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run release:check -- "${{ github.event.release.tag_name }}"
+      - run: npm publish --workspace @wraithwalker/core
       - run: npm publish --workspace @wraithwalker/mcp-server
       - run: npm publish --workspace @wraithwalker/native-host
       - run: npm publish --workspace @wraithwalker/cli

@@ -15,6 +15,10 @@ export const INTERNAL_DEPENDENCY_FIELDS = Object.freeze([
 
 export const PUBLISHABLE_PACKAGES = Object.freeze([
   {
+    name: "@wraithwalker/core",
+    relativePath: "packages/core/package.json"
+  },
+  {
     name: "@wraithwalker/mcp-server",
     relativePath: "packages/mcp-server/package.json"
   },

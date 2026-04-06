@@ -1,7 +1,8 @@
 # npm Releases
 
-WraithWalker publishes three workspace packages to the public npm registry:
+WraithWalker publishes four workspace packages to the public npm registry:
 
+- `@wraithwalker/core`
 - `@wraithwalker/mcp-server`
 - `@wraithwalker/native-host`
 - `@wraithwalker/cli`
@@ -26,6 +27,7 @@ Trusted publishing can only be configured after each package already exists on n
    npm run typecheck
    npm test
    npm run build
+   npm pack --dry-run --workspace @wraithwalker/core
    npm pack --dry-run --workspace @wraithwalker/mcp-server
    npm pack --dry-run --workspace @wraithwalker/native-host
    npm pack --dry-run --workspace @wraithwalker/cli
@@ -41,6 +43,7 @@ Trusted publishing can only be configured after each package already exists on n
 3. Publish the packages in dependency order:
 
    ```bash
+   npm publish --access public --workspace @wraithwalker/core
    npm publish --access public --workspace @wraithwalker/mcp-server
    npm publish --access public --workspace @wraithwalker/native-host
    npm publish --access public --workspace @wraithwalker/cli
@@ -49,6 +52,7 @@ Trusted publishing can only be configured after each package already exists on n
 4. Confirm the packages exist on npm:
 
    ```bash
+   npm view @wraithwalker/core version
    npm view @wraithwalker/mcp-server version
    npm view @wraithwalker/native-host version
    npm view @wraithwalker/cli version
@@ -59,6 +63,7 @@ Trusted publishing can only be configured after each package already exists on n
 After the bootstrap publish succeeds, register the release workflow as a trusted publisher for each package:
 
 ```bash
+npm trust github @wraithwalker/core --repo VictorQueiroz/WraithWalker --file release.yml -y
 npm trust github @wraithwalker/mcp-server --repo VictorQueiroz/WraithWalker --file release.yml -y
 npm trust github @wraithwalker/native-host --repo VictorQueiroz/WraithWalker --file release.yml -y
 npm trust github @wraithwalker/cli --repo VictorQueiroz/WraithWalker --file release.yml -y
@@ -80,6 +85,7 @@ These commands bind each package to `.github/workflows/release.yml` in `VictorQu
 
    ```bash
    npm run release:check -- v0.2.0
+   npm pack --dry-run --workspace @wraithwalker/core
    npm pack --dry-run --workspace @wraithwalker/mcp-server
    npm pack --dry-run --workspace @wraithwalker/native-host
    npm pack --dry-run --workspace @wraithwalker/cli
@@ -89,8 +95,9 @@ These commands bind each package to `.github/workflows/release.yml` in `VictorQu
 
 5. The `Release` workflow will run `typecheck`, `test`, `build`, validate the tag with `release:check`, then publish the packages in this order:
 
-   1. `@wraithwalker/mcp-server`
-   2. `@wraithwalker/native-host`
-   3. `@wraithwalker/cli`
+   1. `@wraithwalker/core`
+   2. `@wraithwalker/mcp-server`
+   3. `@wraithwalker/native-host`
+   4. `@wraithwalker/cli`
 
 Because publishing uses npm trusted publishing from a public GitHub repository, npm will generate provenance attestations automatically for these public packages.
