@@ -12,9 +12,13 @@ import { z } from "zod";
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import {
+  listAssets,
   listScenarios,
   readApiFixture,
   readFixtureBody,
+  readFixtureSnippet,
+  searchFixtureContent,
+  flattenStaticResourceManifest,
   readOriginInfo,
   readSiteConfigs,
   resolveFixturePath
@@ -29,9 +33,12 @@ export const DEFAULT_HTTP_PORT = 4319;
 
 export const MCP_TOOL_NAMES = [
   "list-origins",
+  "list-assets",
   "list-endpoints",
+  "search-content",
   "read-endpoint-fixture",
   "read-fixture",
+  "read-fixture-snippet",
   "read-manifest",
   "list-scenarios",
   "diff-scenarios"
@@ -60,7 +67,34 @@ interface HttpSession {
   transport: StreamableHTTPServerTransport;
 }
 
+const optionalStringArraySchema = z.array(z.string()).optional();
+
+function renderJson(value: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
+  };
+}
+
 function registerTools(server: McpServer, rootPath: string): void {
+  async function resolveSiteConfig(origin: string) {
+    const configs = await readSiteConfigs(rootPath);
+    return {
+      configs,
+      config: configs.find((candidate) => candidate.origin === origin)
+    };
+  }
+
+  function renderOriginNotFound(origin: string, availableOrigins: string[]) {
+    const available = availableOrigins.join(", ");
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Origin "${origin}" not found.${available ? ` Available: ${available}` : ""}`
+      }],
+      isError: true
+    };
+  }
+
   server.tool(
     "list-origins",
     "List all captured origins and their fixture summary",
@@ -74,16 +108,51 @@ function registerTools(server: McpServer, rootPath: string): void {
         origins.push({
           origin: info.origin,
           mode: info.mode,
+          manifestPath: info.manifestPath,
           apiEndpoints: info.apiEndpoints.length,
-          staticAssets: info.manifest
-            ? Object.values(info.manifest.resourcesByPathname).flat().length
-            : 0
+          staticAssets: flattenStaticResourceManifest(info.manifest).length
         });
       }
 
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(origins, null, 2) }]
-      };
+      return renderJson(origins);
+    }
+  );
+
+  server.tool(
+    "list-assets",
+    "List captured static assets for an origin with optional filters and pagination",
+    {
+      origin: z.string().describe("The origin to list assets for (e.g., https://app.example.com)"),
+      resourceTypes: optionalStringArraySchema.describe("Optional static resource types to include"),
+      mimeTypes: optionalStringArraySchema.describe("Optional MIME types to include"),
+      pathnameContains: z.string().optional().describe("Optional case-insensitive pathname substring filter"),
+      requestOrigin: z.string().optional().describe("Optional exact request origin filter"),
+      limit: z.number().int().positive().max(200).optional().describe("Maximum number of assets to return"),
+      cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous list-assets call")
+    },
+    async ({ origin, resourceTypes, mimeTypes, pathnameContains, requestOrigin, limit, cursor }) => {
+      const { configs, config } = await resolveSiteConfig(origin);
+      if (!config) {
+        return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
+      }
+
+      try {
+        const assets = await listAssets(rootPath, config, {
+          resourceTypes,
+          mimeTypes,
+          pathnameContains,
+          requestOrigin,
+          limit,
+          cursor
+        });
+
+        return renderJson(assets);
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
     }
   );
 
@@ -92,13 +161,9 @@ function registerTools(server: McpServer, rootPath: string): void {
     "List all captured API endpoints for an origin",
     { origin: z.string().describe("The origin to list endpoints for (e.g., https://app.example.com)") },
     async ({ origin }) => {
-      const configs = await readSiteConfigs(rootPath);
-      const config = configs.find((candidate) => candidate.origin === origin);
+      const { configs, config } = await resolveSiteConfig(origin);
       if (!config) {
-        return {
-          content: [{ type: "text" as const, text: `Origin "${origin}" not found. Available: ${configs.map((candidate) => candidate.origin).join(", ")}` }],
-          isError: true
-        };
+        return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
       }
 
       const info = await readOriginInfo(rootPath, config);
@@ -107,12 +172,53 @@ function registerTools(server: McpServer, rootPath: string): void {
         pathname: endpoint.pathname,
         status: endpoint.status,
         mimeType: endpoint.mimeType,
-        fixtureDir: endpoint.fixtureDir
+        fixtureDir: endpoint.fixtureDir,
+        metaPath: endpoint.metaPath,
+        bodyPath: endpoint.bodyPath
       }));
 
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(endpoints, null, 2) }]
-      };
+      return renderJson(endpoints);
+    }
+  );
+
+  server.tool(
+    "search-content",
+    "Search live fixture content across assets, endpoint bodies, and text-like files",
+    {
+      query: z.string().trim().min(1).describe("Case-insensitive substring query to search for"),
+      origin: z.string().optional().describe("Optional origin filter"),
+      pathContains: z.string().optional().describe("Optional case-insensitive relative path substring filter"),
+      mimeTypes: optionalStringArraySchema.describe("Optional MIME types to include"),
+      resourceTypes: optionalStringArraySchema.describe("Optional resource types to include"),
+      limit: z.number().int().positive().max(100).optional().describe("Maximum number of matches to return"),
+      cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous search-content call")
+    },
+    async ({ query, origin, pathContains, mimeTypes, resourceTypes, limit, cursor }) => {
+      if (origin) {
+        const { configs, config } = await resolveSiteConfig(origin);
+        if (!config) {
+          return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
+        }
+      }
+
+      try {
+        const results = await searchFixtureContent(rootPath, {
+          query,
+          origin,
+          pathContains,
+          mimeTypes,
+          resourceTypes,
+          limit,
+          cursor
+        });
+
+        return renderJson(results);
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
     }
   );
 
@@ -139,6 +245,32 @@ function registerTools(server: McpServer, rootPath: string): void {
       return {
         content: [{ type: "text" as const, text: content }]
       };
+    }
+  );
+
+  server.tool(
+    "read-fixture-snippet",
+    "Read a bounded text snippet from a fixture file relative to the fixture root",
+    {
+      path: z.string().describe("Relative path to the text fixture file"),
+      startLine: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional().describe("1-based line number to start reading from"),
+      lineCount: z.number().int().positive().max(400).optional().describe("Maximum number of lines to return"),
+      maxBytes: z.number().int().positive().max(64000).optional().describe("Maximum UTF-8 bytes to return")
+    },
+    async ({ path: filePath, startLine, lineCount, maxBytes }) => {
+      try {
+        const snippet = await readFixtureSnippet(rootPath, filePath, {
+          startLine,
+          lineCount,
+          maxBytes
+        });
+        return renderJson(snippet);
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
     }
   );
 
@@ -173,13 +305,9 @@ function registerTools(server: McpServer, rootPath: string): void {
     "Read the RESOURCE_MANIFEST.json for an origin",
     { origin: z.string().describe("The origin to read the manifest for") },
     async ({ origin }) => {
-      const configs = await readSiteConfigs(rootPath);
-      const config = configs.find((candidate) => candidate.origin === origin);
+      const { configs, config } = await resolveSiteConfig(origin);
       if (!config) {
-        return {
-          content: [{ type: "text" as const, text: `Origin "${origin}" not found.` }],
-          isError: true
-        };
+        return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
       }
 
       const info = await readOriginInfo(rootPath, config);
@@ -190,9 +318,7 @@ function registerTools(server: McpServer, rootPath: string): void {
         };
       }
 
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(info.manifest, null, 2) }]
-      };
+      return renderJson(info.manifest);
     }
   );
 
@@ -202,9 +328,7 @@ function registerTools(server: McpServer, rootPath: string): void {
     {},
     async () => {
       const scenarios = await listScenarios(rootPath);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify({ scenarios }, null, 2) }]
-      };
+      return renderJson({ scenarios });
     }
   );
 

@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -85,6 +87,18 @@ async function createFixtureRootWithData() {
           mimeType: "application/javascript",
           resourceType: "Script",
           capturedAt: "2026-04-05T00:00:00.000Z"
+        }],
+        "/styles/dropdown.css": [{
+          requestUrl: "https://cdn.example.com/styles/dropdown.css",
+          requestOrigin: "https://cdn.example.com",
+          pathname: "/styles/dropdown.css",
+          search: "",
+          bodyPath: "cdn.example.com/styles/dropdown.css",
+          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.css.__request.json",
+          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.css.__response.json",
+          mimeType: "text/css",
+          resourceType: "Stylesheet",
+          capturedAt: "2026-04-05T00:00:00.000Z"
         }]
       }
     }
@@ -100,15 +114,19 @@ async function createFixtureRootWithData() {
       status: 200,
       statusText: "OK",
       mimeType: "application/json",
-      resourceType: "XHR",
+      resourceType: "Fetch",
       url: "https://api.example.com/users",
       method: "GET",
       capturedAt: "2026-04-05T00:00:00.000Z"
     },
-    body: "{\"users\":[{\"id\":1}]}"
+    body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
   });
 
-  await root.writeText("cdn.example.com/assets/app.js", "console.log('fixture');");
+  await root.writeText("cdn.example.com/assets/app.js", "renderDropdown({ animated: true });");
+  await root.writeText("cdn.example.com/styles/dropdown.css", ".dropdown { color: #111; }");
+  await root.writeText("notes/ui-guidelines.txt", "Dropdown styling reference for agents.");
+  await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
+  await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
 
   await root.ensureScenario("baseline");
   await root.ensureScenario("candidate");
@@ -163,12 +181,15 @@ describe("mcp server", () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
         "diff-scenarios",
+        "list-assets",
         "list-endpoints",
         "list-origins",
         "list-scenarios",
         "read-endpoint-fixture",
         "read-fixture",
-        "read-manifest"
+        "read-fixture-snippet",
+        "read-manifest",
+        "search-content"
       ]);
     } finally {
       await client.close();
@@ -188,16 +209,47 @@ describe("mcp server", () => {
       });
       const origins = JSON.parse(readTextContent(listOriginsResult)) as Array<{
         origin: string;
+        manifestPath: string | null;
         apiEndpoints: number;
         staticAssets: number;
       }>;
       expect(origins).toEqual([
         expect.objectContaining({
           origin: "https://app.example.com",
+          manifestPath: ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json",
           apiEndpoints: 1,
-          staticAssets: 1
+          staticAssets: 2
         })
       ]);
+
+      const listAssetsResult = await client.callTool({
+        name: "list-assets",
+        arguments: {
+          origin: "https://app.example.com",
+          resourceTypes: ["Script"],
+          mimeTypes: ["application/javascript"]
+        }
+      });
+      const assets = JSON.parse(readTextContent(listAssetsResult)) as {
+        items: Array<{
+          pathname: string;
+          mimeType: string;
+          bodyPath: string;
+        }>;
+        totalMatched: number;
+        nextCursor: string | null;
+      };
+      expect(assets).toEqual({
+        items: [
+          expect.objectContaining({
+            pathname: "/app.js",
+            mimeType: "application/javascript",
+            bodyPath: "cdn.example.com/assets/app.js"
+          })
+        ],
+        totalMatched: 1,
+        nextCursor: null
+      });
 
       const listEndpointsResult = await client.callTool({
         name: "list-endpoints",
@@ -208,13 +260,17 @@ describe("mcp server", () => {
         pathname: string;
         status: number;
         fixtureDir: string;
+        bodyPath: string;
+        metaPath: string;
       }>;
       expect(endpoints).toEqual([
         expect.objectContaining({
           method: "GET",
           pathname: "/users",
           status: 200,
-          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
+          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+          metaPath: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
+          bodyPath: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
         })
       ]);
 
@@ -233,14 +289,58 @@ describe("mcp server", () => {
           status: 200,
           url: "https://api.example.com/users"
         }),
-        body: "{\"users\":[{\"id\":1}]}"
+        body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
       }));
+
+      const searchResult = await client.callTool({
+        name: "search-content",
+        arguments: {
+          query: "dropdown"
+        }
+      });
+      const searchMatches = JSON.parse(readTextContent(searchResult)) as {
+        items: Array<{
+          path: string;
+          sourceKind: string;
+        }>;
+        totalMatched: number;
+      };
+      expect(searchMatches.totalMatched).toBe(4);
+      expect(searchMatches.items.map((item) => item.sourceKind)).toEqual([
+        "endpoint",
+        "asset",
+        "asset",
+        "file"
+      ]);
+
+      const snippetResult = await client.callTool({
+        name: "read-fixture-snippet",
+        arguments: {
+          path: "cdn.example.com/assets/app.js",
+          startLine: 1,
+          lineCount: 1
+        }
+      });
+      const snippet = JSON.parse(readTextContent(snippetResult)) as {
+        path: string;
+        startLine: number;
+        endLine: number;
+        truncated: boolean;
+        text: string;
+      };
+      expect(snippet).toEqual({
+        path: "cdn.example.com/assets/app.js",
+        startLine: 1,
+        endLine: 1,
+        truncated: false,
+        text: "renderDropdown({ animated: true });"
+      });
 
       const fixtureResult = await client.callTool({
         name: "read-fixture",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
-      expect(readTextContent(fixtureResult)).toBe("console.log('fixture');");
+      expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
 
       const manifestResult = await client.callTool({
         name: "read-manifest",
@@ -250,6 +350,7 @@ describe("mcp server", () => {
         resourcesByPathname: Record<string, unknown[]>;
       };
       expect(manifest.resourcesByPathname["/app.js"]).toHaveLength(1);
+      expect(manifest.resourcesByPathname["/styles/dropdown.css"]).toHaveLength(1);
 
       const scenariosResult = await client.callTool({
         name: "list-scenarios",
@@ -281,6 +382,13 @@ describe("mcp server", () => {
     const { client, server } = await connectClient(root.rootPath);
 
     try {
+      const assetResult = await client.callTool({
+        name: "list-assets",
+        arguments: { origin: "https://missing.example.com" }
+      });
+      expect(assetResult.isError).toBe(true);
+      expect(readTextContent(assetResult)).toContain("Origin \"https://missing.example.com\" not found.");
+
       const endpointResult = await client.callTool({
         name: "list-endpoints",
         arguments: { origin: "https://missing.example.com" }
@@ -302,6 +410,20 @@ describe("mcp server", () => {
       expect(invalidFixturePathResult.isError).toBe(true);
       expect(readTextContent(invalidFixturePathResult)).toContain("Invalid fixture path: ../package.json");
 
+      const snippetMissingResult = await client.callTool({
+        name: "read-fixture-snippet",
+        arguments: { path: "missing.txt" }
+      });
+      expect(snippetMissingResult.isError).toBe(true);
+      expect(readTextContent(snippetMissingResult)).toContain("File not found: missing.txt");
+
+      const snippetInvalidPathResult = await client.callTool({
+        name: "read-fixture-snippet",
+        arguments: { path: "../package.json" }
+      });
+      expect(snippetInvalidPathResult.isError).toBe(true);
+      expect(readTextContent(snippetInvalidPathResult)).toContain("Invalid fixture path: ../package.json");
+
       const invalidEndpointFixtureResult = await client.callTool({
         name: "read-endpoint-fixture",
         arguments: { fixtureDir: "../escape" }
@@ -316,6 +438,16 @@ describe("mcp server", () => {
       expect(manifestResult.isError).toBe(true);
       expect(readTextContent(manifestResult)).toContain("Origin \"https://missing.example.com\" not found.");
 
+      const searchResult = await client.callTool({
+        name: "search-content",
+        arguments: {
+          query: "dropdown",
+          origin: "https://missing.example.com"
+        }
+      });
+      expect(searchResult.isError).toBe(true);
+      expect(readTextContent(searchResult)).toContain("Origin \"https://missing.example.com\" not found.");
+
       await root.ensureOrigin({ mode: "advanced", topOrigin: "https://empty.example.com" });
       const emptyManifestResult = await client.callTool({
         name: "read-manifest",
@@ -323,6 +455,25 @@ describe("mcp server", () => {
       });
       expect(emptyManifestResult.isError).toBe(true);
       expect(readTextContent(emptyManifestResult)).toContain("No manifest found for \"https://empty.example.com\".");
+
+      const invalidCursorResult = await client.callTool({
+        name: "list-assets",
+        arguments: {
+          origin: "https://empty.example.com",
+          cursor: "not-a-cursor"
+        }
+      });
+      expect(invalidCursorResult.isError).toBe(true);
+      expect(readTextContent(invalidCursorResult)).toContain("Invalid cursor");
+
+      await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
+      await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
+      const binarySnippetResult = await client.callTool({
+        name: "read-fixture-snippet",
+        arguments: { path: "bin/blob.bin" }
+      });
+      expect(binarySnippetResult.isError).toBe(true);
+      expect(readTextContent(binarySnippetResult)).toContain("Fixture is not a text file");
 
       const diffResult = await client.callTool({
         name: "diff-scenarios",
@@ -375,9 +526,12 @@ describe("mcp server", () => {
       expect(server.url).toContain(`:${server.port}/mcp`);
       expect(server.tools).toEqual([
         "list-origins",
+        "list-assets",
         "list-endpoints",
+        "search-content",
         "read-endpoint-fixture",
         "read-fixture",
+        "read-fixture-snippet",
         "read-manifest",
         "list-scenarios",
         "diff-scenarios"
@@ -386,19 +540,28 @@ describe("mcp server", () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
         "diff-scenarios",
+        "list-assets",
         "list-endpoints",
         "list-origins",
         "list-scenarios",
         "read-endpoint-fixture",
         "read-fixture",
-        "read-manifest"
+        "read-fixture-snippet",
+        "read-manifest",
+        "search-content"
       ]);
 
       const fixtureResult = await client.callTool({
         name: "read-fixture",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
-      expect(readTextContent(fixtureResult)).toBe("console.log('fixture');");
+      expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
+
+      const assetResult = await client.callTool({
+        name: "list-assets",
+        arguments: { origin: "https://app.example.com" }
+      });
+      expect(readTextContent(assetResult)).toContain("\"totalMatched\": 2");
 
       const endpointResult = await client.callTool({
         name: "read-endpoint-fixture",
@@ -407,6 +570,22 @@ describe("mcp server", () => {
         }
       });
       expect(readTextContent(endpointResult)).toContain("\"status\": 200");
+
+      const searchResult = await client.callTool({
+        name: "search-content",
+        arguments: { query: "dropdown" }
+      });
+      expect(readTextContent(searchResult)).toContain("\"sourceKind\": \"endpoint\"");
+
+      const snippetResult = await client.callTool({
+        name: "read-fixture-snippet",
+        arguments: {
+          path: "cdn.example.com/assets/app.js",
+          startLine: 1,
+          lineCount: 1
+        }
+      });
+      expect(readTextContent(snippetResult)).toContain("renderDropdown({ animated: true });");
 
       const listOriginsResult = await client.callTool({
         name: "list-origins",

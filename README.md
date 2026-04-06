@@ -56,10 +56,13 @@ The `@wraithwalker/mcp-server` package exposes captured fixtures programmaticall
 | Tool | Description |
 |------|-------------|
 | `list-origins` | Summarize all captured origins |
+| `list-assets` | List captured static assets for an origin with filtering and pagination |
 | `list-endpoints` | API endpoints for a given origin, including a fixture directory identifier |
+| `search-content` | Search live fixture content across assets, endpoint bodies, and text-like files |
 | `read-endpoint-fixture` | Read response metadata and body for a listed API endpoint fixture |
 | `read-fixture` | Read a fixture response body by root-bounded relative path |
-| `read-manifest` | Read RESOURCE_MANIFEST.json for an origin |
+| `read-fixture-snippet` | Read a bounded text snippet from a large fixture file |
+| `read-manifest` | Read RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
 | `list-scenarios` | Enumerate saved scenario snapshots |
 | `diff-scenarios` | Compare two scenarios — added, removed, and changed endpoints, with missing-scenario validation |
 
@@ -71,6 +74,14 @@ wraithwalker serve --http   # Streamable HTTP at http://127.0.0.1:4319/mcp
 ```
 
 When you use `--http`, WraithWalker prints the final MCP URL, available tools, and a reminder to copy that URL into your AI client.
+
+The intended agent workflow is progressive:
+
+1. `list-origins`
+2. `list-assets` and/or `list-endpoints`
+3. `search-content`
+4. `read-fixture-snippet`
+5. raw reads like `read-fixture`, `read-endpoint-fixture`, or `read-manifest` only when needed
 
 You can also run the package bin directly:
 
