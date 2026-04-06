@@ -135,6 +135,96 @@ describe("fixture readers", () => {
     expect(await readFixtureBody(root.rootPath, "../package.json")).toBeNull();
   });
 
+  it("prettifies asset and endpoint bodies at read time without mutating stored files", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-06T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/chunk.js": [{
+            requestUrl: "https://cdn.example.com/assets/chunk.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/chunk.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/chunk.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }]
+        }
+      }
+    });
+    await root.writeText(
+      "cdn.example.com/assets/chunk.js",
+      "function renderDropdown(){if(animated){return{theme:\"dark\"}}return null}"
+    );
+
+    const apiFixture = await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
+        status: 200,
+        statusText: "OK",
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/users",
+        method: "GET",
+        capturedAt: "2026-04-06T00:00:00.000Z"
+      },
+      body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
+    });
+
+    expect(await readFixtureBody(root.rootPath, "cdn.example.com/assets/chunk.js", { pretty: true })).toBe(
+      "function renderDropdown() {\n  if (animated) {\n    return { theme: \"dark\" };\n  }\n  return null;\n}"
+    );
+    expect(await readFixtureBody(root.rootPath, apiFixture.bodyPath, { pretty: true })).toBe(
+      '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+    );
+    expect(await readApiFixture(root.rootPath, apiFixture.fixtureDir, { pretty: true })).toEqual({
+      fixtureDir: apiFixture.fixtureDir,
+      metaPath: apiFixture.metaPath,
+      bodyPath: apiFixture.bodyPath,
+      meta: expect.objectContaining({
+        status: 200,
+        url: "https://api.example.com/users"
+      }),
+      body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+    });
+
+    const snippet = await readFixtureSnippet(root.rootPath, "cdn.example.com/assets/chunk.js", {
+      pretty: true,
+      startLine: 2,
+      lineCount: 3
+    });
+    expect(snippet).toEqual({
+      path: "cdn.example.com/assets/chunk.js",
+      startLine: 2,
+      endLine: 4,
+      truncated: false,
+      text: "  if (animated) {\n    return { theme: \"dark\" };\n  }"
+    });
+
+    expect(await fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")).toBe(
+      "function renderDropdown(){if(animated){return{theme:\"dark\"}}return null}"
+    );
+    expect(await fs.readFile(root.resolve(apiFixture.bodyPath), "utf8")).toBe(
+      "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
+    );
+  });
+
   it("reads API fixtures by their listed directory", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
@@ -458,6 +548,7 @@ describe("fixture readers", () => {
     await expect(readFixtureSnippet(root.rootPath, "../escape")).rejects.toThrow("Invalid fixture path");
     await expect(readFixtureSnippet(root.rootPath, "missing.txt")).rejects.toThrow("File not found");
     await expect(readFixtureSnippet(root.rootPath, "bin/blob.bin")).rejects.toThrow("Fixture is not a text file");
+    await expect(readFixtureSnippet(root.rootPath, "bin/blob.bin", { pretty: true })).rejects.toThrow("Fixture is not a text file");
   });
 
   it("discovers site configs from simple and advanced fixture trees", async () => {

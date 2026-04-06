@@ -66,9 +66,9 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | `list-assets` | `origin`, optional filters | List static assets for a specific origin with filtering and pagination |
 | `list-endpoints` | `origin` | List API endpoints for a specific origin, including the `fixtureDir`, `metaPath`, and `bodyPath` to inspect |
 | `search-content` | `query`, optional filters | Search live fixture content across assets, endpoint bodies, and other text-like files |
-| `read-endpoint-fixture` | `fixtureDir` | Read the response metadata and body for a fixture returned by `list-endpoints` |
-| `read-fixture` | `path` | Read a fixture response body by relative path, restricted to the fixture root |
-| `read-fixture-snippet` | `path`, optional bounds | Read a bounded text snippet from a fixture file without dumping the full blob |
+| `read-endpoint-fixture` | `fixtureDir`, optional `pretty` | Read the response metadata and body for a fixture returned by `list-endpoints` |
+| `read-fixture` | `path`, optional `pretty` | Read a fixture response body by relative path, restricted to the fixture root |
+| `read-fixture-snippet` | `path`, optional `pretty`, optional bounds | Read a bounded text snippet from a fixture file without dumping the full blob |
 | `read-manifest` | `origin` | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
 | `list-scenarios` | — | List saved scenario snapshots |
 | `diff-scenarios` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
@@ -80,7 +80,7 @@ WraithWalker now exposes a progressive-disclosure MCP surface for agents:
 1. `list-origins` to discover what has been captured
 2. `list-assets` or `list-endpoints` to narrow to the relevant files or API fixtures
 3. `search-content` to find the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about
-4. `read-fixture-snippet` to inspect only the relevant section of a large file
+4. `read-fixture-snippet` to inspect only the relevant section of a large file, optionally with `pretty: true` for minified chunks
 5. `read-fixture`, `read-endpoint-fixture`, or `read-manifest` only when you need the full raw payload
 
 `read-manifest` intentionally stays available for full-fidelity debugging, but it should not be the main discovery path for agents.

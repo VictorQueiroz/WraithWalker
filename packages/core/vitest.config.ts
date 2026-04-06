@@ -7,6 +7,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: [
+        "src/fixture-presentation.mts",
         "src/fixture-layout.mts",
         "src/har-import.mts",
         "src/overrides-sync.mts",

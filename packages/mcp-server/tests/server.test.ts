@@ -88,6 +88,18 @@ async function createFixtureRootWithData() {
           resourceType: "Script",
           capturedAt: "2026-04-05T00:00:00.000Z"
         }],
+        "/assets/chunk.js": [{
+          requestUrl: "https://cdn.example.com/assets/chunk.js",
+          requestOrigin: "https://cdn.example.com",
+          pathname: "/assets/chunk.js",
+          search: "",
+          bodyPath: "cdn.example.com/assets/chunk.js",
+          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__request.json",
+          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__response.json",
+          mimeType: "application/javascript",
+          resourceType: "Script",
+          capturedAt: "2026-04-05T00:00:00.000Z"
+        }],
         "/styles/dropdown.css": [{
           requestUrl: "https://cdn.example.com/styles/dropdown.css",
           requestOrigin: "https://cdn.example.com",
@@ -123,6 +135,10 @@ async function createFixtureRootWithData() {
   });
 
   await root.writeText("cdn.example.com/assets/app.js", "renderDropdown({ animated: true });");
+  await root.writeText(
+    "cdn.example.com/assets/chunk.js",
+    "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+  );
   await root.writeText("cdn.example.com/styles/dropdown.css", ".dropdown { color: #111; }");
   await root.writeText("notes/ui-guidelines.txt", "Dropdown styling reference for agents.");
   await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
@@ -218,7 +234,7 @@ describe("mcp server", () => {
           origin: "https://app.example.com",
           manifestPath: ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json",
           apiEndpoints: 1,
-          staticAssets: 2
+          staticAssets: 3
         })
       ]);
 
@@ -227,7 +243,8 @@ describe("mcp server", () => {
         arguments: {
           origin: "https://app.example.com",
           resourceTypes: ["Script"],
-          mimeTypes: ["application/javascript"]
+          mimeTypes: ["application/javascript"],
+          pathnameContains: "app"
         }
       });
       const assets = JSON.parse(readTextContent(listAssetsResult)) as {
@@ -292,6 +309,18 @@ describe("mcp server", () => {
         body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
       }));
 
+      const prettyEndpointFixtureResult = await client.callTool({
+        name: "read-endpoint-fixture",
+        arguments: {
+          fixtureDir: endpoints[0].fixtureDir,
+          pretty: true
+        }
+      });
+      const prettyEndpointFixture = JSON.parse(readTextContent(prettyEndpointFixtureResult)) as {
+        body: string | null;
+      };
+      expect(prettyEndpointFixture.body).toBe('{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }');
+
       const searchResult = await client.callTool({
         name: "search-content",
         arguments: {
@@ -341,6 +370,41 @@ describe("mcp server", () => {
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
       expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
+
+      const prettyFixtureResult = await client.callTool({
+        name: "read-fixture",
+        arguments: {
+          path: "cdn.example.com/assets/chunk.js",
+          pretty: true
+        }
+      });
+      expect(readTextContent(prettyFixtureResult)).toBe(
+        "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
+      );
+
+      const prettySnippetResult = await client.callTool({
+        name: "read-fixture-snippet",
+        arguments: {
+          path: "cdn.example.com/assets/chunk.js",
+          pretty: true,
+          startLine: 2,
+          lineCount: 3
+        }
+      });
+      const prettySnippet = JSON.parse(readTextContent(prettySnippetResult)) as {
+        path: string;
+        startLine: number;
+        endLine: number;
+        truncated: boolean;
+        text: string;
+      };
+      expect(prettySnippet).toEqual({
+        path: "cdn.example.com/assets/chunk.js",
+        startLine: 2,
+        endLine: 4,
+        truncated: false,
+        text: "  if (open) {\n    return { variant: \"dark\" };\n  }"
+      });
 
       const manifestResult = await client.callTool({
         name: "read-manifest",
@@ -561,15 +625,18 @@ describe("mcp server", () => {
         name: "list-assets",
         arguments: { origin: "https://app.example.com" }
       });
-      expect(readTextContent(assetResult)).toContain("\"totalMatched\": 2");
+      expect(readTextContent(assetResult)).toContain("\"totalMatched\": 3");
 
       const endpointResult = await client.callTool({
         name: "read-endpoint-fixture",
         arguments: {
-          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
+          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+          pretty: true
         }
       });
-      expect(readTextContent(endpointResult)).toContain("\"status\": 200");
+      expect(JSON.parse(readTextContent(endpointResult))).toEqual(expect.objectContaining({
+        body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+      }));
 
       const searchResult = await client.callTool({
         name: "search-content",
@@ -580,12 +647,19 @@ describe("mcp server", () => {
       const snippetResult = await client.callTool({
         name: "read-fixture-snippet",
         arguments: {
-          path: "cdn.example.com/assets/app.js",
-          startLine: 1,
-          lineCount: 1
+          path: "cdn.example.com/assets/chunk.js",
+          pretty: true,
+          startLine: 2,
+          lineCount: 2
         }
       });
-      expect(readTextContent(snippetResult)).toContain("renderDropdown({ animated: true });");
+      expect(JSON.parse(readTextContent(snippetResult))).toEqual({
+        path: "cdn.example.com/assets/chunk.js",
+        startLine: 2,
+        endLine: 3,
+        truncated: false,
+        text: "  if (open) {\n    return { variant: \"dark\" };"
+      });
 
       const listOriginsResult = await client.callTool({
         name: "list-origins",

@@ -225,8 +225,11 @@ function registerTools(server: McpServer, rootPath: string): void {
   server.tool(
     "read-fixture",
     "Read a fixture response body by its file path relative to the fixture root",
-    { path: z.string().describe("Relative path to the fixture file (e.g., cdn.example.com/assets/app.js)") },
-    async ({ path: filePath }) => {
+    {
+      path: z.string().describe("Relative path to the fixture file (e.g., cdn.example.com/assets/app.js)"),
+      pretty: z.boolean().optional().describe("Format supported text-like fixtures for easier reading without changing stored bytes")
+    },
+    async ({ path: filePath, pretty }) => {
       if (!resolveFixturePath(rootPath, filePath)) {
         return {
           content: [{ type: "text" as const, text: `Invalid fixture path: ${filePath}. Paths must stay within the fixture root.` }],
@@ -234,7 +237,7 @@ function registerTools(server: McpServer, rootPath: string): void {
         };
       }
 
-      const content = await readFixtureBody(rootPath, filePath);
+      const content = await readFixtureBody(rootPath, filePath, { pretty });
       if (content === null) {
         return {
           content: [{ type: "text" as const, text: `File not found: ${filePath}` }],
@@ -253,13 +256,15 @@ function registerTools(server: McpServer, rootPath: string): void {
     "Read a bounded text snippet from a fixture file relative to the fixture root",
     {
       path: z.string().describe("Relative path to the text fixture file"),
+      pretty: z.boolean().optional().describe("Format supported text-like fixtures before slicing lines for easier inspection"),
       startLine: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional().describe("1-based line number to start reading from"),
       lineCount: z.number().int().positive().max(400).optional().describe("Maximum number of lines to return"),
       maxBytes: z.number().int().positive().max(64000).optional().describe("Maximum UTF-8 bytes to return")
     },
-    async ({ path: filePath, startLine, lineCount, maxBytes }) => {
+    async ({ path: filePath, pretty, startLine, lineCount, maxBytes }) => {
       try {
         const snippet = await readFixtureSnippet(rootPath, filePath, {
+          pretty,
           startLine,
           lineCount,
           maxBytes
@@ -277,8 +282,11 @@ function registerTools(server: McpServer, rootPath: string): void {
   server.tool(
     "read-endpoint-fixture",
     "Read the response metadata and body for an API fixture returned by list-endpoints",
-    { fixtureDir: z.string().describe("Fixture directory returned by list-endpoints") },
-    async ({ fixtureDir }) => {
+    {
+      fixtureDir: z.string().describe("Fixture directory returned by list-endpoints"),
+      pretty: z.boolean().optional().describe("Format supported text-like response bodies for easier reading without changing stored bytes")
+    },
+    async ({ fixtureDir, pretty }) => {
       if (!resolveFixturePath(rootPath, path.join(fixtureDir, "response.meta.json"))) {
         return {
           content: [{ type: "text" as const, text: `Invalid fixture directory: ${fixtureDir}. Paths must stay within the fixture root.` }],
@@ -286,7 +294,7 @@ function registerTools(server: McpServer, rootPath: string): void {
         };
       }
 
-      const fixture = await readApiFixture(rootPath, fixtureDir);
+      const fixture = await readApiFixture(rootPath, fixtureDir, { pretty });
       if (!fixture) {
         return {
           content: [{ type: "text" as const, text: `Endpoint fixture not found: ${fixtureDir}` }],

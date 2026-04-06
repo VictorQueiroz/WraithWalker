@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/core",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "Shared Node-side domain logic for WraithWalker fixture roots, scenarios, and context generation.",
   "license": "MIT",
   "repository": {
@@ -40,6 +40,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "prettier": "^3.6.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -14,6 +14,7 @@ import {
   type StaticResourceManifest,
   type StaticResourceManifestEntry
 } from "./fixture-layout.mjs";
+import { prettifyFixtureText } from "./fixture-presentation.mjs";
 import { createFixtureRootFs, resolveWithinRoot } from "./root-fs.mjs";
 
 export type { ResponseMeta, StaticResourceManifest, StaticResourceManifestEntry } from "./fixture-layout.mjs";
@@ -89,9 +90,14 @@ export interface SearchContentMatch {
 }
 
 export interface FixtureSnippetOptions {
+  pretty?: boolean;
   startLine?: number;
   lineCount?: number;
   maxBytes?: number;
+}
+
+export interface FixtureReadOptions {
+  pretty?: boolean;
 }
 
 export interface FixtureSnippet {
@@ -114,6 +120,11 @@ interface SearchableFixtureEntry {
 type TextFixtureReadResult =
   | { ok: true; text: string }
   | { ok: false; reason: "invalid-path" | "missing" | "binary" };
+
+interface FixturePresentationContext {
+  mimeType?: string | null;
+  resourceType?: string | null;
+}
 
 const DEFAULT_ASSET_LIMIT = 50;
 const MAX_ASSET_LIMIT = 200;
@@ -325,6 +336,67 @@ function truncateUtf8(text: string, maxBytes: number): { text: string; truncated
   };
 }
 
+async function findAssetPresentationContext(
+  rootPath: string,
+  relativePath: string
+): Promise<FixturePresentationContext | null> {
+  const configs = await readSiteConfigs(rootPath);
+
+  for (const config of configs) {
+    const info = await readOriginInfo(rootPath, config);
+    for (const asset of flattenStaticResourceManifest(info.manifest)) {
+      if (asset.bodyPath !== relativePath) {
+        continue;
+      }
+
+      return {
+        mimeType: asset.mimeType,
+        resourceType: asset.resourceType
+      };
+    }
+  }
+
+  return null;
+}
+
+async function resolveFixturePresentationContext(
+  rootPath: string,
+  relativePath: string
+): Promise<FixturePresentationContext | null> {
+  if (path.basename(relativePath) === "response.body") {
+    const metaPath = path.join(path.dirname(relativePath), "response.meta.json");
+    const meta = await createFixtureRootFs(rootPath).readOptionalJson<ResponseMeta>(metaPath);
+    if (meta) {
+      return {
+        mimeType: meta.mimeType,
+        resourceType: meta.resourceType
+      };
+    }
+  }
+
+  return findAssetPresentationContext(rootPath, relativePath);
+}
+
+async function maybePrettifyFixtureText(
+  rootPath: string,
+  relativePath: string,
+  text: string,
+  options: FixtureReadOptions,
+  context?: FixturePresentationContext | null
+): Promise<string> {
+  if (!options.pretty) {
+    return text;
+  }
+
+  const resolvedContext = context ?? await resolveFixturePresentationContext(rootPath, relativePath);
+  return prettifyFixtureText({
+    relativePath,
+    text,
+    mimeType: resolvedContext?.mimeType,
+    resourceType: resolvedContext?.resourceType
+  });
+}
+
 async function listAllFiles(rootPath: string, relativeDir = ""): Promise<string[]> {
   const rootFs = createFixtureRootFs(rootPath);
   const entries = await rootFs.listOptionalDirectory(relativeDir);
@@ -512,8 +584,17 @@ export function resolveFixturePath(rootPath: string, relativePath: string): stri
   return resolveWithinRoot(rootPath, relativePath);
 }
 
-export async function readFixtureBody(rootPath: string, relativePath: string): Promise<string | null> {
-  return createFixtureRootFs(rootPath).readOptionalText(relativePath);
+export async function readFixtureBody(
+  rootPath: string,
+  relativePath: string,
+  options: FixtureReadOptions = {}
+): Promise<string | null> {
+  const text = await createFixtureRootFs(rootPath).readOptionalText(relativePath);
+  if (text === null) {
+    return null;
+  }
+
+  return maybePrettifyFixtureText(rootPath, relativePath, text, options);
 }
 
 export async function readFixtureSnippet(
@@ -545,7 +626,13 @@ export async function readFixtureSnippet(
     }
   }
 
-  const allLines = textFixture.text.split(/\r\n|\n|\r/);
+  const renderedText = await maybePrettifyFixtureText(
+    rootPath,
+    relativePath,
+    textFixture.text,
+    options
+  );
+  const allLines = renderedText.split(/\r\n|\n|\r/);
   const snippetLines = allLines.slice(startLine - 1, startLine - 1 + lineCount);
   const rawSnippet = snippetLines.join("\n");
   const truncatedSnippet = truncateUtf8(rawSnippet, maxBytes);
@@ -562,7 +649,11 @@ export async function readFixtureSnippet(
   };
 }
 
-export async function readApiFixture(rootPath: string, fixtureDir: string): Promise<ApiFixture | null> {
+export async function readApiFixture(
+  rootPath: string,
+  fixtureDir: string,
+  options: FixtureReadOptions = {}
+): Promise<ApiFixture | null> {
   const rootFs = createFixtureRootFs(rootPath);
   const metaPath = path.join(fixtureDir, "response.meta.json");
   const bodyPath = path.join(fixtureDir, "response.body");
@@ -581,7 +672,17 @@ export async function readApiFixture(rootPath: string, fixtureDir: string): Prom
     metaPath,
     bodyPath,
     meta,
-    body: await rootFs.readOptionalText(bodyPath)
+    body: await (async () => {
+      const body = await rootFs.readOptionalText(bodyPath);
+      if (body === null) {
+        return null;
+      }
+
+      return maybePrettifyFixtureText(rootPath, bodyPath, body, options, {
+        mimeType: meta.mimeType,
+        resourceType: meta.resourceType
+      });
+    })()
   };
 }
 
