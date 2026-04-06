@@ -93,6 +93,21 @@ describe("fixture mapper", () => {
     expect(descriptor.bodyPath).toBe("cdn.example.com/assets/index");
   });
 
+  it("routes typed simple-mode GET json requests through API storage", async () => {
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://api.example.com/agents",
+      siteMode: "simple",
+      mimeType: "application/json"
+    });
+
+    expect(descriptor.storageMode).toBe("api");
+    expect(descriptor.bodyPath).toMatch(
+      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/GET\/agents__q-/
+    );
+  });
+
   it("hashes query and request body for API requests", async () => {
     const descriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",

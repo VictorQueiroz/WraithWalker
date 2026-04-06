@@ -15,7 +15,7 @@
     "check:offscreen": "npm run build && node --check dist/offscreen.js"
   },
   "dependencies": {
-    "@wraithwalker/core": "0.3.3",
+    "@wraithwalker/core": "0.3.4",
     "idb": "^8.0.3"
   },
   "devDependencies": {

@@ -55,13 +55,13 @@ interface HarResponse {
 }
 
 interface HarTimings {
-  blocked?: number | string;
-  connect?: number | string;
-  dns?: number | string;
-  receive?: number | string;
-  send?: number | string;
-  wait?: number | string;
-  ssl?: number | string;
+  blocked?: number | string | null;
+  connect?: number | string | null;
+  dns?: number | string | null;
+  receive?: number | string | null;
+  send?: number | string | null;
+  wait?: number | string | null;
+  ssl?: number | string | null;
 }
 
 interface HarPage {
@@ -247,7 +247,7 @@ function inferResourceType(entry: HarEntry, mimeType: string): string {
 }
 
 function validateTimingValue(value: unknown, label: string, url: string): void {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return;
   }
 
@@ -463,6 +463,16 @@ function resolveEntryTopOrigins(entries: HarEntry[], pages?: HarPage[], explicit
 interface PlannedWrite {
   relativePath: string;
   content: Buffer;
+  topOrigin: string;
+  kind: "request" | "meta" | "body";
+}
+
+function isMetadataWritePath(relativePath: string): boolean {
+  const fileName = path.basename(relativePath);
+  return fileName === "request.json"
+    || fileName === "response.meta.json"
+    || fileName.endsWith(".__request.json")
+    || fileName.endsWith(".__response.json");
 }
 
 function createPlannedWrites(preparedEntries: PreparedHarEntry[]): PlannedWrite[] {
@@ -476,15 +486,21 @@ function createPlannedWrites(preparedEntries: PreparedHarEntry[]): PlannedWrite[
     return [
       {
         relativePath: prepared.descriptor.requestPath,
-        content: requestBuffer
+        content: requestBuffer,
+        topOrigin: prepared.topOrigin,
+        kind: "request"
       },
       {
         relativePath: prepared.descriptor.metaPath,
-        content: metaBuffer
+        content: metaBuffer,
+        topOrigin: prepared.topOrigin,
+        kind: "meta"
       },
       {
         relativePath: prepared.descriptor.bodyPath,
-        content: bodyBuffer
+        content: bodyBuffer,
+        topOrigin: prepared.topOrigin,
+        kind: "body"
       }
     ];
   });
@@ -495,21 +511,30 @@ async function assertPlannedWritesAreCompatible(
   preparedEntries: PreparedHarEntry[]
 ): Promise<void> {
   const rootFs = createFixtureRootFs(dir);
-  const plannedByPath = new Map<string, Buffer>();
+  const plannedByPath = new Map<string, PlannedWrite>();
 
   for (const write of createPlannedWrites(preparedEntries)) {
     const existingPlanned = plannedByPath.get(write.relativePath);
     if (existingPlanned) {
-      if (!existingPlanned.equals(write.content)) {
+      if (write.kind !== "body") {
+        continue;
+      }
+
+      if (existingPlanned.topOrigin === write.topOrigin) {
+        plannedByPath.set(write.relativePath, write);
+        continue;
+      }
+
+      if (!existingPlanned.content.equals(write.content)) {
         throw new Error(`Cannot import HAR because multiple entries would write different content to ${write.relativePath}.`);
       }
       continue;
     }
 
-    plannedByPath.set(write.relativePath, write.content);
+    plannedByPath.set(write.relativePath, write);
   }
 
-  for (const [relativePath, content] of plannedByPath) {
+  for (const [relativePath, write] of plannedByPath) {
     const existingStat = await rootFs.stat(relativePath);
     if (!existingStat) {
       continue;
@@ -519,9 +544,13 @@ async function assertPlannedWritesAreCompatible(
       throw new Error(`Cannot import HAR because ${relativePath} already exists as a directory.`);
     }
 
+    if (isMetadataWritePath(relativePath)) {
+      continue;
+    }
+
     const absolutePath = rootFs.resolve(relativePath)!;
     const existingContent = await fs.readFile(absolutePath);
-    if (!existingContent.equals(content)) {
+    if (!existingContent.equals(write.content)) {
       throw new Error(`Cannot import HAR because ${relativePath} already exists with different content.`);
     }
   }

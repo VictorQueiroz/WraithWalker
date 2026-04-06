@@ -42,7 +42,7 @@ function createHarEntry({
   mimeType?: string;
   text?: string;
   encoding?: string;
-  timings?: Record<string, number>;
+  timings?: Record<string, number | string | null>;
 }) {
   return {
     startedDateTime,
@@ -118,6 +118,18 @@ describe("har import", () => {
             ...validEntry,
             timings: {
               wait: "-1"
+            }
+          }
+        ]
+      }
+    }))).not.toThrow();
+    expect(() => parseHarArchive(JSON.stringify({
+      log: {
+        entries: [
+          {
+            ...validEntry,
+            timings: {
+              wait: null
             }
           }
         ]
@@ -451,6 +463,202 @@ describe("har import", () => {
     });
     expect(events.filter((event) => event.type === "entry-skipped")).toHaveLength(2);
     expect(events.filter((event) => event.type === "entry-complete")).toHaveLength(3);
+  });
+
+  it("imports entries whose HAR timings use null for optional timing fields", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        entries: [
+          createHarEntry({
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            url: "https://assets.example.com/polyfills.js",
+            responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+            mimeType: "application/javascript",
+            text: "console.log('polyfills');",
+            timings: {
+              blocked: 22.349999999278225,
+              wait: null,
+              receive: 0.0010000003385357559
+            }
+          })
+        ]
+      }
+    });
+
+    const result = await importHarFile({
+      harPath,
+      dir: await tmpdir(),
+      topOrigin: "https://app.example.com"
+    });
+
+    expect(result.topOrigins).toEqual(["https://app.example.com"]);
+    expect(result.imported).toEqual([
+      expect.objectContaining({
+        requestUrl: "https://assets.example.com/polyfills.js",
+        topOrigin: "https://app.example.com"
+      })
+    ]);
+  });
+
+  it("allows duplicate asset entries when only metadata differs", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_app",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.500Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              requestHeaders: [{ name: "Referer", value: "https://app.example.com/" }],
+              responseHeaders: [{ name: "Date", value: "Thu, 02 Apr 2026 19:06:16 GMT" }],
+              mimeType: "application/javascript",
+              text: "console.log('shared');"
+            }),
+            pageref: "page_app"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.500Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              requestHeaders: [{ name: "Referer", value: "https://app.example.com/dashboard" }],
+              responseHeaders: [{ name: "Date", value: "Thu, 02 Apr 2026 19:06:17 GMT" }],
+              mimeType: "application/javascript",
+              text: "console.log('shared');"
+            }),
+            pageref: "page_app"
+          }
+        ]
+      }
+    });
+    const dir = await tmpdir();
+
+    await expect(importHarFile({
+      harPath,
+      dir
+    })).resolves.toEqual(
+      expect.objectContaining({
+        topOrigins: ["https://app.example.com"]
+      })
+    );
+  });
+
+  it("keeps the latest same-origin asset body when repeated GET entries change over time", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_app",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.500Z",
+              url: "https://cdn.example.com/assets/live.js",
+              mimeType: "application/javascript",
+              text: "console.log('first');"
+            }),
+            pageref: "page_app"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.500Z",
+              url: "https://cdn.example.com/assets/live.js",
+              mimeType: "application/javascript",
+              text: "console.log('second');"
+            }),
+            pageref: "page_app"
+          }
+        ]
+      }
+    });
+    const dir = await tmpdir();
+
+    await importHarFile({
+      harPath,
+      dir
+    });
+
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/live.js",
+      siteMode: "simple",
+      mimeType: "application/javascript",
+      resourceType: "Script"
+    });
+
+    expect(await fs.readFile(path.join(dir, descriptor.bodyPath), "utf8")).toBe("console.log('second');");
+  });
+
+  it("stores simple-mode GET json endpoints as API fixtures to avoid file-directory collisions", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_app",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.500Z",
+              url: "https://api.example.com/agents",
+              mimeType: "application/json",
+              text: '{"items":[1]}'
+            }),
+            pageref: "page_app"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.500Z",
+              url: "https://api.example.com/agents/all",
+              mimeType: "application/json",
+              text: '{"items":[1,2]}'
+            }),
+            pageref: "page_app"
+          }
+        ]
+      }
+    });
+    const dir = await tmpdir();
+
+    await importHarFile({
+      harPath,
+      dir
+    });
+
+    const parentDescriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://api.example.com/agents",
+      siteMode: "simple",
+      mimeType: "application/json",
+      resourceType: "Other"
+    });
+    const childDescriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://api.example.com/agents/all",
+      siteMode: "simple",
+      mimeType: "application/json",
+      resourceType: "Other"
+    });
+
+    expect(parentDescriptor.storageMode).toBe("api");
+    expect(childDescriptor.storageMode).toBe("api");
+    expect(await fs.readFile(path.join(dir, parentDescriptor.bodyPath), "utf8")).toBe('{"items":[1]}');
+    expect(await fs.readFile(path.join(dir, childDescriptor.bodyPath), "utf8")).toBe('{"items":[1,2]}');
   });
 
   it("accepts an explicit top origin, imports binary bodies, and supports har files without pages", async () => {
@@ -1092,6 +1300,66 @@ describe("har import", () => {
       dir: directoryConflictRoot.rootPath
     })).rejects.toThrow(
       "Cannot import HAR because cdn.example.com/assets/shared.js already exists as a directory."
+    );
+  });
+
+  it("overwrites existing metadata files when the fixture body matches", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-import-metadata-overwrite-"
+    });
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/app.js",
+      siteMode: "simple",
+      mimeType: "application/javascript",
+      resourceType: "Script"
+    });
+
+    await root.writeJson(descriptor.requestPath, {
+      topOrigin: "https://app.example.com",
+      url: "https://cdn.example.com/assets/app.js",
+      method: "GET"
+    });
+    await root.writeText(descriptor.metaPath, "{not-json");
+
+    const harPath = await writeHarFile({
+      log: {
+        pages: [{
+          id: "page_app",
+          startedDateTime: "2026-04-06T00:00:00.000Z",
+          title: "https://app.example.com/"
+        }],
+        entries: [{
+          ...createHarEntry({
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            url: "https://cdn.example.com/assets/app.js",
+            mimeType: "application/javascript",
+            text: "console.log('app');"
+          }),
+          pageref: "page_app"
+        }]
+      }
+    });
+
+    const result = await importHarFile({
+      harPath,
+      dir: root.rootPath
+    });
+
+    expect(result.topOrigins).toEqual(["https://app.example.com"]);
+    expect(await root.readJson(descriptor.requestPath)).toEqual(
+      expect.objectContaining({
+        topOrigin: "https://app.example.com",
+        url: "https://cdn.example.com/assets/app.js",
+        capturedAt: "2026-04-06T00:00:00.000Z"
+      })
+    );
+    expect(await root.readJson(descriptor.metaPath)).toEqual(
+      expect.objectContaining({
+        url: "https://cdn.example.com/assets/app.js",
+        capturedAt: "2026-04-06T00:00:00.000Z"
+      })
     );
   });
 });

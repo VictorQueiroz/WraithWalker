@@ -58,6 +58,16 @@ Fallback: ChromeDevTools/devtools-frontend
 Reference: https://developer.chrome.com/docs/devtools/overrides
 ```
 
+#### HAR Import / Sanitization
+
+Trigger: modifying HAR parsing, validation, import behavior, or sanitization rules.
+
+```
+Repository: google/har-sanitizer
+Ask: real-world HAR structure quirks, sanitization behavior, compatibility edge cases
+Fallback: janodvarko/harviewer, W3C HAR draft
+```
+
 #### IndexedDB / idb package
 
 Trigger: modifying `packages/extension/src/lib/idb.ts` or root handle persistence.

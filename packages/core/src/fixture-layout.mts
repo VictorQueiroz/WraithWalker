@@ -306,12 +306,14 @@ export function isAssetLikeRequest({
   }
 
   return [
+    "document",
     "script",
     "stylesheet",
     "image",
     "font",
     "media"
   ].includes(lowerType) || [
+    "text/html",
     "application/javascript",
     "text/javascript",
     "text/css",
@@ -398,8 +400,13 @@ export async function createFixtureDescriptor({
   const bodyHash = await shortHash(bodyHashSource);
   const topOriginKey = originToKey(topOrigin);
   const requestOriginKey = originToKey(requestOrigin);
+  const assetLike = isAssetLikeRequest({ method: methodUpper, url, resourceType, mimeType });
+  const hasTypeHints = resourceType.trim().length > 0 || mimeType.trim().length > 0;
+  const useSimpleVisibleAssetStorage = siteMode === "simple"
+    && methodUpper === "GET"
+    && (assetLike || !hasTypeHints);
 
-  if (siteMode === "simple" && methodUpper === "GET") {
+  if (useSimpleVisibleAssetStorage) {
     const pathSegments = splitSimpleModePath(requestUrl.pathname);
     const fileName = pathSegments[pathSegments.length - 1];
     const slug = sanitizeSegment(fileName);
@@ -444,7 +451,6 @@ export async function createFixtureDescriptor({
     siteMode === "simple"
       ? [SIMPLE_MODE_METADATA_DIR, SIMPLE_MODE_METADATA_TREE, topOriginKey, "origins", requestOriginKey]
       : [topOriginKey, "origins", requestOriginKey];
-  const assetLike = isAssetLikeRequest({ method: methodUpper, url, resourceType, mimeType });
 
   if (assetLike) {
     const pathSegments = splitPathSegments(requestUrl.pathname);

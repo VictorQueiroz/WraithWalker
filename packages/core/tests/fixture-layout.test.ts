@@ -130,6 +130,19 @@ describe("fixture layout", () => {
       url: "https://cdn.example.com/assets/chunk.js?v=2",
       siteMode: "simple"
     });
+    const simpleUntypedTrailingSlash = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/",
+      siteMode: "simple"
+    });
+    const simpleGetApi = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://api.example.com/agents",
+      siteMode: "simple",
+      mimeType: "application/json"
+    });
     const simpleApi = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
@@ -161,6 +174,12 @@ describe("fixture layout", () => {
       ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/chunk.js.__request.json"
     );
     expect(simpleGet.metadataOptional).toBe(true);
+    expect(simpleUntypedTrailingSlash.storageMode).toBe("asset");
+    expect(simpleUntypedTrailingSlash.bodyPath).toBe("cdn.example.com/assets/index");
+    expect(simpleGetApi.storageMode).toBe("api");
+    expect(simpleGetApi.bodyPath).toMatch(
+      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/GET\/agents__q-/
+    );
 
     expect(simpleApi.storageMode).toBe("api");
     expect(simpleApi.bodyPath).toMatch(
