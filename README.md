@@ -63,17 +63,23 @@ The `@wraithwalker/mcp-server` package exposes captured fixtures programmaticall
 | `list-scenarios` | Enumerate saved scenario snapshots |
 | `diff-scenarios` | Compare two scenarios — added, removed, and changed endpoints, with missing-scenario validation |
 
-Start the MCP server from a fixture root:
+WraithWalker supports two MCP transport modes from the same fixture root:
 
 ```bash
-wraithwalker serve
+wraithwalker serve          # stdio for existing local process-spawned clients
+wraithwalker serve --http   # Streamable HTTP at http://127.0.0.1:4319/mcp
 ```
 
-Or run it directly:
+When you use `--http`, WraithWalker prints the final MCP URL, available tools, and a reminder to copy that URL into your AI client.
+
+You can also run the package bin directly:
 
 ```bash
 node packages/mcp-server/out/bin.mjs /path/to/fixture-root
+node packages/mcp-server/out/bin.mjs --http /path/to/fixture-root
 ```
+
+See [`docs/mcp-clients.md`](docs/mcp-clients.md) for Claude Code, Cursor, Windsurf, Codex, and generic HTTP setup examples.
 
 ## Features
 
@@ -142,7 +148,7 @@ wraithwalker scenarios list          # List saved scenarios
 wraithwalker scenarios save <name>   # Save current fixtures as scenario
 wraithwalker scenarios switch <name> # Switch to a saved scenario
 wraithwalker scenarios diff <a> <b>  # Compare two scenarios
-wraithwalker serve                   # Start the MCP server
+wraithwalker serve [--http] [--host <host>] [--port <port>] # Start the MCP server
 ```
 
 The CLI discovers the nearest fixture root by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one.

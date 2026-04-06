@@ -47,7 +47,7 @@
   },
   "dependencies": {
     "@wraithwalker/core": "0.1.0",
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

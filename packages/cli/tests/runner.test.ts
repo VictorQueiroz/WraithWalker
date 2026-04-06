@@ -5,11 +5,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 const mocks = vi.hoisted(() => ({
-  startServer: vi.fn().mockResolvedValue(undefined)
+  startServer: vi.fn().mockResolvedValue(undefined),
+  startHttpServer: vi.fn().mockResolvedValue({
+    rootPath: "/tmp/fixtures",
+    host: "127.0.0.1",
+    port: 4319,
+    url: "http://127.0.0.1:4319/mcp",
+    tools: [
+      "list-origins",
+      "list-endpoints",
+      "read-endpoint-fixture",
+      "read-fixture",
+      "read-manifest",
+      "list-scenarios",
+      "diff-scenarios"
+    ],
+    close: vi.fn().mockResolvedValue(undefined)
+  })
 }));
 
 vi.mock("@wraithwalker/mcp-server/server", () => ({
-  startServer: mocks.startServer
+  DEFAULT_HTTP_HOST: "127.0.0.1",
+  DEFAULT_HTTP_PORT: 4319,
+  startServer: mocks.startServer,
+  startHttpServer: mocks.startHttpServer
 }));
 
 async function loadRunner() {
@@ -46,6 +65,7 @@ function consoleCapture() {
 
 beforeEach(() => {
   mocks.startServer.mockClear();
+  mocks.startHttpServer.mockClear();
 });
 
 afterEach(() => {
@@ -248,5 +268,91 @@ describe("cli runner", () => {
 
     expect(exitCode).toBe(0);
     expect(mocks.startServer).toHaveBeenCalledWith(root.rootPath);
+  });
+
+  it("starts the HTTP MCP server with default connection details", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createFixtureRoot();
+    mocks.startHttpServer.mockResolvedValueOnce({
+      rootPath: root.rootPath,
+      host: "127.0.0.1",
+      port: 4319,
+      url: "http://127.0.0.1:4319/mcp",
+      tools: [
+        "list-origins",
+        "list-endpoints",
+        "read-endpoint-fixture",
+        "read-fixture",
+        "read-manifest",
+        "list-scenarios",
+        "diff-scenarios"
+      ],
+      close: vi.fn().mockResolvedValue(undefined)
+    });
+    const capture = consoleCapture();
+
+    const exitCode = await runCli(["serve", "--http"], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
+      host: "127.0.0.1",
+      port: 4319
+    });
+    expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/mcp");
+    expect(capture.logs.join("\n")).toContain("streamable-http");
+    expect(capture.logs.join("\n")).toContain("list-origins");
+  });
+
+  it("accepts custom HTTP host and port values", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createFixtureRoot();
+    mocks.startHttpServer.mockResolvedValueOnce({
+      rootPath: root.rootPath,
+      host: "0.0.0.0",
+      port: 8321,
+      url: "http://0.0.0.0:8321/mcp",
+      tools: ["list-origins"],
+      close: vi.fn().mockResolvedValue(undefined)
+    });
+    const capture = consoleCapture();
+
+    const exitCode = await runCli(["serve", "--http", "--host", "0.0.0.0", "--port", "8321"], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
+      host: "0.0.0.0",
+      port: 8321
+    });
+    expect(capture.errors.join("\n")).toContain("not bound to a loopback host");
+  });
+
+  it("rejects HTTP host and port flags unless HTTP mode is enabled", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createFixtureRoot();
+    const capture = consoleCapture();
+
+    const exitCode = await runCli(["serve", "--host", "127.0.0.1"], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    });
+
+    expect(exitCode).toBe(1);
+    expect(capture.errors.join("\n")).toContain("--host and --port require --http.");
+    expect(mocks.startHttpServer).not.toHaveBeenCalled();
   });
 });

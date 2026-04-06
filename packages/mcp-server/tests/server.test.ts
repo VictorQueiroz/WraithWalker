@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
-import { startServer } from "../src/server.mts";
+import { isLoopbackHost, startHttpServer, startServer } from "../src/server.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 function readTextContent(result: unknown): string {
@@ -38,6 +39,113 @@ async function connectClient(rootPath: string) {
   return { client, server };
 }
 
+async function connectHttpClient(rootPath: string) {
+  const server = await startHttpServer(rootPath, {
+    host: "127.0.0.1",
+    port: 0
+  });
+  const client = new Client({
+    name: "wraithwalker-mcp-http-test-client",
+    version: "1.0.0"
+  });
+  const transport = new StreamableHTTPClientTransport(new URL(server.url));
+
+  try {
+    await client.connect(transport);
+    return { client, server, transport };
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
+}
+
+async function createFixtureRootWithData() {
+  const root = await createWraithwalkerFixtureRoot({
+    prefix: "wraithwalker-mcp-server-",
+    rootId: "root-mcp-server"
+  });
+
+  await root.writeManifest({
+    mode: "simple",
+    topOrigin: "https://app.example.com",
+    manifest: {
+      schemaVersion: 1,
+      topOrigin: "https://app.example.com",
+      topOriginKey: "https__app.example.com",
+      generatedAt: "2026-04-05T00:00:00.000Z",
+      resourcesByPathname: {
+        "/app.js": [{
+          requestUrl: "https://cdn.example.com/app.js",
+          requestOrigin: "https://cdn.example.com",
+          pathname: "/app.js",
+          search: "",
+          bodyPath: "cdn.example.com/assets/app.js",
+          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
+          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+          mimeType: "application/javascript",
+          resourceType: "Script",
+          capturedAt: "2026-04-05T00:00:00.000Z"
+        }]
+      }
+    }
+  });
+
+  await root.writeApiFixture({
+    mode: "simple",
+    topOrigin: "https://app.example.com",
+    requestOrigin: "https://api.example.com",
+    method: "GET",
+    fixtureName: "users__q-abc__b-def",
+    meta: {
+      status: 200,
+      statusText: "OK",
+      mimeType: "application/json",
+      resourceType: "XHR",
+      url: "https://api.example.com/users",
+      method: "GET",
+      capturedAt: "2026-04-05T00:00:00.000Z"
+    },
+    body: "{\"users\":[{\"id\":1}]}"
+  });
+
+  await root.writeText("cdn.example.com/assets/app.js", "console.log('fixture');");
+
+  await root.ensureScenario("baseline");
+  await root.ensureScenario("candidate");
+  await root.writeApiFixture({
+    mode: "simple",
+    scenario: "candidate",
+    topOrigin: "https://app.example.com",
+    requestOrigin: "https://api.example.com",
+    method: "GET",
+    fixtureName: "users__q-abc__b-def",
+    meta: {
+      status: 500,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    },
+    body: "{\"error\":true}"
+  });
+  await root.writeApiFixture({
+    mode: "simple",
+    scenario: "baseline",
+    topOrigin: "https://app.example.com",
+    requestOrigin: "https://api.example.com",
+    method: "GET",
+    fixtureName: "users__q-abc__b-def",
+    meta: {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    },
+    body: "{\"users\":[]}"
+  });
+
+  return root;
+}
+
 afterEach(() => {
   // The tests explicitly close the MCP client/server pair. This hook keeps the
   // test file symmetric with other suites and makes later cleanup additions safe.
@@ -69,88 +177,7 @@ describe("mcp server", () => {
   });
 
   it("serves fixture data over MCP tools", async () => {
-    const root = await createWraithwalkerFixtureRoot({
-      prefix: "wraithwalker-mcp-server-",
-      rootId: "root-mcp-server"
-    });
-
-    await root.writeManifest({
-      mode: "simple",
-      topOrigin: "https://app.example.com",
-      manifest: {
-        schemaVersion: 1,
-        topOrigin: "https://app.example.com",
-        topOriginKey: "https__app.example.com",
-        generatedAt: "2026-04-05T00:00:00.000Z",
-        resourcesByPathname: {
-          "/app.js": [{
-            requestUrl: "https://cdn.example.com/app.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/app.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-05T00:00:00.000Z"
-          }]
-        }
-      }
-    });
-
-    await root.writeApiFixture({
-      mode: "simple",
-      topOrigin: "https://app.example.com",
-      requestOrigin: "https://api.example.com",
-      method: "GET",
-      fixtureName: "users__q-abc__b-def",
-      meta: {
-        status: 200,
-        statusText: "OK",
-        mimeType: "application/json",
-        resourceType: "XHR",
-        url: "https://api.example.com/users",
-        method: "GET",
-        capturedAt: "2026-04-05T00:00:00.000Z"
-      },
-      body: "{\"users\":[{\"id\":1}]}"
-    });
-
-    await root.writeText("cdn.example.com/assets/app.js", "console.log('fixture');");
-
-    await root.ensureScenario("baseline");
-    await root.ensureScenario("candidate");
-    await root.writeApiFixture({
-      mode: "simple",
-      scenario: "candidate",
-      topOrigin: "https://app.example.com",
-      requestOrigin: "https://api.example.com",
-      method: "GET",
-      fixtureName: "users__q-abc__b-def",
-      meta: {
-        status: 500,
-        mimeType: "application/json",
-        url: "https://api.example.com/users",
-        method: "GET"
-      },
-      body: "{\"error\":true}"
-    });
-    await root.writeApiFixture({
-      mode: "simple",
-      scenario: "baseline",
-      topOrigin: "https://app.example.com",
-      requestOrigin: "https://api.example.com",
-      method: "GET",
-      fixtureName: "users__q-abc__b-def",
-      meta: {
-        status: 200,
-        mimeType: "application/json",
-        url: "https://api.example.com/users",
-        method: "GET"
-      },
-      body: "{\"users\":[]}"
-    });
+    const root = await createFixtureRootWithData();
 
     const { client, server } = await connectClient(root.rootPath);
 
@@ -336,6 +363,150 @@ describe("mcp server", () => {
     } finally {
       await client.close();
       await server.close();
+    }
+  });
+
+  it("serves the same tools over Streamable HTTP", async () => {
+    const root = await createFixtureRootWithData();
+    const { client, server, transport } = await connectHttpClient(root.rootPath);
+
+    try {
+      expect(server.port).toBeGreaterThan(0);
+      expect(server.url).toContain(`:${server.port}/mcp`);
+      expect(server.tools).toEqual([
+        "list-origins",
+        "list-endpoints",
+        "read-endpoint-fixture",
+        "read-fixture",
+        "read-manifest",
+        "list-scenarios",
+        "diff-scenarios"
+      ]);
+
+      const { tools } = await client.listTools();
+      expect(tools.map((tool) => tool.name).sort()).toEqual([
+        "diff-scenarios",
+        "list-endpoints",
+        "list-origins",
+        "list-scenarios",
+        "read-endpoint-fixture",
+        "read-fixture",
+        "read-manifest"
+      ]);
+
+      const fixtureResult = await client.callTool({
+        name: "read-fixture",
+        arguments: { path: "cdn.example.com/assets/app.js" }
+      });
+      expect(readTextContent(fixtureResult)).toBe("console.log('fixture');");
+
+      const endpointResult = await client.callTool({
+        name: "read-endpoint-fixture",
+        arguments: {
+          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
+        }
+      });
+      expect(readTextContent(endpointResult)).toContain("\"status\": 200");
+
+      const listOriginsResult = await client.callTool({
+        name: "list-origins",
+        arguments: {}
+      });
+      expect(readTextContent(listOriginsResult)).toContain("https://app.example.com");
+
+      const scenariosResult = await client.callTool({
+        name: "list-scenarios",
+        arguments: {}
+      });
+      expect(readTextContent(scenariosResult)).toContain("baseline");
+
+      const diffResult = await client.callTool({
+        name: "diff-scenarios",
+        arguments: { scenarioA: "baseline", scenarioB: "candidate" }
+      });
+      expect(readTextContent(diffResult)).toContain("200 → 500");
+
+      const invalidFixtureResult = await client.callTool({
+        name: "read-fixture",
+        arguments: { path: "../escape" }
+      });
+      expect(invalidFixtureResult.isError).toBe(true);
+      expect(readTextContent(invalidFixtureResult)).toContain("Invalid fixture path: ../escape");
+
+      const invalidSessionResponse = await fetch(server.url, { method: "GET" });
+      expect(invalidSessionResponse.status).toBe(400);
+      expect(await invalidSessionResponse.text()).toContain("No valid session ID provided");
+    } finally {
+      await transport.terminateSession();
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("returns a clear 404 for unknown HTTP session IDs", async () => {
+    const root = await createFixtureRootWithData();
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+
+    try {
+      const response = await fetch(server.url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "mcp-session-id": "missing-session"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/list",
+          params: {}
+        })
+      });
+
+      expect(response.status).toBe(404);
+      const payload = await response.json() as { error: { message: string } };
+      expect(payload.error.message).toBe('Session "missing-session" not found.');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("formats loopback hosts consistently for HTTP mode", async () => {
+    expect(isLoopbackHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackHost("localhost")).toBe(true);
+    expect(isLoopbackHost("::1")).toBe(true);
+    expect(isLoopbackHost("[::1]")).toBe(true);
+    expect(isLoopbackHost("0.0.0.0")).toBe(false);
+
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "::1",
+      port: 0
+    });
+
+    try {
+      expect(server.url).toContain("http://[::1]:");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("closes active HTTP sessions when shutting down the listener", async () => {
+    const root = await createFixtureRootWithData();
+    const { client, server } = await connectHttpClient(root.rootPath);
+
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.length).toBeGreaterThan(0);
+
+      await server.close();
+    } finally {
+      await client.close().catch(() => undefined);
     }
   });
 });

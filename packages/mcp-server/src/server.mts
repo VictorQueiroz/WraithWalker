@@ -1,8 +1,13 @@
 import path from "node:path";
+import type { AddressInfo } from "node:net";
+import type { Server as HttpServer } from "node:http";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
@@ -15,19 +20,47 @@ import {
   resolveFixturePath
 } from "./fixture-reader.mjs";
 
+const SERVER_NAME = "wraithwalker";
+const SERVER_VERSION = "0.1.0";
+
+export const HTTP_MCP_PATH = "/mcp";
+export const DEFAULT_HTTP_HOST = "127.0.0.1";
+export const DEFAULT_HTTP_PORT = 4319;
+
+export const MCP_TOOL_NAMES = [
+  "list-origins",
+  "list-endpoints",
+  "read-endpoint-fixture",
+  "read-fixture",
+  "read-manifest",
+  "list-scenarios",
+  "diff-scenarios"
+] as const;
+
 export interface StartServerOptions {
   transport?: Transport;
 }
 
-export async function startServer(
-  rootPath: string,
-  options: StartServerOptions = {}
-): Promise<McpServer> {
-  const server = new McpServer({
-    name: "wraithwalker",
-    version: "0.1.0"
-  });
+export interface StartHttpServerOptions {
+  host?: string;
+  port?: number;
+}
 
+export interface HttpServerHandle {
+  rootPath: string;
+  host: string;
+  port: number;
+  url: string;
+  tools: readonly string[];
+  close(): Promise<void>;
+}
+
+interface HttpSession {
+  server: McpServer;
+  transport: StreamableHTTPServerTransport;
+}
+
+function registerTools(server: McpServer, rootPath: string): void {
   server.tool(
     "list-origins",
     "List all captured origins and their fixture summary",
@@ -205,8 +238,170 @@ export async function startServer(
       }
     }
   );
+}
 
+function createConnectedServer(rootPath: string): McpServer {
+  const server = new McpServer({
+    name: SERVER_NAME,
+    version: SERVER_VERSION
+  });
+  registerTools(server, rootPath);
+  return server;
+}
+
+function createJsonRpcError(code: number, message: string) {
+  return {
+    jsonrpc: "2.0" as const,
+    error: { code, message },
+    id: null
+  };
+}
+
+function getSessionId(header: string | string[] | undefined): string | undefined {
+  if (Array.isArray(header)) {
+    return header[0];
+  }
+
+  return header;
+}
+
+function formatUrlHost(host: string): string {
+  const normalized = host.startsWith("[") && host.endsWith("]")
+    ? host.slice(1, -1)
+    : host;
+
+  return normalized.includes(":")
+    ? `[${normalized}]`
+    : normalized;
+}
+
+export function isLoopbackHost(host: string): boolean {
+  const normalized = host.startsWith("[") && host.endsWith("]")
+    ? host.slice(1, -1)
+    : host;
+
+  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+}
+
+async function closeHttpSession(session: HttpSession): Promise<void> {
+  await Promise.allSettled([
+    session.transport.close(),
+    session.server.close()
+  ]);
+}
+
+export async function startServer(
+  rootPath: string,
+  options: StartServerOptions = {}
+): Promise<McpServer> {
+  const server = createConnectedServer(rootPath);
   const transport = options.transport ?? new StdioServerTransport();
   await server.connect(transport);
   return server;
+}
+
+export async function startHttpServer(
+  rootPath: string,
+  options: StartHttpServerOptions = {}
+): Promise<HttpServerHandle> {
+  const host = options.host ?? DEFAULT_HTTP_HOST;
+  const port = options.port ?? DEFAULT_HTTP_PORT;
+  const app = createMcpExpressApp({ host });
+  const sessions = new Map<string, HttpSession>();
+
+  app.all(HTTP_MCP_PATH, async (req, res) => {
+    const sessionId = getSessionId(req.headers["mcp-session-id"]);
+    let session = sessionId
+      ? sessions.get(sessionId)
+      : undefined;
+    let createdSession = false;
+
+    try {
+      if (!session) {
+        if (sessionId) {
+          res.status(404).json(createJsonRpcError(-32000, `Session "${sessionId}" not found.`));
+          return;
+        }
+
+        if (req.method !== "POST" || !isInitializeRequest(req.body)) {
+          res.status(400).json(createJsonRpcError(-32000, "Bad Request: No valid session ID provided."));
+          return;
+        }
+
+        const server = createConnectedServer(rootPath);
+        let initializedSessionId: string | undefined;
+        let transport: StreamableHTTPServerTransport;
+
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => crypto.randomUUID(),
+          onsessioninitialized(nextSessionId) {
+            initializedSessionId = nextSessionId;
+            sessions.set(nextSessionId, { server, transport });
+          }
+        });
+
+        transport.onclose = () => {
+          if (initializedSessionId) {
+            sessions.delete(initializedSessionId);
+          }
+        };
+
+        await server.connect(transport);
+        session = { server, transport };
+        createdSession = true;
+      }
+
+      await session.transport.handleRequest(req, res, req.body);
+
+      if (req.method === "DELETE") {
+        await session.server.close();
+      }
+    } catch (error) {
+      if (createdSession && session) {
+        await closeHttpSession(session);
+      }
+
+      if (!res.headersSent) {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(500).json(createJsonRpcError(-32603, `Internal server error: ${message}`));
+      }
+    }
+  });
+
+  const listener = await new Promise<HttpServer>((resolve, reject) => {
+    const server = app.listen(port, host, () => resolve(server));
+    server.once("error", reject);
+  });
+
+  const address = listener.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Could not resolve the HTTP listener address.");
+  }
+
+  const actualAddress = address as AddressInfo;
+  const url = `http://${formatUrlHost(host)}:${actualAddress.port}${HTTP_MCP_PATH}`;
+
+  return {
+    rootPath,
+    host,
+    port: actualAddress.port,
+    url,
+    tools: MCP_TOOL_NAMES,
+    async close() {
+      const activeSessions = Array.from(sessions.values());
+      sessions.clear();
+
+      await Promise.allSettled(activeSessions.map((session) => closeHttpSession(session)));
+      await new Promise<void>((resolve, reject) => {
+        listener.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    }
+  };
 }

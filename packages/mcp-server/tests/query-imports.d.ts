@@ -1,3 +1,9 @@
 declare module "*?argv";
 declare module "*?env";
 declare module "*?cwd";
+declare module "*?http-default";
+declare module "*?http-custom";
+declare module "*?missing-host";
+declare module "*?invalid-port";
+declare module "*?requires-http";
+declare module "*?unknown-flag";

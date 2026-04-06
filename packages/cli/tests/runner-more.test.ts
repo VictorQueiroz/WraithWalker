@@ -4,11 +4,22 @@ import { promises as fs } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  startServer: vi.fn().mockResolvedValue(undefined)
+  startServer: vi.fn().mockResolvedValue(undefined),
+  startHttpServer: vi.fn().mockResolvedValue({
+    rootPath: "/tmp/fixtures",
+    host: "127.0.0.1",
+    port: 4319,
+    url: "http://127.0.0.1:4319/mcp",
+    tools: ["list-origins"],
+    close: vi.fn().mockResolvedValue(undefined)
+  })
 }));
 
 vi.mock("@wraithwalker/mcp-server/server", () => ({
-  startServer: mocks.startServer
+  DEFAULT_HTTP_HOST: "127.0.0.1",
+  DEFAULT_HTTP_PORT: 4319,
+  startServer: mocks.startServer,
+  startHttpServer: mocks.startHttpServer
 }));
 
 async function loadRunner() {

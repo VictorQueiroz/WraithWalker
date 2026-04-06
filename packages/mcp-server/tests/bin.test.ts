@@ -1,59 +1,160 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-const originalArgv = process.argv;
-
-async function loadBin(which: "argv" | "env" | "cwd", startServer = vi.fn().mockResolvedValue(undefined)) {
-  vi.resetModules();
-  vi.doMock("../src/server.mjs", () => ({
-    startServer
-  }));
-
-  switch (which) {
-    case "argv":
-      await import("../src/bin.mts?argv");
-      break;
-    case "env":
-      await import("../src/bin.mts?env");
-      break;
-    case "cwd":
-      await import("../src/bin.mts?cwd");
-      break;
-  }
-
-  return { startServer };
-}
-
-afterEach(() => {
-  process.argv = originalArgv;
-  vi.unstubAllEnvs();
-  vi.restoreAllMocks();
-  vi.doUnmock("../src/server.mjs");
-});
+import {
+  parseArgs,
+  parsePort,
+  renderHttpStartup,
+  runBin
+} from "../src/bin.mts";
 
 describe("mcp server bin", () => {
   it("prefers argv root path over env and cwd", async () => {
-    process.argv = ["node", "wraithwalker-mcp", "/tmp/from-argv"];
-    vi.stubEnv("WRAITHWALKER_ROOT", "/tmp/from-env");
-    vi.spyOn(process, "cwd").mockReturnValue("/tmp/from-cwd");
+    const startServer = vi.fn().mockResolvedValue(undefined);
 
-    const { startServer } = await loadBin("argv");
+    await runBin({
+      argv: ["/tmp/from-argv"],
+      env: { WRAITHWALKER_ROOT: "/tmp/from-env" },
+      cwd: "/tmp/from-cwd",
+      startServerImpl: startServer
+    });
+
     expect(startServer).toHaveBeenCalledWith("/tmp/from-argv");
   });
 
   it("uses WRAITHWALKER_ROOT when argv is missing", async () => {
-    process.argv = ["node", "wraithwalker-mcp"];
-    vi.stubEnv("WRAITHWALKER_ROOT", "/tmp/from-env");
-    vi.spyOn(process, "cwd").mockReturnValue("/tmp/from-cwd");
+    const startServer = vi.fn().mockResolvedValue(undefined);
 
-    const { startServer } = await loadBin("env");
+    await runBin({
+      argv: [],
+      env: { WRAITHWALKER_ROOT: "/tmp/from-env" },
+      cwd: "/tmp/from-cwd",
+      startServerImpl: startServer
+    });
+
     expect(startServer).toHaveBeenCalledWith("/tmp/from-env");
   });
 
   it("falls back to process.cwd()", async () => {
-    process.argv = ["node", "wraithwalker-mcp"];
-    vi.spyOn(process, "cwd").mockReturnValue("/tmp/from-cwd");
+    const startServer = vi.fn().mockResolvedValue(undefined);
 
-    const { startServer } = await loadBin("cwd");
+    await runBin({
+      argv: [],
+      cwd: "/tmp/from-cwd",
+      startServerImpl: startServer
+    });
+
     expect(startServer).toHaveBeenCalledWith("/tmp/from-cwd");
+  });
+
+  it("parses the supported CLI flags", () => {
+    expect(parseArgs(["--http", "--host", "0.0.0.0", "--port", "8321", "/tmp/root"])).toEqual({
+      http: true,
+      host: "0.0.0.0",
+      port: 8321,
+      rootPath: "/tmp/root"
+    });
+  });
+
+  it("starts the HTTP server with default host and port", async () => {
+    const startHttpServer = vi.fn().mockResolvedValue({
+      rootPath: "/tmp/from-argv",
+      host: "127.0.0.1",
+      port: 4319,
+      url: "http://127.0.0.1:4319/mcp",
+      tools: ["list-origins"],
+      close: vi.fn().mockResolvedValue(undefined)
+    });
+    const writeLine = vi.fn();
+
+    await runBin({
+      argv: ["--http", "/tmp/from-argv"],
+      startHttpServerImpl: startHttpServer,
+      writeLine
+    });
+
+    expect(startHttpServer).toHaveBeenCalledWith("/tmp/from-argv", {
+      host: "127.0.0.1",
+      port: 4319
+    });
+    expect(writeLine).toHaveBeenCalledWith("MCP Server Ready");
+    expect(writeLine).toHaveBeenCalledWith("URL: http://127.0.0.1:4319/mcp");
+  });
+
+  it("accepts custom HTTP host and port flags", async () => {
+    const startHttpServer = vi.fn().mockResolvedValue({
+      rootPath: "/tmp/from-cwd",
+      host: "0.0.0.0",
+      port: 8321,
+      url: "http://0.0.0.0:8321/mcp",
+      tools: ["list-origins"],
+      close: vi.fn().mockResolvedValue(undefined)
+    });
+
+    await runBin({
+      argv: ["--http", "--host", "0.0.0.0", "--port", "8321"],
+      cwd: "/tmp/from-cwd",
+      startHttpServerImpl: startHttpServer,
+      writeLine: vi.fn()
+    });
+
+    expect(startHttpServer).toHaveBeenCalledWith("/tmp/from-cwd", {
+      host: "0.0.0.0",
+      port: 8321
+    });
+  });
+
+  it("starts the stdio server when HTTP mode is disabled", async () => {
+    const startServer = vi.fn().mockResolvedValue(undefined);
+
+    await runBin({
+      argv: ["/tmp/from-argv"],
+      startServerImpl: startServer
+    });
+
+    expect(startServer).toHaveBeenCalledWith("/tmp/from-argv");
+  });
+
+  it("renders HTTP startup output line by line", () => {
+    const writeLine = vi.fn();
+
+    renderHttpStartup({
+      host: "127.0.0.1",
+      port: 4319,
+      url: "http://127.0.0.1:4319/mcp"
+    }, "/tmp/root", writeLine);
+
+    expect(writeLine.mock.calls).toEqual([
+      ["MCP Server Ready"],
+      ["Root: /tmp/root"],
+      ["Transport: streamable-http"],
+      ["Host: 127.0.0.1"],
+      ["Port: 4319"],
+      ["URL: http://127.0.0.1:4319/mcp"]
+    ]);
+  });
+
+  it("rejects a missing HTTP host value", () => {
+    expect(() => parseArgs(["--http", "--host"])).toThrow("Missing value for --host.");
+  });
+
+  it("rejects a missing HTTP port value", () => {
+    expect(() => parseArgs(["--http", "--port"])).toThrow("Missing value for --port.");
+  });
+
+  it("rejects invalid HTTP ports", () => {
+    expect(() => parsePort("70000")).toThrow("Invalid port: 70000");
+  });
+
+  it("requires HTTP mode before accepting host and port flags", () => {
+    expect(() => parseArgs(["--host", "127.0.0.1"])).toThrow("--host and --port require --http.");
+    expect(() => parseArgs(["--port", "4319"])).toThrow("--host and --port require --http.");
+  });
+
+  it("rejects unknown flags", () => {
+    expect(() => parseArgs(["--mystery"])).toThrow("Unknown argument: --mystery");
+  });
+
+  it("rejects extra positional arguments", () => {
+    expect(() => parseArgs(["/tmp/root", "/tmp/extra"])).toThrow("Unexpected extra positional argument: /tmp/extra");
   });
 });

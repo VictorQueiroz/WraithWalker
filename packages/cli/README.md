@@ -14,7 +14,7 @@ wraithwalker scenarios list          # List saved scenarios
 wraithwalker scenarios save <name>   # Save current fixtures as a named scenario
 wraithwalker scenarios switch <name> # Switch to a saved scenario
 wraithwalker scenarios diff <a> <b>  # Compare two scenarios
-wraithwalker serve                   # Start the MCP server
+wraithwalker serve [--http] [--host <host>] [--port <port>] # Start the MCP server
 ```
 
 ## Root Discovery
@@ -97,6 +97,11 @@ Scenarios are stored in `.wraithwalker/scenarios/` and copy fixture files (not s
 ## MCP Server
 
 `wraithwalker serve` starts the MCP server pointed at the nearest fixture root. This is a convenience wrapper around `@wraithwalker/mcp-server/server`.
+
+- `wraithwalker serve` keeps the existing `stdio` transport for process-spawned MCP clients.
+- `wraithwalker serve --http` starts Streamable HTTP on `http://127.0.0.1:4319/mcp` by default.
+- `--host` and `--port` are only valid with `--http`.
+- When HTTP mode starts, the CLI prints the final MCP URL and available tools so you can paste the URL into Cursor, Windsurf, Codex, or other HTTP-capable MCP clients.
 
 ## Development
 
