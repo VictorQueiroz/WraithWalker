@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "WraithWalker command-line tooling for fixture roots, context generation, and scenario workflows.",
   "license": "MIT",
   "repository": {
@@ -41,8 +41,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
-    "@wraithwalker/core": "0.3.0",
-    "@wraithwalker/mcp-server": "0.3.0"
+    "@wraithwalker/core": "0.3.1",
+    "@wraithwalker/mcp-server": "0.3.1"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

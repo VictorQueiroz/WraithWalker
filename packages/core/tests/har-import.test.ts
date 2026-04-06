@@ -97,6 +97,9 @@ describe("har import", () => {
       log: { entries: [{ ...validEntry, time: -1 }] }
     }))).toThrow("HAR entry 0 has an invalid time value.");
     expect(() => parseHarArchive(JSON.stringify({
+      log: { entries: [{ ...validEntry, time: "12" }] }
+    }))).not.toThrow();
+    expect(() => parseHarArchive(JSON.stringify({
       log: { entries: [{ ...validEntry, request: undefined }] }
     }))).toThrow("HAR entry 0 is missing a request object.");
     expect(() => parseHarArchive(JSON.stringify({
@@ -113,7 +116,9 @@ describe("har import", () => {
         entries: [
           {
             ...validEntry,
-            timings: {}
+            timings: {
+              wait: "-1"
+            }
           }
         ]
       }

@@ -230,7 +230,11 @@ function validateTimingValue(value: unknown, label: string, url: string): void {
     return;
   }
 
-  if (typeof value !== "number" || value < -1) {
+  const numericValue = typeof value === "string" && value.trim()
+    ? Number(value)
+    : value;
+
+  if (typeof numericValue !== "number" || !Number.isFinite(numericValue) || numericValue < -1) {
     throw new Error(`Invalid HAR timing "${label}" for ${url}. Timings must be numbers >= -1.`);
   }
 }
@@ -252,7 +256,11 @@ function validateHarEntry(entry: unknown, index: number): asserts entry is HarEn
     throw new Error(`HAR entry ${index} is missing a valid startedDateTime.`);
   }
 
-  if (candidate.time !== undefined && (typeof candidate.time !== "number" || candidate.time < 0)) {
+  const totalTime = typeof candidate.time === "string" && candidate.time.trim()
+    ? Number(candidate.time)
+    : candidate.time;
+
+  if (totalTime !== undefined && (typeof totalTime !== "number" || !Number.isFinite(totalTime) || totalTime < 0)) {
     throw new Error(`HAR entry ${index} has an invalid time value.`);
   }
 
