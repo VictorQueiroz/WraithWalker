@@ -10,6 +10,8 @@ const SIMPLE_MIME_BY_EXTENSION = new Map<string, string>([
   ["jsx", "application/javascript"],
   ["json", "application/json"],
   ["mjs", "application/javascript"],
+  ["mp3", "audio/mpeg"],
+  ["mp4", "video/mp4"],
   ["otf", "font/otf"],
   ["png", "image/png"],
   ["svg", "image/svg+xml"],

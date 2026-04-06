@@ -17,6 +17,7 @@
     "paths": {
       "@wraithwalker/core/fixture-layout": ["packages/core/src/fixture-layout.mts"],
       "@wraithwalker/core/har-import": ["packages/core/src/har-import.mts"],
+      "@wraithwalker/core/overrides-sync": ["packages/core/src/overrides-sync.mts"],
       "@wraithwalker/core/root": ["packages/core/src/root.mts"],
       "@wraithwalker/core/root-fs": ["packages/core/src/root-fs.mts"],
       "@wraithwalker/core/fixtures": ["packages/core/src/fixtures.mts"],

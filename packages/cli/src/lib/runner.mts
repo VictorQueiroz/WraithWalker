@@ -11,9 +11,11 @@ import { command as initCommand } from "../commands/init.mjs";
 import { command as scenariosCommand } from "../commands/scenarios.mjs";
 import { command as serveCommand } from "../commands/serve.mjs";
 import { command as statusCommand } from "../commands/status.mjs";
+import { command as syncCommand } from "../commands/sync.mjs";
 
 const COMMANDS: CommandSpec<unknown, unknown>[] = [
   initCommand,
+  syncCommand,
   importHarCommand,
   statusCommand,
   contextCommand,
@@ -27,6 +29,7 @@ export const USAGE = `Usage: wraithwalker <command>
 
 Commands:
   init [dir]                     Create a fixture root (.wraithwalker/root.json)
+  sync [dir]                     Populate or refresh .wraithwalker metadata
   import-har <har-file> [dir]    Populate a fixture root from a HAR file
   status                         Show fixture root summary
   context [--editor <id>]        Regenerate CLAUDE.md and .d.ts types

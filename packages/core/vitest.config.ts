@@ -9,6 +9,7 @@ export default defineConfig({
       include: [
         "src/fixture-layout.mts",
         "src/har-import.mts",
+        "src/overrides-sync.mts",
         "src/root-fs.mts"
       ],
       thresholds: {

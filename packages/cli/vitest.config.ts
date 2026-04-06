@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       "@wraithwalker/core/fixture-layout": fileURLToPath(new URL("../core/src/fixture-layout.mts", import.meta.url)),
       "@wraithwalker/core/har-import": fileURLToPath(new URL("../core/src/har-import.mts", import.meta.url)),
+      "@wraithwalker/core/overrides-sync": fileURLToPath(new URL("../core/src/overrides-sync.mts", import.meta.url)),
       "@wraithwalker/core/root": fileURLToPath(new URL("../core/src/root.mts", import.meta.url)),
       "@wraithwalker/core/root-fs": fileURLToPath(new URL("../core/src/root-fs.mts", import.meta.url)),
       "@wraithwalker/core/fixtures": fileURLToPath(new URL("../core/src/fixtures.mts", import.meta.url)),
@@ -20,6 +21,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: [
+        "src/commands/sync.mts",
         "src/commands/import-har.mts",
         "src/lib/plain-output.mts",
         "src/lib/themed-output.mts"

@@ -32,7 +32,8 @@
     "./fixtures": "./out/fixtures.mjs",
     "./scenarios": "./out/scenarios.mjs",
     "./context": "./out/context.mjs",
-    "./har-import": "./out/har-import.mjs"
+    "./har-import": "./out/har-import.mjs",
+    "./overrides-sync": "./out/overrides-sync.mjs"
   },
   "engines": {
     "node": ">=22"
