@@ -13,7 +13,9 @@ import { z } from "zod";
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import {
   listAssets,
+  listApiEndpoints,
   listScenarios,
+  matchSiteConfigsByOrigin,
   readApiFixture,
   readFixtureBody,
   readFixtureSnippet,
@@ -84,6 +86,14 @@ function registerTools(server: McpServer, rootPath: string): void {
     };
   }
 
+  async function resolveDiscoverySiteConfigs(origin: string) {
+    const configs = await readSiteConfigs(rootPath);
+    return {
+      configs,
+      matchedConfigs: matchSiteConfigsByOrigin(configs, origin)
+    };
+  }
+
   function renderOriginNotFound(origin: string, availableOrigins: string[]) {
     const available = availableOrigins.join(", ");
     return {
@@ -138,13 +148,13 @@ function registerTools(server: McpServer, rootPath: string): void {
       cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous list-assets call")
     },
     async ({ origin, resourceTypes, mimeTypes, pathnameContains, requestOrigin, limit, cursor }) => {
-      const { configs, config } = await resolveSiteConfig(origin);
-      if (!config) {
+      const { configs, matchedConfigs } = await resolveDiscoverySiteConfigs(origin);
+      if (matchedConfigs.length === 0) {
         return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
       }
 
       try {
-        const assets = await listAssets(rootPath, config, {
+        const assets = await listAssets(rootPath, matchedConfigs, {
           resourceTypes,
           mimeTypes,
           pathnameContains,
@@ -168,22 +178,12 @@ function registerTools(server: McpServer, rootPath: string): void {
     "List all captured API endpoints for an origin",
     { origin: z.string().describe("The origin to list endpoints for (e.g., https://app.example.com)") },
     async ({ origin }) => {
-      const { configs, config } = await resolveSiteConfig(origin);
-      if (!config) {
+      const { configs, matchedConfigs } = await resolveDiscoverySiteConfigs(origin);
+      if (matchedConfigs.length === 0) {
         return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
       }
 
-      const info = await readOriginInfo(rootPath, config);
-      const endpoints = info.apiEndpoints.map((endpoint) => ({
-        method: endpoint.method,
-        pathname: endpoint.pathname,
-        status: endpoint.status,
-        mimeType: endpoint.mimeType,
-        fixtureDir: endpoint.fixtureDir,
-        metaPath: endpoint.metaPath,
-        bodyPath: endpoint.bodyPath
-      }));
-
+      const endpoints = await listApiEndpoints(rootPath, matchedConfigs);
       return renderJson(endpoints);
     }
   );
@@ -202,8 +202,8 @@ function registerTools(server: McpServer, rootPath: string): void {
     },
     async ({ query, origin, pathContains, mimeTypes, resourceTypes, limit, cursor }) => {
       if (origin) {
-        const { configs, config } = await resolveSiteConfig(origin);
-        if (!config) {
+        const { configs, matchedConfigs } = await resolveDiscoverySiteConfigs(origin);
+        if (matchedConfigs.length === 0) {
           return renderOriginNotFound(origin, configs.map((candidate) => candidate.origin));
         }
       }
@@ -244,7 +244,15 @@ function registerTools(server: McpServer, rootPath: string): void {
         };
       }
 
-      const content = await readFixtureBody(rootPath, filePath, { pretty });
+      let content: string | null;
+      try {
+        content = await readFixtureBody(rootPath, filePath, { pretty });
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
       if (content === null) {
         return {
           content: [{ type: "text" as const, text: `File not found: ${filePath}` }],
@@ -301,7 +309,15 @@ function registerTools(server: McpServer, rootPath: string): void {
         };
       }
 
-      const fixture = await readApiFixture(rootPath, fixtureDir, { pretty });
+      let fixture;
+      try {
+        fixture = await readApiFixture(rootPath, fixtureDir, { pretty });
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
       if (!fixture) {
         return {
           content: [{ type: "text" as const, text: `Endpoint fixture not found: ${fixtureDir}` }],

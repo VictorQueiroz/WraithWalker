@@ -2,6 +2,8 @@ export { listScenarios } from "@wraithwalker/core/scenarios";
 export {
   flattenStaticResourceManifest,
   listAssets,
+  listApiEndpoints,
+  matchSiteConfigsByOrigin,
   readApiFixture,
   readFixtureBody,
   readFixtureSnippet,
@@ -13,6 +15,8 @@ export {
   type ApiEndpoint,
   type AssetInfo,
   type AssetListOptions,
+  type DiscoveryResult,
+  type EndpointListResult,
   type FixtureSnippet,
   type FixtureSnippetOptions,
   type OriginInfo,

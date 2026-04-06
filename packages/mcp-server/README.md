@@ -63,9 +63,9 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `list-origins` | optional `search` | List all captured origins with endpoint counts, asset counts, and manifest presence |
-| `list-assets` | `origin`, optional filters | List static assets for a specific origin with filtering, pagination, and body availability (`hasBody`, `bodySize`) |
-| `list-endpoints` | `origin` | List API endpoints for a specific origin, including the `fixtureDir`, `metaPath`, and `bodyPath` to inspect |
-| `search-content` | `query`, optional filters | Search live fixture content across assets, endpoint bodies, and other text-like files, with path fallback matches when body text is unavailable or does not match |
+| `list-assets` | `origin`, optional filters | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, and body availability (`hasBody`, `bodySize`) |
+| `list-endpoints` | `origin` | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath` |
+| `search-content` | `query`, optional filters | Search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, and per-file `matchCount` |
 | `read-endpoint-fixture` | `fixtureDir`, optional `pretty` | Read the response metadata and body for a fixture returned by `list-endpoints` |
 | `read-fixture` | `path`, optional `pretty` | Read a fixture response body by relative path, restricted to the fixture root |
 | `read-fixture-snippet` | `path`, optional `pretty`, optional bounds | Read a bounded text snippet from a fixture file without dumping the full blob |
@@ -78,10 +78,14 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 WraithWalker now exposes a progressive-disclosure MCP surface for agents:
 
 1. `list-origins` to discover what has been captured, optionally narrowed with `search`
-2. `list-assets` or `list-endpoints` to narrow to the relevant files or API fixtures, using `hasBody` / `bodySize` to see what is actually readable
-3. `search-content` to find the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about, including path-based fallback matches when a body is missing
+2. `list-assets` or `list-endpoints` to narrow to the relevant files or API fixtures, using `matchedOrigins` plus `hasBody` / `bodySize` to see what is actually readable
+3. `search-content` to find the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about, using `matchCount` for body hits and `matchKind: "path"` when only the name/path matched
 4. `read-fixture-snippet` to inspect only the relevant section of a large file, optionally with `pretty: true` for minified chunks
 5. `read-fixture`, `read-endpoint-fixture`, or `read-manifest` only when you need the full raw payload
+
+`list-assets`, `list-endpoints`, and `search-content` treat HTTP and HTTPS origins with the same host and port as one discovery group, and report the concrete origins they matched in `matchedOrigins`.
+
+`read-fixture` and `read-endpoint-fixture` reject oversized full reads above 64 KB and direct agents to `read-fixture-snippet` with `startLine` and `lineCount`.
 
 `read-manifest` intentionally stays available for full-fidelity debugging, but it should not be the main discovery path for agents.
 

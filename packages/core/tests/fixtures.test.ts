@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   listAssets,
+  listApiEndpoints,
+  matchSiteConfigsByOrigin,
   readApiFixture,
   readFixtureBody,
   readFixtureSnippet,
@@ -86,6 +88,7 @@ describe("fixture readers", () => {
     expect(info.manifestPath).toBeNull();
     expect(info.apiEndpoints).toEqual([
       expect.objectContaining({
+        origin: "https://app.example.com",
         method: "GET",
         pathname: "users",
         status: 204,
@@ -119,6 +122,7 @@ describe("fixture readers", () => {
     const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.apiEndpoints).toHaveLength(1);
+    expect(info.apiEndpoints[0].origin).toBe("https://app.example.com");
     expect(info.apiEndpoints[0].pathname).toBe("/users");
   });
 
@@ -350,6 +354,7 @@ describe("fixture readers", () => {
       limit: 2
     });
     expect(firstPage.totalMatched).toBe(3);
+    expect(firstPage.matchedOrigins).toEqual(["https://app.example.com"]);
     expect(firstPage.items.map((item) => item.pathname)).toEqual([
       "/assets/app.css",
       "/assets/app.js"
@@ -380,6 +385,7 @@ describe("fixture readers", () => {
     });
     expect(filtered.items).toEqual([
       expect.objectContaining({
+        origin: "https://app.example.com",
         pathname: "/assets/app.js",
         requestOrigin: "https://cdn.example.com",
         hasBody: true,
@@ -393,6 +399,7 @@ describe("fixture readers", () => {
     });
     expect(advanced.items).toEqual([
       expect.objectContaining({
+        origin: "https://admin.example.com",
         pathname: "/panel.js",
         bodyPath: "cdn.example.com/panel.js",
         hasBody: true,
@@ -477,8 +484,10 @@ describe("fixture readers", () => {
     const matches = await searchFixtureContent(root.rootPath, {
       query: "dropdown"
     });
+    expect(matches.matchedOrigins).toEqual(["https://app.example.com"]);
     expect(matches.items.map((item) => item.sourceKind)).toEqual(["endpoint", "asset", "file"]);
     expect(matches.items.map((item) => item.matchKind)).toEqual(["body", "body", "body"]);
+    expect(matches.items.map((item) => item.matchCount)).toEqual([1, 1, 1]);
     expect(matches.items.map((item) => item.path)).toEqual([
       ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/menu__q-abc__b-def/response.body",
       "cdn.example.com/assets/app.js",
@@ -624,6 +633,7 @@ describe("fixture readers", () => {
         path: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/hierarchy__q-abc__b-def/response.body",
         sourceKind: "endpoint",
         matchKind: "path",
+        matchCount: 1,
         pathname: "/hierarchy",
         excerpt: "Matched path: /hierarchy"
       }),
@@ -631,6 +641,7 @@ describe("fixture readers", () => {
         path: "cdn.example.com/assets/hierarchy-shell.js",
         sourceKind: "asset",
         matchKind: "path",
+        matchCount: 1,
         pathname: "/assets/hierarchy-shell.js",
         excerpt: "Matched path: /assets/hierarchy-shell.js"
       }),
@@ -638,8 +649,191 @@ describe("fixture readers", () => {
         path: "cdn.example.com/assets/hierarchy.chunk.js",
         sourceKind: "asset",
         matchKind: "path",
+        matchCount: 1,
         pathname: "/assets/hierarchy.chunk.js",
         excerpt: "Matched path: /assets/hierarchy.chunk.js"
+      })
+    ]);
+  });
+
+  it("reports the total number of body matches per file", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-06T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/dropdown.js": [{
+            requestUrl: "https://cdn.example.com/assets/dropdown.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/dropdown.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/dropdown.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }]
+        }
+      }
+    });
+    await root.writeText(
+      "cdn.example.com/assets/dropdown.js",
+      "dropdown();\nshowDropdown();\ndropdown();"
+    );
+
+    const matches = await searchFixtureContent(root.rootPath, {
+      query: "dropdown"
+    });
+
+    expect(matches.items).toEqual([
+      expect.objectContaining({
+        path: "cdn.example.com/assets/dropdown.js",
+        matchKind: "body",
+        matchCount: 3
+      })
+    ]);
+  });
+
+  it("merges http and https discovery results by host and port while preserving item origins", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "http://app.example.com",
+      manifest: {
+        schemaVersion: 1,
+        topOrigin: "http://app.example.com",
+        topOriginKey: "http__app.example.com",
+        generatedAt: "2026-04-06T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/http.js": [{
+            requestUrl: "http://cdn.example.com/assets/http.js",
+            requestOrigin: "http://cdn.example.com",
+            pathname: "/assets/http.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/http.js",
+            requestPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http.js.__request.json",
+            metaPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }]
+        }
+      }
+    });
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-06T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/https.js": [{
+            requestUrl: "https://cdn.example.com/assets/https.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/https.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/https.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/https.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/https.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }]
+        }
+      }
+    });
+    await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "http://app.example.com",
+      requestOrigin: "http://api.example.com",
+      method: "GET",
+      fixtureName: "status__q-abc__b-def",
+      meta: {
+        status: 200,
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "http://api.example.com/status",
+        method: "GET"
+      },
+      body: "{\"scheme\":\"http\"}"
+    });
+    await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "status__q-abc__b-def",
+      meta: {
+        status: 200,
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/status",
+        method: "GET"
+      },
+      body: "{\"scheme\":\"https\"}"
+    });
+    await root.writeText("cdn.example.com/assets/http.js", "console.log('http');");
+    await root.writeText("cdn.example.com/assets/https.js", "console.log('https');");
+
+    const matchedConfigs = matchSiteConfigsByOrigin(
+      await readSiteConfigs(root.rootPath),
+      "https://app.example.com"
+    );
+    const assets = await listAssets(root.rootPath, matchedConfigs);
+    const endpoints = await listApiEndpoints(root.rootPath, matchedConfigs);
+    const search = await searchFixtureContent(root.rootPath, {
+      origin: "https://app.example.com",
+      query: "scheme"
+    });
+
+    expect(matchedConfigs.map((config) => config.origin)).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(assets.matchedOrigins).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(assets.items.map((item) => item.origin)).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(endpoints.matchedOrigins).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(endpoints.items.map((item) => item.origin)).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(search.matchedOrigins).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(search.items).toEqual([
+      expect.objectContaining({
+        origin: "http://app.example.com",
+        matchKind: "body",
+        matchCount: 1
+      }),
+      expect.objectContaining({
+        origin: "https://app.example.com",
+        matchKind: "body",
+        matchCount: 1
       })
     ]);
   });
@@ -677,6 +871,43 @@ describe("fixture readers", () => {
     await expect(readFixtureSnippet(root.rootPath, "missing.txt")).rejects.toThrow("File not found");
     await expect(readFixtureSnippet(root.rootPath, "bin/blob.bin")).rejects.toThrow("Fixture is not a text file");
     await expect(readFixtureSnippet(root.rootPath, "bin/blob.bin", { pretty: true })).rejects.toThrow("Fixture is not a text file");
+  });
+
+  it("rejects oversized full reads and points agents to bounded snippet reads", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    const largeBody = "a".repeat(70_000);
+
+    await root.writeText("cdn.example.com/assets/huge.js", largeBody);
+    const endpointFixture = await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "large__q-abc__b-def",
+      meta: {
+        status: 200,
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/large",
+        method: "GET"
+      },
+      body: largeBody
+    });
+
+    await expect(readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")).rejects.toThrow(
+      "File is too large to read in full: cdn.example.com/assets/huge.js"
+    );
+    await expect(readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")).rejects.toThrow(
+      "Use read-fixture-snippet with this path and specify startLine and lineCount."
+    );
+    await expect(readApiFixture(root.rootPath, endpointFixture.fixtureDir)).rejects.toThrow(
+      `Endpoint fixture body is too large to read in full: ${endpointFixture.bodyPath}`
+    );
+    await expect(readApiFixture(root.rootPath, endpointFixture.fixtureDir)).rejects.toThrow(
+      `Use read-fixture-snippet with path "${endpointFixture.bodyPath}" and specify startLine and lineCount.`
+    );
   });
 
   it("discovers site configs from simple and advanced fixture trees", async () => {

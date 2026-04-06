@@ -15,11 +15,12 @@ import {
   type StaticResourceManifestEntry
 } from "./fixture-layout.mjs";
 import { prettifyFixtureText } from "./fixture-presentation.mjs";
-import { createFixtureRootFs, resolveWithinRoot } from "./root-fs.mjs";
+import { createFixtureRootFs, resolveWithinRoot, type FixtureRootFs } from "./root-fs.mjs";
 
 export type { ResponseMeta, StaticResourceManifest, StaticResourceManifestEntry } from "./fixture-layout.mjs";
 
 export interface ApiEndpoint {
+  origin: string;
   method: string;
   pathname: string;
   status: number;
@@ -62,6 +63,7 @@ export interface AssetListOptions {
 }
 
 export interface AssetInfo extends StaticResourceManifestEntry {
+  origin: string;
   hasBody: boolean;
   bodySize: number | null;
 }
@@ -86,6 +88,7 @@ export interface SearchContentMatch {
   path: string;
   sourceKind: "asset" | "endpoint" | "file";
   matchKind: "body" | "path";
+  matchCount: number;
   origin: string | null;
   pathname: string | null;
   mimeType: string | null;
@@ -114,6 +117,15 @@ export interface FixtureSnippet {
   text: string;
 }
 
+export interface DiscoveryResult<T> extends PaginatedResult<T> {
+  matchedOrigins: string[];
+}
+
+export interface EndpointListResult {
+  items: ApiEndpoint[];
+  matchedOrigins: string[];
+}
+
 interface SearchableFixtureEntry {
   path: string;
   sourceKind: "asset" | "endpoint" | "file";
@@ -140,6 +152,7 @@ const DEFAULT_SNIPPET_LINE_COUNT = 80;
 const MAX_SNIPPET_LINE_COUNT = 400;
 const DEFAULT_SNIPPET_MAX_BYTES = 16000;
 const MAX_SNIPPET_MAX_BYTES = 64000;
+const MAX_FULL_READ_BYTES = 64 * 1024;
 const SEARCH_EXACT_EXCLUDE = new Set([
   ROOT_SENTINEL_RELATIVE_PATH,
   path.join(SIMPLE_METADATA_DIR, "cli.json")
@@ -313,9 +326,22 @@ function findSubstringMatch(
   text: string,
   query: string
 ): Omit<SearchContentMatch, "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType"> | null {
-  const matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const matchIndex = lowerText.indexOf(lowerQuery);
   if (matchIndex === -1) {
     return null;
+  }
+
+  let matchCount = 0;
+  let searchIndex = 0;
+  while (true) {
+    const nextIndex = lowerText.indexOf(lowerQuery, searchIndex);
+    if (nextIndex === -1) {
+      break;
+    }
+    matchCount += 1;
+    searchIndex = nextIndex + lowerQuery.length;
   }
 
   const leadingText = text.slice(0, matchIndex);
@@ -325,6 +351,7 @@ function findSubstringMatch(
 
   return {
     excerpt: createExcerpt(text, matchIndex, query.length),
+    matchCount,
     matchLine: line,
     matchColumn: column
   };
@@ -345,12 +372,86 @@ function findPathMatch(
 
     return {
       excerpt: `Matched path: ${candidate}`,
+      matchCount: 1,
       matchLine: 1,
       matchColumn: match.matchColumn
     };
   }
 
   return null;
+}
+
+function normalizeHttpOriginForDiscovery(origin: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return null;
+  }
+
+  if (!["http:", "https:"].includes(url.protocol)) {
+    return null;
+  }
+
+  return `${url.hostname.toLowerCase()}${url.port ? `:${url.port}` : ""}`;
+}
+
+export function matchesDiscoveryOrigin(candidateOrigin: string, requestedOrigin: string): boolean {
+  const candidateKey = normalizeHttpOriginForDiscovery(candidateOrigin);
+  const requestedKey = normalizeHttpOriginForDiscovery(requestedOrigin);
+
+  if (candidateKey && requestedKey) {
+    return candidateKey === requestedKey;
+  }
+
+  return candidateOrigin === requestedOrigin;
+}
+
+export function matchSiteConfigsByOrigin(
+  configs: SiteConfigLike[],
+  origin: string
+): SiteConfigLike[] {
+  return configs.filter((config) => matchesDiscoveryOrigin(config.origin, origin));
+}
+
+function normalizeSiteConfigs(siteConfigOrConfigs: SiteConfigLike | SiteConfigLike[]): SiteConfigLike[] {
+  const normalized = Array.isArray(siteConfigOrConfigs)
+    ? siteConfigOrConfigs
+    : [siteConfigOrConfigs];
+
+  return [...normalized]
+    .sort((left, right) => left.origin.localeCompare(right.origin) || left.mode.localeCompare(right.mode));
+}
+
+function uniqueOrigins(origins: Array<string | null | undefined>): string[] {
+  return [...new Set(origins.filter((origin): origin is string => Boolean(origin)))].sort();
+}
+
+function compareAssetInfos(a: AssetInfo, b: AssetInfo): number {
+  return compareAssetEntries(a, b)
+    || a.origin.localeCompare(b.origin);
+}
+
+function compareApiEndpoints(a: ApiEndpoint, b: ApiEndpoint): number {
+  return a.pathname.localeCompare(b.pathname)
+    || a.method.localeCompare(b.method)
+    || a.fixtureDir.localeCompare(b.fixtureDir)
+    || a.origin.localeCompare(b.origin);
+}
+
+async function assertWithinFullReadLimit(
+  rootFs: FixtureRootFs,
+  relativePath: string,
+  createError: (byteLength: number, limit: number) => Error
+): Promise<void> {
+  const stat = await rootFs.stat(relativePath);
+  if (!stat?.isFile()) {
+    return;
+  }
+
+  if (stat.size > MAX_FULL_READ_BYTES) {
+    throw createError(stat.size, MAX_FULL_READ_BYTES);
+  }
 }
 
 function truncateUtf8(text: string, maxBytes: number): { text: string; truncated: boolean } {
@@ -520,6 +621,7 @@ async function collectApiEndpoints(rootPath: string, baseRelativePath: string): 
         : fixture.replace(/__q-.*/, "").replace(/-/g, "/");
 
       endpoints.push({
+        origin: "",
         method,
         pathname,
         status: meta.status,
@@ -556,7 +658,10 @@ export async function readOriginInfo(rootPath: string, siteConfig: SiteConfigLik
       ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, "origins", dir)
       : path.join(originKey, "origins", dir);
     const endpoints = await collectApiEndpoints(rootPath, relativeBasePath);
-    apiEndpoints.push(...endpoints);
+    apiEndpoints.push(...endpoints.map((endpoint) => ({
+      ...endpoint,
+      origin: siteConfig.origin
+    })));
   }
 
   return {
@@ -583,14 +688,21 @@ export function flattenStaticResourceManifest(
 
 export async function listAssets(
   rootPath: string,
-  siteConfig: SiteConfigLike,
+  siteConfigOrConfigs: SiteConfigLike | SiteConfigLike[],
   options: AssetListOptions = {}
-): Promise<PaginatedResult<AssetInfo>> {
-  const info = await readOriginInfo(rootPath, siteConfig);
+): Promise<DiscoveryResult<AssetInfo>> {
+  const infos = await Promise.all(normalizeSiteConfigs(siteConfigOrConfigs).map(async (siteConfig) => (
+    readOriginInfo(rootPath, siteConfig)
+  )));
   const rootFs = createFixtureRootFs(rootPath);
   const normalizedPathnameContains = options.pathnameContains?.toLowerCase();
 
-  const filteredItems = flattenStaticResourceManifest(info.manifest).filter((entry) => {
+  const filteredItems = infos
+    .flatMap((info) => flattenStaticResourceManifest(info.manifest).map((entry) => ({
+      ...entry,
+      origin: info.origin
+    })))
+    .filter((entry) => {
     if (options.resourceTypes?.length && !options.resourceTypes.includes(entry.resourceType)) {
       return false;
     }
@@ -616,9 +728,26 @@ export async function listAssets(
       hasBody,
       bodySize: hasBody ? stat!.size : null
     };
-  }));
+  })).then((entries) => entries.sort(compareAssetInfos));
 
-  return paginateItems(items, normalizeLimit(options.limit, DEFAULT_ASSET_LIMIT, MAX_ASSET_LIMIT), options.cursor);
+  return {
+    ...paginateItems(items, normalizeLimit(options.limit, DEFAULT_ASSET_LIMIT, MAX_ASSET_LIMIT), options.cursor),
+    matchedOrigins: uniqueOrigins(infos.map((info) => info.origin))
+  };
+}
+
+export async function listApiEndpoints(
+  rootPath: string,
+  siteConfigOrConfigs: SiteConfigLike | SiteConfigLike[]
+): Promise<EndpointListResult> {
+  const infos = await Promise.all(normalizeSiteConfigs(siteConfigOrConfigs).map(async (siteConfig) => (
+    readOriginInfo(rootPath, siteConfig)
+  )));
+
+  return {
+    items: infos.flatMap((info) => info.apiEndpoints).sort(compareApiEndpoints),
+    matchedOrigins: uniqueOrigins(infos.map((info) => info.origin))
+  };
 }
 
 export function resolveFixturePath(rootPath: string, relativePath: string): string | null {
@@ -630,7 +759,14 @@ export async function readFixtureBody(
   relativePath: string,
   options: FixtureReadOptions = {}
 ): Promise<string | null> {
-  const text = await createFixtureRootFs(rootPath).readOptionalText(relativePath);
+  const rootFs = createFixtureRootFs(rootPath);
+  await assertWithinFullReadLimit(rootFs, relativePath, (byteLength, limit) => (
+    new Error(
+      `File is too large to read in full: ${relativePath} (${byteLength} bytes; limit ${limit} bytes). `
+      + "Use read-fixture-snippet with this path and specify startLine and lineCount."
+    )
+  ));
+  const text = await rootFs.readOptionalText(relativePath);
   if (text === null) {
     return null;
   }
@@ -714,6 +850,12 @@ export async function readApiFixture(
     bodyPath,
     meta,
     body: await (async () => {
+      await assertWithinFullReadLimit(rootFs, bodyPath, (byteLength, limit) => (
+        new Error(
+          `Endpoint fixture body is too large to read in full: ${bodyPath} (${byteLength} bytes; limit ${limit} bytes). `
+          + `Use read-fixture-snippet with path "${bodyPath}" and specify startLine and lineCount.`
+        )
+      ));
       const body = await rootFs.readOptionalText(bodyPath);
       if (body === null) {
         return null;
@@ -730,15 +872,20 @@ export async function readApiFixture(
 export async function searchFixtureContent(
   rootPath: string,
   options: SearchContentOptions
-): Promise<PaginatedResult<SearchContentMatch>> {
+): Promise<DiscoveryResult<SearchContentMatch>> {
   const query = options.query.trim();
   if (!query) {
-    return { items: [], nextCursor: null, totalMatched: 0 };
+    return { items: [], nextCursor: null, totalMatched: 0, matchedOrigins: [] };
   }
 
+  const configs = await readSiteConfigs(rootPath);
+  const matchedConfigs = options.origin
+    ? matchSiteConfigsByOrigin(configs, options.origin)
+    : configs;
+  const matchedOriginSet = new Set(matchedConfigs.map((config) => config.origin));
   const normalizedPathContains = options.pathContains?.toLowerCase();
   const searchableEntries = (await buildSearchableFixtureEntries(rootPath)).filter((entry) => {
-    if (options.origin && entry.origin !== options.origin) {
+    if (options.origin && (!entry.origin || !matchedOriginSet.has(entry.origin))) {
       return false;
     }
     if (normalizedPathContains && !entry.path.toLowerCase().includes(normalizedPathContains)) {
@@ -765,6 +912,7 @@ export async function searchFixtureContent(
           path: entry.path,
           sourceKind: entry.sourceKind,
           matchKind: "body",
+          matchCount: match.matchCount,
           origin: entry.origin,
           pathname: entry.pathname,
           mimeType: entry.mimeType,
@@ -786,6 +934,7 @@ export async function searchFixtureContent(
       path: entry.path,
       sourceKind: entry.sourceKind,
       matchKind: "path",
+      matchCount: pathMatch.matchCount,
       origin: entry.origin,
       pathname: entry.pathname,
       mimeType: entry.mimeType,
@@ -796,7 +945,12 @@ export async function searchFixtureContent(
     });
   }
 
-  return paginateItems(matches, normalizeLimit(options.limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT), options.cursor);
+  return {
+    ...paginateItems(matches, normalizeLimit(options.limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT), options.cursor),
+    matchedOrigins: options.origin
+      ? uniqueOrigins(matchedConfigs.map((config) => config.origin))
+      : uniqueOrigins(matches.map((match) => match.origin))
+  };
 }
 
 export async function readSiteConfigs(rootPath: string): Promise<SiteConfigLike[]> {
