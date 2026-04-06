@@ -87,6 +87,7 @@ describe("cli runner", () => {
 
     expect(exitCode).toBe(0);
     expect(capture.errors.join("\n")).toContain("Usage: wraithwalker <command>");
+    expect(capture.errors.join("\n")).toContain("import-har <har-file> [dir]");
   });
 
   it("initializes a fixture root using only global config", async () => {

@@ -1,4 +1,32 @@
-export type SiteMode = "simple" | "advanced";
+import type {
+  ApiFixtureDescriptor,
+  AssetFixtureDescriptor,
+  AssetLikeRequestInput,
+  FixtureDescriptor,
+  FixtureDescriptorBase,
+  HeaderEntry,
+  RequestPayload,
+  ResponseMeta,
+  SiteMode,
+  StaticResourceManifest,
+  StaticResourceManifestEntry,
+  StoredFixture
+} from "@wraithwalker/core/fixture-layout";
+
+export type {
+  ApiFixtureDescriptor,
+  AssetFixtureDescriptor,
+  AssetLikeRequestInput,
+  FixtureDescriptor,
+  FixtureDescriptorBase,
+  HeaderEntry,
+  RequestPayload,
+  ResponseMeta,
+  SiteMode,
+  StaticResourceManifest,
+  StaticResourceManifestEntry,
+  StoredFixture
+};
 
 export interface SiteConfig {
   origin: string;
@@ -43,50 +71,6 @@ export interface StorageState {
   preferredEditorId?: string;
 }
 
-export interface HeaderEntry {
-  name: string;
-  value: string;
-}
-
-export interface AssetLikeRequestInput {
-  method: string;
-  url: string;
-  resourceType?: string;
-  mimeType?: string;
-}
-
-export interface FixtureDescriptorBase {
-  topOrigin: string;
-  topOriginKey: string;
-  requestOrigin: string;
-  requestOriginKey: string;
-  requestUrl: string;
-  method: string;
-  siteMode: SiteMode;
-  postDataEncoding: string;
-  queryHash: string;
-  bodyHash: string;
-  bodyPath: string;
-  requestPath: string;
-  metaPath: string;
-  manifestPath: string | null;
-  metadataOptional: boolean;
-  slug: string;
-}
-
-export interface AssetFixtureDescriptor extends FixtureDescriptorBase {
-  assetLike: true;
-  storageMode: "asset";
-}
-
-export interface ApiFixtureDescriptor extends FixtureDescriptorBase {
-  assetLike: false;
-  directory: string;
-  storageMode: "api";
-}
-
-export type FixtureDescriptor = AssetFixtureDescriptor | ApiFixtureDescriptor;
-
 export interface RequestEntry {
   tabId: number;
   requestId: string;
@@ -114,59 +98,6 @@ export interface RequestContext {
   bodyEncoding: string;
   resourceType: string;
   mimeType: string;
-}
-
-export interface RequestPayload {
-  topOrigin: string;
-  url: string;
-  method: string;
-  headers: HeaderEntry[];
-  body: string;
-  bodyEncoding: string;
-  bodyHash: string;
-  queryHash: string;
-  capturedAt: string;
-}
-
-export interface ResponseMeta {
-  status: number;
-  statusText: string;
-  headers: HeaderEntry[];
-  mimeType: string;
-  resourceType: string;
-  url: string;
-  method: string;
-  capturedAt: string;
-  bodyEncoding: string;
-  bodySuggestedExtension: string;
-}
-
-export interface StoredFixture {
-  request: RequestPayload;
-  meta: ResponseMeta;
-  bodyBase64: string;
-  size: number;
-}
-
-export interface StaticResourceManifestEntry {
-  requestUrl: string;
-  requestOrigin: string;
-  pathname: string;
-  search: string;
-  bodyPath: string;
-  requestPath: string;
-  metaPath: string;
-  mimeType: string;
-  resourceType: string;
-  capturedAt: string;
-}
-
-export interface StaticResourceManifest {
-  schemaVersion: number;
-  topOrigin: string;
-  topOriginKey: string;
-  generatedAt: string;
-  resourcesByPathname: Record<string, StaticResourceManifestEntry[]>;
 }
 
 export type HeaderInput = HeaderEntry[] | Record<string, unknown>;

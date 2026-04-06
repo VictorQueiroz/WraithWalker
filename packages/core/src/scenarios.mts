@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { SCENARIOS_DIR } from "./constants.mjs";
+import type { ResponseMeta } from "./fixture-layout.mjs";
 import { readSentinel } from "./root.mjs";
 import { createFixtureRootFs, type FixtureRootFs } from "./root-fs.mjs";
 
@@ -34,13 +35,6 @@ export interface FixtureDiff {
   added: EndpointRef[];
   removed: EndpointRef[];
   changed: EndpointChange[];
-}
-
-interface ResponseMeta {
-  status: number;
-  mimeType: string;
-  url: string;
-  method: string;
 }
 
 interface EndpointWithBody {

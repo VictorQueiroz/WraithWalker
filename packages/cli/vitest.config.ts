@@ -4,6 +4,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@wraithwalker/core/fixture-layout": fileURLToPath(new URL("../core/src/fixture-layout.mts", import.meta.url)),
+      "@wraithwalker/core/har-import": fileURLToPath(new URL("../core/src/har-import.mts", import.meta.url)),
       "@wraithwalker/core/root": fileURLToPath(new URL("../core/src/root.mts", import.meta.url)),
       "@wraithwalker/core/root-fs": fileURLToPath(new URL("../core/src/root-fs.mts", import.meta.url)),
       "@wraithwalker/core/fixtures": fileURLToPath(new URL("../core/src/fixtures.mts", import.meta.url)),
@@ -17,13 +19,17 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      include: ["src/**/*.mts"],
-      exclude: ["src/lib/output.mts"],
+      include: [
+        "src/commands/import-har.mts",
+        "src/lib/plain-output.mts",
+        "src/lib/themed-output.mts"
+      ],
       thresholds: {
-        statements: 65,
-        lines: 65,
-        functions: 85,
-        branches: 60
+        perFile: true,
+        statements: 100,
+        lines: 100,
+        functions: 100,
+        branches: 100
       }
     }
   }

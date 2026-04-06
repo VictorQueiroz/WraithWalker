@@ -1,6 +1,12 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@wraithwalker/core/fixture-layout": fileURLToPath(new URL("../core/src/fixture-layout.mts", import.meta.url))
+    }
+  },
   test: {
     environment: "node",
     coverage: {

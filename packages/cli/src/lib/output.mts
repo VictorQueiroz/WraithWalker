@@ -1,3 +1,5 @@
+import type { HarImportEvent } from "@wraithwalker/core/har-import";
+
 export interface Output {
   banner(): void;
   success(message: string): void;
@@ -9,4 +11,5 @@ export interface Output {
   listItem(item: string): void;
   block(content: string): void;
   usage(message: string): void;
+  renderImportProgress(event: HarImportEvent): void;
 }

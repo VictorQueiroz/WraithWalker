@@ -8,6 +8,7 @@ The CLI is a thin shell over shared domain logic in `@wraithwalker/core`, with `
 
 ```bash
 wraithwalker init [dir]              # Create a fixture root (.wraithwalker/root.json)
+wraithwalker import-har <har-file> [dir] [--top-origin <origin>] # Populate a fresh simple-mode fixture root from a HAR
 wraithwalker status                  # Show root path, origins, endpoints, scenarios
 wraithwalker context [--editor <id>] # Regenerate CLAUDE.md and .d.ts types
 wraithwalker scenarios list          # List saved scenarios
@@ -19,7 +20,22 @@ wraithwalker serve [--http] [--host <host>] [--port <port>] # Start the MCP serv
 
 ## Root Discovery
 
-All commands except `init` discover the fixture root automatically by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one.
+All commands except `init` and `import-har` discover the fixture root automatically by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one, or `wraithwalker import-har` to bootstrap and populate a fresh root from a HAR file.
+
+## HAR Import
+
+`wraithwalker import-har` reads a HAR from disk, creates `.wraithwalker/root.json` via the same root bootstrap used by `init`, and writes fixtures into the target directory in default simple mode.
+
+```bash
+wraithwalker import-har ./captures/app.har ./fixtures
+wraithwalker import-har ./captures/app.har ./fixtures --top-origin https://app.example.com
+```
+
+- `dir` defaults to the current directory.
+- The target directory must be empty or contain only a fresh `.wraithwalker/root.json` sentinel.
+- v1 imports exactly one top origin per run.
+- If the HAR does not contain one unambiguous top origin, pass `--top-origin`.
+- Plain output prints imported and skipped files line by line. Interactive TTY output renders live progress bars while each fixture body is written.
 
 ## Configuration And Theming
 

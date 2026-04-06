@@ -64,6 +64,9 @@ function createOutputRecorder() {
       },
       usage(message: string) {
         calls.usage.push(message);
+      },
+      renderImportProgress() {
+        // no-op for command rendering tests that do not exercise import progress
       }
     }
   };

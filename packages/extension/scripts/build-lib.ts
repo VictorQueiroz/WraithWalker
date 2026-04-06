@@ -24,6 +24,9 @@ export interface BuildPaths {
   vendorSource: string;
   distVendorDir: string;
   distVendorFile: string;
+  coreFixtureLayoutSource: string;
+  distVendorCoreDir: string;
+  distVendorCoreFixtureLayoutFile: string;
 }
 
 export interface CopySpec {
@@ -47,7 +50,10 @@ export function createBuildPaths(rootDir: string): BuildPaths {
     libEmitDir: path.join(emitDir, "lib"),
     vendorSource,
     distVendorDir: path.join(distDir, "vendor"),
-    distVendorFile: path.join(distDir, "vendor", "idb.js")
+    distVendorFile: path.join(distDir, "vendor", "idb.js"),
+    coreFixtureLayoutSource: path.resolve(rootDir, "../core/out/fixture-layout.mjs"),
+    distVendorCoreDir: path.join(distDir, "vendor", "wraithwalker-core"),
+    distVendorCoreFixtureLayoutFile: path.join(distDir, "vendor", "wraithwalker-core", "fixture-layout.js")
   };
 }
 
@@ -70,4 +76,10 @@ export function createStaticExtensionCopies(paths: BuildPaths): CopySpec[] {
  */
 export function rewriteIdbSpecifiers(source: string): string {
   return source.replace(/from\s+["']idb["']/g, 'from "../vendor/idb.js"');
+}
+
+export function rewriteCoreFixtureLayoutSpecifiers(source: string, replacement: string): string {
+  return source
+    .replace(/from\s+["']@wraithwalker\/core\/fixture-layout["']/g, `from "${replacement}"`)
+    .replace(/from\s+["']@wraithwalker\/core\/fixture-layout["'];?/g, `from "${replacement}"`);
 }

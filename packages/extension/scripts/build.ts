@@ -7,6 +7,8 @@ import {
   createBuildPaths,
   createDistRuntimeCopies,
   createStaticExtensionCopies,
+  ROOT_RUNTIME_FILES,
+  rewriteCoreFixtureLayoutSpecifiers,
   rewriteIdbSpecifiers
 } from "./build-lib.js";
 
@@ -15,13 +17,21 @@ const execFileAsync = promisify(execFile);
 import { createRequire } from "node:module";
 
 const ROOT = process.cwd();
+const REPO_ROOT = path.resolve(ROOT, "../..");
 const require = createRequire(path.join(ROOT, "package.json"));
 const TSC_PATH = path.join(path.dirname(require.resolve("typescript/package.json")), "bin", "tsc");
 const PATHS = createBuildPaths(ROOT);
+const NPM_PATH = process.platform === "win32" ? "npm.cmd" : "npm";
 
 async function runTsc(configPath) {
   await execFileAsync(process.execPath, [TSC_PATH, "-p", configPath], {
     cwd: ROOT
+  });
+}
+
+async function buildCoreFixtureLayout() {
+  await execFileAsync(NPM_PATH, ["run", "build", "--workspace", "@wraithwalker/core"], {
+    cwd: REPO_ROOT
   });
 }
 
@@ -47,6 +57,7 @@ async function copyFiles(copySpecs: CopySpec[]) {
 }
 
 async function buildRuntime() {
+  await buildCoreFixtureLayout();
   await fs.rm(PATHS.emitDir, { recursive: true, force: true });
   await runTsc(path.join(ROOT, "tsconfig.build.json"));
 }
@@ -55,6 +66,32 @@ async function rewriteIdbImports(distLibDir: string) {
   const idbFile = path.join(distLibDir, "idb.js");
   const content = await fs.readFile(idbFile, "utf-8");
   await fs.writeFile(idbFile, rewriteIdbSpecifiers(content), "utf-8");
+}
+
+async function rewriteCoreFixtureLayoutImports() {
+  for (const fileName of ROOT_RUNTIME_FILES) {
+    const filePath = path.join(PATHS.distDir, fileName);
+    const content = await fs.readFile(filePath, "utf-8");
+    await fs.writeFile(
+      filePath,
+      rewriteCoreFixtureLayoutSpecifiers(content, "./vendor/wraithwalker-core/fixture-layout.js"),
+      "utf-8"
+    );
+  }
+
+  for (const entry of await fs.readdir(path.join(PATHS.distDir, "lib"))) {
+    if (!entry.endsWith(".js")) {
+      continue;
+    }
+
+    const filePath = path.join(PATHS.distDir, "lib", entry);
+    const content = await fs.readFile(filePath, "utf-8");
+    await fs.writeFile(
+      filePath,
+      rewriteCoreFixtureLayoutSpecifiers(content, "../vendor/wraithwalker-core/fixture-layout.js"),
+      "utf-8"
+    );
+  }
 }
 
 async function buildDist() {
@@ -66,7 +103,9 @@ async function buildDist() {
   await copyDirectory(PATHS.libEmitDir, path.join(PATHS.distDir, "lib"));
   await ensureDir(PATHS.distVendorDir);
   await copyFile(PATHS.vendorSource, PATHS.distVendorFile);
+  await copyFile(PATHS.coreFixtureLayoutSource, PATHS.distVendorCoreFixtureLayoutFile);
   await rewriteIdbImports(path.join(PATHS.distDir, "lib"));
+  await rewriteCoreFixtureLayoutImports();
 }
 
 async function main() {

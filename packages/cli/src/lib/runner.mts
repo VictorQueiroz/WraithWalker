@@ -6,6 +6,7 @@ import { supportsColor } from "./ansi.mjs";
 import { createPlainOutput } from "./plain-output.mjs";
 import { createThemedOutput } from "./themed-output.mjs";
 import { command as contextCommand } from "../commands/context.mjs";
+import { command as importHarCommand } from "../commands/import-har.mjs";
 import { command as initCommand } from "../commands/init.mjs";
 import { command as scenariosCommand } from "../commands/scenarios.mjs";
 import { command as serveCommand } from "../commands/serve.mjs";
@@ -13,6 +14,7 @@ import { command as statusCommand } from "../commands/status.mjs";
 
 const COMMANDS: CommandSpec<unknown, unknown>[] = [
   initCommand,
+  importHarCommand,
   statusCommand,
   contextCommand,
   scenariosCommand,
@@ -25,6 +27,7 @@ export const USAGE = `Usage: wraithwalker <command>
 
 Commands:
   init [dir]                     Create a fixture root (.wraithwalker/root.json)
+  import-har <har-file> [dir]    Populate a fixture root from a HAR file
   status                         Show fixture root summary
   context [--editor <id>]        Regenerate CLAUDE.md and .d.ts types
   scenarios list                 List saved scenarios
@@ -38,7 +41,7 @@ function createOutput(
   { env = process.env, isTTY = process.stdout.isTTY }: { env?: NodeJS.ProcessEnv; isTTY?: boolean } = {}
 ) {
   return supportsColor({ env, isTTY })
-    ? createThemedOutput(cliConfig.theme)
+    ? createThemedOutput(cliConfig.theme, { isTTY })
     : createPlainOutput(cliConfig.theme);
 }
 

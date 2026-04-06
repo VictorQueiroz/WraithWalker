@@ -1,3 +1,5 @@
+import type { HarImportEvent } from "@wraithwalker/core/har-import";
+
 import type { Output } from "./output.mjs";
 import type { ThemeDefinition } from "./theme.mjs";
 
@@ -24,5 +26,14 @@ export function createPlainOutput(theme: ThemeDefinition): Output {
     listItem(item)          { console.log(`  ${item}`); },
     block(content)          { console.log(content); },
     usage(message)          { console.error(message); },
+    renderImportProgress(event: HarImportEvent) {
+      if (event.type === "entry-complete") {
+        console.log(`Imported ${event.bodyPath}`);
+      }
+
+      if (event.type === "entry-skipped") {
+        console.log(`Skipped [${event.method}] ${event.requestUrl}: ${event.reason}`);
+      }
+    }
   };
 }

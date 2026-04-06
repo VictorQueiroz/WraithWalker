@@ -6,6 +6,11 @@ export interface RootFsEntry {
   kind: "file" | "directory";
 }
 
+export interface WriteBodyOptions {
+  onProgress?: (writtenBytes: number, totalBytes: number) => void | Promise<void>;
+  chunkSize?: number;
+}
+
 export interface FixtureRootFs {
   rootPath: string;
   resolve(relativePath: string): string | null;
@@ -17,6 +22,11 @@ export interface FixtureRootFs {
   readOptionalJson<T>(relativePath: string): Promise<T | null>;
   writeText(relativePath: string, content: string): Promise<void>;
   writeJson(relativePath: string, value: unknown): Promise<void>;
+  writeBody(
+    relativePath: string,
+    payload: { body: string; bodyEncoding: "utf8" | "base64" },
+    options?: WriteBodyOptions
+  ): Promise<void>;
   ensureDir(relativePath: string): Promise<void>;
   listDirectory(relativePath?: string): Promise<RootFsEntry[]>;
   listOptionalDirectory(relativePath?: string): Promise<RootFsEntry[]>;
@@ -136,6 +146,35 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     await writeText(relativePath, JSON.stringify(value, null, 2));
   }
 
+  async function writeBody(
+    relativePath: string,
+    payload: { body: string; bodyEncoding: "utf8" | "base64" },
+    options: WriteBodyOptions = {}
+  ): Promise<void> {
+    const absolutePath = requireWithinRoot(rootPath, relativePath);
+    const bodyBuffer = payload.bodyEncoding === "base64"
+      ? Buffer.from(payload.body, "base64")
+      : Buffer.from(payload.body, "utf8");
+    const chunkSize = Math.max(1, options.chunkSize ?? 64 * 1024);
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    const handle = await fs.open(absolutePath, "w");
+
+    try {
+      let writtenBytes = 0;
+      while (writtenBytes < bodyBuffer.byteLength) {
+        const nextChunk = bodyBuffer.subarray(writtenBytes, writtenBytes + chunkSize);
+        await handle.write(nextChunk);
+        writtenBytes += nextChunk.byteLength;
+        if (options.onProgress) {
+          await options.onProgress(writtenBytes, bodyBuffer.byteLength);
+        }
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+
   async function ensureDir(relativePath: string): Promise<void> {
     await fs.mkdir(requireWithinRoot(rootPath, relativePath), { recursive: true });
   }
@@ -189,6 +228,7 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     readOptionalJson,
     writeText,
     writeJson,
+    writeBody,
     ensureDir,
     listDirectory,
     listOptionalDirectory,

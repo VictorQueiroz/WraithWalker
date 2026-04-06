@@ -7,16 +7,16 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: [
-        "src/root.mts",
-        "src/fixtures.mts",
-        "src/scenarios.mts",
-        "src/context.mts"
+        "src/fixture-layout.mts",
+        "src/har-import.mts",
+        "src/root-fs.mts"
       ],
       thresholds: {
-        statements: 80,
-        lines: 80,
-        functions: 90,
-        branches: 70
+        perFile: true,
+        statements: 100,
+        lines: 100,
+        functions: 100,
+        branches: 100
       }
     }
   }

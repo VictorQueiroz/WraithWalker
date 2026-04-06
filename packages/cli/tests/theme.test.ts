@@ -47,7 +47,9 @@ describe("theme output", () => {
   it("renders ANSI styles and all themed output methods", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const output = createThemedOutput(testTheme);
+    const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    const output = createThemedOutput(testTheme, { isTTY: true });
+    const nonInteractiveOutput = createThemedOutput(testTheme, { isTTY: false });
 
     output.success("Done");
     output.error("Nope");
@@ -58,6 +60,69 @@ describe("theme output", () => {
     output.listItem("alpha");
     output.block("Block text");
     output.usage("Usage text");
+    output.renderImportProgress({
+      type: "entry-start",
+      requestUrl: "https://cdn.example.com/static/chunks/some-very-long-file-name-that-needs-truncation.js",
+      bodyPath: "cdn.example.com/app.js",
+      completedEntries: 1,
+      totalEntries: 2,
+      writtenBytes: 3,
+      totalBytes: 6
+    });
+    output.renderImportProgress({
+      type: "entry-progress",
+      requestUrl: "https://cdn.example.com/static/chunks/some-very-long-file-name-that-needs-truncation.js",
+      bodyPath: "cdn.example.com/app.js",
+      completedEntries: 1,
+      totalEntries: 2,
+      writtenBytes: 6,
+      totalBytes: 6
+    });
+    output.renderImportProgress({
+      type: "entry-progress",
+      requestUrl: "https://cdn.example.com/app.js",
+      bodyPath: "cdn.example.com/app.js",
+      completedEntries: 1,
+      totalEntries: 2,
+      writtenBytes: 6,
+      totalBytes: 6
+    });
+    output.renderImportProgress({
+      type: "entry-complete",
+      requestUrl: "https://cdn.example.com/app.js",
+      bodyPath: "cdn.example.com/app.js",
+      completedEntries: 1,
+      totalEntries: 2
+    });
+    output.renderImportProgress({
+      type: "entry-skipped",
+      requestUrl: "https://api.example.com/users",
+      method: "PATCH",
+      reason: "Missing body",
+      skippedEntries: 1,
+      totalCandidates: 2
+    });
+    nonInteractiveOutput.renderImportProgress({
+      type: "entry-complete",
+      requestUrl: "https://cdn.example.com/app.js",
+      bodyPath: "cdn.example.com/app.js",
+      completedEntries: 1,
+      totalEntries: 2
+    });
+    nonInteractiveOutput.renderImportProgress({
+      type: "entry-skipped",
+      requestUrl: "https://api.example.com/users",
+      method: "PATCH",
+      reason: "Missing body",
+      skippedEntries: 1,
+      totalCandidates: 2
+    });
+    nonInteractiveOutput.renderImportProgress({
+      type: "scan-complete",
+      totalEntries: 2,
+      totalCandidates: 2,
+      topOrigin: "https://app.example.com"
+    });
     output.banner();
 
     expect(logSpy.mock.calls[0][0]).toContain("\u001b[32m");
@@ -68,7 +133,10 @@ describe("theme output", () => {
     expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Info line"))).toBe(true);
     expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Block text"))).toBe(true);
     expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Theme phrase"))).toBe(true);
+    expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Imported cdn.example.com/app.js"))).toBe(true);
+    expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Skipped [PATCH] https://api.example.com/users: Missing body"))).toBe(true);
     expect(errorSpy.mock.calls[2][0]).toContain("\u001b[2m");
+    expect(writeSpy).toHaveBeenCalled();
   });
 
   it("respects spacing and banner content without ANSI in plain output", () => {
@@ -85,6 +153,21 @@ describe("theme output", () => {
     output.listItem("alpha");
     output.block("Block text");
     output.usage("Usage text");
+    output.renderImportProgress({
+      type: "entry-complete",
+      requestUrl: "https://cdn.example.com/app.js",
+      bodyPath: "cdn.example.com/app.js",
+      completedEntries: 1,
+      totalEntries: 2
+    });
+    output.renderImportProgress({
+      type: "entry-skipped",
+      requestUrl: "https://api.example.com/users",
+      method: "PATCH",
+      reason: "Missing body",
+      skippedEntries: 1,
+      totalCandidates: 2
+    });
     output.banner();
 
     expect(logSpy.mock.calls[0][0]).toBe("Done");
@@ -95,6 +178,8 @@ describe("theme output", () => {
     expect(logSpy.mock.calls.some((call) => call[0] === "Info line")).toBe(true);
     expect(logSpy.mock.calls.some((call) => call[0] === "  alpha")).toBe(true);
     expect(logSpy.mock.calls.some((call) => call[0] === "Block text")).toBe(true);
+    expect(logSpy.mock.calls.some((call) => call[0] === "Imported cdn.example.com/app.js")).toBe(true);
+    expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Skipped [PATCH] https://api.example.com/users: Missing body"))).toBe(true);
     expect(errorSpy.mock.calls[2][0]).toBe("Usage text");
     expect(logSpy.mock.calls.some((call) => call[0] === "BANNER")).toBe(true);
     expect(logSpy.mock.calls.some((call) => String(call[0]).includes("Theme phrase"))).toBe(true);

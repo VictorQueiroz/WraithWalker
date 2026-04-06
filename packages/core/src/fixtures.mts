@@ -8,38 +8,15 @@ import {
   SIMPLE_METADATA_TREE,
   STATIC_RESOURCE_MANIFEST_FILE
 } from "./constants.mjs";
+import {
+  originToKey,
+  type ResponseMeta,
+  type StaticResourceManifest,
+  type StaticResourceManifestEntry
+} from "./fixture-layout.mjs";
 import { createFixtureRootFs, resolveWithinRoot } from "./root-fs.mjs";
 
-export interface StaticResourceManifestEntry {
-  requestUrl: string;
-  requestOrigin: string;
-  pathname: string;
-  search: string;
-  bodyPath: string;
-  requestPath: string;
-  metaPath: string;
-  mimeType: string;
-  resourceType: string;
-  capturedAt: string;
-}
-
-export interface StaticResourceManifest {
-  schemaVersion: number;
-  topOrigin: string;
-  topOriginKey: string;
-  generatedAt: string;
-  resourcesByPathname: Record<string, StaticResourceManifestEntry[]>;
-}
-
-export interface ResponseMeta {
-  status: number;
-  statusText: string;
-  mimeType: string;
-  resourceType: string;
-  url: string;
-  method: string;
-  capturedAt: string;
-}
+export type { ResponseMeta, StaticResourceManifest, StaticResourceManifestEntry } from "./fixture-layout.mjs";
 
 export interface ApiEndpoint {
   method: string;
@@ -156,13 +133,6 @@ const SEARCH_SUFFIX_EXCLUDE = [
   "__response.json",
   "response.meta.json"
 ];
-
-function originToKey(origin: string): string {
-  const url = new URL(origin);
-  const protocol = url.protocol.replace(":", "");
-  const port = url.port ? `__${url.port}` : "";
-  return `${protocol}__${url.hostname}${port}`;
-}
 
 function keyToOrigin(key: string): string {
   const match = key.match(/^(https?)__([^_](?:[^_]|_(?!_))*)(?:__(\d+))?$/);

@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Shared Node-side domain logic for WraithWalker fixture roots, scenarios, and context generation.",
   "license": "MIT",
   "repository": {
@@ -26,11 +26,13 @@
     "README.md"
   ],
   "exports": {
+    "./fixture-layout": "./out/fixture-layout.mjs",
     "./root": "./out/root.mjs",
     "./root-fs": "./out/root-fs.mjs",
     "./fixtures": "./out/fixtures.mjs",
     "./scenarios": "./out/scenarios.mjs",
-    "./context": "./out/context.mjs"
+    "./context": "./out/context.mjs",
+    "./har-import": "./out/har-import.mjs"
   },
   "engines": {
     "node": ">=22"

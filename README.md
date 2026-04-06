@@ -131,6 +131,7 @@ Initialize a fixture root and generate context:
 
 ```bash
 wraithwalker init /path/to/fixtures
+wraithwalker import-har ./captures/app.har /path/to/fixtures --top-origin https://app.example.com
 wraithwalker status
 wraithwalker context --editor cursor
 ```
@@ -145,7 +146,7 @@ This is a [Turborepo](https://turbo.build/) monorepo with 5 packages:
 | [`packages/extension`](packages/extension/) | Chrome extension — service worker, popup, options page, offscreen document, and shared library |
 | [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration and scenario management |
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server for programmatic fixture access, endpoint listing, and scenario diffing |
-| [`packages/cli`](packages/cli/) | CLI tool — `wraithwalker init`, `status`, `context`, `scenarios`, `serve` |
+| [`packages/cli`](packages/cli/) | CLI tool — `wraithwalker init`, `import-har`, `status`, `context`, `scenarios`, `serve` |
 
 ## CLI
 
@@ -153,6 +154,7 @@ The `wraithwalker` CLI manages fixture roots, generates context files, and handl
 
 ```bash
 wraithwalker init [dir]              # Create a fixture root
+wraithwalker import-har <har-file> [dir] [--top-origin <origin>] # Populate a simple-mode fixture root from a HAR
 wraithwalker status                  # Show origins, endpoints, scenarios
 wraithwalker context [--editor <id>] # Regenerate CLAUDE.md and .d.ts types
 wraithwalker scenarios list          # List saved scenarios
@@ -162,7 +164,7 @@ wraithwalker scenarios diff <a> <b>  # Compare two scenarios
 wraithwalker serve [--http] [--host <host>] [--port <port>] # Start the MCP server
 ```
 
-The CLI discovers the nearest fixture root by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one.
+The CLI discovers the nearest fixture root by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one, or `wraithwalker import-har` to bootstrap a fresh root and populate it from a HAR file in default simple mode.
 
 ### CLI Theming
 

@@ -1,6 +1,8 @@
-import { BODY_DERIVED_HEADERS, HOP_BY_HOP_HEADERS } from "./constants.js";
-import { sanitizeResponseHeaders } from "./fixture-mapper.js";
-import { deriveExtensionFromMime } from "./path-utils.js";
+import {
+  buildRequestPayload as defaultBuildRequestPayload,
+  buildResponseMeta as defaultBuildResponseMeta,
+  replayResponseHeaders as defaultReplayResponseHeaders
+} from "@wraithwalker/core/fixture-layout";
 import type { HeaderEntry, NativeHostConfig, RequestEntry, RequestPayload, ResponseMeta, SessionSnapshot } from "./types.js";
 
 type HeaderCollection = HeaderEntry[] | Record<string, unknown>;
@@ -35,10 +37,7 @@ export function arrayifyHeaders(headers: HeaderCollection = {}): HeaderEntry[] {
 }
 
 export function replayResponseHeaders(headers: HeaderEntry[] = []): HeaderEntry[] {
-  return sanitizeResponseHeaders(headers).filter((header) => {
-    const lowerName = header.name.toLowerCase();
-    return !BODY_DERIVED_HEADERS.has(lowerName) && !HOP_BY_HOP_HEADERS.has(lowerName);
-  });
+  return defaultReplayResponseHeaders(headers);
 }
 
 export function buildSessionSnapshot({
@@ -97,17 +96,15 @@ export function createRequestEntry({
 }
 
 export function buildRequestPayload(entry: RequestEntry, capturedAt = new Date().toISOString()): RequestPayload {
-  return {
+  return defaultBuildRequestPayload({
     topOrigin: entry.topOrigin,
     url: entry.url,
     method: entry.method,
-    headers: entry.requestHeaders,
-    body: entry.requestBody,
-    bodyEncoding: entry.requestBodyEncoding,
-    bodyHash: entry.descriptor?.bodyHash || "",
-    queryHash: entry.descriptor?.queryHash || "",
-    capturedAt
-  };
+    requestHeaders: entry.requestHeaders,
+    requestBody: entry.requestBody,
+    requestBodyEncoding: entry.requestBodyEncoding,
+    descriptor: entry.descriptor
+  }, capturedAt);
 }
 
 export function buildResponseMeta(
@@ -115,16 +112,13 @@ export function buildResponseMeta(
   bodyEncoding: string,
   capturedAt = new Date().toISOString()
 ): ResponseMeta {
-  return {
-    status: entry.responseStatus,
-    statusText: entry.responseStatusText,
-    headers: sanitizeResponseHeaders(entry.responseHeaders),
+  return defaultBuildResponseMeta({
+    responseStatus: entry.responseStatus,
+    responseStatusText: entry.responseStatusText,
+    responseHeaders: entry.responseHeaders,
     mimeType: entry.mimeType,
     resourceType: entry.resourceType,
     url: entry.url,
-    method: entry.method,
-    capturedAt,
-    bodyEncoding,
-    bodySuggestedExtension: deriveExtensionFromMime(entry.mimeType)
-  };
+    method: entry.method
+  }, bodyEncoding, capturedAt);
 }
