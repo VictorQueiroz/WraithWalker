@@ -91,12 +91,14 @@ export interface HarImportedEntry {
   requestUrl: string;
   bodyPath: string;
   method: string;
+  topOrigin: string;
 }
 
 export interface HarSkippedEntry {
   requestUrl: string;
   method: string;
   reason: string;
+  topOrigin?: string;
 }
 
 export type HarImportEvent =
@@ -105,9 +107,11 @@ export type HarImportEvent =
       totalEntries: number;
       totalCandidates: number;
       topOrigin: string;
+      topOrigins: string[];
     }
   | {
       type: "entry-start";
+      topOrigin: string;
       requestUrl: string;
       bodyPath: string;
       completedEntries: number;
@@ -117,6 +121,7 @@ export type HarImportEvent =
     }
   | {
       type: "entry-progress";
+      topOrigin: string;
       requestUrl: string;
       bodyPath: string;
       completedEntries: number;
@@ -126,6 +131,7 @@ export type HarImportEvent =
     }
   | {
       type: "entry-complete";
+      topOrigin: string;
       requestUrl: string;
       bodyPath: string;
       completedEntries: number;
@@ -133,6 +139,7 @@ export type HarImportEvent =
     }
   | {
       type: "entry-skipped";
+      topOrigin?: string;
       requestUrl: string;
       method: string;
       reason: string;
@@ -151,12 +158,19 @@ export interface ImportHarFileResult {
   dir: string;
   sentinel: RootSentinel;
   topOrigin: string;
+  topOrigins: string[];
   imported: HarImportedEntry[];
   skipped: HarSkippedEntry[];
 }
 
+interface ResolvedHarEntry {
+  entry: HarEntry;
+  topOrigin: string;
+}
+
 interface PreparedHarEntry {
   entry: HarEntry;
+  topOrigin: string;
   descriptor: FixtureDescriptor;
   request: RequestPayload;
   response: {
@@ -335,23 +349,7 @@ function getHttpOrigin(candidate: unknown): string | null {
   }
 }
 
-function resolveTopOrigin(entries: HarEntry[], pages?: HarPage[], explicitTopOrigin?: string): string {
-  if (explicitTopOrigin) {
-    return normalizeSiteInput(explicitTopOrigin);
-  }
-
-  const pageOrigins = new Set<string>();
-  for (const page of pages || []) {
-    const pageOrigin = getHttpOrigin(page.title);
-    if (pageOrigin) {
-      pageOrigins.add(pageOrigin);
-    }
-  }
-
-  if (pageOrigins.size === 1) {
-    return [...pageOrigins][0];
-  }
-
+function resolveSingleTopOrigin(entries: HarEntry[]): string {
   const documentOrigins = new Set<string>();
   for (const entry of entries) {
     if (entry.request.method.toUpperCase() !== "GET") {
@@ -389,6 +387,144 @@ function resolveTopOrigin(entries: HarEntry[], pages?: HarPage[], explicitTopOri
   throw new Error(
     `Unable to infer a single top origin from the HAR. Use --top-origin with one of: ${[...requestOrigins].sort().join(", ")}`
   );
+}
+
+function resolveUngroupedEntriesTopOrigin(
+  entries: HarEntry[],
+  resolvedPageOrigins: Set<string>
+): string {
+  if (resolvedPageOrigins.size === 1) {
+    return [...resolvedPageOrigins][0];
+  }
+
+  return resolveSingleTopOrigin(entries);
+}
+
+function resolveEntryTopOrigins(entries: HarEntry[], pages?: HarPage[], explicitTopOrigin?: string): ResolvedHarEntry[] {
+  if (!entries.length) {
+    throw new Error("Unable to infer a top origin from an empty HAR entry set.");
+  }
+
+  if (explicitTopOrigin) {
+    const topOrigin = normalizeSiteInput(explicitTopOrigin);
+    return entries.map((entry) => ({ entry, topOrigin }));
+  }
+
+  const pageList = pages || [];
+  if (!pageList.length) {
+    const topOrigin = resolveSingleTopOrigin(entries);
+    return entries.map((entry) => ({ entry, topOrigin }));
+  }
+
+  const pageById = new Map<string, HarPage>();
+  for (const page of pageList) {
+    if (typeof page.id === "string" && page.id) {
+      pageById.set(page.id, page);
+    }
+  }
+
+  const entriesByPage = new Map<string, HarEntry[]>();
+  const ungroupedEntries: HarEntry[] = [];
+
+  for (const entry of entries) {
+    if (typeof entry.pageref === "string" && entry.pageref && pageById.has(entry.pageref)) {
+      const pageEntries = entriesByPage.get(entry.pageref) || [];
+      pageEntries.push(entry);
+      entriesByPage.set(entry.pageref, pageEntries);
+      continue;
+    }
+
+    ungroupedEntries.push(entry);
+  }
+
+  const resolved: ResolvedHarEntry[] = [];
+  const resolvedPageOrigins = new Set<string>();
+
+  for (const [pageId, pageEntries] of entriesByPage) {
+    const page = pageById.get(pageId);
+    const topOrigin = getHttpOrigin(page?.title) || resolveSingleTopOrigin(pageEntries);
+    resolvedPageOrigins.add(topOrigin);
+
+    for (const entry of pageEntries) {
+      resolved.push({ entry, topOrigin });
+    }
+  }
+
+  if (ungroupedEntries.length > 0) {
+    const topOrigin = resolveUngroupedEntriesTopOrigin(ungroupedEntries, resolvedPageOrigins);
+    for (const entry of ungroupedEntries) {
+      resolved.push({ entry, topOrigin });
+    }
+  }
+
+  return resolved;
+}
+
+interface PlannedWrite {
+  relativePath: string;
+  content: Buffer;
+}
+
+function createPlannedWrites(preparedEntries: PreparedHarEntry[]): PlannedWrite[] {
+  return preparedEntries.flatMap((prepared) => {
+    const requestBuffer = Buffer.from(JSON.stringify(prepared.request, null, 2), "utf8");
+    const metaBuffer = Buffer.from(JSON.stringify(prepared.response.meta, null, 2), "utf8");
+    const bodyBuffer = prepared.response.bodyEncoding === "base64"
+      ? Buffer.from(prepared.response.body, "base64")
+      : Buffer.from(prepared.response.body, "utf8");
+
+    return [
+      {
+        relativePath: prepared.descriptor.requestPath,
+        content: requestBuffer
+      },
+      {
+        relativePath: prepared.descriptor.metaPath,
+        content: metaBuffer
+      },
+      {
+        relativePath: prepared.descriptor.bodyPath,
+        content: bodyBuffer
+      }
+    ];
+  });
+}
+
+async function assertPlannedWritesAreCompatible(
+  dir: string,
+  preparedEntries: PreparedHarEntry[]
+): Promise<void> {
+  const rootFs = createFixtureRootFs(dir);
+  const plannedByPath = new Map<string, Buffer>();
+
+  for (const write of createPlannedWrites(preparedEntries)) {
+    const existingPlanned = plannedByPath.get(write.relativePath);
+    if (existingPlanned) {
+      if (!existingPlanned.equals(write.content)) {
+        throw new Error(`Cannot import HAR because multiple entries would write different content to ${write.relativePath}.`);
+      }
+      continue;
+    }
+
+    plannedByPath.set(write.relativePath, write.content);
+  }
+
+  for (const [relativePath, content] of plannedByPath) {
+    const existingStat = await rootFs.stat(relativePath);
+    if (!existingStat) {
+      continue;
+    }
+
+    if (existingStat.isDirectory()) {
+      throw new Error(`Cannot import HAR because ${relativePath} already exists as a directory.`);
+    }
+
+    const absolutePath = rootFs.resolve(relativePath)!;
+    const existingContent = await fs.readFile(absolutePath);
+    if (!existingContent.equals(content)) {
+      throw new Error(`Cannot import HAR because ${relativePath} already exists with different content.`);
+    }
+  }
 }
 
 function resolveRequestBody(entry: HarEntry): { body: string; bodyEncoding: string } | null {
@@ -441,24 +577,6 @@ function ensureWritableRoot(dir: string): Promise<RootSentinel> {
   return createRoot(dir);
 }
 
-async function assertRootOnlyContainsSentinel(dir: string): Promise<void> {
-  const rootFs = createFixtureRootFs(dir);
-  const topEntries = await rootFs.listOptionalDirectory("");
-
-  for (const entry of topEntries) {
-    if (entry.name !== ".wraithwalker") {
-      throw new Error("Target directory must be empty or contain only a fresh .wraithwalker/root.json sentinel.");
-    }
-  }
-
-  const sentinelEntries = await rootFs.listOptionalDirectory(".wraithwalker");
-  for (const entry of sentinelEntries) {
-    if (entry.name !== "root.json") {
-      throw new Error("Target directory must be empty or contain only a fresh .wraithwalker/root.json sentinel.");
-    }
-  }
-}
-
 function createResponseMetaForEntry(
   entry: HarEntry,
   bodyEncoding: "utf8" | "base64",
@@ -477,25 +595,25 @@ function createResponseMetaForEntry(
 }
 
 async function prepareHarEntries(
-  entries: HarEntry[],
-  topOrigin: string
+  resolvedEntries: ResolvedHarEntry[]
 ): Promise<{ prepared: PreparedHarEntry[]; skipped: HarSkippedEntry[] }> {
   const prepared: PreparedHarEntry[] = [];
   const skipped: HarSkippedEntry[] = [];
 
-  for (const entry of entries) {
+  for (const resolvedEntry of resolvedEntries) {
+    const { entry, topOrigin } = resolvedEntry;
     const method = entry.request.method.toUpperCase();
     let requestUrl: URL;
 
     try {
       requestUrl = new URL(entry.request.url);
     } catch {
-      skipped.push({ requestUrl: entry.request.url, method, reason: "Invalid request URL" });
+      skipped.push({ requestUrl: entry.request.url, method, reason: "Invalid request URL", topOrigin });
       continue;
     }
 
     if (!["http:", "https:"].includes(requestUrl.protocol)) {
-      skipped.push({ requestUrl: entry.request.url, method, reason: "Unsupported request protocol" });
+      skipped.push({ requestUrl: entry.request.url, method, reason: "Unsupported request protocol", topOrigin });
       continue;
     }
 
@@ -506,7 +624,8 @@ async function prepareHarEntries(
       skipped.push({
         requestUrl: entry.request.url,
         method,
-        reason: "Cannot reconstruct a stable request body for hashing"
+        reason: "Cannot reconstruct a stable request body for hashing",
+        topOrigin
       });
       continue;
     }
@@ -516,7 +635,8 @@ async function prepareHarEntries(
       skipped.push({
         requestUrl: entry.request.url,
         method,
-        reason: "Response body is missing from HAR content.text"
+        reason: "Response body is missing from HAR content.text",
+        topOrigin
       });
       continue;
     }
@@ -534,6 +654,7 @@ async function prepareHarEntries(
 
     prepared.push({
       entry,
+      topOrigin,
       descriptor,
       request: buildRequestPayload({
         topOrigin,
@@ -575,6 +696,7 @@ async function writePreparedEntries(
     if (onEvent) {
       await onEvent({
         type: "entry-start",
+        topOrigin: prepared.topOrigin,
         requestUrl: entry.request.url,
         bodyPath: descriptor.bodyPath,
         completedEntries,
@@ -590,6 +712,7 @@ async function writePreparedEntries(
       onProgress: onEvent
         ? (writtenBytes, totalBytes) => onEvent({
             type: "entry-progress",
+            topOrigin: prepared.topOrigin,
             requestUrl: entry.request.url,
             bodyPath: descriptor.bodyPath,
             completedEntries,
@@ -617,12 +740,14 @@ async function writePreparedEntries(
     imported.push({
       requestUrl: entry.request.url,
       bodyPath: descriptor.bodyPath,
-      method: descriptor.method
+      method: descriptor.method,
+      topOrigin: prepared.topOrigin
     });
 
     if (onEvent) {
       await onEvent({
         type: "entry-complete",
+        topOrigin: prepared.topOrigin,
         requestUrl: entry.request.url,
         bodyPath: descriptor.bodyPath,
         completedEntries: index + 1,
@@ -644,18 +769,20 @@ export async function importHarFile(options: ImportHarFileOptions): Promise<Impo
   const content = await fs.readFile(harPath, "utf8");
   const archive = parseHarArchive(content);
   const sortedEntries = sortEntriesByStartedDateTime(archive.log.entries);
-  const topOrigin = resolveTopOrigin(sortedEntries, archive.log.pages, options.topOrigin);
   const sentinel = await ensureWritableRoot(dir);
-  await assertRootOnlyContainsSentinel(dir);
-
-  const { prepared, skipped } = await prepareHarEntries(sortedEntries, topOrigin);
+  const resolvedEntries = resolveEntryTopOrigins(sortedEntries, archive.log.pages, options.topOrigin);
+  const topOrigins = [...new Set(resolvedEntries.map((resolved) => resolved.topOrigin))].sort();
+  const topOrigin = topOrigins[0]!;
+  const { prepared, skipped } = await prepareHarEntries(resolvedEntries);
+  await assertPlannedWritesAreCompatible(dir, prepared);
 
   if (options.onEvent) {
     await options.onEvent({
       type: "scan-complete",
       totalEntries: sortedEntries.length,
       totalCandidates: prepared.length,
-      topOrigin
+      topOrigin,
+      topOrigins
     });
 
     let skippedEntries = 0;
@@ -663,6 +790,7 @@ export async function importHarFile(options: ImportHarFileOptions): Promise<Impo
       skippedEntries += 1;
       await options.onEvent({
         type: "entry-skipped",
+        topOrigin: skippedEntry.topOrigin,
         requestUrl: skippedEntry.requestUrl,
         method: skippedEntry.method,
         reason: skippedEntry.reason,
@@ -678,6 +806,7 @@ export async function importHarFile(options: ImportHarFileOptions): Promise<Impo
     dir,
     sentinel,
     topOrigin,
+    topOrigins,
     imported,
     skipped
   };

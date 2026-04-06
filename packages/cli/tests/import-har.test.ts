@@ -86,13 +86,20 @@ describe("import-har command", () => {
         createdAt: "2026-04-06T00:00:00.000Z"
       },
       topOrigin: "https://app.example.com",
-      imported: [{ requestUrl: "https://app.example.com/", bodyPath: "app.example.com/index", method: "GET" }],
+      topOrigins: ["https://app.example.com"],
+      imported: [{
+        requestUrl: "https://app.example.com/",
+        bodyPath: "app.example.com/index",
+        method: "GET",
+        topOrigin: "https://app.example.com"
+      }],
       skipped: []
     };
 
     mocks.importHarFile.mockImplementationOnce(async (options) => {
       await options.onEvent?.({
         type: "entry-complete",
+        topOrigin: "https://app.example.com",
         requestUrl: "https://app.example.com/",
         bodyPath: "app.example.com/index",
         completedEntries: 1,
@@ -145,6 +152,7 @@ describe("import-har command", () => {
     }));
     expect(recorder.calls.progress).toEqual([{
       type: "entry-complete",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://app.example.com/",
       bodyPath: "app.example.com/index",
       completedEntries: 1,
@@ -165,9 +173,20 @@ describe("import-har command", () => {
         createdAt: "2026-04-06T00:00:00.000Z"
       },
       topOrigin: "https://app.example.com",
+      topOrigins: ["https://app.example.com"],
       imported: [
-        { requestUrl: "https://app.example.com/", bodyPath: "app.example.com/index", method: "GET" },
-        { requestUrl: "https://api.example.com/graphql", bodyPath: ".wraithwalker/simple/response.body", method: "POST" }
+        {
+          requestUrl: "https://app.example.com/",
+          bodyPath: "app.example.com/index",
+          method: "GET",
+          topOrigin: "https://app.example.com"
+        },
+        {
+          requestUrl: "https://api.example.com/graphql",
+          bodyPath: ".wraithwalker/simple/response.body",
+          method: "POST",
+          topOrigin: "https://app.example.com"
+        }
       ],
       skipped: [
         { requestUrl: "a", method: "GET", reason: "Missing body" },
@@ -203,11 +222,68 @@ describe("import-har command", () => {
         createdAt: "2026-04-06T00:00:00.000Z"
       },
       topOrigin: "https://app.example.com",
+      topOrigins: ["https://app.example.com"],
       imported: [],
       skipped: []
     });
 
     expect(recorder.calls.heading).toEqual([]);
     expect(recorder.calls.listItem).toEqual([]);
+  });
+
+  it("renders a multi-origin summary", async () => {
+    const { command } = await loadCommand();
+    const recorder = createOutputRecorder();
+
+    command.render(recorder.output as never, {
+      dir: "/repo/fixtures",
+      sentinel: {
+        schemaVersion: 1,
+        rootId: "root-123",
+        createdAt: "2026-04-06T00:00:00.000Z"
+      },
+      topOrigin: "https://admin.example.com",
+      topOrigins: [
+        "https://admin.example.com",
+        "https://app.example.com"
+      ],
+      imported: [],
+      skipped: []
+    });
+
+    expect(recorder.calls.keyValue).toEqual([
+      ["Top Origins", 2],
+      ["Imported", 0],
+      ["Skipped", 0]
+    ]);
+    expect(recorder.calls.heading).toEqual(["Origins"]);
+    expect(recorder.calls.listItem).toEqual([
+      "https://admin.example.com",
+      "https://app.example.com"
+    ]);
+  });
+
+  it("falls back to the legacy topOrigin field when topOrigins is empty", async () => {
+    const { command } = await loadCommand();
+    const recorder = createOutputRecorder();
+
+    command.render(recorder.output as never, {
+      dir: "/repo/fixtures",
+      sentinel: {
+        schemaVersion: 1,
+        rootId: "root-123",
+        createdAt: "2026-04-06T00:00:00.000Z"
+      },
+      topOrigin: "https://app.example.com",
+      topOrigins: [],
+      imported: [],
+      skipped: []
+    });
+
+    expect(recorder.calls.keyValue).toEqual([
+      ["Top Origin", "https://app.example.com"],
+      ["Imported", 0],
+      ["Skipped", 0]
+    ]);
   });
 });

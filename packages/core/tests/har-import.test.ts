@@ -138,6 +138,19 @@ describe("har import", () => {
     }))).toThrow('Invalid HAR timing "blocked" for https://app.example.com. Timings must be numbers >= -1.');
   });
 
+  it("rejects har files with no entries to import", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        entries: []
+      }
+    });
+
+    await expect(importHarFile({
+      harPath,
+      dir: await tmpdir()
+    })).rejects.toThrow("Unable to infer a top origin from an empty HAR entry set.");
+  });
+
   it("fails when the top origin is ambiguous without an explicit override", async () => {
     const harPath = await writeHarFile({
       log: {
@@ -192,8 +205,7 @@ describe("har import", () => {
               url: "https://cdn.example.com/embed.html",
               mimeType: "text/html",
               text: "<html>embed</html>"
-            }),
-            pageref: "page_1"
+            })
           }
         ]
       }
@@ -232,12 +244,33 @@ describe("har import", () => {
           }
         ],
         entries: [
-          createHarEntry({
-            startedDateTime: "2026-04-06T00:00:00.000Z",
-            url: "https://app.example.com/",
-            mimeType: "text/html",
-            text: "<html>app</html>"
-          })
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.000Z",
+              url: "https://app.example.com/",
+              mimeType: "text/html",
+              text: "<html>app</html>"
+            }),
+            pageref: "page_1"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.000Z",
+              url: "https://app.example.com/dashboard",
+              mimeType: "text/html",
+              text: "<html>dashboard</html>"
+            }),
+            pageref: "page_2"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:02.000Z",
+              url: "https://app.example.com/settings",
+              mimeType: "text/html",
+              text: "<html>settings</html>"
+            }),
+            pageref: "page_3"
+          }
         ]
       }
     });
@@ -248,7 +281,46 @@ describe("har import", () => {
     });
 
     expect(result.topOrigin).toBe("https://app.example.com");
-    expect(result.imported.map((entry) => entry.requestUrl)).toEqual(["https://app.example.com/"]);
+    expect(result.imported.map((entry) => entry.requestUrl)).toEqual([
+      "https://app.example.com/",
+      "https://app.example.com/dashboard",
+      "https://app.example.com/settings"
+    ]);
+  });
+
+  it("falls back to ungrouped entry inference when pages are present but no page origin resolves", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_1",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "Dashboard"
+          }
+        ],
+        entries: [
+          createHarEntry({
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            method: "POST",
+            url: "https://api.example.com/orders",
+            postData: {
+              mimeType: "application/json",
+              text: "{\"sku\":\"A1\"}"
+            },
+            mimeType: "application/json",
+            text: "{\"ok\":true}"
+          })
+        ]
+      }
+    });
+
+    const result = await importHarFile({
+      harPath,
+      dir: await tmpdir()
+    });
+
+    expect(result.topOrigin).toBe("https://api.example.com");
+    expect(result.topOrigins).toEqual(["https://api.example.com"]);
   });
 
   it("imports sorted fixtures into a fresh simple-mode root, reports skips, and writes manifests", async () => {
@@ -314,6 +386,7 @@ describe("har import", () => {
     });
 
     expect(result.topOrigin).toBe("https://app.example.com");
+    expect(result.topOrigins).toEqual(["https://app.example.com"]);
     expect(result.imported.map((entry) => entry.requestUrl)).toEqual([
       "https://app.example.com/",
       "https://cdn.example.com/assets/app.js?v=1",
@@ -323,12 +396,14 @@ describe("har import", () => {
       {
         requestUrl: "https://api.example.com/users/1",
         method: "PATCH",
-        reason: "Cannot reconstruct a stable request body for hashing"
+        reason: "Cannot reconstruct a stable request body for hashing",
+        topOrigin: "https://app.example.com"
       },
       {
         requestUrl: "https://cdn.example.com/assets/missing.js",
         method: "GET",
-        reason: "Response body is missing from HAR content.text"
+        reason: "Response body is missing from HAR content.text",
+        topOrigin: "https://app.example.com"
       }
     ]);
 
@@ -371,7 +446,8 @@ describe("har import", () => {
       type: "scan-complete",
       totalEntries: 5,
       totalCandidates: 3,
-      topOrigin: "https://app.example.com"
+      topOrigin: "https://app.example.com",
+      topOrigins: ["https://app.example.com"]
     });
     expect(events.filter((event) => event.type === "entry-skipped")).toHaveLength(2);
     expect(events.filter((event) => event.type === "entry-complete")).toHaveLength(3);
@@ -415,6 +491,7 @@ describe("har import", () => {
     });
 
     expect(result.topOrigin).toBe("https://app.example.com");
+    expect(result.topOrigins).toEqual(["https://app.example.com"]);
 
     const fontDescriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
@@ -468,6 +545,7 @@ describe("har import", () => {
     });
 
     expect(result.topOrigin).toBe("https://api.example.com");
+    expect(result.topOrigins).toEqual(["https://api.example.com"]);
   });
 
   it("infers mime types from headers, records resource types, and skips invalid or unsupported urls", async () => {
@@ -614,17 +692,19 @@ describe("har import", () => {
       {
         requestUrl: "not a valid url",
         method: "GET",
-        reason: "Invalid request URL"
+        reason: "Invalid request URL",
+        topOrigin: "https://app.example.com"
       },
       {
         requestUrl: "chrome-extension://abcdef/background",
         method: "GET",
-        reason: "Unsupported request protocol"
+        reason: "Unsupported request protocol",
+        topOrigin: "https://app.example.com"
       }
     ]);
   });
 
-  it("reconstructs form bodies, skips unstable post bodies, and rejects extra metadata inside the sentinel folder", async () => {
+  it("reconstructs form bodies, skips unstable post bodies, and allows additive imports into initialized roots", async () => {
     const harPath = await writeHarFile({
       log: {
         entries: [
@@ -698,12 +778,14 @@ describe("har import", () => {
       {
         requestUrl: "https://api.example.com/invalid-form",
         method: "POST",
-        reason: "Cannot reconstruct a stable request body for hashing"
+        reason: "Cannot reconstruct a stable request body for hashing",
+        topOrigin: "https://app.example.com"
       },
       {
         requestUrl: "https://api.example.com/raw",
         method: "POST",
-        reason: "Cannot reconstruct a stable request body for hashing"
+        reason: "Cannot reconstruct a stable request body for hashing",
+        topOrigin: "https://app.example.com"
       }
     ]);
 
@@ -712,38 +794,304 @@ describe("har import", () => {
     });
     await root.writeText(".wraithwalker/notes.txt", "busy");
 
-    await expect(importHarFile({
+    const additiveResult = await importHarFile({
       harPath,
       dir: root.rootPath
-    })).rejects.toThrow(
-      "Target directory must be empty or contain only a fresh .wraithwalker/root.json sentinel."
-    );
+    });
+
+    expect(additiveResult.topOrigins).toEqual(["https://app.example.com"]);
+    expect(await fs.readFile(root.resolve(".wraithwalker/notes.txt"), "utf8")).toBe("busy");
   });
 
-  it("refuses to import into a populated fixture root", async () => {
+  it("imports multiple top origins from page groups and reuses shared visible assets when content matches", async () => {
     const root = await createWraithwalkerFixtureRoot({
-      prefix: "wraithwalker-core-import-populated-"
+      prefix: "wraithwalker-core-import-multi-origin-"
     });
-    await root.writeText("cdn.example.com/app.js", "console.log('existing');");
 
     const harPath = await writeHarFile({
       log: {
+        pages: [
+          {
+            id: "page_app",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "https://app.example.com/"
+          },
+          {
+            id: "page_admin",
+            startedDateTime: "2026-04-06T00:00:01.000Z",
+            title: "https://admin.example.com/"
+          }
+        ],
         entries: [
-          createHarEntry({
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.000Z",
+              url: "https://app.example.com/",
+              mimeType: "text/html",
+              text: "<html>app</html>"
+            }),
+            pageref: "page_app"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.500Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              mimeType: "application/javascript",
+              text: "console.log('shared');"
+            }),
+            pageref: "page_app"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.000Z",
+              url: "https://admin.example.com/",
+              mimeType: "text/html",
+              text: "<html>admin</html>"
+            }),
+            pageref: "page_admin"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.500Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              mimeType: "application/javascript",
+              text: "console.log('shared');"
+            }),
+            pageref: "page_admin"
+          }
+        ]
+      }
+    });
+
+    const result = await importHarFile({
+      harPath,
+      dir: root.rootPath
+    });
+
+    expect(result.topOrigin).toBe("https://admin.example.com");
+    expect(result.topOrigins).toEqual([
+      "https://admin.example.com",
+      "https://app.example.com"
+    ]);
+    expect(result.imported).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        requestUrl: "https://app.example.com/",
+        topOrigin: "https://app.example.com"
+      }),
+      expect.objectContaining({
+        requestUrl: "https://admin.example.com/",
+        topOrigin: "https://admin.example.com"
+      })
+    ]));
+
+    const appHtmlDescriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://app.example.com/",
+      siteMode: "simple",
+      mimeType: "text/html",
+      resourceType: "Document"
+    });
+    const adminHtmlDescriptor = await createFixtureDescriptor({
+      topOrigin: "https://admin.example.com",
+      method: "GET",
+      url: "https://admin.example.com/",
+      siteMode: "simple",
+      mimeType: "text/html",
+      resourceType: "Document"
+    });
+    const sharedAppDescriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/shared.js",
+      siteMode: "simple",
+      mimeType: "application/javascript",
+      resourceType: "Script"
+    });
+    const sharedAdminDescriptor = await createFixtureDescriptor({
+      topOrigin: "https://admin.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/shared.js",
+      siteMode: "simple",
+      mimeType: "application/javascript",
+      resourceType: "Script"
+    });
+
+    expect(sharedAppDescriptor.bodyPath).toBe(sharedAdminDescriptor.bodyPath);
+    expect(await fs.readFile(path.join(root.rootPath, appHtmlDescriptor.bodyPath), "utf8")).toBe("<html>app</html>");
+    expect(await fs.readFile(path.join(root.rootPath, adminHtmlDescriptor.bodyPath), "utf8")).toBe("<html>admin</html>");
+    expect(await fs.readFile(path.join(root.rootPath, sharedAppDescriptor.bodyPath), "utf8")).toBe("console.log('shared');");
+    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://app.example.com"');
+    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/simple/https__admin.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://admin.example.com"');
+  });
+
+  it("allows additive imports for different top origins in the same root", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-import-additive-"
+    });
+
+    const appHarPath = await writeHarFile({
+      log: {
+        pages: [{
+          id: "page_app",
+          startedDateTime: "2026-04-06T00:00:00.000Z",
+          title: "https://app.example.com/"
+        }],
+        entries: [{
+          ...createHarEntry({
             startedDateTime: "2026-04-06T00:00:00.000Z",
             url: "https://app.example.com/",
             mimeType: "text/html",
-            text: "<html>home</html>"
-          })
+            text: "<html>app</html>"
+          }),
+          pageref: "page_app"
+        }]
+      }
+    });
+    const adminHarPath = await writeHarFile({
+      log: {
+        pages: [{
+          id: "page_admin",
+          startedDateTime: "2026-04-06T00:00:01.000Z",
+          title: "https://admin.example.com/"
+        }],
+        entries: [{
+          ...createHarEntry({
+            startedDateTime: "2026-04-06T00:00:01.000Z",
+            url: "https://admin.example.com/",
+            mimeType: "text/html",
+            text: "<html>admin</html>"
+          }),
+          pageref: "page_admin"
+        }]
+      }
+    });
+
+    await importHarFile({
+      harPath: appHarPath,
+      dir: root.rootPath
+    });
+    const result = await importHarFile({
+      harPath: adminHarPath,
+      dir: root.rootPath
+    });
+
+    expect(result.topOrigins).toEqual(["https://admin.example.com"]);
+    expect(await root.readJson(".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json")).toEqual(
+      expect.objectContaining({ topOrigin: "https://app.example.com" })
+    );
+    expect(await root.readJson(".wraithwalker/simple/https__admin.example.com/RESOURCE_MANIFEST.json")).toEqual(
+      expect.objectContaining({ topOrigin: "https://admin.example.com" })
+    );
+  });
+
+  it("rejects conflicting writes within a single multi-origin import and across existing files", async () => {
+    const sameRunConflictHarPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_app",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "https://app.example.com/"
+          },
+          {
+            id: "page_admin",
+            startedDateTime: "2026-04-06T00:00:01.000Z",
+            title: "https://admin.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.500Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              mimeType: "application/javascript",
+              text: "console.log('app');"
+            }),
+            pageref: "page_app"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.500Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              mimeType: "application/javascript",
+              text: "console.log('admin');"
+            }),
+            pageref: "page_admin"
+          }
         ]
       }
     });
 
     await expect(importHarFile({
-      harPath,
+      harPath: sameRunConflictHarPath,
+      dir: await tmpdir()
+    })).rejects.toThrow(
+      "Cannot import HAR because multiple entries would write different content to cdn.example.com/assets/shared.js."
+    );
+
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-import-conflict-"
+    });
+    const firstHarPath = await writeHarFile({
+      log: {
+        pages: [{
+          id: "page_app",
+          startedDateTime: "2026-04-06T00:00:00.000Z",
+          title: "https://app.example.com/"
+        }],
+        entries: [{
+          ...createHarEntry({
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            url: "https://cdn.example.com/assets/shared.js",
+            mimeType: "application/javascript",
+            text: "console.log('first');"
+          }),
+          pageref: "page_app"
+        }]
+      }
+    });
+    const secondHarPath = await writeHarFile({
+      log: {
+        pages: [{
+          id: "page_admin",
+          startedDateTime: "2026-04-06T00:00:01.000Z",
+          title: "https://admin.example.com/"
+        }],
+        entries: [{
+          ...createHarEntry({
+            startedDateTime: "2026-04-06T00:00:01.000Z",
+            url: "https://cdn.example.com/assets/shared.js",
+            mimeType: "application/javascript",
+            text: "console.log('second');"
+          }),
+          pageref: "page_admin"
+        }]
+      }
+    });
+
+    await importHarFile({
+      harPath: firstHarPath,
+      dir: root.rootPath
+    });
+
+    await expect(importHarFile({
+      harPath: secondHarPath,
       dir: root.rootPath
     })).rejects.toThrow(
-      "Target directory must be empty or contain only a fresh .wraithwalker/root.json sentinel."
+      "Cannot import HAR because cdn.example.com/assets/shared.js already exists with different content."
+    );
+
+    const directoryConflictRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-import-directory-conflict-"
+    });
+    await fs.mkdir(path.join(directoryConflictRoot.rootPath, "cdn.example.com/assets/shared.js"), { recursive: true });
+
+    await expect(importHarFile({
+      harPath: firstHarPath,
+      dir: directoryConflictRoot.rootPath
+    })).rejects.toThrow(
+      "Cannot import HAR because cdn.example.com/assets/shared.js already exists as a directory."
     );
   });
 });

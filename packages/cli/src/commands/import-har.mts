@@ -64,8 +64,18 @@ export const command: CommandSpec<ImportHarArgs, ImportHarFileResult> = {
     });
   },
   render(output, result) {
+    const topOrigins = result.topOrigins.length > 0 ? result.topOrigins : [result.topOrigin];
+
     output.success(`Imported HAR into ${result.dir}`);
-    output.keyValue("Top Origin", result.topOrigin);
+    if (topOrigins.length === 1) {
+      output.keyValue("Top Origin", topOrigins[0]);
+    } else {
+      output.keyValue("Top Origins", topOrigins.length);
+      output.heading("Origins");
+      for (const topOrigin of topOrigins) {
+        output.listItem(topOrigin);
+      }
+    }
     output.keyValue("Imported", result.imported.length);
     output.keyValue("Skipped", result.skipped.length);
 

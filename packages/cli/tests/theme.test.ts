@@ -62,6 +62,7 @@ describe("theme output", () => {
     output.usage("Usage text");
     output.renderImportProgress({
       type: "entry-start",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://cdn.example.com/static/chunks/some-very-long-file-name-that-needs-truncation.js",
       bodyPath: "cdn.example.com/app.js",
       completedEntries: 1,
@@ -71,6 +72,7 @@ describe("theme output", () => {
     });
     output.renderImportProgress({
       type: "entry-progress",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://cdn.example.com/static/chunks/some-very-long-file-name-that-needs-truncation.js",
       bodyPath: "cdn.example.com/app.js",
       completedEntries: 1,
@@ -80,6 +82,7 @@ describe("theme output", () => {
     });
     output.renderImportProgress({
       type: "entry-progress",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://cdn.example.com/app.js",
       bodyPath: "cdn.example.com/app.js",
       completedEntries: 1,
@@ -89,6 +92,7 @@ describe("theme output", () => {
     });
     output.renderImportProgress({
       type: "entry-complete",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://cdn.example.com/app.js",
       bodyPath: "cdn.example.com/app.js",
       completedEntries: 1,
@@ -96,6 +100,7 @@ describe("theme output", () => {
     });
     output.renderImportProgress({
       type: "entry-skipped",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://api.example.com/users",
       method: "PATCH",
       reason: "Missing body",
@@ -104,6 +109,7 @@ describe("theme output", () => {
     });
     nonInteractiveOutput.renderImportProgress({
       type: "entry-complete",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://cdn.example.com/app.js",
       bodyPath: "cdn.example.com/app.js",
       completedEntries: 1,
@@ -111,6 +117,7 @@ describe("theme output", () => {
     });
     nonInteractiveOutput.renderImportProgress({
       type: "entry-skipped",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://api.example.com/users",
       method: "PATCH",
       reason: "Missing body",
@@ -121,7 +128,8 @@ describe("theme output", () => {
       type: "scan-complete",
       totalEntries: 2,
       totalCandidates: 2,
-      topOrigin: "https://app.example.com"
+      topOrigin: "https://app.example.com",
+      topOrigins: ["https://app.example.com"]
     });
     output.banner();
 
@@ -155,6 +163,7 @@ describe("theme output", () => {
     output.usage("Usage text");
     output.renderImportProgress({
       type: "entry-complete",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://cdn.example.com/app.js",
       bodyPath: "cdn.example.com/app.js",
       completedEntries: 1,
@@ -162,6 +171,7 @@ describe("theme output", () => {
     });
     output.renderImportProgress({
       type: "entry-skipped",
+      topOrigin: "https://app.example.com",
       requestUrl: "https://api.example.com/users",
       method: "PATCH",
       reason: "Missing body",
