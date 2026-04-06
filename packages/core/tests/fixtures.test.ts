@@ -339,6 +339,9 @@ describe("fixture readers", () => {
         }
       }
     });
+    await root.writeText("cdn.example.com/assets/app.css", "");
+    await root.writeText("cdn.example.com/assets/app.js", "console.log('ready');");
+    await root.writeText("cdn.example.com/panel.js", "export const panel = true;");
 
     const firstPage = await listAssets(root.rootPath, {
       origin: "https://app.example.com",
@@ -378,7 +381,9 @@ describe("fixture readers", () => {
     expect(filtered.items).toEqual([
       expect.objectContaining({
         pathname: "/assets/app.js",
-        requestOrigin: "https://cdn.example.com"
+        requestOrigin: "https://cdn.example.com",
+        hasBody: true,
+        bodySize: Buffer.byteLength("console.log('ready');", "utf8")
       })
     ]);
 
@@ -389,7 +394,28 @@ describe("fixture readers", () => {
     expect(advanced.items).toEqual([
       expect.objectContaining({
         pathname: "/panel.js",
-        bodyPath: "cdn.example.com/panel.js"
+        bodyPath: "cdn.example.com/panel.js",
+        hasBody: true,
+        bodySize: Buffer.byteLength("export const panel = true;", "utf8")
+      })
+    ]);
+    expect(firstPage.items).toEqual([
+      expect.objectContaining({
+        pathname: "/assets/app.css",
+        hasBody: true,
+        bodySize: 0
+      }),
+      expect.objectContaining({
+        pathname: "/assets/app.js",
+        hasBody: true,
+        bodySize: Buffer.byteLength("console.log('ready');", "utf8")
+      })
+    ]);
+    expect(secondPage.items).toEqual([
+      expect.objectContaining({
+        pathname: "/images/logo.svg",
+        hasBody: false,
+        bodySize: null
       })
     ]);
   });
@@ -452,6 +478,7 @@ describe("fixture readers", () => {
       query: "dropdown"
     });
     expect(matches.items.map((item) => item.sourceKind)).toEqual(["endpoint", "asset", "file"]);
+    expect(matches.items.map((item) => item.matchKind)).toEqual(["body", "body", "body"]);
     expect(matches.items.map((item) => item.path)).toEqual([
       ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/menu__q-abc__b-def/response.body",
       "cdn.example.com/assets/app.js",
@@ -514,6 +541,107 @@ describe("fixture readers", () => {
       query: "metadata only"
     });
     expect(metadataOnly.items).toEqual([]);
+  });
+
+  it("falls back to matching asset and endpoint paths when body text is missing or does not match", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-06T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/hierarchy.chunk.js": [{
+            requestUrl: "https://cdn.example.com/assets/hierarchy.chunk.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/hierarchy.chunk.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }],
+          "/assets/hierarchy-shell.js": [{
+            requestUrl: "https://cdn.example.com/assets/hierarchy-shell.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/hierarchy-shell.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/hierarchy-shell.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy-shell.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy-shell.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }],
+          "/assets/tree-view.js": [{
+            requestUrl: "https://cdn.example.com/assets/tree-view.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/tree-view.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/tree-view.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/tree-view.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/tree-view.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }]
+        }
+      }
+    });
+    await root.writeText("cdn.example.com/assets/hierarchy-shell.js", "console.log('ready');");
+    await root.writeText("cdn.example.com/assets/tree-view.js", "console.log('ready');");
+    await root.writeApiFixture({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "hierarchy__q-abc__b-def",
+      meta: {
+        status: 200,
+        statusText: "OK",
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/hierarchy",
+        method: "GET",
+        capturedAt: "2026-04-06T00:00:00.000Z"
+      }
+    });
+
+    const matches = await searchFixtureContent(root.rootPath, {
+      query: "hierarchy"
+    });
+
+    expect(matches.items).toEqual([
+      expect.objectContaining({
+        path: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/hierarchy__q-abc__b-def/response.body",
+        sourceKind: "endpoint",
+        matchKind: "path",
+        pathname: "/hierarchy",
+        excerpt: "Matched path: /hierarchy"
+      }),
+      expect.objectContaining({
+        path: "cdn.example.com/assets/hierarchy-shell.js",
+        sourceKind: "asset",
+        matchKind: "path",
+        pathname: "/assets/hierarchy-shell.js",
+        excerpt: "Matched path: /assets/hierarchy-shell.js"
+      }),
+      expect.objectContaining({
+        path: "cdn.example.com/assets/hierarchy.chunk.js",
+        sourceKind: "asset",
+        matchKind: "path",
+        pathname: "/assets/hierarchy.chunk.js",
+        excerpt: "Matched path: /assets/hierarchy.chunk.js"
+      })
+    ]);
   });
 
   it("reads bounded fixture snippets and rejects invalid, missing, and binary files", async () => {

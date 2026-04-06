@@ -61,6 +61,11 @@ export interface AssetListOptions {
   cursor?: string;
 }
 
+export interface AssetInfo extends StaticResourceManifestEntry {
+  hasBody: boolean;
+  bodySize: number | null;
+}
+
 export interface PaginatedResult<T> {
   items: T[];
   nextCursor: string | null;
@@ -80,6 +85,7 @@ export interface SearchContentOptions {
 export interface SearchContentMatch {
   path: string;
   sourceKind: "asset" | "endpoint" | "file";
+  matchKind: "body" | "path";
   origin: string | null;
   pathname: string | null;
   mimeType: string | null;
@@ -306,7 +312,7 @@ function createExcerpt(text: string, matchIndex: number, queryLength: number): s
 function findSubstringMatch(
   text: string,
   query: string
-): Omit<SearchContentMatch, "path" | "sourceKind" | "origin" | "pathname" | "mimeType" | "resourceType"> | null {
+): Omit<SearchContentMatch, "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType"> | null {
   const matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
   if (matchIndex === -1) {
     return null;
@@ -322,6 +328,29 @@ function findSubstringMatch(
     matchLine: line,
     matchColumn: column
   };
+}
+
+function findPathMatch(
+  entry: SearchableFixtureEntry,
+  query: string
+): Omit<SearchContentMatch, "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType"> | null {
+  const candidates = [entry.pathname, entry.path]
+    .filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const match = findSubstringMatch(candidate, query);
+    if (!match) {
+      continue;
+    }
+
+    return {
+      excerpt: `Matched path: ${candidate}`,
+      matchLine: 1,
+      matchColumn: match.matchColumn
+    };
+  }
+
+  return null;
 }
 
 function truncateUtf8(text: string, maxBytes: number): { text: string; truncated: boolean } {
@@ -556,11 +585,12 @@ export async function listAssets(
   rootPath: string,
   siteConfig: SiteConfigLike,
   options: AssetListOptions = {}
-): Promise<PaginatedResult<StaticResourceManifestEntry>> {
+): Promise<PaginatedResult<AssetInfo>> {
   const info = await readOriginInfo(rootPath, siteConfig);
+  const rootFs = createFixtureRootFs(rootPath);
   const normalizedPathnameContains = options.pathnameContains?.toLowerCase();
 
-  const items = flattenStaticResourceManifest(info.manifest).filter((entry) => {
+  const filteredItems = flattenStaticResourceManifest(info.manifest).filter((entry) => {
     if (options.resourceTypes?.length && !options.resourceTypes.includes(entry.resourceType)) {
       return false;
     }
@@ -576,6 +606,17 @@ export async function listAssets(
 
     return true;
   });
+
+  const items = await Promise.all(filteredItems.map(async (entry) => {
+    const stat = await rootFs.stat(entry.bodyPath);
+    const hasBody = Boolean(stat?.isFile());
+
+    return {
+      ...entry,
+      hasBody,
+      bodySize: hasBody ? stat!.size : null
+    };
+  }));
 
   return paginateItems(items, normalizeLimit(options.limit, DEFAULT_ASSET_LIMIT, MAX_ASSET_LIMIT), options.cursor);
 }
@@ -717,25 +758,41 @@ export async function searchFixtureContent(
 
   for (const entry of searchableEntries) {
     const result = await readTextFixture(rootPath, entry.path);
-    if (!result.ok) {
-      continue;
+    if (result.ok) {
+      const match = findSubstringMatch(result.text, query);
+      if (match) {
+        matches.push({
+          path: entry.path,
+          sourceKind: entry.sourceKind,
+          matchKind: "body",
+          origin: entry.origin,
+          pathname: entry.pathname,
+          mimeType: entry.mimeType,
+          resourceType: entry.resourceType,
+          excerpt: match.excerpt,
+          matchLine: match.matchLine,
+          matchColumn: match.matchColumn
+        });
+        continue;
+      }
     }
 
-    const match = findSubstringMatch(result.text, query);
-    if (!match) {
+    const pathMatch = findPathMatch(entry, query);
+    if (!pathMatch) {
       continue;
     }
 
     matches.push({
       path: entry.path,
       sourceKind: entry.sourceKind,
+      matchKind: "path",
       origin: entry.origin,
       pathname: entry.pathname,
       mimeType: entry.mimeType,
       resourceType: entry.resourceType,
-      excerpt: match.excerpt,
-      matchLine: match.matchLine,
-      matchColumn: match.matchColumn
+      excerpt: pathMatch.excerpt,
+      matchLine: pathMatch.matchLine,
+      matchColumn: pathMatch.matchColumn
     });
   }
 

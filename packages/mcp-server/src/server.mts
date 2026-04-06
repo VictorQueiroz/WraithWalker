@@ -98,12 +98,19 @@ function registerTools(server: McpServer, rootPath: string): void {
   server.tool(
     "list-origins",
     "List all captured origins and their fixture summary",
-    {},
-    async () => {
+    {
+      search: z.string().trim().min(1).optional().describe("Optional case-insensitive origin substring filter")
+    },
+    async ({ search }) => {
       const configs = await readSiteConfigs(rootPath);
+      const normalizedSearch = search?.toLowerCase();
       const origins = [];
 
       for (const config of configs) {
+        if (normalizedSearch && !config.origin.toLowerCase().includes(normalizedSearch)) {
+          continue;
+        }
+
         const info = await readOriginInfo(rootPath, config);
         origins.push({
           origin: info.origin,
@@ -120,7 +127,7 @@ function registerTools(server: McpServer, rootPath: string): void {
 
   server.tool(
     "list-assets",
-    "List captured static assets for an origin with optional filters and pagination",
+    "List captured static assets for an origin with optional filters, pagination, and body availability",
     {
       origin: z.string().describe("The origin to list assets for (e.g., https://app.example.com)"),
       resourceTypes: optionalStringArraySchema.describe("Optional static resource types to include"),
@@ -183,7 +190,7 @@ function registerTools(server: McpServer, rootPath: string): void {
 
   server.tool(
     "search-content",
-    "Search live fixture content across assets, endpoint bodies, and text-like files",
+    "Search live fixture content across assets, endpoint bodies, and text-like files, with path fallback when body text is unavailable or misses",
     {
       query: z.string().trim().min(1).describe("Case-insensitive substring query to search for"),
       origin: z.string().optional().describe("Optional origin filter"),

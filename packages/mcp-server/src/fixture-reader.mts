@@ -11,6 +11,7 @@ export {
   searchFixtureContent,
   type ApiFixture,
   type ApiEndpoint,
+  type AssetInfo,
   type AssetListOptions,
   type FixtureSnippet,
   type FixtureSnippetOptions,

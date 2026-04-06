@@ -252,6 +252,8 @@ describe("mcp server", () => {
           pathname: string;
           mimeType: string;
           bodyPath: string;
+          hasBody: boolean;
+          bodySize: number | null;
         }>;
         totalMatched: number;
         nextCursor: string | null;
@@ -261,7 +263,9 @@ describe("mcp server", () => {
           expect.objectContaining({
             pathname: "/app.js",
             mimeType: "application/javascript",
-            bodyPath: "cdn.example.com/assets/app.js"
+            bodyPath: "cdn.example.com/assets/app.js",
+            hasBody: true,
+            bodySize: Buffer.byteLength("renderDropdown({ animated: true });", "utf8")
           })
         ],
         totalMatched: 1,
@@ -331,6 +335,7 @@ describe("mcp server", () => {
         items: Array<{
           path: string;
           sourceKind: string;
+          matchKind: string;
         }>;
         totalMatched: number;
       };
@@ -340,6 +345,12 @@ describe("mcp server", () => {
         "asset",
         "asset",
         "file"
+      ]);
+      expect(searchMatches.items.map((item) => item.matchKind)).toEqual([
+        "body",
+        "body",
+        "body",
+        "body"
       ]);
 
       const snippetResult = await client.callTool({
@@ -554,6 +565,97 @@ describe("mcp server", () => {
       expect(invalidScenarioResult.isError).toBe(true);
       expect(readTextContent(invalidScenarioResult)).toContain("Scenario name must be 1-64 alphanumeric");
       expect(readTextContent(invalidScenarioResult)).not.toContain("Available scenarios:");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("filters origins, surfaces asset body availability, and falls back to path matches", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    await root.writeManifest({
+      mode: "simple",
+      topOrigin: "https://app.example.com",
+      manifest: {
+        schemaVersion: 1,
+        topOrigin: "https://app.example.com",
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-06T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/hierarchy.chunk.js": [{
+            requestUrl: "https://cdn.example.com/assets/hierarchy.chunk.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/hierarchy.chunk.js",
+            search: "",
+            bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
+            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
+            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-06T00:00:00.000Z"
+          }]
+        }
+      }
+    });
+    await root.ensureOrigin({ mode: "simple", topOrigin: "https://admin.example.com" });
+
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const filteredOriginsResult = await client.callTool({
+        name: "list-origins",
+        arguments: { search: "ADMIN" }
+      });
+      const filteredOrigins = JSON.parse(readTextContent(filteredOriginsResult)) as Array<{ origin: string }>;
+      expect(filteredOrigins).toEqual([
+        expect.objectContaining({
+          origin: "https://admin.example.com"
+        })
+      ]);
+
+      const assetsResult = await client.callTool({
+        name: "list-assets",
+        arguments: { origin: "https://app.example.com" }
+      });
+      const assets = JSON.parse(readTextContent(assetsResult)) as {
+        items: Array<{
+          pathname: string;
+          hasBody: boolean;
+          bodySize: number | null;
+        }>;
+      };
+      expect(assets.items).toEqual([
+        expect.objectContaining({
+          pathname: "/assets/hierarchy.chunk.js",
+          hasBody: false,
+          bodySize: null
+        })
+      ]);
+
+      const searchResult = await client.callTool({
+        name: "search-content",
+        arguments: {
+          query: "hierarchy",
+          resourceTypes: ["Script"]
+        }
+      });
+      const searchMatches = JSON.parse(readTextContent(searchResult)) as {
+        items: Array<{
+          path: string;
+          matchKind: string;
+          excerpt: string;
+        }>;
+      };
+      expect(searchMatches.items).toEqual([
+        expect.objectContaining({
+          path: "cdn.example.com/assets/hierarchy.chunk.js",
+          matchKind: "path",
+          excerpt: "Matched path: /assets/hierarchy.chunk.js"
+        })
+      ]);
     } finally {
       await client.close();
       await server.close();
