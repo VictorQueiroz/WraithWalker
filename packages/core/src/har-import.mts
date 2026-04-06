@@ -55,28 +55,35 @@ interface HarResponse {
 }
 
 interface HarTimings {
-  blocked?: number;
-  connect?: number;
-  dns?: number;
-  receive?: number;
-  send?: number;
-  wait?: number;
-  ssl?: number;
+  blocked?: number | string;
+  connect?: number | string;
+  dns?: number | string;
+  receive?: number | string;
+  send?: number | string;
+  wait?: number | string;
+  ssl?: number | string;
+}
+
+interface HarPage {
+  id?: string;
+  startedDateTime?: string;
+  title?: string;
 }
 
 interface HarEntry {
   startedDateTime: string;
-  time?: number;
+  time?: number | string;
   request: HarRequest;
   response: HarResponse;
   timings?: HarTimings;
+  pageref?: string;
 }
 
 interface HarArchive {
   log: {
     version?: string;
     entries: HarEntry[];
-    pages?: Array<{ id?: string; startedDateTime?: string }>;
+    pages?: HarPage[];
   };
 }
 
@@ -315,9 +322,34 @@ function sortEntriesByStartedDateTime(entries: HarEntry[]): HarEntry[] {
   ));
 }
 
-function resolveTopOrigin(entries: HarEntry[], explicitTopOrigin?: string): string {
+function getHttpOrigin(candidate: unknown): string | null {
+  if (typeof candidate !== "string" || !candidate.trim()) {
+    return null;
+  }
+
+  try {
+    const url = new URL(candidate);
+    return ["http:", "https:"].includes(url.protocol) ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveTopOrigin(entries: HarEntry[], pages?: HarPage[], explicitTopOrigin?: string): string {
   if (explicitTopOrigin) {
     return normalizeSiteInput(explicitTopOrigin);
+  }
+
+  const pageOrigins = new Set<string>();
+  for (const page of pages || []) {
+    const pageOrigin = getHttpOrigin(page.title);
+    if (pageOrigin) {
+      pageOrigins.add(pageOrigin);
+    }
+  }
+
+  if (pageOrigins.size === 1) {
+    return [...pageOrigins][0];
   }
 
   const documentOrigins = new Set<string>();
@@ -612,7 +644,7 @@ export async function importHarFile(options: ImportHarFileOptions): Promise<Impo
   const content = await fs.readFile(harPath, "utf8");
   const archive = parseHarArchive(content);
   const sortedEntries = sortEntriesByStartedDateTime(archive.log.entries);
-  const topOrigin = resolveTopOrigin(sortedEntries, options.topOrigin);
+  const topOrigin = resolveTopOrigin(sortedEntries, archive.log.pages, options.topOrigin);
   const sentinel = await ensureWritableRoot(dir);
   await assertRootOnlyContainsSentinel(dir);
 

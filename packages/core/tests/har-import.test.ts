@@ -166,6 +166,91 @@ describe("har import", () => {
     );
   });
 
+  it("infers the top origin from a single page title url when document origins are ambiguous", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_1",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.000Z",
+              url: "https://app.example.com/",
+              mimeType: "text/html",
+              text: "<html>app</html>"
+            }),
+            pageref: "page_1"
+          },
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.000Z",
+              url: "https://cdn.example.com/embed.html",
+              mimeType: "text/html",
+              text: "<html>embed</html>"
+            }),
+            pageref: "page_1"
+          }
+        ]
+      }
+    });
+
+    const result = await importHarFile({
+      harPath,
+      dir: await tmpdir()
+    });
+
+    expect(result.topOrigin).toBe("https://app.example.com");
+    expect(result.imported.map((entry) => entry.requestUrl)).toEqual([
+      "https://app.example.com/",
+      "https://cdn.example.com/embed.html"
+    ]);
+  });
+
+  it("ignores blank and invalid page titles when inferring the top origin", async () => {
+    const harPath = await writeHarFile({
+      log: {
+        pages: [
+          {
+            id: "page_1",
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            title: ""
+          },
+          {
+            id: "page_2",
+            startedDateTime: "2026-04-06T00:00:01.000Z",
+            title: "not a url"
+          },
+          {
+            id: "page_3",
+            startedDateTime: "2026-04-06T00:00:02.000Z",
+            title: "file:///tmp/index.html"
+          }
+        ],
+        entries: [
+          createHarEntry({
+            startedDateTime: "2026-04-06T00:00:00.000Z",
+            url: "https://app.example.com/",
+            mimeType: "text/html",
+            text: "<html>app</html>"
+          })
+        ]
+      }
+    });
+
+    const result = await importHarFile({
+      harPath,
+      dir: await tmpdir()
+    });
+
+    expect(result.topOrigin).toBe("https://app.example.com");
+    expect(result.imported.map((entry) => entry.requestUrl)).toEqual(["https://app.example.com/"]);
+  });
+
   it("imports sorted fixtures into a fresh simple-mode root, reports skips, and writes manifests", async () => {
     const harPath = await writeHarFile({
       log: {
