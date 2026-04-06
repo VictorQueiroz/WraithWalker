@@ -1,5 +1,6 @@
 import { promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
+import ignore from "ignore";
 
 import {
   SIMPLE_MODE_METADATA_DIR,
@@ -53,6 +54,11 @@ interface OverrideAssetCandidate {
   capturedAt: string;
   bodyEncoding: "utf8" | "base64";
   bodySize: number;
+}
+
+interface IgnoreContext {
+  baseDir: string;
+  matcher: ReturnType<typeof ignore>;
 }
 
 function joinRelativePath(...parts: string[]): string {
@@ -224,6 +230,70 @@ function applyHeaderOverrides(
   return headers;
 }
 
+function normalizeIgnorePath(relativePath: string, isDirectory = false): string {
+  const normalized = relativePath
+    .split(path.sep)
+    .join("/")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+
+  if (!normalized) {
+    return "";
+  }
+
+  return isDirectory
+    ? `${normalized}/`
+    : normalized;
+}
+
+function relativeIgnorePath(baseDir: string, relativePath: string, isDirectory: boolean): string {
+  const normalizedBaseDir = normalizeIgnorePath(baseDir);
+  const normalizedRelativePath = normalizeIgnorePath(relativePath);
+  const candidate = normalizedBaseDir
+    ? path.posix.relative(normalizedBaseDir, normalizedRelativePath)
+    : normalizedRelativePath;
+
+  return isDirectory
+    ? normalizeIgnorePath(candidate, true)
+    : normalizeIgnorePath(candidate);
+}
+
+function isIgnoredByContexts(
+  relativePath: string,
+  isDirectory: boolean,
+  contexts: IgnoreContext[]
+): boolean {
+  let ignored = false;
+
+  for (const context of contexts) {
+    const candidate = relativeIgnorePath(context.baseDir, relativePath, isDirectory);
+    const result = context.matcher.test(candidate);
+    if (result.ignored) {
+      ignored = true;
+      continue;
+    }
+
+    if (result.unignored) {
+      ignored = false;
+    }
+  }
+
+  return ignored;
+}
+
+async function ensureExistingOverrideDirectory(dir: string): Promise<void> {
+  let directoryStat;
+  try {
+    directoryStat = await fs.stat(dir);
+  } catch {
+    throw new Error(`Overrides directory not found: ${dir}`);
+  }
+
+  if (!directoryStat.isDirectory()) {
+    throw new Error(`Overrides path is not a directory: ${dir}`);
+  }
+}
+
 async function walkOverrideDirectory(
   dir: string
 ): Promise<{ visibleFiles: string[]; rules: HeaderOverrideRule[]; skipped: HarSkippedEntry[] }> {
@@ -232,20 +302,38 @@ async function walkOverrideDirectory(
   const skipped: HarSkippedEntry[] = [];
   let nextRuleOrder = 0;
 
-  async function visit(relativeDir = ""): Promise<void> {
+  async function visit(relativeDir = "", inheritedContexts: IgnoreContext[] = []): Promise<void> {
     const absoluteDir = path.resolve(dir, relativeDir);
     const entries: Dirent[] = await fs.readdir(absoluteDir, { withFileTypes: true });
+    const contexts = [...inheritedContexts];
+    const gitignoreEntry = entries.find((entry) => entry.isFile() && entry.name === ".gitignore");
+
+    if (gitignoreEntry) {
+      const gitignoreContent = await fs.readFile(path.resolve(absoluteDir, gitignoreEntry.name), "utf8");
+      contexts.push({
+        baseDir: relativeDir,
+        matcher: ignore().add(gitignoreContent)
+      });
+    }
 
     for (const entry of [...entries].sort((left, right) => left.name.localeCompare(right.name))) {
       const relativePath = relativeDir
         ? joinRelativePath(relativeDir, entry.name)
         : entry.name;
 
+      if (entry.name === ".gitignore") {
+        continue;
+      }
+
+      if (isIgnoredByContexts(relativePath, entry.isDirectory(), contexts)) {
+        continue;
+      }
+
       if (entry.isDirectory()) {
         if (entry.name === SIMPLE_MODE_METADATA_DIR) {
           continue;
         }
-        await visit(relativePath);
+        await visit(relativePath, contexts);
         continue;
       }
 
@@ -384,7 +472,7 @@ export async function syncOverridesDirectory(
   options: SyncOverridesDirectoryOptions
 ): Promise<SyncOverridesDirectoryResult> {
   const dir = path.resolve(options.dir);
-  await fs.mkdir(dir, { recursive: true });
+  await ensureExistingOverrideDirectory(dir);
   const sentinel = await createRoot(dir);
   const rootFs = createFixtureRootFs(dir);
   const { visibleFiles, rules, skipped: scanSkipped } = await walkOverrideDirectory(dir);

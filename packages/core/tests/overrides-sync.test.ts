@@ -262,4 +262,66 @@ describe("syncOverridesDirectory", () => {
       JSON.parse = originalParse;
     }
   });
+
+  it("respects root and nested .gitignore rules during sync", async () => {
+    const dir = await tmpdir();
+
+    await writeFile(dir, ".gitignore", [
+      "ignored.example.com/",
+      "app.example.com/scripts/*.skip.js",
+      "!app.example.com/scripts/keep.skip.js"
+    ].join("\n"));
+    await writeFile(dir, "ignored.example.com/.headers", "{oops");
+    await writeFile(dir, "ignored.example.com/index.html", "<html>ignored</html>");
+    await writeFile(dir, "app.example.com/index.html", "<!doctype html>");
+    await writeFile(dir, "app.example.com/scripts/keep.skip.js", "console.log('keep');");
+    await writeFile(dir, "app.example.com/scripts/drop.skip.js", "console.log('drop');");
+    await writeFile(dir, "app.example.com/styles/.gitignore", [
+      "*.css",
+      "!keep.css"
+    ].join("\n"));
+    await writeFile(dir, "app.example.com/styles/keep.css", "body{color:red}");
+    await writeFile(dir, "app.example.com/styles/drop.css", "body{color:blue}");
+
+    const result = await syncOverridesDirectory({ dir });
+
+    expect(result.topOrigins).toEqual([
+      "http://app.example.com",
+      "https://app.example.com"
+    ]);
+    expect(result.imported).toHaveLength(6);
+    expect(result.imported.map((entry) => entry.bodyPath)).toEqual([
+      "app.example.com/index.html",
+      "app.example.com/index.html",
+      "app.example.com/scripts/keep.skip.js",
+      "app.example.com/scripts/keep.skip.js",
+      "app.example.com/styles/keep.css",
+      "app.example.com/styles/keep.css"
+    ]);
+    expect(result.skipped).toEqual([]);
+
+    const manifest = await readJson<{
+      resourcesByPathname: Record<string, Array<{ bodyPath: string }>>;
+    }>(dir, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json");
+    expect(Object.values(manifest.resourcesByPathname).flat().map((entry) => entry.bodyPath)).toEqual([
+      "app.example.com/index.html",
+      "app.example.com/scripts/keep.skip.js",
+      "app.example.com/styles/keep.css"
+    ]);
+
+    await expect(fs.access(path.join(dir, ".wraithwalker/simple/https__ignored.example.com/RESOURCE_MANIFEST.json"))).rejects.toThrow();
+  });
+
+  it("throws when the overrides path does not exist or is not a directory", async () => {
+    const missingDir = path.join(await tmpdir(), "missing-overrides");
+    await expect(syncOverridesDirectory({ dir: missingDir })).rejects.toThrow(
+      `Overrides directory not found: ${path.resolve(missingDir)}`
+    );
+
+    const filePath = path.join(await tmpdir(), "not-a-directory.txt");
+    await fs.writeFile(filePath, "hello", "utf8");
+    await expect(syncOverridesDirectory({ dir: filePath })).rejects.toThrow(
+      `Overrides path is not a directory: ${path.resolve(filePath)}`
+    );
+  });
 });
