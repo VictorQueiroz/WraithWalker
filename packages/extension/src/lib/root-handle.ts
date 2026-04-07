@@ -1,4 +1,5 @@
 import {
+  ROOT_DIRECTORY_PICKER_ID,
   ROOT_HANDLE_KEY,
   ROOT_SENTINEL_DIR,
   ROOT_SENTINEL_FILE,
@@ -7,12 +8,33 @@ import {
 import { idbGet, idbSet } from "./idb.js";
 import type { RootSentinel } from "./types.js";
 
+export interface RootDirectoryPickerOptions {
+  mode: "readwrite";
+  id: string;
+  startIn?: FileSystemDirectoryHandle;
+}
+
 function randomId(): string {
   return crypto.randomUUID();
 }
 
 export async function loadStoredRootHandle(): Promise<FileSystemDirectoryHandle | undefined> {
   return idbGet<FileSystemDirectoryHandle>(ROOT_HANDLE_KEY);
+}
+
+export function createRootDirectoryPickerOptions(
+  rootHandle?: FileSystemDirectoryHandle | null
+): RootDirectoryPickerOptions {
+  return rootHandle
+    ? {
+        mode: "readwrite",
+        id: ROOT_DIRECTORY_PICKER_ID,
+        startIn: rootHandle
+      }
+    : {
+        mode: "readwrite",
+        id: ROOT_DIRECTORY_PICKER_ID
+      };
 }
 
 export async function persistRootHandle(rootHandle: FileSystemDirectoryHandle): Promise<void> {

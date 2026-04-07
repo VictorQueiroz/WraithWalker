@@ -3,7 +3,7 @@ import * as React from "react";
 import { DEFAULT_EDITOR_ID, EDITOR_PRESETS, POPUP_REFRESH_INTERVAL_MS, type EditorPreset } from "../lib/constants.js";
 import type { BackgroundMessage, ErrorResult, NativeOpenResult } from "../lib/messages.js";
 import type { SessionSnapshot } from "../lib/types.js";
-import { Alert, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components.js";
+import { Alert, Button } from "./components.js";
 
 interface RuntimeApi {
   sendMessage(message: BackgroundMessage): Promise<unknown>;
@@ -86,27 +86,6 @@ function deriveDefaultAlert(snapshot: SessionSnapshot | null, preferredEditor: E
   };
 }
 
-function StatusTile({
-  label,
-  value,
-  tone = "default"
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "success" | "destructive";
-}) {
-  return (
-    <div className="metric-tile">
-      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
-      <div className="mt-2 text-lg font-semibold">
-        {tone === "success" && <span className="text-emerald-700">{value}</span>}
-        {tone === "destructive" && <span className="text-destructive">{value}</span>}
-        {tone === "default" && value}
-      </div>
-    </div>
-  );
-}
-
 export function PopupApp({
   runtime,
   getPreferredEditorId,
@@ -153,9 +132,6 @@ export function PopupApp({
   }, [getPreferredEditorId, refreshIntervalMs, refreshState, setIntervalFn]);
 
   const alert = actionAlert ?? deriveDefaultAlert(snapshot, preferredEditor);
-  const managedOrigins = snapshot?.enabledOrigins ?? [];
-  const visibleOrigins = managedOrigins.slice(0, 3);
-  const hiddenOriginsCount = Math.max(0, managedOrigins.length - visibleOrigins.length);
 
   async function handleToggleSession() {
     setBusyAction("toggle");
@@ -203,44 +179,18 @@ export function PopupApp({
   return (
     <main className="min-w-[360px] p-4">
       <div className="extension-shell">
-        <div className="extension-panel grid gap-4 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <Badge variant={snapshot?.sessionActive ? "success" : "destructive"}>
-                {snapshot?.sessionActive ? "Session Active" : "Session Inactive"}
-              </Badge>
-              <div>
-                <h1 className="text-lg font-semibold tracking-tight">WraithWalker</h1>
-                <p className="text-sm text-muted-foreground">
-                  One-click fixture capture and workspace access.
-                </p>
-              </div>
-            </div>
-            <Button type="button" variant="ghost" onClick={() => runtime.openOptionsPage()}>
-              Settings
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <StatusTile label="Attached Tabs" value={String(snapshot?.attachedTabIds.length ?? 0)} />
-            <StatusTile label="Origins" value={String(snapshot?.enabledOrigins.length ?? 0)} />
-            <StatusTile
-              label="Root Access"
-              value={snapshot?.rootReady ? "Ready" : "Blocked"}
-              tone={snapshot?.rootReady ? "success" : "destructive"}
-            />
-            <StatusTile
-              label="Editor Launch"
-              value={snapshot?.helperReady || preferredEditor.urlTemplate ? "Ready" : "Needs Setup"}
-              tone={snapshot?.helperReady || preferredEditor.urlTemplate ? "success" : "destructive"}
-            />
+        <div className="extension-panel grid gap-4 p-5">
+          <div className="space-y-2">
+            <h1 className="text-lg font-semibold tracking-tight">WraithWalker</h1>
+            <p className="text-sm text-muted-foreground">
+              Start capture, open the remembered root, or jump straight to Settings.
+            </p>
           </div>
 
           <Alert variant={alert.variant}>{alert.text}</Alert>
 
-          <div className="flex gap-3">
+          <div className="grid gap-3">
             <Button
-              className="flex-1"
               type="button"
               disabled={busyAction !== null}
               onClick={handleToggleSession}
@@ -248,7 +198,6 @@ export function PopupApp({
               {snapshot?.sessionActive ? "Stop Session" : "Start Session"}
             </Button>
             <Button
-              className="flex-1"
               type="button"
               variant="secondary"
               disabled={busyAction !== null}
@@ -256,32 +205,10 @@ export function PopupApp({
             >
               {busyAction === "open" ? "Opening..." : `Open in ${preferredEditor.label}`}
             </Button>
+            <Button type="button" variant="ghost" onClick={() => runtime.openOptionsPage()}>
+              Settings
+            </Button>
           </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Managed Origins</CardTitle>
-              <CardDescription>
-                {managedOrigins.length > 0
-                  ? "The session watches these exact origins."
-                  : "No origins are enabled yet."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {visibleOrigins.length > 0 ? (
-                <>
-                  {visibleOrigins.map((origin) => (
-                    <Badge key={origin} variant="muted">{origin}</Badge>
-                  ))}
-                  {hiddenOriginsCount > 0 ? (
-                    <Badge variant="muted">+{hiddenOriginsCount} more</Badge>
-                  ) : null}
-                </>
-              ) : (
-                <span className="text-sm text-muted-foreground">Open Settings to add your first origin.</span>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
     </main>

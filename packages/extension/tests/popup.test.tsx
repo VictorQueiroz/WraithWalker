@@ -49,7 +49,6 @@ describe("popup entrypoint", () => {
   it("renders the simplified popup with one-click editor open", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
-    const user = userEvent.setup();
     const runtime = {
       sendMessage: vi.fn().mockResolvedValue({
         sessionActive: true,
@@ -73,9 +72,13 @@ describe("popup entrypoint", () => {
       expect(await screen.findByRole("button", { name: "Stop Session" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Open in Cursor" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
+      expect(screen.getAllByRole("button")).toHaveLength(3);
       expect(screen.queryByText("Check root access")).toBeNull();
       expect(screen.queryByText("Save Scenario")).toBeNull();
       expect(screen.queryByLabelText("Choose editor")).toBeNull();
+      expect(screen.queryByText("Attached Tabs")).toBeNull();
+      expect(screen.queryByText("Managed Origins")).toBeNull();
+      expect(screen.queryByText("Origins")).toBeNull();
       expect(runtime.sendMessage).toHaveBeenCalledWith({ type: "session.getState" });
     } finally {
       popup.unmount();
@@ -205,7 +208,7 @@ describe("popup entrypoint", () => {
     }
   });
 
-  it("prioritizes stored session errors and summarizes long origin lists", async () => {
+  it("prioritizes stored session errors in the single status area", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
@@ -234,7 +237,7 @@ describe("popup entrypoint", () => {
 
     try {
       expect(await screen.findByText("The last capture failed.")).toBeTruthy();
-      expect(screen.getByText("+1 more")).toBeTruthy();
+      expect(screen.queryByText("Managed Origins")).toBeNull();
     } finally {
       popup.unmount();
     }
@@ -264,7 +267,7 @@ describe("popup entrypoint", () => {
 
     try {
       expect(await screen.findByText(/Windsurf needs a custom URL override or a verified native host/i)).toBeTruthy();
-      expect(screen.getByText("Needs Setup")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Open in Windsurf" })).toBeTruthy();
     } finally {
       popup.unmount();
     }

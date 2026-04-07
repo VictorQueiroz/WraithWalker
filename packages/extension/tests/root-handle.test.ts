@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ROOT_HANDLE_KEY, ROOT_SENTINEL_DIR, ROOT_SENTINEL_FILE, ROOT_SENTINEL_SCHEMA_VERSION } from "../src/lib/constants.js";
+import {
+  ROOT_DIRECTORY_PICKER_ID,
+  ROOT_HANDLE_KEY,
+  ROOT_SENTINEL_DIR,
+  ROOT_SENTINEL_FILE,
+  ROOT_SENTINEL_SCHEMA_VERSION
+} from "../src/lib/constants.js";
 
 const mocks = vi.hoisted(() => ({
   idbGet: vi.fn(),
@@ -13,6 +19,7 @@ vi.mock("../src/lib/idb.js", () => ({
 }));
 
 import {
+  createRootDirectoryPickerOptions,
   ensureRootSentinel,
   loadStoredRootHandle,
   queryRootPermission,
@@ -154,5 +161,19 @@ describe("root handle helpers", () => {
 
     expect(sentinel.rootId).toBeTypeOf("string");
     expect(mocks.idbSet).toHaveBeenCalledWith(ROOT_HANDLE_KEY, rootHandle);
+  });
+
+  it("creates remembered picker options with an id and optional start handle", () => {
+    const rootHandle = asFileSystemDirectoryHandle(new MockDirectoryHandle());
+
+    expect(createRootDirectoryPickerOptions()).toEqual({
+      mode: "readwrite",
+      id: ROOT_DIRECTORY_PICKER_ID
+    });
+    expect(createRootDirectoryPickerOptions(rootHandle)).toEqual({
+      mode: "readwrite",
+      id: ROOT_DIRECTORY_PICKER_ID,
+      startIn: rootHandle
+    });
   });
 });

@@ -29,6 +29,7 @@ export const ROOT_HANDLE_KEY = "rootDirectory";
 export const ROOT_SENTINEL_DIR = ".wraithwalker";
 export const ROOT_SENTINEL_FILE = "root.json";
 export const ROOT_SENTINEL_SCHEMA_VERSION = 1;
+export const ROOT_DIRECTORY_PICKER_ID = "wraithwalker-root";
 export const SIMPLE_MODE_METADATA_DIR = ".wraithwalker";
 export const SIMPLE_MODE_METADATA_TREE = "simple";
 

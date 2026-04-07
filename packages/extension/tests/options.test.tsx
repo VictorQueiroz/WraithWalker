@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
-import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
+import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_NATIVE_HOST_CONFIG, ROOT_DIRECTORY_PICKER_ID } from "../src/lib/constants.js";
 import type { NativeHostConfig, SiteConfig } from "../src/lib/types.js";
 
 function renderRoot() {
@@ -12,10 +12,10 @@ function renderRoot() {
 }
 
 function createWindowWithDirectoryPicker(
-  showDirectoryPicker: (options?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>
+  showDirectoryPicker: (options?: { mode?: "read" | "readwrite"; id?: string; startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle>
 ): Window {
   const windowRef = window as Window & {
-    showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<unknown>;
+    showDirectoryPicker?: (options?: { mode?: "read" | "readwrite"; id?: string; startIn?: FileSystemDirectoryHandle }) => Promise<unknown>;
   };
   windowRef.showDirectoryPicker = showDirectoryPicker;
   return windowRef;
@@ -343,7 +343,10 @@ describe("options entrypoint", () => {
       const button = await screen.findByRole("button", { name: "Choose Root Directory" });
       await user.click(button);
 
-      expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "readwrite" });
+      expect(showDirectoryPicker).toHaveBeenCalledWith({
+        mode: "readwrite",
+        id: ROOT_DIRECTORY_PICKER_ID
+      });
       expect(storeRootHandleWithSentinel).toHaveBeenCalledWith(rootHandle);
       expect(await screen.findByText(/Root directory saved\. Root ID: root-123\./)).toBeTruthy();
     } finally {
@@ -383,7 +386,10 @@ describe("options entrypoint", () => {
 
     try {
       await user.click(await screen.findByRole("button", { name: "Choose Root Directory" }));
-      expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "readwrite" });
+      expect(showDirectoryPicker).toHaveBeenCalledWith({
+        mode: "readwrite",
+        id: ROOT_DIRECTORY_PICKER_ID
+      });
       expect(screen.queryByText(/Aborted/i)).toBeNull();
       expect(screen.getByText(/No capture root is connected yet/i)).toBeTruthy();
     } finally {
@@ -482,12 +488,12 @@ describe("options entrypoint", () => {
   it("shows the change-root action and sentinel when the root is ready", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
+    const currentRootHandle = { kind: "directory" } as FileSystemDirectoryHandle;
+    const showDirectoryPicker = vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle);
 
     const options = await initOptions({
       document,
-      windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
-      ),
+      windowRef: createWindowWithDirectoryPicker(showDirectoryPicker),
       chromeApi: {
         permissions: {
           request: vi.fn(),
@@ -501,7 +507,7 @@ describe("options entrypoint", () => {
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
-      loadStoredRootHandle: vi.fn().mockResolvedValue({}),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(currentRootHandle),
       queryRootPermission: vi.fn().mockResolvedValue("granted"),
       requestRootPermission: vi.fn(),
       ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" }),
@@ -513,6 +519,17 @@ describe("options entrypoint", () => {
       expect(await screen.findByRole("button", { name: "Change Root Directory" })).toBeTruthy();
       expect(screen.getByText("Root access is ready. Root ID: root-ready.")).toBeTruthy();
       expect(screen.getByText("root-ready")).toBeTruthy();
+      expect(screen.getByText("Capture Root")).toBeTruthy();
+      expect(screen.getByText("Enabled Origins")).toBeTruthy();
+      expect(screen.getByText("Preferred Editor")).toBeTruthy();
+      expect(screen.queryByText("Default root path")).toBeNull();
+
+      await userEvent.setup().click(screen.getByRole("button", { name: "Change Root Directory" }));
+      expect(showDirectoryPicker).toHaveBeenCalledWith({
+        mode: "readwrite",
+        id: ROOT_DIRECTORY_PICKER_ID,
+        startIn: currentRootHandle
+      });
     } finally {
       options.unmount();
     }
