@@ -22,7 +22,25 @@ Typical captured content includes:
 4. Browse the target site normally.
 5. WraithWalker writes matching responses into the fixture root.
 
+Nothing is captured unless the session is running.
+
 The extension remembers the previously granted directory handle. Chrome does not expose the absolute local path for that picked directory back to the extension, so the remembered root is permission-based, not path-based.
+
+## How To Think About The Root Folder
+
+The root folder is the working fixture workspace.
+
+It is not the original website source repository. It is the place where WraithWalker dumps the assets and fixtures that were actually accessed while your session was running.
+
+That means the folder can contain:
+
+- captured JavaScript bundles and chunks
+- captured CSS and HTML
+- images, fonts, and other static assets
+- API fixtures and replay metadata
+- generated agent context files
+
+This is the folder Cursor opens, and it is the folder the agent reasons about.
 
 ## Open In Cursor
 
@@ -38,6 +56,8 @@ When you click **Open in Cursor**, WraithWalker:
 2. Opens the remembered fixture root in Cursor when a shared absolute launch path is configured.
 3. Sends a Cursor Chat prompt through Cursor's deeplink handler.
 
+The prompt is there to help Cursor connect the dots quickly. It tells the agent that this folder is a WraithWalker fixture workspace, asks it to prettify dumped or minified contents, and asks it to understand the structure of the selected origins before making changes.
+
 The generated brief tells Cursor that:
 
 - this is a WraithWalker fixture workspace
@@ -49,6 +69,8 @@ WraithWalker writes the supporting workspace context into:
 - `CLAUDE.md`
 - `.cursorrules`
 - `.wraithwalker/types/*.d.ts`
+
+The goal is simple: let the agent make sense of the dumped CSS, JS, and other accessed files that were captured during the session.
 
 ## Launch Path Vs Remembered Root
 
