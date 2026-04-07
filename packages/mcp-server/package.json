@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/mcp-server",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "MCP server for exposing WraithWalker fixture directories to AI agents.",
   "license": "MIT",
   "repository": {
@@ -46,7 +46,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
-    "@wraithwalker/core": "0.6.0",
+    "@wraithwalker/core": "0.6.1",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
