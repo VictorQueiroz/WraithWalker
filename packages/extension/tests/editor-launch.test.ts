@@ -25,7 +25,7 @@ describe("editor launch helpers", () => {
     }, "cursor")).toEqual({
       ...DEFAULT_NATIVE_HOST_CONFIG,
       hostName: "com.example.host",
-      rootPath: "/tmp/fixtures",
+      launchPath: "/tmp/fixtures",
       editorLaunchOverrides: {
         cursor: {
           commandTemplate: 'cursor "$DIR"',

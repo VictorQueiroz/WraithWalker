@@ -11,8 +11,6 @@ import {
   isHttpUrl,
   replayResponseHeaders
 } from "../src/lib/background-helpers.js";
-import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
-
 describe("background helpers", () => {
   it("accepts only http and https URLs", () => {
     expect(isHttpUrl("https://app.example.com")).toBe(true);
@@ -49,17 +47,12 @@ describe("background helpers", () => {
     ]);
   });
 
-  it("computes helper readiness in the session snapshot", () => {
+  it("builds a session snapshot without editor-launch state", () => {
     const snapshot = buildSessionSnapshot({
       sessionActive: true,
       attachedTabIds: [11, 22],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
-      nativeHostConfig: {
-        ...DEFAULT_NATIVE_HOST_CONFIG,
-        verifiedAt: "2026-04-02T20:00:00.000Z",
-        lastVerificationError: ""
-      },
       lastError: ""
     });
 
@@ -68,7 +61,6 @@ describe("background helpers", () => {
       attachedTabIds: [11, 22],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
-      helperReady: true,
       lastError: ""
     });
   });

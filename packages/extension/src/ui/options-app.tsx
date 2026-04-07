@@ -747,18 +747,21 @@ export function OptionsApp({
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="native-root-path">Absolute Root Path</Label>
+                      <Label htmlFor="native-root-path">Shared Editor Launch Path</Label>
                       <Input
                         id="native-root-path"
-                        value={nativeHostConfig.rootPath}
+                        value={nativeHostConfig.launchPath}
                         onChange={(event) => {
-                          const rootPath = event.currentTarget.value;
+                          const launchPath = event.currentTarget.value;
                           setNativeHostConfigState((current) => (
-                            current ? { ...current, rootPath } : current
+                            current ? { ...current, launchPath } : current
                           ));
                         }}
                         placeholder="/Users/you/wraithwalker-fixtures"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Needed for editor URL launches. Chrome remembers the chosen directory handle, but it does not expose the absolute local path back to the extension.
+                      </p>
                     </div>
                     <Separator />
                     <div className="grid gap-2">
@@ -804,11 +807,6 @@ export function OptionsApp({
                         {preferredEditor.label} does not ship with a built-in URL scheme here. Add a custom URL override if you want URL-first launching, or rely on the native host fallback.
                       </Alert>
                     ) : null}
-                    <div className="grid gap-2 text-sm text-muted-foreground">
-                      {nativeHostConfig.verifiedAt ? <div>Last verified: {nativeHostConfig.verifiedAt}</div> : null}
-                      {nativeHostConfig.lastVerificationError ? <div>Verification error: {nativeHostConfig.lastVerificationError}</div> : null}
-                      {nativeHostConfig.lastOpenError ? <div>Open error: {nativeHostConfig.lastOpenError}</div> : null}
-                    </div>
                     <div className="flex flex-wrap gap-3">
                       <Button type="button" onClick={() => void handleSaveLaunchSettings()}>
                         Save Launch Settings

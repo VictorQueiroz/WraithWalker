@@ -4,13 +4,48 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
+import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
+import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
+
 function renderRoot() {
   document.body.innerHTML = "<div id=\"root\"></div>";
 }
 
-const fakeSetInterval = ((_handler: TimerHandler, _timeout?: number) => {
-  return 1;
-}) as typeof setInterval;
+function createNativeHostConfig(overrides: Partial<NativeHostConfig> = {}): NativeHostConfig {
+  return {
+    ...DEFAULT_NATIVE_HOST_CONFIG,
+    ...overrides,
+    editorLaunchOverrides: {
+      ...DEFAULT_NATIVE_HOST_CONFIG.editorLaunchOverrides,
+      ...overrides.editorLaunchOverrides
+    }
+  };
+}
+
+function createSnapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
+  return {
+    sessionActive: false,
+    attachedTabIds: [],
+    enabledOrigins: ["https://app.example.com"],
+    rootReady: true,
+    lastError: "",
+    ...overrides
+  };
+}
+
+function createRootDeps({
+  hasHandle = true,
+  permission = "granted" as PermissionState
+} = {}) {
+  return {
+    loadStoredRootHandle: vi.fn().mockResolvedValue(
+      hasHandle ? ({ kind: "directory" } as FileSystemDirectoryHandle) : undefined
+    ),
+    queryRootPermission: vi.fn().mockResolvedValue(permission)
+  };
+}
+
+const fakeSetInterval = ((_handler: TimerHandler, _timeout?: number) => 1) as typeof setInterval;
 
 async function loadPopupModule() {
   vi.resetModules();
@@ -27,6 +62,8 @@ async function loadPopupModuleOutsideTestMode() {
 afterEach(() => {
   delete globalThis.__WRAITHWALKER_TEST__;
   delete globalThis.chrome;
+  vi.doUnmock("../src/lib/chrome-storage.js");
+  vi.doUnmock("../src/lib/root-handle.js");
   document.body.innerHTML = "";
   vi.restoreAllMocks();
 });
@@ -42,22 +79,17 @@ describe("popup entrypoint", () => {
         sendMessage: vi.fn(),
         openOptionsPage: vi.fn()
       },
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
     })).rejects.toThrow("Popup root container not found.");
   });
 
-  it("renders the simplified popup with one-click editor open", async () => {
+  it("renders the simplified popup with only the required controls", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue({
-        sessionActive: true,
-        attachedTabIds: [1, 2],
-        enabledOrigins: ["https://app.example.com", "https://admin.example.com"],
-        rootReady: true,
-        helperReady: true,
-        lastError: ""
-      }),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot({ sessionActive: true })),
       openOptionsPage: vi.fn()
     };
 
@@ -65,7 +97,9 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
     });
 
     try {
@@ -73,41 +107,21 @@ describe("popup entrypoint", () => {
       expect(screen.getByRole("button", { name: "Open in Cursor" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
       expect(screen.getAllByRole("button")).toHaveLength(3);
-      expect(screen.queryByText("Check root access")).toBeNull();
-      expect(screen.queryByText("Save Scenario")).toBeNull();
-      expect(screen.queryByLabelText("Choose editor")).toBeNull();
-      expect(screen.queryByText("Attached Tabs")).toBeNull();
       expect(screen.queryByText("Managed Origins")).toBeNull();
-      expect(screen.queryByText("Origins")).toBeNull();
+      expect(screen.queryByText("Attached Tabs")).toBeNull();
       expect(runtime.sendMessage).toHaveBeenCalledWith({ type: "session.getState" });
     } finally {
       popup.unmount();
     }
   });
 
-  it("opens the preferred editor without sending command templates", async () => {
+  it("opens Cursor through the URL scheme without sending native.open", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
+    const openExternalUrl = vi.fn();
     const runtime = {
-      sendMessage: vi.fn()
-        .mockResolvedValueOnce({
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: ["https://app.example.com"],
-          rootReady: true,
-          helperReady: true,
-          lastError: ""
-        })
-        .mockResolvedValueOnce({ ok: true })
-        .mockResolvedValueOnce({
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: ["https://app.example.com"],
-          rootReady: true,
-          helperReady: true,
-          lastError: ""
-        }),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -115,46 +129,32 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      openExternalUrl,
+      ...createRootDeps()
     });
 
     try {
-      await screen.findByRole("button", { name: "Open in Cursor" });
-      await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
+      await user.click(await screen.findByRole("button", { name: "Open in Cursor" }));
 
-      expect(runtime.sendMessage).toHaveBeenCalledWith({
+      expect(openExternalUrl).toHaveBeenCalledWith("cursor://file//tmp/fixtures/");
+      expect(runtime.sendMessage).not.toHaveBeenCalledWith({
         type: "native.open",
         editorId: "cursor"
       });
-      expect(await screen.findByText("Opened the capture root in Cursor.")).toBeTruthy();
+      expect(await screen.findByText("Requested Cursor to open the capture root.")).toBeTruthy();
     } finally {
       popup.unmount();
     }
   });
 
-  it("shows native open failures inline", async () => {
+  it("does not show the missing launch path on load, only after open is clicked", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
     const runtime = {
-      sendMessage: vi.fn()
-        .mockResolvedValueOnce({
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: ["https://app.example.com"],
-          rootReady: true,
-          helperReady: false,
-          lastError: ""
-        })
-        .mockResolvedValueOnce({ ok: false, error: "Open failed." })
-        .mockResolvedValueOnce({
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: ["https://app.example.com"],
-          rootReady: true,
-          helperReady: false,
-          lastError: ""
-        }),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -162,12 +162,80 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
     });
 
     try {
-      await screen.findByRole("button", { name: "Open in Cursor" });
+      expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
+      expect(screen.queryByText(/Set the absolute editor launch path in Settings/i)).toBeNull();
+
       await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
+      expect(await screen.findByText(/Set the absolute editor launch path in Settings/i)).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("surfaces native-host setup only after click for editors without URL launch support", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ hostName: "", launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
+      ...createRootDeps()
+    });
+
+    try {
+      expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
+
+      await user.click(screen.getByRole("button", { name: "Open in Windsurf" }));
+      expect(await screen.findByText(/Windsurf needs a native host name or a custom URL override/i)).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("shows native open failures inline for native-host editors", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce({ ok: false, error: "Open failed." })
+        .mockResolvedValueOnce(createSnapshot()),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+        hostName: "com.example.host",
+        launchPath: "/tmp/fixtures"
+      })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open in Windsurf" }));
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
+        type: "native.open",
+        editorId: "windsurf"
+      });
       expect(await screen.findByText("Open failed.")).toBeTruthy();
     } finally {
       popup.unmount();
@@ -180,14 +248,7 @@ describe("popup entrypoint", () => {
     const user = userEvent.setup();
     const runtime = {
       sendMessage: vi.fn()
-        .mockResolvedValueOnce({
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: ["https://app.example.com"],
-          rootReady: true,
-          helperReady: true,
-          lastError: ""
-        })
+        .mockResolvedValueOnce(createSnapshot())
         .mockRejectedValueOnce(new Error("Session failed.")),
       openOptionsPage: vi.fn()
     };
@@ -196,12 +257,13 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
     });
 
     try {
-      await screen.findByRole("button", { name: "Start Session" });
-      await user.click(screen.getByRole("button", { name: "Start Session" }));
+      await user.click(await screen.findByRole("button", { name: "Start Session" }));
       expect(await screen.findByText("Session failed.")).toBeTruthy();
     } finally {
       popup.unmount();
@@ -212,19 +274,7 @@ describe("popup entrypoint", () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue({
-        sessionActive: false,
-        attachedTabIds: [],
-        enabledOrigins: [
-          "https://app.example.com",
-          "https://admin.example.com",
-          "https://cdn.example.com",
-          "https://assets.example.com"
-        ],
-        rootReady: true,
-        helperReady: true,
-        lastError: "The last capture failed."
-      }),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot({ lastError: "The last capture failed." })),
       openOptionsPage: vi.fn()
     };
 
@@ -232,29 +282,23 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
     });
 
     try {
       expect(await screen.findByText("The last capture failed.")).toBeTruthy();
-      expect(screen.queryByText("Managed Origins")).toBeNull();
     } finally {
       popup.unmount();
     }
   });
 
-  it("shows editor setup guidance when the preferred editor lacks URL launch support", async () => {
+  it("surfaces blocked root state from the remembered handle", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue({
-        sessionActive: false,
-        attachedTabIds: [],
-        enabledOrigins: ["https://app.example.com"],
-        rootReady: true,
-        helperReady: false,
-        lastError: ""
-      }),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -262,37 +306,9 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf")
-    });
-
-    try {
-      expect(await screen.findByText(/Windsurf needs a custom URL override or a verified native host/i)).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Open in Windsurf" })).toBeTruthy();
-    } finally {
-      popup.unmount();
-    }
-  });
-
-  it("surfaces blocked root and unsupported launch states as guidance", async () => {
-    renderRoot();
-    const { initPopup } = await loadPopupModule();
-    const runtime = {
-      sendMessage: vi.fn().mockResolvedValue({
-        sessionActive: false,
-        attachedTabIds: [],
-        enabledOrigins: ["https://app.example.com"],
-        rootReady: false,
-        helperReady: false,
-        lastError: ""
-      }),
-      openOptionsPage: vi.fn()
-    };
-
-    const popup = await initPopup({
-      document,
-      runtime,
-      setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ permission: "prompt" })
     });
 
     try {
@@ -307,14 +323,7 @@ describe("popup entrypoint", () => {
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue({
-        sessionActive: false,
-        attachedTabIds: [],
-        enabledOrigins: [],
-        rootReady: false,
-        helperReady: false,
-        lastError: ""
-      }),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot({ enabledOrigins: [] })),
       openOptionsPage: vi.fn()
     };
 
@@ -322,12 +331,13 @@ describe("popup entrypoint", () => {
       document,
       runtime,
       setIntervalFn: fakeSetInterval,
-      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode"),
+      ...createRootDeps()
     });
 
     try {
-      await screen.findByRole("button", { name: "Settings" });
-      await user.click(screen.getByRole("button", { name: "Settings" }));
+      await user.click(await screen.findByRole("button", { name: "Settings" }));
       expect(runtime.openOptionsPage).toHaveBeenCalled();
     } finally {
       popup.unmount();
@@ -336,23 +346,18 @@ describe("popup entrypoint", () => {
 
   it("bootstraps automatically outside test mode", async () => {
     renderRoot();
+    vi.doMock("../src/lib/chrome-storage.js", () => ({
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor")
+    }));
+    vi.doMock("../src/lib/root-handle.js", () => ({
+      loadStoredRootHandle: vi.fn().mockResolvedValue({ kind: "directory" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted")
+    }));
     globalThis.chrome = {
       runtime: {
-        sendMessage: vi.fn().mockResolvedValue({
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: [],
-          rootReady: false,
-          helperReady: false,
-          lastError: ""
-        }),
+        sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
         openOptionsPage: vi.fn()
-      },
-      storage: {
-        local: {
-          get: vi.fn().mockResolvedValue({}),
-          set: vi.fn().mockResolvedValue(undefined)
-        }
       }
     } as any;
 

@@ -3,8 +3,7 @@ import {
   getNativeHostConfig as defaultGetNativeHostConfig,
   getPreferredEditorId as defaultGetPreferredEditorId,
   getSiteConfigs as defaultGetSiteConfigs,
-  setLastSessionSnapshot as defaultSetLastSessionSnapshot,
-  setNativeHostConfig as defaultSetNativeHostConfig
+  setLastSessionSnapshot as defaultSetLastSessionSnapshot
 } from "./lib/chrome-storage.js";
 import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
 import { buildEditorLaunchUrl, resolveEditorLaunch } from "./lib/editor-launch.js";
@@ -120,7 +119,6 @@ interface BackgroundDependencies {
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getPreferredEditorId?: typeof defaultGetPreferredEditorId;
   setLastSessionSnapshot?: typeof defaultSetLastSessionSnapshot;
-  setNativeHostConfig?: typeof defaultSetNativeHostConfig;
   createSessionController?: (dependencies: Parameters<typeof defaultCreateSessionController>[0]) => SessionControllerApi;
   createRequestLifecycle?: (dependencies: Parameters<typeof defaultCreateRequestLifecycle>[0]) => RequestLifecycleApi;
   initialState?: Partial<BackgroundState>;
@@ -168,7 +166,6 @@ export function createBackgroundRuntime({
   getNativeHostConfig = defaultGetNativeHostConfig,
   getPreferredEditorId = defaultGetPreferredEditorId,
   setLastSessionSnapshot = defaultSetLastSessionSnapshot,
-  setNativeHostConfig = defaultSetNativeHostConfig,
   createSessionController = defaultCreateSessionController,
   createRequestLifecycle = defaultCreateRequestLifecycle,
   initialState = {}
@@ -211,7 +208,6 @@ export function createBackgroundRuntime({
       attachedTabIds: [...state.attachedTabs.keys()],
       enabledOrigins: [...state.enabledOrigins],
       rootReady: state.rootReady,
-      nativeHostConfig: state.nativeHostConfig,
       lastError: state.lastError
     });
   }
@@ -266,18 +262,8 @@ export function createBackgroundRuntime({
     const result = await sendOffscreenMessage<RootReadyResult>("fs.ensureRoot", { requestPermission });
     state.rootReady = Boolean(result.ok);
     state.rootSentinel = result.ok ? result.sentinel : null;
-    if (!result.ok) {
-      setLastError(getErrorMessage(result as ErrorResult));
-    }
+    setLastError(result.ok ? "" : getErrorMessage(result as ErrorResult));
     return result;
-  }
-
-  async function updateNativeHostConfig(patch: Partial<NativeHostConfig>): Promise<void> {
-    state.nativeHostConfig = {
-      ...state.nativeHostConfig,
-      ...patch
-    };
-    await setNativeHostConfig(state.nativeHostConfig);
   }
 
   async function verifyNativeHostRoot({
@@ -290,27 +276,18 @@ export function createBackgroundRuntime({
     await refreshStoredConfig();
     const resolvedRoot = rootResult || await ensureRootReady({ requestPermission });
     if (!resolvedRoot.ok) {
-      const error = getErrorMessage(resolvedRoot as ErrorResult);
-      await updateNativeHostConfig({
-        verifiedAt: null,
-        lastVerificationError: error
-      });
-      return { ok: false, error };
+      return { ok: false, error: getErrorMessage(resolvedRoot as ErrorResult) };
     }
 
-    if (!state.nativeHostConfig.hostName || !state.nativeHostConfig.rootPath) {
-      const error = "Configure the native host name and absolute root path in the options page first.";
-      await updateNativeHostConfig({
-        verifiedAt: null,
-        lastVerificationError: error
-      });
+    if (!state.nativeHostConfig.hostName || !state.nativeHostConfig.launchPath) {
+      const error = "Configure the native host name and shared editor launch path in the options page first.";
       return { ok: false, error };
     }
 
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "verifyRoot",
-        path: state.nativeHostConfig.rootPath,
+        path: state.nativeHostConfig.launchPath,
         expectedRootId: resolvedRoot.sentinel.rootId
       });
 
@@ -318,19 +295,9 @@ export function createBackgroundRuntime({
         throw new Error(String(response?.error || "Native host verification failed."));
       }
 
-      const verifiedAt = new Date().toISOString();
-      await updateNativeHostConfig({
-        verifiedAt,
-        lastVerificationError: ""
-      });
-      return { ok: true, verifiedAt };
+      return { ok: true, verifiedAt: new Date().toISOString() };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await updateNativeHostConfig({
-        verifiedAt: null,
-        lastVerificationError: message
-      });
-      return { ok: false, error: message };
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -350,12 +317,9 @@ export function createBackgroundRuntime({
       await chromeApi.tabs.create({
         url: buildEditorLaunchUrl(urlTemplate, rootPath, rootSentinel.rootId)
       });
-      await updateNativeHostConfig({ lastOpenError: "" });
       return { ok: true };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await updateNativeHostConfig({ lastOpenError: message });
-      return { ok: false, error: message };
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -363,31 +327,24 @@ export function createBackgroundRuntime({
     await refreshStoredConfig();
     const resolvedEditorId = editorId || state.preferredEditorId;
     await generateContext(resolvedEditorId);
+    const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
+    const urlTemplate = launch.urlTemplate.trim();
 
     const rootResult = await ensureRootReady({ requestPermission: true });
     if (!rootResult.ok) {
       return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
     }
 
-    const rootPath = state.nativeHostConfig.rootPath.trim();
-    if (!rootPath) {
-      const error = "Configure the absolute root path in the options page first.";
-      await updateNativeHostConfig({ lastOpenError: error });
+    const launchPath = state.nativeHostConfig.launchPath.trim();
+    if (!launchPath) {
+      const error = urlTemplate
+        ? `Set the absolute editor launch path in Settings before opening ${launch.preset.label}. Chrome does not expose local folder paths from the directory picker.`
+        : "Configure the shared editor launch path in the options page first.";
       return { ok: false, error };
     }
 
-    const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
-    const urlTemplate = launch.urlTemplate.trim();
-
     if (urlTemplate) {
-      const urlResult = await openDirectoryViaUrlTemplate(urlTemplate, rootPath, rootResult.sentinel);
-      if (urlResult.ok) {
-        return urlResult;
-      }
-
-      if (!state.nativeHostConfig.hostName) {
-        return urlResult;
-      }
+      return openDirectoryViaUrlTemplate(urlTemplate, launchPath, rootResult.sentinel);
     }
 
     const verification = await verifyNativeHostRoot({ rootResult });
@@ -398,7 +355,7 @@ export function createBackgroundRuntime({
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "openDirectory",
-        path: rootPath,
+        path: launchPath,
         expectedRootId: rootResult.sentinel.rootId,
         commandTemplate: commandTemplate || launch.commandTemplate
       });
@@ -407,12 +364,9 @@ export function createBackgroundRuntime({
         throw new Error(String(response?.error || "Open directory request failed."));
       }
 
-      await updateNativeHostConfig({ lastOpenError: "" });
       return { ok: true };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await updateNativeHostConfig({ lastOpenError: message });
-      return { ok: false, error: message };
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -577,7 +531,7 @@ export function createBackgroundRuntime({
         await refreshStoredConfig();
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
           type: "listScenarios",
-          path: state.nativeHostConfig.rootPath,
+          path: state.nativeHostConfig.launchPath,
           expectedRootId: state.rootSentinel?.rootId
         });
         return result as { ok: true; scenarios: string[] };
@@ -586,7 +540,7 @@ export function createBackgroundRuntime({
         await refreshStoredConfig();
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
           type: "saveScenario",
-          path: state.nativeHostConfig.rootPath,
+          path: state.nativeHostConfig.launchPath,
           expectedRootId: state.rootSentinel?.rootId,
           name: message.name
         });
@@ -596,7 +550,7 @@ export function createBackgroundRuntime({
         await refreshStoredConfig();
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
           type: "switchScenario",
-          path: state.nativeHostConfig.rootPath,
+          path: state.nativeHostConfig.launchPath,
           expectedRootId: state.rootSentinel?.rootId,
           name: message.name
         });

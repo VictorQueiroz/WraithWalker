@@ -14,11 +14,8 @@ export const STORAGE_KEYS = {
 
 export const DEFAULT_NATIVE_HOST_CONFIG: NativeHostConfig = {
   hostName: "com.wraithwalker.host",
-  rootPath: "",
-  editorLaunchOverrides: {},
-  verifiedAt: null,
-  lastVerificationError: "",
-  lastOpenError: ""
+  launchPath: "",
+  editorLaunchOverrides: {}
 };
 
 export const IDB_NAME = "wraithwalker";

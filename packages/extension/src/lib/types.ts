@@ -42,11 +42,8 @@ export interface EditorLaunchOverride {
 
 export interface NativeHostConfig {
   hostName: string;
-  rootPath: string;
+  launchPath: string;
   editorLaunchOverrides: Record<string, EditorLaunchOverride>;
-  verifiedAt: string | null;
-  lastVerificationError: string;
-  lastOpenError: string;
 }
 
 export interface SessionSnapshot {
@@ -54,7 +51,6 @@ export interface SessionSnapshot {
   attachedTabIds: number[];
   enabledOrigins: string[];
   rootReady: boolean;
-  helperReady: boolean;
   lastError: string;
 }
 

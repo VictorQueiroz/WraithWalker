@@ -544,7 +544,7 @@ describe("options entrypoint", () => {
       .mockResolvedValueOnce(createNativeHostConfig())
       .mockResolvedValueOnce(createNativeHostConfig({
         hostName: "com.example.host",
-        rootPath: "/tmp/fixtures",
+        launchPath: "/tmp/fixtures",
         editorLaunchOverrides: {
           cursor: {
             urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
@@ -554,14 +554,13 @@ describe("options entrypoint", () => {
       }))
       .mockResolvedValueOnce(createNativeHostConfig({
         hostName: "com.example.host",
-        rootPath: "/tmp/fixtures",
+        launchPath: "/tmp/fixtures",
         editorLaunchOverrides: {
           cursor: {
             urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
             commandTemplate: 'cursor "$DIR"'
           }
-        },
-        verifiedAt: "2026-04-03T12:00:00.000Z"
+        }
       }));
     const runtimeSendMessage = createRuntimeSendMessage();
     const setPreferredEditorId = vi.fn().mockResolvedValue(undefined);
@@ -605,7 +604,7 @@ describe("options entrypoint", () => {
       fireEvent.change(await screen.findByLabelText("Native Host Name"), {
         target: { value: "com.example.host" }
       });
-      fireEvent.change(screen.getByLabelText("Absolute Root Path"), {
+      fireEvent.change(screen.getByLabelText("Shared Editor Launch Path"), {
         target: { value: "/tmp/fixtures" }
       });
       fireEvent.change(screen.getByLabelText("Custom URL Override For Cursor"), {
@@ -618,7 +617,7 @@ describe("options entrypoint", () => {
 
       expect(setNativeHostConfig).toHaveBeenCalledWith(createNativeHostConfig({
         hostName: "com.example.host",
-        rootPath: "/tmp/fixtures",
+        launchPath: "/tmp/fixtures",
         editorLaunchOverrides: {
           cursor: {
             urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",

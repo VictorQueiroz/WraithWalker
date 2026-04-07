@@ -3,7 +3,7 @@ import {
   buildResponseMeta as defaultBuildResponseMeta,
   replayResponseHeaders as defaultReplayResponseHeaders
 } from "@wraithwalker/core/fixture-layout";
-import type { HeaderEntry, NativeHostConfig, RequestEntry, RequestPayload, ResponseMeta, SessionSnapshot } from "./types.js";
+import type { HeaderEntry, RequestEntry, RequestPayload, ResponseMeta, SessionSnapshot } from "./types.js";
 
 type HeaderCollection = HeaderEntry[] | Record<string, unknown>;
 
@@ -45,14 +45,12 @@ export function buildSessionSnapshot({
   attachedTabIds,
   enabledOrigins,
   rootReady,
-  nativeHostConfig,
   lastError
 }: {
   sessionActive: boolean;
   attachedTabIds: Iterable<number>;
   enabledOrigins: Iterable<string>;
   rootReady: boolean;
-  nativeHostConfig: NativeHostConfig;
   lastError: string;
 }): SessionSnapshot {
   return {
@@ -60,7 +58,6 @@ export function buildSessionSnapshot({
     attachedTabIds: [...attachedTabIds],
     enabledOrigins: [...enabledOrigins],
     rootReady,
-    helperReady: Boolean(nativeHostConfig.verifiedAt && !nativeHostConfig.lastVerificationError),
     lastError
   };
 }

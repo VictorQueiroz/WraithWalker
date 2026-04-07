@@ -1,8 +1,24 @@
 import * as React from "react";
 
-import { DEFAULT_EDITOR_ID, EDITOR_PRESETS, POPUP_REFRESH_INTERVAL_MS, type EditorPreset } from "../lib/constants.js";
+import { buildEditorLaunchUrl } from "../lib/editor-launch.js";
 import type { BackgroundMessage, ErrorResult, NativeOpenResult } from "../lib/messages.js";
-import type { SessionSnapshot } from "../lib/types.js";
+import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
+import {
+  createMissingLaunchPathAlert,
+  createMissingNativeHostAlert,
+  deriveCaptureRootState,
+  deriveEditorLaunchState,
+  resolvePopupAlert,
+  type CaptureRootState,
+  type PopupAlertState
+} from "../lib/workspace-open-state.js";
+import {
+  DEFAULT_EDITOR_ID,
+  DEFAULT_NATIVE_HOST_CONFIG,
+  EDITOR_PRESETS,
+  POPUP_REFRESH_INTERVAL_MS,
+  type EditorPreset
+} from "../lib/constants.js";
 import { Alert, Button } from "./components.js";
 
 interface RuntimeApi {
@@ -10,17 +26,16 @@ interface RuntimeApi {
   openOptionsPage(): void;
 }
 
-interface PopupAlert {
-  variant: "default" | "success" | "destructive";
-  text: string;
-}
-
 export interface PopupAppProps {
   runtime: RuntimeApi;
+  getNativeHostConfig: () => Promise<NativeHostConfig>;
   getPreferredEditorId: () => Promise<string>;
+  loadStoredRootHandle: () => Promise<FileSystemDirectoryHandle | undefined>;
+  queryRootPermission: (rootHandle?: FileSystemDirectoryHandle | null) => Promise<PermissionState>;
   setIntervalFn?: typeof setInterval;
   refreshIntervalMs?: number;
   editorPresets?: EditorPreset[];
+  openExternalUrl?: (url: string) => void;
 }
 
 function getErrorMessage(result: { error?: string }): string {
@@ -37,70 +52,58 @@ function resolvePreferredEditor(editorId: string, editorPresets: EditorPreset[])
     ?? editorPresets[0];
 }
 
-function deriveDefaultAlert(snapshot: SessionSnapshot | null, preferredEditor: EditorPreset): PopupAlert {
-  if (!snapshot) {
-    return {
-      variant: "default",
-      text: "Loading session state..."
-    };
-  }
-
-  if (snapshot.lastError) {
-    return {
-      variant: "destructive",
-      text: snapshot.lastError
-    };
-  }
-
-  if (!snapshot.enabledOrigins.length) {
-    return {
-      variant: "default",
-      text: "Add at least one origin in Settings before starting a capture session."
-    };
-  }
-
-  if (!snapshot.rootReady) {
-    return {
-      variant: "destructive",
-      text: "Reconnect the capture root in Settings before starting or opening the workspace."
-    };
-  }
-
-  if (!snapshot.helperReady && !preferredEditor.urlTemplate) {
-    return {
-      variant: "destructive",
-      text: `${preferredEditor.label} needs a custom URL override or a verified native host in Settings before it can open the root.`
-    };
-  }
-
-  if (snapshot.sessionActive) {
-    return {
-      variant: "success",
-      text: "Debugger capture and replay are active for all matching tabs."
-    };
-  }
-
-  return {
-    variant: "default",
-    text: "Session is idle. Start it when you want matching tabs to attach automatically."
-  };
-}
-
 export function PopupApp({
   runtime,
+  getNativeHostConfig,
   getPreferredEditorId,
+  loadStoredRootHandle,
+  queryRootPermission,
   setIntervalFn = setInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
-  editorPresets = EDITOR_PRESETS
+  editorPresets = EDITOR_PRESETS,
+  openExternalUrl = (url: string) => {
+    window.location.href = url;
+  }
 }: PopupAppProps) {
   const [snapshot, setSnapshot] = React.useState<SessionSnapshot | null>(null);
   const [preferredEditorId, setPreferredEditorId] = React.useState(DEFAULT_EDITOR_ID);
-  const [actionAlert, setActionAlert] = React.useState<PopupAlert | null>(null);
+  const [nativeHostConfig, setNativeHostConfig] = React.useState<NativeHostConfig>(DEFAULT_NATIVE_HOST_CONFIG);
+  const [captureRootState, setCaptureRootState] = React.useState<CaptureRootState>({ kind: "missing_handle" });
+  const [actionAlert, setActionAlert] = React.useState<PopupAlertState | null>(null);
   const [busyAction, setBusyAction] = React.useState<"toggle" | "open" | null>(null);
   const preferredEditor = React.useMemo(
     () => resolvePreferredEditor(preferredEditorId, editorPresets),
     [editorPresets, preferredEditorId]
   );
+  const editorLaunchState = React.useMemo(
+    () => deriveEditorLaunchState(nativeHostConfig, preferredEditor.id),
+    [nativeHostConfig, preferredEditor.id]
+  );
+
+  const refreshEnvironment = React.useCallback(async () => {
+    const [nextPreferredEditorId, nextNativeHostConfig, rootHandle] = await Promise.all([
+      getPreferredEditorId(),
+      getNativeHostConfig(),
+      loadStoredRootHandle()
+    ]);
+    const permission = rootHandle
+      ? await queryRootPermission(rootHandle)
+      : "prompt";
+    const nextCaptureRootState = deriveCaptureRootState({
+      hasHandle: Boolean(rootHandle),
+      permission
+    });
+
+    setPreferredEditorId(nextPreferredEditorId);
+    setNativeHostConfig(nextNativeHostConfig);
+    setCaptureRootState(nextCaptureRootState);
+
+    return {
+      preferredEditorId: nextPreferredEditorId,
+      nativeHostConfig: nextNativeHostConfig,
+      captureRootState: nextCaptureRootState
+    };
+  }, [getNativeHostConfig, getPreferredEditorId, loadStoredRootHandle, queryRootPermission]);
 
   const refreshState = React.useCallback(async (clearActionAlert = true) => {
     const nextSnapshot = await sendMessage<SessionSnapshot>(runtime, { type: "session.getState" });
@@ -113,13 +116,11 @@ export function PopupApp({
 
   React.useEffect(() => {
     let active = true;
-    void getPreferredEditorId().then((editorId) => {
+    void Promise.all([refreshEnvironment(), refreshState()]).then(() => {
       if (!active) {
         return;
       }
-      setPreferredEditorId(editorId);
     });
-    void refreshState();
 
     const intervalId = setIntervalFn(() => {
       void refreshState();
@@ -129,9 +130,14 @@ export function PopupApp({
       active = false;
       clearInterval(intervalId);
     };
-  }, [getPreferredEditorId, refreshIntervalMs, refreshState, setIntervalFn]);
+  }, [refreshEnvironment, refreshIntervalMs, refreshState, setIntervalFn]);
 
-  const alert = actionAlert ?? deriveDefaultAlert(snapshot, preferredEditor);
+  const alert = resolvePopupAlert({
+    snapshot,
+    captureRootState,
+    editorLaunchState,
+    actionDiagnostic: actionAlert
+  });
 
   async function handleToggleSession() {
     setBusyAction("toggle");
@@ -155,15 +161,52 @@ export function PopupApp({
   async function handleOpenEditor() {
     setBusyAction("open");
     try {
+      const environment = await refreshEnvironment();
+      const nextEditorLaunchState = deriveEditorLaunchState(
+        environment.nativeHostConfig,
+        environment.preferredEditorId
+      );
+      if (environment.captureRootState.kind !== "ready") {
+        setActionAlert(resolvePopupAlert({
+          snapshot,
+          captureRootState: environment.captureRootState,
+          editorLaunchState: nextEditorLaunchState
+        }));
+        return;
+      }
+
+      if (nextEditorLaunchState.kind === "missing_launch_path") {
+        setActionAlert(createMissingLaunchPathAlert(nextEditorLaunchState.editorLabel));
+        return;
+      }
+
+      if (nextEditorLaunchState.kind === "missing_native_host") {
+        setActionAlert(createMissingNativeHostAlert(nextEditorLaunchState.editorLabel));
+        return;
+      }
+
+      if (nextEditorLaunchState.kind === "ready_via_url") {
+        openExternalUrl(buildEditorLaunchUrl(
+          nextEditorLaunchState.urlTemplate,
+          nextEditorLaunchState.launchPath,
+          "popup-root"
+        ));
+        setActionAlert({
+          variant: "success",
+          text: `Requested ${nextEditorLaunchState.editorLabel} to open the capture root.`
+        });
+        return;
+      }
+
       const result = await sendMessage<NativeOpenResult>(runtime, {
         type: "native.open",
-        editorId: preferredEditor.id
+        editorId: nextEditorLaunchState.editorId
       });
       await refreshState(false);
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? `Opened the capture root in ${preferredEditor.label}.`
+          ? `Opened the capture root in ${nextEditorLaunchState.editorLabel}.`
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {

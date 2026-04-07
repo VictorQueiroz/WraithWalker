@@ -44,7 +44,6 @@ function createControllerHarness(overrides: ControllerHarnessOverrides = {}) {
     attachedTabIds: [...state.attachedTabs.keys()],
     enabledOrigins: [...state.enabledOrigins],
     rootReady: state.rootReady,
-    helperReady: false,
     lastError: state.lastError
   }));
 

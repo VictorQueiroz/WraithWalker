@@ -2,6 +2,7 @@ import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, EDITOR_PRESETS, type Edi
 import type { EditorLaunchOverride, NativeHostConfig } from "./types.js";
 
 type LegacyNativeHostConfig = Partial<NativeHostConfig> & {
+  rootPath?: string;
   commandTemplate?: string;
   urlTemplate?: string;
   editorLaunchOverrides?: Record<string, Partial<EditorLaunchOverride>>;
@@ -84,19 +85,12 @@ export function normalizeNativeHostConfig(
     hostName: typeof stored.hostName === "string"
       ? stored.hostName
       : DEFAULT_NATIVE_HOST_CONFIG.hostName,
-    rootPath: typeof stored.rootPath === "string"
-      ? stored.rootPath
-      : DEFAULT_NATIVE_HOST_CONFIG.rootPath,
+    launchPath: typeof stored.launchPath === "string"
+      ? stored.launchPath
+      : typeof stored.rootPath === "string"
+        ? stored.rootPath
+        : DEFAULT_NATIVE_HOST_CONFIG.launchPath,
     editorLaunchOverrides,
-    verifiedAt: typeof stored.verifiedAt === "string" || stored.verifiedAt === null
-      ? stored.verifiedAt
-      : DEFAULT_NATIVE_HOST_CONFIG.verifiedAt,
-    lastVerificationError: typeof stored.lastVerificationError === "string"
-      ? stored.lastVerificationError
-      : DEFAULT_NATIVE_HOST_CONFIG.lastVerificationError,
-    lastOpenError: typeof stored.lastOpenError === "string"
-      ? stored.lastOpenError
-      : DEFAULT_NATIVE_HOST_CONFIG.lastOpenError
   };
 }
 

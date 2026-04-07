@@ -61,14 +61,14 @@ describe("chrome storage helpers", () => {
     storageGet.mockResolvedValue({
       [STORAGE_KEYS.NATIVE_HOST]: {
         hostName: "com.example.host",
-        rootPath: "/tmp/fixtures"
+        launchPath: "/tmp/fixtures"
       }
     });
 
     await expect(getNativeHostConfig()).resolves.toEqual({
       ...DEFAULT_NATIVE_HOST_CONFIG,
       hostName: "com.example.host",
-      rootPath: "/tmp/fixtures"
+      launchPath: "/tmp/fixtures"
     });
   });
 
@@ -86,7 +86,7 @@ describe("chrome storage helpers", () => {
     await expect(getNativeHostConfig()).resolves.toEqual({
       ...DEFAULT_NATIVE_HOST_CONFIG,
       hostName: "com.example.host",
-      rootPath: "/tmp/fixtures",
+      launchPath: "/tmp/fixtures",
       editorLaunchOverrides: {
         cursor: {
           commandTemplate: 'cursor "$DIR"',
@@ -118,7 +118,6 @@ describe("chrome storage helpers", () => {
       attachedTabIds: [1, 2],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
-      helperReady: false,
       lastError: ""
     };
 
@@ -152,7 +151,7 @@ describe("chrome storage helpers", () => {
     await setNativeHostConfig({
       ...DEFAULT_NATIVE_HOST_CONFIG,
       hostName: "com.example.host",
-      rootPath: "/tmp/fixtures",
+      launchPath: "/tmp/fixtures",
       editorLaunchOverrides: {}
     });
 
@@ -160,7 +159,7 @@ describe("chrome storage helpers", () => {
       [STORAGE_KEYS.NATIVE_HOST]: {
         ...DEFAULT_NATIVE_HOST_CONFIG,
         hostName: "com.example.host",
-        rootPath: "/tmp/fixtures",
+        launchPath: "/tmp/fixtures",
         editorLaunchOverrides: {}
       }
     });
