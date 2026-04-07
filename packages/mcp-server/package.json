@@ -28,6 +28,7 @@
   "exports": {
     "./fixture-reader": "./out/fixture-reader.mjs",
     "./fixture-diff": "./out/fixture-diff.mjs",
+    "./trpc": "./out/trpc.mjs",
     "./server": "./out/server.mjs"
   },
   "bin": {
@@ -46,8 +47,10 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
+    "@trpc/server": "^11.7.1",
     "@wraithwalker/core": "0.6.1",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

@@ -45,12 +45,16 @@ export function buildSessionSnapshot({
   attachedTabIds,
   enabledOrigins,
   rootReady,
+  captureDestination,
+  captureRootPath,
   lastError
 }: {
   sessionActive: boolean;
   attachedTabIds: Iterable<number>;
   enabledOrigins: Iterable<string>;
   rootReady: boolean;
+  captureDestination: SessionSnapshot["captureDestination"];
+  captureRootPath: string;
   lastError: string;
 }): SessionSnapshot {
   return {
@@ -58,6 +62,8 @@ export function buildSessionSnapshot({
     attachedTabIds: [...attachedTabIds],
     enabledOrigins: [...enabledOrigins],
     rootReady,
+    captureDestination,
+    captureRootPath,
     lastError
   };
 }

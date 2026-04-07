@@ -53,6 +53,8 @@ describe("background helpers", () => {
       attachedTabIds: [11, 22],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
+      captureDestination: "local",
+      captureRootPath: "/tmp/fixtures",
       lastError: ""
     });
 
@@ -61,6 +63,8 @@ describe("background helpers", () => {
       attachedTabIds: [11, 22],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
+      captureDestination: "local",
+      captureRootPath: "/tmp/fixtures",
       lastError: ""
     });
   });

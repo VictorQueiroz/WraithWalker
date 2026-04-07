@@ -44,6 +44,8 @@ describe("fixture root fs", () => {
       { name: "notes", kind: "directory" }
     ]));
     expect(await rootFs.listDirectories("")).toEqual(expect.arrayContaining([".wraithwalker", "data", "notes"]));
+    expect(await rootFs.listOptionalDirectory("missing-directory")).toEqual([]);
+    expect(await rootFs.listOptionalDirectories("missing-directory")).toEqual([]);
   });
 
   it("writes utf8 and base64 bodies with progress updates", async () => {
@@ -69,6 +71,7 @@ describe("fixture root fs", () => {
     await rootFs.writeBody("text/readme.txt", { body: "hello", bodyEncoding: "utf8" });
 
     expect(await rootFs.readText("text/readme.txt")).toBe("hello");
+    expect(await rootFs.readBodyAsBase64("binary/font.woff2")).toBe(Buffer.from([0, 1, 2, 3, 4, 5]).toString("base64"));
     expect(await rootFs.stat("binary/font.woff2")).toEqual(expect.objectContaining({ size: 6 }));
     expect(progress).toEqual([
       [2, 6],

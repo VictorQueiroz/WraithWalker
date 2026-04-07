@@ -2,6 +2,8 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { Server as HttpServer } from "node:http";
 
+import * as trpcExpress from "@trpc/server/adapters/express";
+import { createRoot } from "@wraithwalker/core/root";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -25,9 +27,10 @@ import {
   readSiteConfigs,
   resolveFixturePath
 } from "./fixture-reader.mjs";
+import { createWraithwalkerRouter, HTTP_TRPC_PATH } from "./trpc.mjs";
 
 const SERVER_NAME = "wraithwalker";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.6.1";
 
 export const HTTP_MCP_PATH = "/mcp";
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
@@ -59,6 +62,8 @@ export interface HttpServerHandle {
   rootPath: string;
   host: string;
   port: number;
+  baseUrl: string;
+  trpcUrl: string;
   url: string;
   tools: readonly string[];
   close(): Promise<void>;
@@ -461,8 +466,35 @@ export async function startHttpServer(
 ): Promise<HttpServerHandle> {
   const host = options.host ?? DEFAULT_HTTP_HOST;
   const port = options.port ?? DEFAULT_HTTP_PORT;
+  if (!isLoopbackHost(host)) {
+    throw new Error(`Refusing to start WraithWalker HTTP server on non-loopback host "${host}". Use 127.0.0.1, localhost, or ::1.`);
+  }
+
+  const sentinel = await createRoot(rootPath);
   const app = createMcpExpressApp({ host });
   const sessions = new Map<string, HttpSession>();
+  const urls = {
+    baseUrl: "",
+    mcpUrl: "",
+    trpcUrl: ""
+  };
+
+  const trpcRouter = createWraithwalkerRouter({
+    rootPath,
+    sentinel,
+    serverName: SERVER_NAME,
+    serverVersion: SERVER_VERSION,
+    getServerUrls: () => ({
+      baseUrl: urls.baseUrl,
+      mcpUrl: urls.mcpUrl,
+      trpcUrl: urls.trpcUrl
+    })
+  });
+
+  app.use(HTTP_TRPC_PATH, trpcExpress.createExpressMiddleware({
+    router: trpcRouter,
+    createContext: () => ({})
+  }));
 
   app.all(HTTP_MCP_PATH, async (req, res) => {
     const sessionId = getSessionId(req.headers["mcp-session-id"]);
@@ -534,13 +566,17 @@ export async function startHttpServer(
   }
 
   const actualAddress = address as AddressInfo;
-  const url = `http://${formatUrlHost(host)}:${actualAddress.port}${HTTP_MCP_PATH}`;
+  urls.baseUrl = `http://${formatUrlHost(host)}:${actualAddress.port}`;
+  urls.mcpUrl = `${urls.baseUrl}${HTTP_MCP_PATH}`;
+  urls.trpcUrl = `${urls.baseUrl}${HTTP_TRPC_PATH}`;
 
   return {
     rootPath,
     host,
     port: actualAddress.port,
-    url,
+    baseUrl: urls.baseUrl,
+    trpcUrl: urls.trpcUrl,
+    url: urls.mcpUrl,
     tools: MCP_TOOL_NAMES,
     async close() {
       const activeSessions = Array.from(sessions.values());

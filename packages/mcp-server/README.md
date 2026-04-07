@@ -4,40 +4,53 @@ An [MCP](https://modelcontextprotocol.io/) server that exposes WraithWalker fixt
 
 ## Usage
 
-The easiest way to start the server is via the CLI from any fixture root.
-
-For existing process-spawned integrations, keep using `stdio`:
+The CLI command:
 
 ```bash
 wraithwalker serve
 ```
 
-For local HTTP-capable MCP clients, start Streamable HTTP and copy the printed URL:
+now starts one local HTTP server that exposes both:
 
-```bash
-wraithwalker serve --http
-```
+- MCP at `/mcp`
+- the WraithWalker tRPC capture backend at `/trpc`
 
-By default, HTTP mode binds to `127.0.0.1:4319` and exposes the MCP endpoint at `/mcp`, so the default URL is:
+`wraithwalker serve --http` is still accepted for backward compatibility, but it behaves the same as `wraithwalker serve`.
+
+By default the combined server binds to `127.0.0.1:4319`, so the default endpoints are:
 
 ```text
 http://127.0.0.1:4319/mcp
+http://127.0.0.1:4319/trpc
 ```
 
 Override the binding when needed:
 
 ```bash
-wraithwalker serve --http --host 127.0.0.1 --port 4319
+wraithwalker serve /path/to/content-root --host 127.0.0.1 --port 4319
 ```
 
-Or run the package bin directly:
+The server resolves its root path in this order:
+
+1. first CLI argument
+2. `WRAITHWALKER_ROOT`
+3. platform default content root
+
+Platform default content roots:
+
+- macOS: `~/Library/Application Support/WraithWalker/content`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker/content`
+- Windows: `%LOCALAPPDATA%/WraithWalker/content`
+
+If the resolved root does not exist yet, the server bootstraps it with the normal `.wraithwalker/root.json` sentinel before listening.
+
+Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and intended for local use.
+
+For existing process-spawned stdio integrations, keep using the package bin directly:
 
 ```bash
 node packages/mcp-server/out/bin.mjs /path/to/fixture-root
-node packages/mcp-server/out/bin.mjs --http /path/to/fixture-root
 ```
-
-The server reads the root path from the first argument, the `WRAITHWALKER_ROOT` environment variable, or falls back to the current directory.
 
 ## Programmatic API
 
@@ -53,6 +66,8 @@ const handle = await startHttpServer("/path/to/fixture-root", {
   port: 4319
 });
 
+console.log(handle.baseUrl); // http://127.0.0.1:4319
+console.log(handle.trpcUrl); // http://127.0.0.1:4319/trpc
 console.log(handle.url); // http://127.0.0.1:4319/mcp
 ```
 
@@ -72,6 +87,20 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | `read-manifest` | `origin` | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
 | `list-scenarios` | — | List saved scenario snapshots |
 | `diff-scenarios` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
+
+## tRPC Backend
+
+The same HTTP server also exposes a small typed tRPC backend used by the browser extension when it detects a local WraithWalker server.
+
+Current procedures:
+
+- `system.info`
+- `fixtures.has`
+- `fixtures.read`
+- `fixtures.writeIfAbsent`
+- `fixtures.generateContext`
+
+When the extension detects the default loopback server at `http://127.0.0.1:4319/trpc`, it prefers the server root for capture, fixture reads, context generation, and Cursor open flows. If the server is unavailable, the extension falls back to its remembered local root flow.
 
 ## Recommended Workflow
 
@@ -122,7 +151,7 @@ For `stdio` clients, configure the server command directly:
 }
 ```
 
-For HTTP-capable clients, point the client at the URL printed by `wraithwalker serve --http`.
+For HTTP-capable clients, point the client at the MCP URL printed by `wraithwalker serve`.
 
 See [`../../docs/mcp-clients.md`](../../docs/mcp-clients.md) for Claude Code, Cursor, Windsurf, Codex, and generic HTTP setup examples.
 

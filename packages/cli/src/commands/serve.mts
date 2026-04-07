@@ -1,45 +1,39 @@
 import {
   DEFAULT_HTTP_HOST,
   DEFAULT_HTTP_PORT,
-  startHttpServer,
-  startServer
+  startHttpServer
 } from "@wraithwalker/mcp-server/server";
-import { findRoot } from "@wraithwalker/core/root";
 
 import type { CommandSpec } from "../lib/command.mjs";
 import { UsageError } from "../lib/command.mjs";
+import { resolveServeRoot } from "../lib/serve-root.mjs";
 
 interface ServeArgs {
+  dir?: string;
   http: boolean;
   host: string;
   port: number;
 }
 
-type ServeResult =
-  | { transport: "stdio" }
-  | {
-    transport: "streamable-http";
-    rootPath: string;
-    host: string;
-    port: number;
-    url: string;
-    tools: readonly string[];
-    warnNonLoopback: boolean;
-  };
+interface ServeResult {
+  rootPath: string;
+  host: string;
+  port: number;
+  baseUrl: string;
+  trpcUrl: string;
+  url: string;
+  tools: readonly string[];
+}
 
-function isLoopbackHost(host: string): boolean {
-  const normalized = host.startsWith("[") && host.endsWith("]")
-    ? host.slice(1, -1)
-    : host;
-
-  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+function createUsageMessage() {
+  return "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]";
 }
 
 function parsePort(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
     throw new UsageError(
-      `Invalid port: ${value}. Expected an integer between 1 and 65535.\nUsage: wraithwalker serve [--http] [--host <host>] [--port <port>]`
+      `Invalid port: ${value}. Expected an integer between 1 and 65535.\n${createUsageMessage()}`
     );
   }
 
@@ -48,15 +42,13 @@ function parsePort(value: string): number {
 
 export const command: CommandSpec<ServeArgs, ServeResult> = {
   name: "serve",
-  summary: "Start the MCP server",
-  usage: "Usage: wraithwalker serve [--http] [--host <host>] [--port <port>]",
-  requiresRoot: true,
+  summary: "Start the combined MCP+tRPC HTTP server",
+  usage: createUsageMessage(),
   parse(argv) {
+    let dir: string | undefined;
     let http = false;
     let host = DEFAULT_HTTP_HOST;
     let port = DEFAULT_HTTP_PORT;
-    let sawHost = false;
-    let sawPort = false;
 
     for (let index = 0; index < argv.length; index++) {
       const arg = argv[index];
@@ -67,40 +59,43 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
           break;
         case "--host":
           if (!argv[index + 1]) {
-            throw new UsageError("Usage: wraithwalker serve [--http] [--host <host>] [--port <port>]");
+            throw new UsageError(createUsageMessage());
           }
           host = argv[index + 1];
-          sawHost = true;
           index++;
           break;
         case "--port":
           if (!argv[index + 1]) {
-            throw new UsageError("Usage: wraithwalker serve [--http] [--host <host>] [--port <port>]");
+            throw new UsageError(createUsageMessage());
           }
           port = parsePort(argv[index + 1]);
-          sawPort = true;
           index++;
           break;
         default:
-          throw new UsageError("Usage: wraithwalker serve [--http] [--host <host>] [--port <port>]");
+          if (arg.startsWith("-")) {
+            throw new UsageError(createUsageMessage());
+          }
+
+          if (dir) {
+            throw new UsageError(createUsageMessage());
+          }
+
+          dir = arg;
       }
     }
 
-    if (!http && (sawHost || sawPort)) {
-      throw new UsageError(
-        `--host and --port require --http.\nUsage: wraithwalker serve [--http] [--host <host>] [--port <port>]`
-      );
-    }
-
-    return { http, host, port };
+    return { dir, http, host, port };
   },
   async execute(context, args) {
-    const { rootPath } = await findRoot(context.cwd);
+    void args.http;
 
-    if (!args.http) {
-      await startServer(rootPath);
-      return { transport: "stdio" };
-    }
+    const rootPath = resolveServeRoot({
+      cwd: context.cwd,
+      explicitDir: args.dir,
+      env: context.env,
+      platform: context.platform ?? process.platform,
+      homeDir: context.homeDir
+    });
 
     const handle = await startHttpServer(rootPath, {
       host: args.host,
@@ -108,36 +103,29 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
     });
 
     return {
-      transport: "streamable-http",
-      rootPath,
+      rootPath: handle.rootPath,
       host: handle.host,
       port: handle.port,
+      baseUrl: handle.baseUrl,
+      trpcUrl: handle.trpcUrl,
       url: handle.url,
-      tools: handle.tools,
-      warnNonLoopback: !isLoopbackHost(handle.host)
+      tools: handle.tools
     };
   },
   render(output, result) {
-    if (result.transport !== "streamable-http") {
-      return;
-    }
-
-    output.heading("MCP Server Ready");
+    output.heading("WraithWalker Server Ready");
     output.keyValue("Root", result.rootPath);
-    output.keyValue("Transport", result.transport);
     output.keyValue("Host", result.host);
     output.keyValue("Port", result.port);
-    output.keyValue("URL", result.url);
+    output.keyValue("Base URL", result.baseUrl);
+    output.keyValue("MCP URL", result.url);
+    output.keyValue("tRPC URL", result.trpcUrl);
 
     output.heading("Tools");
     for (const tool of result.tools) {
       output.listItem(tool);
     }
 
-    output.info("Use this URL in HTTP-capable MCP clients like Claude Code, Cursor, Windsurf, and Codex.");
-
-    if (result.warnNonLoopback) {
-      output.warn("This server is not bound to a loopback host. Review your network exposure before sharing the URL.");
-    }
+    output.info("The extension will automatically prefer the local WraithWalker server at the tRPC URL above when it is running.");
   }
 };

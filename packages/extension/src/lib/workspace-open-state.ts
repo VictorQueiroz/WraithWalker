@@ -203,7 +203,7 @@ export function resolvePopupAlert({
     };
   }
 
-  if (captureRootState.kind !== "ready") {
+  if (!snapshot.rootReady && captureRootState.kind !== "ready") {
     return {
       variant: "destructive",
       text: "Reconnect the capture root in Settings before starting or opening the workspace."
@@ -214,6 +214,13 @@ export function resolvePopupAlert({
     return {
       variant: "success",
       text: "Debugger capture and replay are active for all matching tabs."
+    };
+  }
+
+  if (snapshot.captureDestination === "server") {
+    return {
+      variant: "default",
+      text: "Session is idle. Start it when you want matching tabs to capture into the local WraithWalker server root."
     };
   }
 

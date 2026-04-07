@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "types": ["chrome"]
+    "types": ["chrome", "node"]
   },
   "include": [
     "src/**/*.ts",

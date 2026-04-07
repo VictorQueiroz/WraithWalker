@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
     rootPath: "/tmp/fixtures",
     host: "127.0.0.1",
     port: 4319,
+    baseUrl: "http://127.0.0.1:4319",
+    trpcUrl: "http://127.0.0.1:4319/trpc",
     url: "http://127.0.0.1:4319/mcp",
     tools: ["list-origins"],
     close: vi.fn().mockResolvedValue(undefined)

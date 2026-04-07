@@ -51,13 +51,15 @@ export interface SessionSnapshot {
   attachedTabIds: number[];
   enabledOrigins: string[];
   rootReady: boolean;
+  captureDestination: "none" | "local" | "server";
+  captureRootPath: string;
   lastError: string;
 }
 
 export interface RootSentinel {
   rootId: string;
-  schemaVersion: number;
-  createdAt: string;
+  schemaVersion?: number;
+  createdAt?: string;
 }
 
 export interface AttachedTabState {

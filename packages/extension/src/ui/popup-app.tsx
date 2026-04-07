@@ -149,19 +149,7 @@ export function PopupApp({
   async function handleOpenEditor() {
     setBusyAction("open");
     try {
-      const environment = await refreshEnvironment();
-      const nextEditorLaunchState = deriveEditorLaunchState(
-        environment.nativeHostConfig,
-        DEFAULT_EDITOR_ID
-      );
-      if (environment.captureRootState.kind !== "ready") {
-        setActionAlert(resolvePopupAlert({
-          snapshot,
-          captureRootState: environment.captureRootState,
-          editorLaunchState: nextEditorLaunchState
-        }));
-        return;
-      }
+      await refreshEnvironment();
 
       const result = await sendMessage<NativeOpenResult>(runtime, {
         type: "native.open",
@@ -193,6 +181,11 @@ export function PopupApp({
             <p className="text-sm text-muted-foreground">
               Start capture, open the remembered root, or jump straight to Settings.
             </p>
+            {snapshot?.captureDestination === "server" ? (
+              <p className="text-xs text-muted-foreground">
+                Using local WraithWalker server root: {snapshot.captureRootPath}
+              </p>
+            ) : null}
           </div>
 
           <Alert variant={alert.variant}>{alert.text}</Alert>

@@ -4,6 +4,8 @@ import type { ResolvedCliConfig } from "./theme.mjs";
 export interface CommandContext {
   cwd: string;
   env: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  homeDir?: string;
   output: Output;
   cliConfig: ResolvedCliConfig;
 }

@@ -2,7 +2,7 @@ import {
   DEFAULT_CONTEXT_FILES,
   EDITOR_CONTEXT_FILES
 } from "./constants.mjs";
-import { readOriginInfo, readSiteConfigs, type OriginInfo } from "./fixtures.mjs";
+import { readOriginInfo, readSiteConfigs, type OriginInfo, type SiteConfigLike } from "./fixtures.mjs";
 import {
   inferTypeNode,
   mergeTypeNodes,
@@ -13,13 +13,8 @@ import {
 } from "./type-extractor.mjs";
 
 export interface FsGateway {
-  exists(rootPath: string, relativePath: string): Promise<boolean>;
-  readJson<T>(rootPath: string, relativePath: string): Promise<T>;
-  readOptionalJson<T>(rootPath: string, relativePath: string): Promise<T | null>;
   readText(rootPath: string, relativePath: string): Promise<string>;
   writeText(rootPath: string, relativePath: string, content: string): Promise<void>;
-  writeJson(rootPath: string, relativePath: string, value: unknown): Promise<void>;
-  listDirectory(rootPath: string, relativePath: string): Promise<Array<{ name: string; kind: "file" | "directory" }>>;
 }
 
 interface ApiEndpointSummary {
@@ -189,8 +184,13 @@ function renderContextMarkdown(origins: OriginSummary[], generatedAt: string): s
   return lines.join("\n");
 }
 
-export async function generateContext(rootPath: string, gateway: FsGateway, editorId?: string): Promise<string> {
-  const configs = await readSiteConfigs(rootPath);
+export async function generateContext(
+  rootPath: string,
+  gateway: FsGateway,
+  editorId?: string,
+  siteConfigsOverride?: SiteConfigLike[]
+): Promise<string> {
+  const configs = siteConfigsOverride ?? await readSiteConfigs(rootPath);
   const origins: OriginSummary[] = [];
 
   for (const config of configs) {

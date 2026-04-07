@@ -22,6 +22,12 @@ npm run build
 5. Browse the website while the session is running.
 6. Click **Open in Cursor** to open that same folder and send the workspace prompt.
 
+## Optional Local Server
+
+Run `wraithwalker serve` if you want one local HTTP server that exposes both MCP and the WraithWalker capture backend.
+
+When that server is running, the extension automatically prefers the server root for capture and Cursor open flows. Without it, the extension keeps using the locally selected root folder.
+
 ## What Cursor Does Here
 
 Cursor works from the dumped CSS, JS, HTML, and other accessed assets captured into that root folder. The prompt and generated workspace files help the agent prettify what was dumped and understand how the selected website is structured.
@@ -33,5 +39,6 @@ No files are captured unless a Session is running.
 ## More Docs
 
 - [Extension and Cursor workflow](docs/extension-workflow.md)
+- [Serve command and local server flow](packages/cli/README.md)
 - [MCP clients](docs/mcp-clients.md)
 - [npm releases](docs/npm-releases.md)

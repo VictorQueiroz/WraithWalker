@@ -98,6 +98,8 @@ describe("workspace open state", () => {
       attachedTabIds: [],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
+      captureDestination: "local" as const,
+      captureRootPath: "/tmp/fixtures",
       lastError: ""
     };
     const editorLaunchState = deriveEditorLaunchState(DEFAULT_NATIVE_HOST_CONFIG, "cursor");

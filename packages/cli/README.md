@@ -16,7 +16,7 @@ wraithwalker scenarios list          # List saved scenarios
 wraithwalker scenarios save <name>   # Save current fixtures as a named scenario
 wraithwalker scenarios switch <name> # Switch to a saved scenario
 wraithwalker scenarios diff <a> <b>  # Compare two scenarios
-wraithwalker serve [--http] [--host <host>] [--port <port>] # Start the MCP server
+wraithwalker serve [dir] [--http] [--host <host>] [--port <port>] # Start the combined MCP+tRPC HTTP server
 ```
 
 ## Root Discovery
@@ -126,14 +126,32 @@ wraithwalker scenarios diff logged-in-admin empty-cart
 
 Scenarios are stored in `.wraithwalker/scenarios/` and copy fixture files (not symlinks) to ensure portability.
 
-## MCP Server
+## Local Server
 
-`wraithwalker serve` starts the MCP server pointed at the nearest fixture root. This is a convenience wrapper around `@wraithwalker/mcp-server/server`.
+`wraithwalker serve` now starts one local HTTP server that exposes both:
 
-- `wraithwalker serve` keeps the existing `stdio` transport for process-spawned MCP clients.
-- `wraithwalker serve --http` starts Streamable HTTP on `http://127.0.0.1:4319/mcp` by default.
-- `--host` and `--port` are only valid with `--http`.
-- When HTTP mode starts, the CLI prints the final MCP URL and available tools so you can paste the URL into Cursor, Windsurf, Codex, or other HTTP-capable MCP clients.
+- MCP at `/mcp`
+- the WraithWalker extension capture backend at `/trpc`
+
+`--http` is still accepted for backward compatibility, but it is now a no-op alias because `serve` is already HTTP-first.
+
+By default the server binds to `127.0.0.1:4319` and chooses its content root in this order:
+
+1. explicit `dir`
+2. `WRAITHWALKER_ROOT`
+3. platform default content root
+
+Platform default content roots:
+
+- macOS: `~/Library/Application Support/WraithWalker/content`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker/content`
+- Windows: `%LOCALAPPDATA%/WraithWalker/content`
+
+The server auto-creates the root with the normal `.wraithwalker/root.json` bootstrap if it does not exist yet.
+
+When the local server is running, the browser extension automatically prefers it for capture, fixture reads, context generation, and Cursor open flows. The local root picker remains the fallback when the server is unavailable.
+
+Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and local-only by design.
 
 ## Development
 

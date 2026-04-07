@@ -99,6 +99,11 @@ interface RequestLifecycleDependencies {
   sendDebuggerCommand: <T = unknown>(tabId: number, method: string, params?: Record<string, unknown>) => Promise<T>;
   sendOffscreenMessage: <T = unknown>(type: string, payload?: Record<string, unknown>) => Promise<T>;
   setLastError: (message: string) => void;
+  repository?: {
+    exists: (descriptor: FixtureDescriptor) => Promise<boolean>;
+    read: (descriptor: FixtureDescriptor) => Promise<StoredFixture | null>;
+    writeIfAbsent: (payload: FixtureWritePayload) => Promise<unknown>;
+  };
   getSiteConfigForOrigin?: (topOrigin: string) => SiteConfig | undefined;
   createFixtureDescriptor?: (entry: {
     topOrigin: string;
@@ -119,6 +124,7 @@ export function createRequestLifecycle({
   sendDebuggerCommand,
   sendOffscreenMessage,
   setLastError,
+  repository: repositoryOverride,
   getSiteConfigForOrigin,
   createFixtureDescriptor = defaultCreateFixtureDescriptor,
   createInterceptionMiddleware = defaultCreateInterceptionMiddleware,
@@ -166,7 +172,7 @@ export function createRequestLifecycle({
   const capturePolicy = createCapturePolicy({ getSiteConfigForOrigin });
   const storageLayout = createStorageLayoutResolver({ createFixtureDescriptor });
 
-  const repository = {
+  const repository = repositoryOverride || {
     async exists(descriptor: FixtureDescriptor): Promise<boolean> {
       const fixtureCheck = await sendOffscreenMessage<FixtureCheckResponse>("fs.hasFixture", { descriptor });
       if (!fixtureCheck.ok) {

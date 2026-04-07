@@ -837,6 +837,12 @@ describe("background entrypoint", () => {
         handleNetworkLoadingFailed: vi.fn()
       })),
       initialState: {
+        localRootReady: true,
+        localRootSentinel: {
+          rootId: "root-scenarios",
+          schemaVersion: 1,
+          createdAt: "2026-04-03T00:00:00.000Z"
+        },
         rootSentinel: {
           rootId: "root-scenarios",
           schemaVersion: 1,

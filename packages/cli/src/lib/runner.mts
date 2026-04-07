@@ -37,7 +37,7 @@ Commands:
   scenarios save <name>          Save current fixtures as a scenario
   scenarios switch <name>        Switch to a saved scenario
   scenarios diff <a> <b>         Compare two scenarios
-  serve [--http] [--host <host>] [--port <port>] Start the MCP server`;
+  serve [dir] [--http] [--host <host>] [--port <port>] Start the MCP+tRPC HTTP server`;
 
 function createOutput(
   cliConfig: CommandContext["cliConfig"],
@@ -98,6 +98,8 @@ export async function runCli(
     const context: CommandContext = {
       cwd,
       env,
+      platform,
+      homeDir,
       output,
       cliConfig
     };

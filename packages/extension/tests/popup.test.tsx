@@ -28,6 +28,8 @@ function createSnapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnapsh
     attachedTabIds: [],
     enabledOrigins: ["https://app.example.com"],
     rootReady: true,
+    captureDestination: "local",
+    captureRootPath: "/tmp/fixtures",
     lastError: "",
     ...overrides
   };
@@ -281,7 +283,11 @@ describe("popup entrypoint", () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot({
+        rootReady: false,
+        captureDestination: "none",
+        captureRootPath: ""
+      })),
       openOptionsPage: vi.fn()
     };
 

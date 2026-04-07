@@ -118,6 +118,8 @@ describe("chrome storage helpers", () => {
       attachedTabIds: [1, 2],
       enabledOrigins: ["https://app.example.com"],
       rootReady: true,
+      captureDestination: "local" as const,
+      captureRootPath: "/tmp/fixtures",
       lastError: ""
     };
 

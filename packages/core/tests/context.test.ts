@@ -8,24 +8,6 @@ import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalke
 
 function createFsGateway(): FsGateway {
   return {
-    async exists(rootPath, relativePath) {
-      try {
-        await fs.access(path.join(rootPath, relativePath));
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    async readJson(rootPath, relativePath) {
-      return JSON.parse(await fs.readFile(path.join(rootPath, relativePath), "utf8"));
-    },
-    async readOptionalJson(rootPath, relativePath) {
-      try {
-        return JSON.parse(await fs.readFile(path.join(rootPath, relativePath), "utf8"));
-      } catch {
-        return null;
-      }
-    },
     async readText(rootPath, relativePath) {
       return fs.readFile(path.join(rootPath, relativePath), "utf8");
     },
@@ -33,19 +15,6 @@ function createFsGateway(): FsGateway {
       const absolute = path.join(rootPath, relativePath);
       await fs.mkdir(path.dirname(absolute), { recursive: true });
       await fs.writeFile(absolute, content, "utf8");
-    },
-    async writeJson(rootPath, relativePath, value) {
-      const absolute = path.join(rootPath, relativePath);
-      await fs.mkdir(path.dirname(absolute), { recursive: true });
-      await fs.writeFile(absolute, JSON.stringify(value, null, 2), "utf8");
-    },
-    async listDirectory(rootPath, relativePath) {
-      const dirPath = relativePath ? path.join(rootPath, relativePath) : rootPath;
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-      return entries.map((entry) => ({
-        name: entry.name,
-        kind: entry.isDirectory() ? "directory" as const : "file" as const
-      }));
     }
   };
 }

@@ -16,7 +16,23 @@ import {
 import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
-import type { AttachedTabState, NativeHostConfig, RequestEntry, RootSentinel, SessionSnapshot, SiteConfig } from "./lib/types.js";
+import type {
+  AttachedTabState,
+  FixtureDescriptor,
+  NativeHostConfig,
+  RequestEntry,
+  RequestPayload,
+  ResponseMeta,
+  RootSentinel,
+  SessionSnapshot,
+  SiteConfig,
+  StoredFixture
+} from "./lib/types.js";
+import {
+  createWraithWalkerServerClient as defaultCreateWraithWalkerServerClient,
+  isServerCacheFresh,
+  type WraithWalkerServerClient
+} from "./lib/wraithwalker-server.js";
 
 const DEBUGGER_VERSION = "1.3";
 type DetachReason = "target_closed" | "canceled_by_user";
@@ -96,9 +112,19 @@ interface BackgroundState {
   siteConfigsByOrigin: Map<string, SiteConfig>;
   preferredEditorId: string;
   lastError: string;
+  localRootReady: boolean;
+  localRootSentinel: RootSentinel | null;
   rootReady: boolean;
   rootSentinel: RootSentinel | null;
   nativeHostConfig: NativeHostConfig;
+  serverInfo: {
+    rootPath: string;
+    sentinel: RootSentinel;
+    baseUrl: string;
+    mcpUrl: string;
+    trpcUrl: string;
+  } | null;
+  serverCheckedAt: number;
 }
 
 interface SessionControllerApi {
@@ -125,6 +151,7 @@ interface BackgroundDependencies {
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getPreferredEditorId?: typeof defaultGetPreferredEditorId;
   setLastSessionSnapshot?: typeof defaultSetLastSessionSnapshot;
+  createWraithWalkerServerClient?: typeof defaultCreateWraithWalkerServerClient;
   createSessionController?: (dependencies: Parameters<typeof defaultCreateSessionController>[0]) => SessionControllerApi;
   createRequestLifecycle?: (dependencies: Parameters<typeof defaultCreateRequestLifecycle>[0]) => RequestLifecycleApi;
   initialState?: Partial<BackgroundState>;
@@ -173,6 +200,7 @@ export function createBackgroundRuntime({
   getNativeHostConfig = defaultGetNativeHostConfig,
   getPreferredEditorId = defaultGetPreferredEditorId,
   setLastSessionSnapshot = defaultSetLastSessionSnapshot,
+  createWraithWalkerServerClient = defaultCreateWraithWalkerServerClient,
   createSessionController = defaultCreateSessionController,
   createRequestLifecycle = defaultCreateRequestLifecycle,
   initialState = {}
@@ -185,16 +213,62 @@ export function createBackgroundRuntime({
     siteConfigsByOrigin: new Map(),
     preferredEditorId: DEFAULT_EDITOR_ID,
     lastError: "",
+    localRootReady: false,
+    localRootSentinel: null,
     rootReady: false,
     rootSentinel: null,
     nativeHostConfig: { ...DEFAULT_NATIVE_HOST_CONFIG },
+    serverInfo: null,
+    serverCheckedAt: 0,
     ...initialState
   };
+
+  const serverClient = createWraithWalkerServerClient();
 
   let listenersRegistered = false;
 
   function setLastError(message: string) {
     state.lastError = message || "";
+  }
+
+  function updateEffectiveRootState(): void {
+    if (state.serverInfo) {
+      state.rootReady = true;
+      state.rootSentinel = state.serverInfo.sentinel;
+      return;
+    }
+
+    state.rootReady = state.localRootReady;
+    state.rootSentinel = state.localRootSentinel;
+  }
+
+  function markServerOffline(): void {
+    state.serverInfo = null;
+    state.serverCheckedAt = Date.now();
+    updateEffectiveRootState();
+  }
+
+  async function refreshServerInfo({ force = false }: { force?: boolean } = {}): Promise<typeof state.serverInfo> {
+    if (!force && isServerCacheFresh(state.serverCheckedAt)) {
+      return state.serverInfo;
+    }
+
+    try {
+      const info = await serverClient.getSystemInfo();
+      state.serverInfo = {
+        rootPath: info.rootPath,
+        sentinel: info.sentinel,
+        baseUrl: info.baseUrl,
+        mcpUrl: info.mcpUrl,
+        trpcUrl: info.trpcUrl
+      };
+      state.serverCheckedAt = Date.now();
+      updateEffectiveRootState();
+      return state.serverInfo;
+    } catch {
+      markServerOffline();
+      return null;
+    }
   }
 
   function getRequiredRootId(rootResult: RootReadySuccess): string | null {
@@ -214,11 +288,19 @@ export function createBackgroundRuntime({
   }
 
   async function snapshotState(): Promise<SessionSnapshot> {
+    await refreshServerInfo();
+
     return buildSessionSnapshot({
       sessionActive: state.sessionActive,
       attachedTabIds: [...state.attachedTabs.keys()],
       enabledOrigins: [...state.enabledOrigins],
       rootReady: state.rootReady,
+      captureDestination: state.serverInfo
+        ? "server"
+        : state.localRootReady
+          ? "local"
+          : "none",
+      captureRootPath: state.serverInfo?.rootPath || "",
       lastError: state.lastError
     });
   }
@@ -269,42 +351,220 @@ export function createBackgroundRuntime({
     } as OffscreenMessage) as Promise<T>;
   }
 
-  async function ensureRootReady({ requestPermission = false }: { requestPermission?: boolean } = {}): Promise<RootReadyResult> {
+  async function ensureLocalRootReady(
+    { requestPermission = false, silent = false }: { requestPermission?: boolean; silent?: boolean } = {}
+  ): Promise<RootReadyResult> {
     const result = await sendOffscreenMessage<RootReadyResult>("fs.ensureRoot", { requestPermission });
-    state.rootReady = Boolean(result.ok);
-    state.rootSentinel = result.ok ? result.sentinel : null;
-    setLastError(result.ok ? "" : getErrorMessage(result as ErrorResult));
+    state.localRootReady = Boolean(result.ok);
+    state.localRootSentinel = result.ok ? result.sentinel : null;
+    updateEffectiveRootState();
+    if (!silent) {
+      setLastError(result.ok ? "" : getErrorMessage(result as ErrorResult));
+    }
     return result;
+  }
+
+  async function ensureRootReady({ requestPermission = false }: { requestPermission?: boolean } = {}): Promise<RootReadyResult> {
+    const serverInfo = await refreshServerInfo({ force: true });
+    if (serverInfo) {
+      setLastError("");
+      return {
+        ok: true,
+        sentinel: serverInfo.sentinel,
+        permission: "granted"
+      };
+    }
+
+    return ensureLocalRootReady({ requestPermission });
+  }
+
+  async function localFixtureExists(descriptor: FixtureDescriptor): Promise<boolean> {
+    const fixtureCheck = await sendOffscreenMessage<{ ok: boolean; exists?: boolean; error?: string }>("fs.hasFixture", { descriptor } as Record<string, unknown>);
+    if (!fixtureCheck.ok) {
+      throw new Error(fixtureCheck.error || "Fixture lookup failed.");
+    }
+
+    return Boolean(fixtureCheck.exists);
+  }
+
+  async function localReadFixture(descriptor: FixtureDescriptor): Promise<StoredFixture | null> {
+    const fixture = await sendOffscreenMessage<{
+      ok: boolean;
+      exists?: boolean;
+      request?: RequestPayload;
+      meta?: ResponseMeta;
+      bodyBase64?: string;
+      size?: number;
+      error?: string;
+    }>("fs.readFixture", { descriptor } as Record<string, unknown>);
+    if (!fixture.ok) {
+      throw new Error(fixture.error || "Fixture lookup failed.");
+    }
+
+    if (!fixture.exists || !fixture.meta || !fixture.bodyBase64 || !fixture.request) {
+      return null;
+    }
+
+    return {
+      request: fixture.request,
+      meta: fixture.meta,
+      bodyBase64: fixture.bodyBase64,
+      size: fixture.size || 0
+    };
+  }
+
+  async function localWriteFixture(payload: {
+    descriptor: FixtureDescriptor;
+    request: RequestPayload;
+    response: {
+      body: string;
+      bodyEncoding: "utf8" | "base64";
+      meta: ResponseMeta;
+    };
+  }): Promise<{ written: boolean; descriptor: FixtureDescriptor; sentinel: RootSentinel }> {
+    const result = await sendOffscreenMessage<{
+      ok: boolean;
+      descriptor?: FixtureDescriptor;
+      sentinel?: RootSentinel;
+      error?: string;
+    }>("fs.writeFixture", payload);
+    if (!result.ok) {
+      throw new Error(result.error || "Fixture write failed.");
+    }
+
+    return {
+      written: true,
+      descriptor: result.descriptor || payload.descriptor,
+      sentinel: result.sentinel || state.rootSentinel || { rootId: "" }
+    };
+  }
+
+  async function withServerFallback<T>({
+    remoteOperation,
+    localOperation
+  }: {
+    remoteOperation: (info: NonNullable<typeof state.serverInfo>) => Promise<T>;
+    localOperation: () => Promise<T>;
+  }): Promise<T> {
+    const serverInfo = await refreshServerInfo();
+    if (!serverInfo) {
+      return localOperation();
+    }
+
+    try {
+      return await remoteOperation(serverInfo);
+    } catch (error) {
+      markServerOffline();
+      const localRoot = await ensureLocalRootReady({ silent: true });
+      if (localRoot.ok) {
+        return localOperation();
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Local WraithWalker server is unavailable and no fallback root is ready. ${message}`);
+    }
+  }
+
+  async function resolveActiveLaunchTarget({
+    requestPermission = false
+  }: {
+    requestPermission?: boolean;
+  } = {}): Promise<
+    | { ok: true; rootId: string; launchPath: string; source: "server" | "local" }
+    | { ok: false; error: string }
+  > {
+    const serverInfo = await refreshServerInfo({ force: true });
+    if (serverInfo) {
+      const rootId = getRequiredRootId({
+        ok: true,
+        sentinel: serverInfo.sentinel,
+        permission: "granted"
+      });
+      if (!rootId) {
+        return { ok: false, error: "Root sentinel is missing a rootId." };
+      }
+
+      return {
+        ok: true,
+        rootId,
+        launchPath: serverInfo.rootPath,
+        source: "server"
+      };
+    }
+
+    const rootResult: RootReadyResult = !requestPermission && state.localRootReady && state.localRootSentinel
+      ? {
+          ok: true,
+          sentinel: state.localRootSentinel,
+          permission: "granted"
+        }
+      : await ensureLocalRootReady({ requestPermission });
+    if (!rootResult.ok) {
+      return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
+    }
+
+    const rootId = getRequiredRootId(rootResult);
+    if (!rootId) {
+      return { ok: false, error: "Root sentinel is missing a rootId." };
+    }
+
+    const launchPath = state.nativeHostConfig.launchPath.trim();
+    if (!launchPath) {
+      return { ok: false, error: "Configure the shared editor launch path in the options page first." };
+    }
+
+    return {
+      ok: true,
+      rootId,
+      launchPath,
+      source: "local"
+    };
   }
 
   async function verifyNativeHostRoot({
     requestPermission = false,
-    rootResult
+    rootResult,
+    launchPathOverride
   }: {
     requestPermission?: boolean;
     rootResult?: RootReadySuccess;
+    launchPathOverride?: string;
   } = {}): Promise<NativeVerifyResult> {
     await refreshStoredConfig();
-    const resolvedRoot = rootResult || await ensureRootReady({ requestPermission });
-    if (!resolvedRoot.ok) {
-      return { ok: false, error: getErrorMessage(resolvedRoot as ErrorResult) };
-    }
-
-    if (!state.nativeHostConfig.hostName || !state.nativeHostConfig.launchPath) {
+    if (!state.nativeHostConfig.hostName.trim()) {
       const error = "Configure the native host name and shared editor launch path in the options page first.";
       return { ok: false, error };
     }
 
-    const rootId = getRequiredRootId(resolvedRoot);
-    if (!rootId) {
-      return { ok: false, error: "Root sentinel is missing a rootId." };
+    let resolvedTarget: Awaited<ReturnType<typeof resolveActiveLaunchTarget>>;
+    if (rootResult) {
+      const rootId = getRequiredRootId(rootResult);
+      if (!rootId) {
+        return { ok: false, error: "Root sentinel is missing a rootId." };
+      }
+
+      resolvedTarget = {
+        ok: true,
+        rootId,
+        launchPath: launchPathOverride ?? state.nativeHostConfig.launchPath.trim(),
+        source: "local"
+      };
+    } else {
+      resolvedTarget = await resolveActiveLaunchTarget({ requestPermission });
+    }
+    if (resolvedTarget.ok === false) {
+      return { ok: false, error: resolvedTarget.error };
+    }
+
+    if (!resolvedTarget.launchPath) {
+      return { ok: false, error: "Configure the shared editor launch path in the options page first." };
     }
 
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "verifyRoot",
-        path: state.nativeHostConfig.launchPath,
-        expectedRootId: rootId
+        path: resolvedTarget.launchPath,
+        expectedRootId: resolvedTarget.rootId
       });
 
       if (!response?.ok) {
@@ -319,9 +579,14 @@ export function createBackgroundRuntime({
 
   async function generateContext(editorId?: string): Promise<void> {
     try {
-      await sendOffscreenMessage("fs.generateContext", {
+      const payload = {
         siteConfigs: [...state.siteConfigsByOrigin.values()],
         editorId
+      };
+
+      await withServerFallback({
+        remoteOperation: () => serverClient.generateContext(payload),
+        localOperation: () => sendOffscreenMessage("fs.generateContext", payload)
       });
     } catch {
       // Context generation failure should not block editor open
@@ -352,12 +617,13 @@ export function createBackgroundRuntime({
 
   async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
     await refreshStoredConfig();
+    const serverInfo = await refreshServerInfo({ force: true });
     const resolvedEditorId = editorId || state.preferredEditorId;
     const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
     const urlTemplate = launch.urlTemplate.trim();
     const appUrl = launch.appUrl.trim();
     const canLaunchEditorApp = Boolean(appUrl && !launch.hasCustomUrlOverride);
-    const launchPath = state.nativeHostConfig.launchPath.trim();
+    const launchPath = serverInfo?.rootPath || state.nativeHostConfig.launchPath.trim();
     const isCursorLaunch = launch.editorId === DEFAULT_EDITOR_ID;
     const cursorPromptUrl = isCursorLaunch
       ? buildCursorPromptUrl(buildCursorPromptText(state.enabledOrigins))
@@ -365,20 +631,15 @@ export function createBackgroundRuntime({
 
     await generateContext(resolvedEditorId);
 
-    const rootResult = await ensureRootReady({ requestPermission: true });
-    if (!rootResult.ok) {
-      return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
-    }
-
     if (isCursorLaunch) {
       const urls: string[] = [];
 
       if (launchPath && urlTemplate) {
-        const rootId = getRequiredRootId(rootResult);
-        if (!rootId) {
-          return { ok: false, error: "Root sentinel is missing a rootId." };
+        const target = await resolveActiveLaunchTarget({ requestPermission: true });
+        if (target.ok === false) {
+          return { ok: false, error: target.error };
         }
-        urls.push(buildEditorLaunchUrl(urlTemplate, launchPath, rootId));
+        urls.push(buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId));
       }
 
       urls.push(cursorPromptUrl);
@@ -397,14 +658,26 @@ export function createBackgroundRuntime({
     }
 
     if (urlTemplate) {
-      const rootId = getRequiredRootId(rootResult);
-      if (!rootId) {
-        return { ok: false, error: "Root sentinel is missing a rootId." };
+      const target = await resolveActiveLaunchTarget({ requestPermission: true });
+      if (target.ok === false) {
+        return { ok: false, error: target.error };
       }
-      return openEditorViaUrl(buildEditorLaunchUrl(urlTemplate, launchPath, rootId));
+      return openEditorViaUrl(buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId));
     }
 
-    const verification = await verifyNativeHostRoot({ rootResult });
+    const target = await resolveActiveLaunchTarget({ requestPermission: true });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
+    }
+
+    const verification = await verifyNativeHostRoot({
+      rootResult: {
+        ok: true,
+        sentinel: state.rootSentinel!,
+        permission: "granted"
+      },
+      launchPathOverride: target.launchPath
+    });
     if (!verification.ok) {
       return verification;
     }
@@ -412,8 +685,8 @@ export function createBackgroundRuntime({
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "openDirectory",
-        path: launchPath,
-        expectedRootId: rootResult.sentinel.rootId,
+        path: target.launchPath,
+        expectedRootId: target.rootId,
         commandTemplate: commandTemplate || launch.commandTemplate
       });
 
@@ -429,26 +702,20 @@ export function createBackgroundRuntime({
 
   async function revealRootInOs(): Promise<NativeOpenResult> {
     await refreshStoredConfig();
-    const rootResult = await ensureRootReady({ requestPermission: true });
-    if (!rootResult.ok) {
-      return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
+    const target = await resolveActiveLaunchTarget({ requestPermission: true });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
     }
 
-    const launchPath = state.nativeHostConfig.launchPath.trim();
-    if (!state.nativeHostConfig.hostName || !launchPath) {
+    if (!state.nativeHostConfig.hostName.trim()) {
       return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
-    }
-
-    const rootId = getRequiredRootId(rootResult);
-    if (!rootId) {
-      return { ok: false, error: "Root sentinel is missing a rootId." };
     }
 
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "revealDirectory",
-        path: launchPath,
-        expectedRootId: rootId
+        path: target.launchPath,
+        expectedRootId: target.rootId
       });
 
       if (!response?.ok) {
@@ -518,6 +785,32 @@ export function createBackgroundRuntime({
       payload?: Record<string, unknown>
     ) => Promise<T>,
     setLastError,
+    repository: {
+      exists: (descriptor) => withServerFallback({
+        remoteOperation: () => serverClient.hasFixture(descriptor).then((result) => result.exists),
+        localOperation: () => localFixtureExists(descriptor)
+      }),
+      read: (descriptor) => withServerFallback({
+        remoteOperation: async () => {
+          const result = await serverClient.readFixture(descriptor);
+          if (!result.exists) {
+            return null;
+          }
+
+          return {
+            request: result.request,
+            meta: result.meta,
+            bodyBase64: result.bodyBase64,
+            size: result.size
+          };
+        },
+        localOperation: () => localReadFixture(descriptor)
+      }),
+      writeIfAbsent: (payload) => withServerFallback({
+        remoteOperation: () => serverClient.writeFixtureIfAbsent(payload),
+        localOperation: () => localWriteFixture(payload)
+      })
+    },
     getSiteConfigForOrigin: (topOrigin: string) => state.siteConfigsByOrigin.get(topOrigin)
   });
 
@@ -625,29 +918,41 @@ export function createBackgroundRuntime({
       }
       case "scenario.list": {
         await refreshStoredConfig();
+        const target = await resolveActiveLaunchTarget({ requestPermission: false });
+        if (target.ok === false) {
+          return { ok: false, error: target.error };
+        }
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
           type: "listScenarios",
-          path: state.nativeHostConfig.launchPath,
-          expectedRootId: state.rootSentinel?.rootId
+          path: target.launchPath,
+          expectedRootId: target.rootId
         });
         return result as { ok: true; scenarios: string[] };
       }
       case "scenario.save": {
         await refreshStoredConfig();
+        const target = await resolveActiveLaunchTarget({ requestPermission: false });
+        if (target.ok === false) {
+          return { ok: false, error: target.error };
+        }
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
           type: "saveScenario",
-          path: state.nativeHostConfig.launchPath,
-          expectedRootId: state.rootSentinel?.rootId,
+          path: target.launchPath,
+          expectedRootId: target.rootId,
           name: message.name
         });
         return result as { ok: true; name: string };
       }
       case "scenario.switch": {
         await refreshStoredConfig();
+        const target = await resolveActiveLaunchTarget({ requestPermission: false });
+        if (target.ok === false) {
+          return { ok: false, error: target.error };
+        }
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
           type: "switchScenario",
-          path: state.nativeHostConfig.launchPath,
-          expectedRootId: state.rootSentinel?.rootId,
+          path: target.launchPath,
+          expectedRootId: target.rootId,
           name: message.name
         });
         return result as { ok: true; name: string };
@@ -689,12 +994,18 @@ export function createBackgroundRuntime({
     chromeApi.storage.onChanged.addListener(handleStorageChanged);
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
     chromeApi.runtime.onStartup.addListener(() => {
-      refreshStoredConfig().catch((error: unknown) => {
+      Promise.all([
+        refreshStoredConfig(),
+        refreshServerInfo({ force: true })
+      ]).catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
     });
     chromeApi.runtime.onInstalled.addListener(() => {
-      refreshStoredConfig().catch((error: unknown) => {
+      Promise.all([
+        refreshStoredConfig(),
+        refreshServerInfo({ force: true })
+      ]).catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
     });
@@ -704,6 +1015,7 @@ export function createBackgroundRuntime({
   async function start(): Promise<void> {
     registerListeners();
     await refreshStoredConfig();
+    await refreshServerInfo({ force: true });
   }
 
   return {

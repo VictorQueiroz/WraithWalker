@@ -18,6 +18,7 @@ export interface FixtureRootFs {
   stat(relativePath: string): Promise<Stats | null>;
   readText(relativePath: string): Promise<string>;
   readOptionalText(relativePath: string): Promise<string | null>;
+  readBodyAsBase64(relativePath: string): Promise<string>;
   readJson<T>(relativePath: string): Promise<T>;
   readOptionalJson<T>(relativePath: string): Promise<T | null>;
   writeText(relativePath: string, content: string): Promise<void>;
@@ -128,6 +129,11 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     return JSON.parse(await readText(relativePath)) as T;
   }
 
+  async function readBodyAsBase64(relativePath: string): Promise<string> {
+    const body = await fs.readFile(requireWithinRoot(rootPath, relativePath));
+    return body.toString("base64");
+  }
+
   async function readOptionalJson<T>(relativePath: string): Promise<T | null> {
     try {
       return await readJson<T>(relativePath);
@@ -224,6 +230,7 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     stat,
     readText,
     readOptionalText,
+    readBodyAsBase64,
     readJson,
     readOptionalJson,
     writeText,

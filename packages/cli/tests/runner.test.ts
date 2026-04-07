@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
     rootPath: "/tmp/fixtures",
     host: "127.0.0.1",
     port: 4319,
+    baseUrl: "http://127.0.0.1:4319",
+    trpcUrl: "http://127.0.0.1:4319/trpc",
     url: "http://127.0.0.1:4319/mcp",
     tools: [
       "list-origins",
@@ -65,7 +67,25 @@ function consoleCapture() {
 
 beforeEach(() => {
   mocks.startServer.mockClear();
-  mocks.startHttpServer.mockClear();
+  mocks.startHttpServer.mockReset();
+  mocks.startHttpServer.mockResolvedValue({
+    rootPath: "/tmp/fixtures",
+    host: "127.0.0.1",
+    port: 4319,
+    baseUrl: "http://127.0.0.1:4319",
+    trpcUrl: "http://127.0.0.1:4319/trpc",
+    url: "http://127.0.0.1:4319/mcp",
+    tools: [
+      "list-origins",
+      "list-endpoints",
+      "read-endpoint-fixture",
+      "read-fixture",
+      "read-manifest",
+      "list-scenarios",
+      "diff-scenarios"
+    ],
+    close: vi.fn().mockResolvedValue(undefined)
+  });
 });
 
 afterEach(() => {
@@ -257,18 +277,22 @@ describe("cli runner", () => {
 
   it("starts the MCP server through the exported API", async () => {
     const { runCli } = await loadRunner();
-    const root = await createFixtureRoot();
+    const cwd = await tmpdir();
+    const homeDir = await tmpdir();
 
     const exitCode = await runCli(["serve"], {
-      cwd: root.rootPath,
+      cwd,
       env: {},
-      homeDir: await tmpdir(),
+      homeDir,
       platform: "linux",
       isTTY: false
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.startServer).toHaveBeenCalledWith(root.rootPath);
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(path.join(homeDir, ".local", "share", "wraithwalker", "content"), {
+      host: "127.0.0.1",
+      port: 4319
+    });
   });
 
   it("starts the HTTP MCP server with default connection details", async () => {
@@ -278,6 +302,8 @@ describe("cli runner", () => {
       rootPath: root.rootPath,
       host: "127.0.0.1",
       port: 4319,
+      baseUrl: "http://127.0.0.1:4319",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
       url: "http://127.0.0.1:4319/mcp",
       tools: [
         "list-origins",
@@ -292,7 +318,7 @@ describe("cli runner", () => {
     });
     const capture = consoleCapture();
 
-    const exitCode = await runCli(["serve", "--http"], {
+    const exitCode = await runCli(["serve", root.rootPath, "--http"], {
       cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
@@ -306,24 +332,26 @@ describe("cli runner", () => {
       port: 4319
     });
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/mcp");
-    expect(capture.logs.join("\n")).toContain("streamable-http");
+    expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/trpc");
     expect(capture.logs.join("\n")).toContain("list-origins");
   });
 
-  it("accepts custom HTTP host and port values", async () => {
+  it("accepts custom HTTP host and port values when a root dir is explicit", async () => {
     const { runCli } = await loadRunner();
     const root = await createFixtureRoot();
     mocks.startHttpServer.mockResolvedValueOnce({
       rootPath: root.rootPath,
       host: "0.0.0.0",
       port: 8321,
+      baseUrl: "http://0.0.0.0:8321",
+      trpcUrl: "http://0.0.0.0:8321/trpc",
       url: "http://0.0.0.0:8321/mcp",
       tools: ["list-origins"],
       close: vi.fn().mockResolvedValue(undefined)
     });
     const capture = consoleCapture();
 
-    const exitCode = await runCli(["serve", "--http", "--host", "0.0.0.0", "--port", "8321"], {
+    const exitCode = await runCli(["serve", root.rootPath, "--http", "--host", "0.0.0.0", "--port", "8321"], {
       cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
@@ -336,15 +364,26 @@ describe("cli runner", () => {
       host: "0.0.0.0",
       port: 8321
     });
-    expect(capture.errors.join("\n")).toContain("not bound to a loopback host");
+    expect(capture.logs.join("\n")).toContain("http://0.0.0.0:8321/trpc");
   });
 
-  it("rejects HTTP host and port flags unless HTTP mode is enabled", async () => {
+  it("accepts host and port flags without requiring --http", async () => {
     const { runCli } = await loadRunner();
     const root = await createFixtureRoot();
     const capture = consoleCapture();
 
-    const exitCode = await runCli(["serve", "--host", "127.0.0.1"], {
+    mocks.startHttpServer.mockResolvedValueOnce({
+      rootPath: root.rootPath,
+      host: "127.0.0.1",
+      port: 5000,
+      baseUrl: "http://127.0.0.1:5000",
+      trpcUrl: "http://127.0.0.1:5000/trpc",
+      url: "http://127.0.0.1:5000/mcp",
+      tools: ["list-origins"],
+      close: vi.fn().mockResolvedValue(undefined)
+    });
+
+    const exitCode = await runCli(["serve", root.rootPath, "--host", "127.0.0.1", "--port", "5000"], {
       cwd: root.rootPath,
       env: {},
       homeDir: await tmpdir(),
@@ -352,8 +391,11 @@ describe("cli runner", () => {
       isTTY: false
     });
 
-    expect(exitCode).toBe(1);
-    expect(capture.errors.join("\n")).toContain("--host and --port require --http.");
-    expect(mocks.startHttpServer).not.toHaveBeenCalled();
+    expect(exitCode).toBe(0);
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
+      host: "127.0.0.1",
+      port: 5000
+    });
+    expect(capture.logs.join("\n")).toContain("http://127.0.0.1:5000/trpc");
   });
 });
