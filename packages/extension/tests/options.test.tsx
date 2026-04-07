@@ -443,11 +443,9 @@ describe("options entrypoint", () => {
     }
   });
 
-  it("shows editor guidance for presets without a built-in URL scheme", async () => {
+  it("keeps the settings flow Cursor-first without a preferred-editor picker", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
-    const user = userEvent.setup();
-    const setPreferredEditorId = vi.fn().mockResolvedValue(undefined);
 
     const options = await initOptions({
       document,
@@ -471,15 +469,14 @@ describe("options entrypoint", () => {
       queryRootPermission: vi.fn(),
       requestRootPermission: vi.fn(),
       ensureRootSentinel: vi.fn(),
-      storeRootHandleWithSentinel: vi.fn(),
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
-      setPreferredEditorId
+      storeRootHandleWithSentinel: vi.fn()
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Use Windsurf" }));
-      await user.click(screen.getByRole("button", { name: "Show" }));
-      expect(await screen.findByText(/Windsurf does not ship with a built-in URL scheme here/i)).toBeTruthy();
+      expect(await screen.findByText("Capture Root")).toBeTruthy();
+      expect(screen.queryByText("Preferred Editor")).toBeNull();
+      await userEvent.setup().click(screen.getByRole("button", { name: "Show" }));
+      expect(await screen.findByLabelText("Custom URL Override For Cursor")).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -521,7 +518,7 @@ describe("options entrypoint", () => {
       expect(screen.getByText("root-ready")).toBeTruthy();
       expect(screen.getByText("Capture Root")).toBeTruthy();
       expect(screen.getByText("Enabled Origins")).toBeTruthy();
-      expect(screen.getByText("Preferred Editor")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Open Launch Folder" })).toBeTruthy();
       expect(screen.queryByText("Default root path")).toBeNull();
 
       await userEvent.setup().click(screen.getByRole("button", { name: "Change Root Directory" }));
@@ -535,7 +532,7 @@ describe("options entrypoint", () => {
     }
   });
 
-  it("persists the preferred editor and saves per-editor overrides from the collapsed advanced section", async () => {
+  it("saves Cursor launch overrides from the collapsed advanced section", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
@@ -563,7 +560,6 @@ describe("options entrypoint", () => {
         }
       }));
     const runtimeSendMessage = createRuntimeSendMessage();
-    const setPreferredEditorId = vi.fn().mockResolvedValue(undefined);
 
     const options = await initOptions({
       document,
@@ -587,18 +583,12 @@ describe("options entrypoint", () => {
       queryRootPermission: vi.fn(),
       requestRootPermission: vi.fn(),
       ensureRootSentinel: vi.fn(),
-      storeRootHandleWithSentinel: vi.fn(),
-      getPreferredEditorId: vi.fn().mockResolvedValue("vscode"),
-      setPreferredEditorId
+      storeRootHandleWithSentinel: vi.fn()
     });
 
     try {
       expect(await screen.findByText(/Hidden by default so the common flow stays simple/i)).toBeTruthy();
       expect(screen.queryByLabelText("Native Host Name")).toBeNull();
-
-      await user.click(screen.getByRole("button", { name: "Use Cursor" }));
-      expect(setPreferredEditorId).toHaveBeenCalledWith("cursor");
-      expect(await screen.findByText("Cursor is now the default popup editor.")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Show" }));
       fireEvent.change(await screen.findByLabelText("Native Host Name"), {
@@ -630,6 +620,58 @@ describe("options entrypoint", () => {
       await user.click(screen.getByRole("button", { name: "Verify Helper" }));
       expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.verify" });
       expect(await screen.findByText("Helper verified at 2026-04-03T12:00:00.000Z.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("opens the configured launch folder through the OS handler", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(async (message: { type: string }) => {
+      switch (message.type) {
+        case "scenario.list":
+          return { ok: true, scenarios: ["baseline"] };
+        case "native.revealRoot":
+          return { ok: true };
+        default:
+          return { ok: true };
+      }
+    });
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+        hostName: "com.example.host",
+        launchPath: "/tmp/fixtures"
+      })),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" }),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open Launch Folder" }));
+      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.revealRoot" });
+      expect(await screen.findByText("Opened the launch folder in the OS file manager.")).toBeTruthy();
     } finally {
       options.unmount();
     }

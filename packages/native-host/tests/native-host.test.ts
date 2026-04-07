@@ -1,8 +1,8 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { listScenarios, openDirectory, saveScenario, substituteDirectory, switchScenario, verifyRoot } from "../src/lib.mts";
+import { getRevealDirectoryCommand, getRevealDirectoryLaunch, listScenarios, openDirectory, revealDirectory, saveScenario, spawnDetached, substituteDirectory, switchScenario, verifyRoot } from "../src/lib.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 async function createFixtureRoot() {
@@ -63,6 +63,45 @@ describe("native host helpers", () => {
     });
     expect(result.ok).toBe(true);
     expect(result.command).toBe(`true '${root.rootPath}'`);
+  });
+
+  it("builds the OS reveal command for supported platforms", async () => {
+    const root = await createFixtureRoot();
+
+    expect(getRevealDirectoryCommand(root.rootPath, "darwin")).toBe(`open '${root.rootPath}'`);
+    expect(getRevealDirectoryCommand(root.rootPath, "linux")).toBe(`xdg-open '${root.rootPath}'`);
+    expect(getRevealDirectoryLaunch(root.rootPath, "win32")).toEqual({
+      command: `cmd /c start \"\" '${root.rootPath}'`,
+      program: "cmd",
+      args: ["/c", "start", "", root.rootPath]
+    });
+  });
+
+  it("uses the injected spawn function for OS reveal launches", async () => {
+    const root = await createFixtureRoot();
+    const child = { unref() {} };
+    const spawnFn = vi.fn().mockReturnValue(child as any);
+
+    const result = await revealDirectory({
+      path: root.rootPath,
+      expectedRootId: "root-123"
+    }, spawnFn);
+
+    expect(spawnFn).toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+  });
+
+  it("supports detached spawn helpers in isolation", () => {
+    const child = { unref: vi.fn() };
+    const spawnFn = vi.fn().mockReturnValue(child as any);
+
+    spawnDetached("open", ["/tmp/fixtures"], spawnFn);
+
+    expect(spawnFn).toHaveBeenCalledWith("open", ["/tmp/fixtures"], {
+      detached: true,
+      stdio: "ignore"
+    });
+    expect(child.unref).toHaveBeenCalled();
   });
 });
 

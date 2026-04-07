@@ -146,6 +146,7 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
     "root.verify",
     "native.verify",
     "native.open",
+    "native.revealRoot",
     "scenario.list",
     "scenario.save",
     "scenario.switch"
@@ -196,15 +197,14 @@ export function createBackgroundRuntime({
   }
 
   async function refreshStoredConfig(): Promise<void> {
-    const [sites, nativeHostConfig, preferredEditorId] = await Promise.all([
+    const [sites, nativeHostConfig] = await Promise.all([
       getSiteConfigs(),
-      getNativeHostConfig(),
-      getPreferredEditorId()
+      getNativeHostConfig()
     ]);
     state.enabledOrigins = sites.map((site: SiteConfig) => site.origin);
     state.siteConfigsByOrigin = new Map(sites.map((site: SiteConfig) => [site.origin, site]));
     state.nativeHostConfig = { ...DEFAULT_NATIVE_HOST_CONFIG, ...nativeHostConfig };
-    state.preferredEditorId = preferredEditorId || DEFAULT_EDITOR_ID;
+    state.preferredEditorId = DEFAULT_EDITOR_ID;
   }
 
   async function snapshotState(): Promise<SessionSnapshot> {
@@ -390,6 +390,40 @@ export function createBackgroundRuntime({
     }
   }
 
+  async function revealRootInOs(): Promise<NativeOpenResult> {
+    await refreshStoredConfig();
+    const rootResult = await ensureRootReady({ requestPermission: true });
+    if (!rootResult.ok) {
+      return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
+    }
+
+    const launchPath = state.nativeHostConfig.launchPath.trim();
+    if (!state.nativeHostConfig.hostName || !launchPath) {
+      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+    }
+
+    const rootId = getRequiredRootId(rootResult);
+    if (!rootId) {
+      return { ok: false, error: "Root sentinel is missing a rootId." };
+    }
+
+    try {
+      const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+        type: "revealDirectory",
+        path: launchPath,
+        expectedRootId: rootId
+      });
+
+      if (!response?.ok) {
+        throw new Error(String(response?.error || "Reveal directory request failed."));
+      }
+
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   async function attachTab(tabId: number, topOrigin: string): Promise<void> {
     if (state.attachedTabs.has(tabId)) {
       state.attachedTabs.set(tabId, { topOrigin });
@@ -547,6 +581,11 @@ export function createBackgroundRuntime({
         await persistSnapshot();
         return result;
       }
+      case "native.revealRoot": {
+        const result = await revealRootInOs();
+        await persistSnapshot();
+        return result;
+      }
       case "scenario.list": {
         await refreshStoredConfig();
         const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
@@ -639,6 +678,7 @@ export function createBackgroundRuntime({
     ensureRootReady,
     verifyNativeHostRoot,
     openDirectoryInEditor,
+    revealRootInOs,
     handleDebuggerEvent,
     handleStorageChanged,
     handleRuntimeMessage,

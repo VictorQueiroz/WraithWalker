@@ -211,13 +211,27 @@ async function collectOriginSummary(
 
 function renderContextMarkdown(data: ContextData): string {
   const lines: string[] = [];
+  const originList = data.origins.map((origin) => origin.origin).join(", ");
 
   lines.push("# WraithWalker Fixture Context");
   lines.push("");
   lines.push(`Generated: ${data.generatedAt}`);
   lines.push("");
   lines.push("This file describes the captured network fixtures in this directory.");
-  lines.push("It is auto-generated when you open the fixture root in an editor.");
+  lines.push("It is auto-generated when you open the fixture root in Cursor.");
+  lines.push("");
+  lines.push("## Cursor Agent Brief");
+  lines.push("");
+  lines.push("This root folder is a WraithWalker fixture workspace, not the source repository for the site.");
+  lines.push("It contains dumped assets, static resource manifests, API fixtures, and replay metadata for the selected origins.");
+  lines.push(originList ? `Selected origins: ${originList}` : "Selected origins: none yet.");
+  lines.push("");
+  lines.push("When working in this root:");
+  lines.push("");
+  lines.push("- Prettify minified or dumped contents before reasoning about them.");
+  lines.push("- Start by understanding the structure of the website across the selected origins below.");
+  lines.push("- Use RESOURCE_MANIFEST.json files, sidecar metadata, and API fixtures to map how requests and assets fit together.");
+  lines.push("- Treat captured files as fixture data unless the task is explicitly to rewrite or replace them.");
   lines.push("");
 
   for (const origin of data.origins) {
@@ -283,13 +297,10 @@ function renderContextMarkdown(data: ContextData): string {
 }
 
 export const EDITOR_CONTEXT_FILES: Record<string, string[]> = {
-  cursor: ["CLAUDE.md", ".cursorrules"],
-  antigravity: ["CLAUDE.md"],
-  vscode: ["CLAUDE.md"],
-  windsurf: ["CLAUDE.md", ".windsurfrules"]
+  cursor: ["CLAUDE.md", ".cursorrules"]
 };
 
-const DEFAULT_CONTEXT_FILES = ["CLAUDE.md"];
+const DEFAULT_CONTEXT_FILES = EDITOR_CONTEXT_FILES.cursor;
 
 export function createContextGenerator({ rootHandle, gateway, siteConfigs }: ContextGeneratorDependencies) {
   async function generate(editorId?: string): Promise<string> {

@@ -40,6 +40,7 @@ export type BackgroundMessage =
   | { type: "root.verify" }
   | { type: "native.verify" }
   | { type: "native.open"; commandTemplate?: string; editorId?: string }
+  | { type: "native.revealRoot" }
   | { type: "scenario.list" }
   | { type: "scenario.save"; name: string }
   | { type: "scenario.switch"; name: string };

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import process from "node:process";
-import { listScenarios, openDirectory, saveScenario, switchScenario, verifyRoot } from "./lib.mjs";
+import { listScenarios, openDirectory, revealDirectory, saveScenario, switchScenario, verifyRoot } from "./lib.mjs";
 
 interface NativeHostMessage {
   type?: string;
@@ -25,6 +25,10 @@ export async function handleMessage(message: NativeHostMessage): Promise<unknown
 
   if (message.type === "openDirectory") {
     return openDirectory(message);
+  }
+
+  if (message.type === "revealDirectory") {
+    return revealDirectory(message);
   }
 
   if (message.type === "saveScenario") {

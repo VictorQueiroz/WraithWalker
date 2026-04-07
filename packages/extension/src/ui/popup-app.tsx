@@ -29,7 +29,7 @@ interface RuntimeApi {
 export interface PopupAppProps {
   runtime: RuntimeApi;
   getNativeHostConfig: () => Promise<NativeHostConfig>;
-  getPreferredEditorId: () => Promise<string>;
+  getPreferredEditorId?: () => Promise<string>;
   loadStoredRootHandle: () => Promise<FileSystemDirectoryHandle | undefined>;
   queryRootPermission: (rootHandle?: FileSystemDirectoryHandle | null) => Promise<PermissionState>;
   setIntervalFn?: typeof setInterval;
@@ -55,7 +55,6 @@ function resolvePreferredEditor(editorId: string, editorPresets: EditorPreset[])
 export function PopupApp({
   runtime,
   getNativeHostConfig,
-  getPreferredEditorId,
   loadStoredRootHandle,
   queryRootPermission,
   setIntervalFn = setInterval,
@@ -66,14 +65,13 @@ export function PopupApp({
   }
 }: PopupAppProps) {
   const [snapshot, setSnapshot] = React.useState<SessionSnapshot | null>(null);
-  const [preferredEditorId, setPreferredEditorId] = React.useState(DEFAULT_EDITOR_ID);
   const [nativeHostConfig, setNativeHostConfig] = React.useState<NativeHostConfig>(DEFAULT_NATIVE_HOST_CONFIG);
   const [captureRootState, setCaptureRootState] = React.useState<CaptureRootState>({ kind: "missing_handle" });
   const [actionAlert, setActionAlert] = React.useState<PopupAlertState | null>(null);
   const [busyAction, setBusyAction] = React.useState<"toggle" | "open" | null>(null);
   const preferredEditor = React.useMemo(
-    () => resolvePreferredEditor(preferredEditorId, editorPresets),
-    [editorPresets, preferredEditorId]
+    () => resolvePreferredEditor(DEFAULT_EDITOR_ID, editorPresets),
+    [editorPresets]
   );
   const editorLaunchState = React.useMemo(
     () => deriveEditorLaunchState(nativeHostConfig, preferredEditor.id),
@@ -81,8 +79,7 @@ export function PopupApp({
   );
 
   const refreshEnvironment = React.useCallback(async () => {
-    const [nextPreferredEditorId, nextNativeHostConfig, rootHandle] = await Promise.all([
-      getPreferredEditorId(),
+    const [nextNativeHostConfig, rootHandle] = await Promise.all([
       getNativeHostConfig(),
       loadStoredRootHandle()
     ]);
@@ -94,16 +91,14 @@ export function PopupApp({
       permission
     });
 
-    setPreferredEditorId(nextPreferredEditorId);
     setNativeHostConfig(nextNativeHostConfig);
     setCaptureRootState(nextCaptureRootState);
 
     return {
-      preferredEditorId: nextPreferredEditorId,
       nativeHostConfig: nextNativeHostConfig,
       captureRootState: nextCaptureRootState
     };
-  }, [getNativeHostConfig, getPreferredEditorId, loadStoredRootHandle, queryRootPermission]);
+  }, [getNativeHostConfig, loadStoredRootHandle, queryRootPermission]);
 
   const refreshState = React.useCallback(async (clearActionAlert = true) => {
     const nextSnapshot = await sendMessage<SessionSnapshot>(runtime, { type: "session.getState" });
@@ -164,7 +159,7 @@ export function PopupApp({
       const environment = await refreshEnvironment();
       const nextEditorLaunchState = deriveEditorLaunchState(
         environment.nativeHostConfig,
-        environment.preferredEditorId
+        DEFAULT_EDITOR_ID
       );
       if (environment.captureRootState.kind !== "ready") {
         setActionAlert(resolvePopupAlert({

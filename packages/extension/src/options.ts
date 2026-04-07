@@ -3,10 +3,8 @@ import { createRoot } from "react-dom/client";
 
 import {
   getNativeHostConfig as defaultGetNativeHostConfig,
-  getPreferredEditorId as defaultGetPreferredEditorId,
   getSiteConfigs as defaultGetSiteConfigs,
   setNativeHostConfig as defaultSetNativeHostConfig,
-  setPreferredEditorId as defaultSetPreferredEditorId,
   setSiteConfigs as defaultSetSiteConfigs
 } from "./lib/chrome-storage.js";
 import { EDITOR_PRESETS, type EditorPreset } from "./lib/constants.js";
@@ -47,8 +45,8 @@ export interface OptionsDependencies {
   queryRootPermission?: typeof defaultQueryRootPermission;
   requestRootPermission?: typeof defaultRequestRootPermission;
   storeRootHandleWithSentinel?: typeof defaultStoreRootHandleWithSentinel;
-  getPreferredEditorId?: typeof defaultGetPreferredEditorId;
-  setPreferredEditorId?: typeof defaultSetPreferredEditorId;
+  getPreferredEditorId?: () => Promise<string>;
+  setPreferredEditorId?: (editorId: string) => Promise<void>;
   editorPresets?: EditorPreset[];
 }
 
@@ -69,8 +67,6 @@ export async function initOptions({
   queryRootPermission = defaultQueryRootPermission,
   requestRootPermission = defaultRequestRootPermission,
   storeRootHandleWithSentinel = defaultStoreRootHandleWithSentinel,
-  getPreferredEditorId = defaultGetPreferredEditorId,
-  setPreferredEditorId = defaultSetPreferredEditorId,
   editorPresets = EDITOR_PRESETS
 }: OptionsDependencies = {}) {
   const container = documentRef.getElementById("root");
@@ -92,8 +88,6 @@ export async function initOptions({
       queryRootPermission,
       requestRootPermission,
       storeRootHandleWithSentinel,
-      getPreferredEditorId,
-      setPreferredEditorId,
       editorPresets
     })
   );

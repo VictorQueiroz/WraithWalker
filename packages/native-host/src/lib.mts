@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import * as childProcess from "node:child_process";
 import {
   listScenarios as listScenarioNames,
   saveScenario as coreSaveScenario,
@@ -19,6 +19,16 @@ export interface OpenDirectoryMessage extends VerifyRootMessage {
 
 export interface ScenarioMessage extends VerifyRootMessage {
   name?: string;
+}
+
+export type SpawnLike = typeof childProcess.spawn;
+
+export function spawnDetached(command: string, args: string[], spawnFn: SpawnLike = childProcess.spawn): void {
+  const child = spawnFn(command, args, {
+    detached: true,
+    stdio: "ignore"
+  });
+  child.unref();
 }
 
 function shellQuote(value: string): string {
@@ -65,13 +75,62 @@ export async function openDirectory({
   await verifyRoot({ path: rootPath, expectedRootId });
   const command = substituteDirectory(commandTemplate, rootPath as string);
 
-  const child = spawn("/bin/sh", ["-lc", command], {
+  const child = childProcess.spawn("/bin/sh", ["-lc", command], {
     detached: true,
     stdio: "ignore"
   });
   child.unref();
 
   return { ok: true, command };
+}
+
+export function getRevealDirectoryCommand(rootPath: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform === "darwin") {
+    return `open ${shellQuote(rootPath)}`;
+  }
+
+  if (platform === "win32") {
+    return `cmd /c start \"\" ${shellQuote(rootPath)}`;
+  }
+
+  return `xdg-open ${shellQuote(rootPath)}`;
+}
+
+export function getRevealDirectoryLaunch(
+  rootPath: string,
+  platform: NodeJS.Platform = process.platform
+): { command: string; program: string; args: string[] } {
+  if (platform === "darwin") {
+    return {
+      command: getRevealDirectoryCommand(rootPath, platform),
+      program: "open",
+      args: [rootPath]
+    };
+  }
+
+  if (platform === "win32") {
+    return {
+      command: getRevealDirectoryCommand(rootPath, platform),
+      program: "cmd",
+      args: ["/c", "start", "", rootPath]
+    };
+  }
+
+  return {
+    command: getRevealDirectoryCommand(rootPath, platform),
+    program: "xdg-open",
+    args: [rootPath]
+  };
+}
+
+export async function revealDirectory(
+  { path: rootPath, expectedRootId }: VerifyRootMessage,
+  spawnFn: SpawnLike = childProcess.spawn
+): Promise<{ ok: true; command: string }> {
+  await verifyRoot({ path: rootPath, expectedRootId });
+  const launch = getRevealDirectoryLaunch(rootPath as string);
+  spawnDetached(launch.program, launch.args, spawnFn);
+  return { ok: true, command: launch.command };
 }
 
 export async function saveScenario({ path: rootPath, expectedRootId, name }: ScenarioMessage): Promise<{ ok: true; name: string }> {

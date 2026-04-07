@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 
-import { getNativeHostConfig as defaultGetNativeHostConfig, getPreferredEditorId as defaultGetPreferredEditorId } from "./lib/chrome-storage.js";
+import { getNativeHostConfig as defaultGetNativeHostConfig } from "./lib/chrome-storage.js";
 import { EDITOR_PRESETS, POPUP_REFRESH_INTERVAL_MS, type EditorPreset } from "./lib/constants.js";
 import { loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission } from "./lib/root-handle.js";
 import type { BackgroundMessage } from "./lib/messages.js";
@@ -19,7 +19,7 @@ export interface PopupDependencies {
   setIntervalFn?: typeof setInterval;
   refreshIntervalMs?: number;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
-  getPreferredEditorId?: typeof defaultGetPreferredEditorId;
+  getPreferredEditorId?: () => Promise<string>;
   loadStoredRootHandle?: typeof defaultLoadStoredRootHandle;
   queryRootPermission?: typeof defaultQueryRootPermission;
   editorPresets?: EditorPreset[];
@@ -37,7 +37,6 @@ export async function initPopup({
   setIntervalFn = setInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   getNativeHostConfig = defaultGetNativeHostConfig,
-  getPreferredEditorId = defaultGetPreferredEditorId,
   loadStoredRootHandle = defaultLoadStoredRootHandle,
   queryRootPermission = defaultQueryRootPermission,
   editorPresets = EDITOR_PRESETS,
@@ -55,7 +54,6 @@ export async function initPopup({
     React.createElement(PopupApp, {
       runtime,
       getNativeHostConfig,
-      getPreferredEditorId,
       loadStoredRootHandle,
       queryRootPermission,
       setIntervalFn,

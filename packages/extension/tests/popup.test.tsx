@@ -184,72 +184,12 @@ describe("popup entrypoint", () => {
     }
   });
 
-  it("still asks for a launch path when the chosen editor needs one to open the remembered root", async () => {
+  it("asks for a launch path when a custom Cursor URL override needs the remembered root path", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
     const runtime = {
       sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
-      openOptionsPage: vi.fn()
-    };
-
-    const popup = await initPopup({
-      document,
-      runtime,
-      setIntervalFn: fakeSetInterval,
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
-      getPreferredEditorId: vi.fn().mockResolvedValue("vscode"),
-      ...createRootDeps()
-    });
-
-    try {
-      expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
-      expect(screen.queryByText(/Set the absolute editor launch path in Settings/i)).toBeNull();
-
-      await user.click(screen.getByRole("button", { name: "Open in VS Code" }));
-      expect(await screen.findByText(/Set the absolute editor launch path in Settings to open the remembered root in VS Code/i)).toBeTruthy();
-    } finally {
-      popup.unmount();
-    }
-  });
-
-  it("surfaces native-host setup only after click for editors without URL launch support", async () => {
-    renderRoot();
-    const { initPopup } = await loadPopupModule();
-    const user = userEvent.setup();
-    const runtime = {
-      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
-      openOptionsPage: vi.fn()
-    };
-
-    const popup = await initPopup({
-      document,
-      runtime,
-      setIntervalFn: fakeSetInterval,
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ hostName: "", launchPath: "/tmp/fixtures" })),
-      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
-      ...createRootDeps()
-    });
-
-    try {
-      expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
-
-      await user.click(screen.getByRole("button", { name: "Open in Windsurf" }));
-      expect(await screen.findByText(/Windsurf needs a native host name or a custom URL override/i)).toBeTruthy();
-    } finally {
-      popup.unmount();
-    }
-  });
-
-  it("shows native open failures inline for native-host editors", async () => {
-    renderRoot();
-    const { initPopup } = await loadPopupModule();
-    const user = userEvent.setup();
-    const runtime = {
-      sendMessage: vi.fn()
-        .mockResolvedValueOnce(createSnapshot())
-        .mockResolvedValueOnce({ ok: false, error: "Open failed." })
-        .mockResolvedValueOnce(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -258,20 +198,22 @@ describe("popup entrypoint", () => {
       runtime,
       setIntervalFn: fakeSetInterval,
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
-        hostName: "com.example.host",
-        launchPath: "/tmp/fixtures"
+        launchPath: "",
+        editorLaunchOverrides: {
+          cursor: {
+            urlTemplate: "cursor://file/$DIR_URI/"
+          }
+        }
       })),
-      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
       ...createRootDeps()
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Open in Windsurf" }));
-      expect(runtime.sendMessage).toHaveBeenCalledWith({
-        type: "native.open",
-        editorId: "windsurf"
-      });
-      expect(await screen.findByText("Open failed.")).toBeTruthy();
+      expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
+      expect(screen.queryByText(/Set the absolute editor launch path in Settings/i)).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
+      expect(await screen.findByText(/Set the absolute editor launch path in Settings to open the remembered root in Cursor/i)).toBeTruthy();
     } finally {
       popup.unmount();
     }

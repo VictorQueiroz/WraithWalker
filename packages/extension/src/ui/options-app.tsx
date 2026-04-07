@@ -1,9 +1,8 @@
 import * as React from "react";
 
-import { getPreferredEditorId as defaultGetPreferredEditorId, setPreferredEditorId as defaultSetPreferredEditorId } from "../lib/chrome-storage.js";
 import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_EDITOR_ID, EDITOR_PRESETS, type EditorPreset } from "../lib/constants.js";
 import { getEditorLaunchOverride, updateEditorLaunchOverride } from "../lib/editor-launch.js";
-import type { BackgroundMessage, ErrorResult, NativeVerifyResult, ScenarioListResult, ScenarioResult } from "../lib/messages.js";
+import type { BackgroundMessage, ErrorResult, NativeOpenResult, NativeVerifyResult, ScenarioListResult, ScenarioResult } from "../lib/messages.js";
 import { normalizeSiteInput, originToPermissionPattern } from "../lib/path-utils.js";
 import {
   createRootDirectoryPickerOptions,
@@ -68,8 +67,8 @@ export interface OptionsAppProps {
   queryRootPermission?: typeof defaultQueryRootPermission;
   requestRootPermission?: typeof defaultRequestRootPermission;
   storeRootHandleWithSentinel?: typeof defaultStoreRootHandleWithSentinel;
-  getPreferredEditorId?: typeof defaultGetPreferredEditorId;
-  setPreferredEditorId?: typeof defaultSetPreferredEditorId;
+  getPreferredEditorId?: () => Promise<string>;
+  setPreferredEditorId?: (editorId: string) => Promise<void>;
   editorPresets?: EditorPreset[];
 }
 
@@ -238,29 +237,25 @@ export function OptionsApp({
   queryRootPermission = defaultQueryRootPermission,
   requestRootPermission = defaultRequestRootPermission,
   storeRootHandleWithSentinel = defaultStoreRootHandleWithSentinel,
-  getPreferredEditorId = defaultGetPreferredEditorId,
-  setPreferredEditorId = defaultSetPreferredEditorId,
   editorPresets = EDITOR_PRESETS
 }: OptionsAppProps) {
   const [sites, setSites] = React.useState<SiteConfig[]>([]);
   const [siteOriginInput, setSiteOriginInput] = React.useState("");
   const [rootState, setRootState] = React.useState<RootState | null>(null);
   const [nativeHostConfig, setNativeHostConfigState] = React.useState<NativeHostConfig | null>(null);
-  const [preferredEditorId, setPreferredEditorIdState] = React.useState(DEFAULT_EDITOR_ID);
   const [scenarioNames, setScenarioNames] = React.useState<string[]>([]);
   const [scenarioName, setScenarioName] = React.useState("");
   const [scenarioStatus, setScenarioStatus] = React.useState<FlashState | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [flash, setFlash] = React.useState<FlashState | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const preferredEditor = React.useMemo(
-    () => editorPresets.find((preset) => preset.id === preferredEditorId)
-      ?? editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID)
+  const cursorEditor = React.useMemo(
+    () => editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID)
       ?? editorPresets[0],
-    [editorPresets, preferredEditorId]
+    [editorPresets]
   );
-  const preferredOverride = nativeHostConfig
-    ? getEditorLaunchOverride(nativeHostConfig, preferredEditor.id)
+  const cursorOverride = nativeHostConfig
+    ? getEditorLaunchOverride(nativeHostConfig, cursorEditor.id)
     : {};
 
   const refreshRootState = React.useCallback(async () => {
@@ -312,21 +307,18 @@ export function OptionsApp({
   const refreshAll = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [nextSites, nextNativeConfig, nextPreferredEditorId] = await Promise.all([
+      const [nextSites, nextNativeConfig] = await Promise.all([
         getSiteConfigs(),
-        getNativeHostConfig(),
-        getPreferredEditorId()
+        getNativeHostConfig()
       ]);
       setSites(nextSites);
       setNativeHostConfigState(nextNativeConfig);
-      setPreferredEditorIdState(nextPreferredEditorId);
       await Promise.all([refreshRootState(), refreshScenarios()]);
     } finally {
       setLoading(false);
     }
   }, [
     getNativeHostConfig,
-    getPreferredEditorId,
     getSiteConfigs,
     refreshRootState,
     refreshScenarios
@@ -492,6 +484,25 @@ export function OptionsApp({
     }
   }
 
+  async function handleOpenLaunchFolder() {
+    setFlash(null);
+    try {
+      const result = await sendMessage<NativeOpenResult>(chromeApi.runtime, { type: "native.revealRoot" });
+      if (!result.ok) {
+        throw new Error(getErrorMessage(result as ErrorResult));
+      }
+      setFlash({
+        variant: "success",
+        text: "Opened the launch folder in the OS file manager."
+      });
+    } catch (error) {
+      setFlash({
+        variant: "destructive",
+        text: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
   async function handleSaveScenario() {
     if (!scenarioName.trim()) {
       return;
@@ -586,6 +597,12 @@ export function OptionsApp({
                 <Button className="sm:w-fit" type="button" onClick={() => void handleRootAction()}>
                   {rootActionLabel}
                 </Button>
+                <Button className="sm:w-fit" type="button" variant="secondary" onClick={() => void handleOpenLaunchFolder()}>
+                  Open Launch Folder
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Chrome can remember the selected directory handle, but opening that folder in Finder or Explorer still requires the native host plus the shared launch path below.
+                </p>
               </CardContent>
             </Card>
 
@@ -619,54 +636,6 @@ export function OptionsApp({
                   ) : (
                     <Alert variant="default">No origins are enabled yet.</Alert>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <SectionIntro
-                  title="Preferred Editor"
-                  description="The popup always opens the capture root with this editor unless you change it here."
-                />
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid gap-2">
-                  {editorPresets.map((preset) => {
-                    const selected = preset.id === preferredEditor.id;
-                    return (
-                      <button
-                        key={preset.id}
-                        aria-label={`Use ${preset.label}`}
-                        aria-pressed={selected}
-                        className={[
-                          "rounded-2xl border px-4 py-3 text-left transition-colors",
-                          selected
-                            ? "border-primary/30 bg-primary/10 shadow-sm"
-                            : "border-border/70 bg-white/70 hover:bg-accent"
-                        ].join(" ")}
-                        type="button"
-                        onClick={async () => {
-                          await setPreferredEditorId(preset.id);
-                          setPreferredEditorIdState(preset.id);
-                          setFlash({
-                            variant: "success",
-                            text: `${preset.label} is now the default popup editor.`
-                          });
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{preset.label}</span>
-                          {selected ? <Badge variant="default">Default</Badge> : null}
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {preset.urlTemplate
-                            ? "Built-in URL launch is available."
-                            : "Needs a custom URL override or native-host fallback for one-click opening."}
-                        </p>
-                      </button>
-                    );
-                  })}
                 </div>
               </CardContent>
             </Card>
@@ -765,48 +734,43 @@ export function OptionsApp({
                     </div>
                     <Separator />
                     <div className="grid gap-2">
-                      <Label htmlFor="editor-url-template">Custom URL Override For {preferredEditor.label}</Label>
+                      <Label htmlFor="editor-url-template">Custom URL Override For Cursor</Label>
                       <Input
                         id="editor-url-template"
-                        value={preferredOverride.urlTemplate ?? ""}
+                        value={cursorOverride.urlTemplate ?? ""}
                         onChange={(event) => {
                           const urlTemplate = event.currentTarget.value;
                           setNativeHostConfigState((current) => (
                             current
-                              ? updateEditorLaunchOverride(current, preferredEditor.id, {
-                                  ...getEditorLaunchOverride(current, preferredEditor.id),
+                              ? updateEditorLaunchOverride(current, cursorEditor.id, {
+                                  ...getEditorLaunchOverride(current, cursorEditor.id),
                                   urlTemplate
                                 })
                               : current
                           ));
                         }}
-                        placeholder={preferredEditor.urlTemplate || "custom://open?folder=$DIR_COMPONENT"}
+                        placeholder={cursorEditor.urlTemplate || "custom://open?folder=$DIR_COMPONENT"}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="editor-command-template">Custom Command Override For {preferredEditor.label}</Label>
+                      <Label htmlFor="editor-command-template">Custom Command Override For Cursor</Label>
                       <Input
                         id="editor-command-template"
-                        value={preferredOverride.commandTemplate ?? ""}
+                        value={cursorOverride.commandTemplate ?? ""}
                         onChange={(event) => {
                           const commandTemplate = event.currentTarget.value;
                           setNativeHostConfigState((current) => (
                             current
-                              ? updateEditorLaunchOverride(current, preferredEditor.id, {
-                                  ...getEditorLaunchOverride(current, preferredEditor.id),
+                              ? updateEditorLaunchOverride(current, cursorEditor.id, {
+                                  ...getEditorLaunchOverride(current, cursorEditor.id),
                                   commandTemplate
                                 })
                               : current
                           ));
                         }}
-                        placeholder={preferredEditor.commandTemplate}
+                        placeholder={cursorEditor.commandTemplate}
                       />
                     </div>
-                    {!preferredEditor.urlTemplate ? (
-                      <Alert variant="default">
-                        {preferredEditor.label} does not ship with a built-in URL scheme here. Add a custom URL override if you want URL-first launching, or rely on the native host fallback.
-                      </Alert>
-                    ) : null}
                     <div className="flex flex-wrap gap-3">
                       <Button type="button" onClick={() => void handleSaveLaunchSettings()}>
                         Save Launch Settings

@@ -158,6 +158,8 @@ describe("context generator", () => {
     const markdown = await generator.generate();
 
     expect(markdown).toContain("# WraithWalker Fixture Context");
+    expect(markdown).toContain("## Cursor Agent Brief");
+    expect(markdown).toContain("Prettify minified or dumped contents before reasoning about them.");
     expect(markdown).toContain("https://app.example.com");
     expect(markdown).toContain("No captured fixtures found");
   });
@@ -275,7 +277,7 @@ describe("context generator", () => {
     expect(root.files.has(".cursorrules")).toBe(true);
   });
 
-  it("writes only CLAUDE.md for unknown editor IDs", async () => {
+  it("defaults unknown editor IDs to the Cursor context files", async () => {
     const root = new MemoryDirectoryHandle();
     const gateway = makeGateway();
     const siteConfigs: SiteConfig[] = [{
@@ -289,6 +291,7 @@ describe("context generator", () => {
     await generator.generate("unknown-editor");
 
     expect(root.files.has("CLAUDE.md")).toBe(true);
+    expect(root.files.has(".cursorrules")).toBe(true);
   });
 
   it("generates .d.ts files from captured JSON API responses", async () => {

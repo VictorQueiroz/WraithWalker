@@ -312,7 +312,7 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.open" });
+    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "windsurf" });
 
     expect(chromeApi.offscreen.createDocument).toHaveBeenCalled();
     expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(1, {
@@ -531,7 +531,7 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.openDirectoryInEditor();
+    const result = await runtime.openDirectoryInEditor(undefined, "cursor");
 
     expect(chromeApi.tabs.create).toHaveBeenCalledWith({
       url: "custom://open?folder=%2Ftmp%2Ffixtures"
@@ -582,7 +582,7 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.openDirectoryInEditor();
+    const result = await runtime.openDirectoryInEditor(undefined, "cursor");
 
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(result).toEqual({
@@ -626,12 +626,56 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.openDirectoryInEditor();
+    const result = await runtime.openDirectoryInEditor(undefined, "cursor");
 
     expect(chromeApi.tabs.create).toHaveBeenCalledWith({
       url: "cursor://"
     });
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("reveals the configured launch root through the native host", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: true });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        launchPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.handleRuntimeMessage({ type: "native.revealRoot" });
+
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.example.host", {
+      type: "revealDirectory",
+      path: "/tmp/fixtures",
+      expectedRootId: "root-1"
+    });
     expect(result).toEqual({ ok: true });
   });
 
@@ -1310,7 +1354,7 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.openDirectoryInEditor();
+    const result = await runtime.openDirectoryInEditor(undefined, "windsurf");
     expect(result).toEqual({ ok: false, error: "Editor not found." });
   });
 
@@ -1350,7 +1394,7 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.openDirectoryInEditor();
+    const result = await runtime.openDirectoryInEditor(undefined, "windsurf");
     expect(result).toEqual({ ok: false, error: "Connection refused." });
   });
 
@@ -1518,6 +1562,6 @@ describe("background entrypoint", () => {
     await bootstrapBackground();
 
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
-    expect(chromeApi.storage.local.get).toHaveBeenCalledTimes(3);
+    expect(chromeApi.storage.local.get).toHaveBeenCalledTimes(2);
   });
 });
