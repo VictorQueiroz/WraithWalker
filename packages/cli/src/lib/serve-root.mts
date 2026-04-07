@@ -17,20 +17,20 @@ export function resolveDefaultServeRoot({
   homeDir?: string;
 } = {}): string {
   if (platform === "darwin") {
-    return path.join(homeDir, "Library", "Application Support", "WraithWalker", "content");
+    return path.join(homeDir, "Library", "Application Support", "WraithWalker");
   }
 
   if (platform === "win32") {
     const localAppData = env.LOCALAPPDATA?.trim()
       ? env.LOCALAPPDATA
       : path.join(homeDir, "AppData", "Local");
-    return path.join(localAppData, "WraithWalker", "content");
+    return path.join(localAppData, "WraithWalker");
   }
 
   const xdgDataHome = env.XDG_DATA_HOME?.trim()
     ? env.XDG_DATA_HOME
     : path.join(homeDir, ".local", "share");
-  return path.join(xdgDataHome, "wraithwalker", "content");
+  return path.join(xdgDataHome, "wraithwalker");
 }
 
 export function resolveServeRoot({

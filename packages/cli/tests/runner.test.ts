@@ -289,7 +289,7 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(path.join(homeDir, ".local", "share", "wraithwalker", "content"), {
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(path.join(homeDir, ".local", "share", "wraithwalker"), {
       host: "127.0.0.1",
       port: 4319
     });

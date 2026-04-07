@@ -3,7 +3,7 @@
 Start from your WraithWalker fixture root:
 
 ```bash
-wraithwalker serve --http
+wraithwalker serve
 ```
 
 By default, WraithWalker starts a local Streamable HTTP MCP server at:
@@ -75,7 +75,7 @@ If you are editing `mcp_config.json` directly, use the generic HTTP config shape
 
 Claude Code can connect to MCP servers over HTTP or `stdio`.
 
-- For HTTP mode, point Claude Code at the WraithWalker MCP URL printed by `wraithwalker serve --http`.
+- For HTTP mode, point Claude Code at the WraithWalker MCP URL printed by `wraithwalker serve`.
 - For `stdio` mode, keep using the command-based config shown in [`packages/mcp-server/README.md`](../packages/mcp-server/README.md).
 
 If your Claude Code setup uses an MCP JSON file, add the generic HTTP config entry above for `wraithwalker`.

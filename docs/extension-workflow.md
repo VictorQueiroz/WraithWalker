@@ -62,9 +62,9 @@ This is the folder Cursor opens, and it is the folder the agent reasons about.
 
 When the local WraithWalker server is active, the “root folder” is the server’s content root. By default that is:
 
-- macOS: `~/Library/Application Support/WraithWalker/content`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker/content`
-- Windows: `%LOCALAPPDATA%/WraithWalker/content`
+- macOS: `~/Library/Application Support/WraithWalker`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker`
+- Windows: `%LOCALAPPDATA%/WraithWalker`
 
 ## Open In Cursor
 

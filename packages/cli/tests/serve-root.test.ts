@@ -9,25 +9,25 @@ describe("serve root resolution", () => {
       platform: "darwin",
       homeDir: "/Users/tester",
       env: {}
-    })).toBe("/Users/tester/Library/Application Support/WraithWalker/content");
+    })).toBe("/Users/tester/Library/Application Support/WraithWalker");
 
     expect(resolveDefaultServeRoot({
       platform: "linux",
       homeDir: "/home/tester",
       env: {}
-    })).toBe("/home/tester/.local/share/wraithwalker/content");
+    })).toBe("/home/tester/.local/share/wraithwalker");
 
     expect(resolveDefaultServeRoot({
       platform: "linux",
       homeDir: "/home/tester",
       env: { XDG_DATA_HOME: "/tmp/xdg-data" }
-    })).toBe("/tmp/xdg-data/wraithwalker/content");
+    })).toBe("/tmp/xdg-data/wraithwalker");
 
     expect(resolveDefaultServeRoot({
       platform: "win32",
       homeDir: "C:\\Users\\tester",
       env: { LOCALAPPDATA: "C:\\LocalAppData" }
-    })).toBe(path.join("C:\\LocalAppData", "WraithWalker", "content"));
+    })).toBe(path.join("C:\\LocalAppData", "WraithWalker"));
   });
 
   it("prefers explicit dir, then env root, then platform default", () => {
@@ -51,6 +51,6 @@ describe("serve root resolution", () => {
       env: {},
       platform: "linux",
       homeDir: "/home/tester"
-    })).toBe("/home/tester/.local/share/wraithwalker/content");
+    })).toBe("/home/tester/.local/share/wraithwalker");
   });
 });

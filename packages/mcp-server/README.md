@@ -38,9 +38,9 @@ The server resolves its root path in this order:
 
 Platform default content roots:
 
-- macOS: `~/Library/Application Support/WraithWalker/content`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker/content`
-- Windows: `%LOCALAPPDATA%/WraithWalker/content`
+- macOS: `~/Library/Application Support/WraithWalker`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker`
+- Windows: `%LOCALAPPDATA%/WraithWalker`
 
 If the resolved root does not exist yet, the server bootstraps it with the normal `.wraithwalker/root.json` sentinel before listening.
 

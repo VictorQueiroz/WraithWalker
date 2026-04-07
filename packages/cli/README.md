@@ -143,9 +143,9 @@ By default the server binds to `127.0.0.1:4319` and chooses its content root in 
 
 Platform default content roots:
 
-- macOS: `~/Library/Application Support/WraithWalker/content`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker/content`
-- Windows: `%LOCALAPPDATA%/WraithWalker/content`
+- macOS: `~/Library/Application Support/WraithWalker`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker`
+- Windows: `%LOCALAPPDATA%/WraithWalker`
 
 The server auto-creates the root with the normal `.wraithwalker/root.json` bootstrap if it does not exist yet.
 
