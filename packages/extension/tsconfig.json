@@ -3,11 +3,13 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["chrome"]
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "src/**/*.d.ts",
     "types/**/*.d.ts"
   ],

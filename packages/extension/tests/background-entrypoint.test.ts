@@ -13,7 +13,7 @@ function createEvent() {
 }
 
 function createChromeApi() {
-  return {
+  const chromeApi = {
     runtime: {
       getURL: vi.fn((path) => path),
       sendMessage: vi.fn(),
@@ -51,6 +51,9 @@ function createChromeApi() {
       }
     }
   };
+
+  globalThis.chrome = chromeApi as any;
+  return chromeApi;
 }
 
 function flushPromises() {
@@ -60,6 +63,12 @@ function flushPromises() {
 async function loadBackgroundModule() {
   vi.resetModules();
   globalThis.__WRAITHWALKER_TEST__ = true;
+  return import("../src/background.ts");
+}
+
+async function loadBackgroundModuleOutsideTestMode() {
+  vi.resetModules();
+  delete globalThis.__WRAITHWALKER_TEST__;
   return import("../src/background.ts");
 }
 
@@ -294,6 +303,7 @@ describe("background entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures"
       }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       setNativeHostConfig,
       createSessionController: vi.fn(() => ({
@@ -319,7 +329,7 @@ describe("background entrypoint", () => {
       type: "fs.generateContext",
       payload: {
         siteConfigs: [],
-        editorId: undefined
+        editorId: "windsurf"
       }
     });
     expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(2, {
@@ -336,7 +346,7 @@ describe("background entrypoint", () => {
       type: "openDirectory",
       path: "/tmp/fixtures",
       expectedRootId: "root-1",
-      commandTemplate: 'code "$DIR"'
+      commandTemplate: 'windsurf "$DIR"'
     });
     expect(chromeApi.tabs.create).not.toHaveBeenCalled();
     expect(setNativeHostConfig).toHaveBeenCalled();
@@ -404,6 +414,100 @@ describe("background entrypoint", () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it("uses Cursor URL launch by default when no editor id is provided", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage
+      .mockResolvedValueOnce({ ok: true }) // fs.generateContext
+      .mockResolvedValueOnce({
+        ok: true,
+        sentinel: { rootId: "root-1" },
+        permission: "granted"
+      });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        rootPath: "/tmp/fixtures"
+      }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.handleRuntimeMessage({ type: "native.open" });
+
+    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+      url: "cursor://file//tmp/fixtures/"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("prefers a custom URL override over the editor's built-in URL template", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage
+      .mockResolvedValueOnce({ ok: true }) // fs.generateContext
+      .mockResolvedValueOnce({
+        ok: true,
+        sentinel: { rootId: "root-1" },
+        permission: "granted"
+      });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        rootPath: "/tmp/fixtures",
+        editorLaunchOverrides: {
+          vscode: {
+            urlTemplate: "custom-vscode://open?folder=$DIR_COMPONENT"
+          }
+        }
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "vscode" });
+
+    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+      url: "custom-vscode://open?folder=%2Ftmp%2Ffixtures"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
+  });
+
   it("falls back to the native helper when URL-template launch fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
@@ -427,8 +531,13 @@ describe("background entrypoint", () => {
         ...DEFAULT_NATIVE_HOST_CONFIG,
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures",
-        urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+        editorLaunchOverrides: {
+          cursor: {
+            urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+          }
+        }
       }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       setNativeHostConfig,
       createSessionController: vi.fn(() => ({
@@ -460,7 +569,7 @@ describe("background entrypoint", () => {
       type: "openDirectory",
       path: "/tmp/fixtures",
       expectedRootId: "root-1",
-      commandTemplate: 'code "$DIR"'
+      commandTemplate: 'cursor "$DIR"'
     });
     expect(result).toEqual({ ok: true });
   });
@@ -484,8 +593,13 @@ describe("background entrypoint", () => {
         ...DEFAULT_NATIVE_HOST_CONFIG,
         hostName: "",
         rootPath: "/tmp/fixtures",
-        urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+        editorLaunchOverrides: {
+          cursor: {
+            urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+          }
+        }
       }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
       createSessionController: vi.fn(() => ({
@@ -631,6 +745,128 @@ describe("background entrypoint", () => {
       type: "fs.ensureRoot",
       payload: { requestPermission: true }
     });
+  });
+
+  it("forwards scenario list, save, and switch actions to the native host", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendNativeMessage
+      .mockResolvedValueOnce({ ok: true, scenarios: ["baseline"] })
+      .mockResolvedValueOnce({ ok: true, name: "release" })
+      .mockResolvedValueOnce({ ok: true, name: "baseline" });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        rootPath: "/tmp/fixtures"
+      }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      })),
+      initialState: {
+        rootSentinel: {
+          rootId: "root-scenarios",
+          schemaVersion: 1,
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      }
+    });
+
+    await expect(runtime.handleRuntimeMessage({ type: "scenario.list" })).resolves.toEqual({
+      ok: true,
+      scenarios: ["baseline"]
+    });
+    await expect(runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })).resolves.toEqual({
+      ok: true,
+      name: "release"
+    });
+    await expect(runtime.handleRuntimeMessage({ type: "scenario.switch", name: "baseline" })).resolves.toEqual({
+      ok: true,
+      name: "baseline"
+    });
+
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(1, "com.example.host", {
+      type: "listScenarios",
+      path: "/tmp/fixtures",
+      expectedRootId: "root-scenarios"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(2, "com.example.host", {
+      type: "saveScenario",
+      path: "/tmp/fixtures",
+      expectedRootId: "root-scenarios",
+      name: "release"
+    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(3, "com.example.host", {
+      type: "switchScenario",
+      path: "/tmp/fixtures",
+      expectedRootId: "root-scenarios",
+      name: "baseline"
+    });
+  });
+
+  it("records refresh failures triggered by startup and install listeners", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const getSiteConfigs = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("Startup refresh failed."))
+      .mockRejectedValueOnce(new Error("Install refresh failed."));
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs,
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      setNativeHostConfig: vi.fn().mockResolvedValue(undefined),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    chromeApi.runtime.onStartup.listeners[0]();
+    await flushPromises();
+    expect(runtime.state.lastError).toBe("Startup refresh failed.");
+
+    chromeApi.runtime.onInstalled.listeners[0]();
+    await flushPromises();
+    expect(runtime.state.lastError).toBe("Install refresh failed.");
+  });
+
+  it("bootstraps automatically outside test mode", async () => {
+    const chromeApi = createChromeApi();
+    await loadBackgroundModuleOutsideTestMode();
+    await flushPromises();
+
+    expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
+    expect(chromeApi.storage.onChanged.addListener).toHaveBeenCalled();
   });
 
   it("uses the real session controller to attach, detach, and reconcile tabs", async () => {
@@ -991,6 +1227,7 @@ describe("background entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures"
       }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
       setLastSessionSnapshot: vi.fn(),
       setNativeHostConfig,
       createSessionController: vi.fn(() => ({
@@ -1079,6 +1316,7 @@ describe("background entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures"
       }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
       setLastSessionSnapshot: vi.fn(),
       setNativeHostConfig,
       createSessionController: vi.fn(() => ({
@@ -1124,6 +1362,7 @@ describe("background entrypoint", () => {
         hostName: "com.example.host",
         rootPath: "/tmp/fixtures"
       }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("windsurf"),
       setLastSessionSnapshot: vi.fn(),
       setNativeHostConfig,
       createSessionController: vi.fn(() => ({
@@ -1317,6 +1556,6 @@ describe("background entrypoint", () => {
     await bootstrapBackground();
 
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
-    expect(chromeApi.storage.local.get).toHaveBeenCalledTimes(2);
+    expect(chromeApi.storage.local.get).toHaveBeenCalledTimes(3);
   });
 });

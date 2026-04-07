@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
+import { build as buildEsbuild } from "esbuild";
 import path from "node:path";
 import { promisify } from "node:util";
+import { createRequire } from "node:module";
 import {
   type CopySpec,
   createBuildPaths,
@@ -14,14 +16,13 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-import { createRequire } from "node:module";
-
 const ROOT = process.cwd();
 const REPO_ROOT = path.resolve(ROOT, "../..");
 const require = createRequire(path.join(ROOT, "package.json"));
 const TSC_PATH = path.join(path.dirname(require.resolve("typescript/package.json")), "bin", "tsc");
 const PATHS = createBuildPaths(ROOT);
 const NPM_PATH = process.platform === "win32" ? "npm.cmd" : "npm";
+const NPX_PATH = process.platform === "win32" ? "npx.cmd" : "npx";
 
 async function runTsc(configPath) {
   await execFileAsync(process.execPath, [TSC_PATH, "-p", configPath], {
@@ -60,6 +61,20 @@ async function buildRuntime() {
   await buildCoreFixtureLayout();
   await fs.rm(PATHS.emitDir, { recursive: true, force: true });
   await runTsc(path.join(ROOT, "tsconfig.build.json"));
+  await buildEsbuild({
+    bundle: true,
+    entryPoints: {
+      popup: path.join(ROOT, "src", "popup.ts"),
+      options: path.join(ROOT, "src", "options.ts")
+    },
+    format: "esm",
+    legalComments: "none",
+    logLevel: "silent",
+    outdir: PATHS.emitDir,
+    platform: "browser",
+    sourcemap: false,
+    target: ["chrome118"]
+  });
 }
 
 async function rewriteIdbImports(distLibDir: string) {
@@ -106,6 +121,17 @@ async function buildDist() {
   await copyFile(PATHS.coreFixtureLayoutSource, PATHS.distVendorCoreFixtureLayoutFile);
   await rewriteIdbImports(path.join(PATHS.distDir, "lib"));
   await rewriteCoreFixtureLayoutImports();
+
+  await execFileAsync(NPX_PATH, [
+    "@tailwindcss/cli",
+    "-i",
+    PATHS.uiStylesSource,
+    "-o",
+    PATHS.distCssFile,
+    "--minify"
+  ], {
+    cwd: ROOT
+  });
 }
 
 async function main() {

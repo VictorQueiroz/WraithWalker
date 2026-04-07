@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+}
+
+:root {
+  color-scheme: light;
+  --background: #edf3f7;
+  --foreground: #102235;
+  --card: rgba(255, 255, 255, 0.92);
+  --card-foreground: #102235;
+  --primary: #0b5fff;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f7fb;
+  --secondary-foreground: #102235;
+  --muted: rgba(85, 104, 122, 0.12);
+  --muted-foreground: #5a6d80;
+  --accent: #e8f0ff;
+  --accent-foreground: #003fb3;
+  --border: rgba(16, 34, 53, 0.12);
+  --input: rgba(16, 34, 53, 0.12);
+  --ring: rgba(11, 95, 255, 0.35);
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+}
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    background:
+      radial-gradient(circle at top left, rgba(11, 95, 255, 0.18), transparent 28%),
+      linear-gradient(180deg, #fcfdff 0%, #edf3f7 100%);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .extension-shell {
+    @apply relative overflow-hidden rounded-[28px] border border-border/80 bg-card/90 shadow-[0_18px_48px_rgba(16,34,53,0.12)] backdrop-blur-xl;
+  }
+
+  .extension-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at top right, rgba(11, 95, 255, 0.12), transparent 32%),
+      radial-gradient(circle at bottom left, rgba(16, 34, 53, 0.05), transparent 30%);
+    pointer-events: none;
+  }
+
+  .extension-panel {
+    @apply relative z-10;
+  }
+
+  .metric-tile {
+    @apply rounded-2xl border border-border/70 bg-white/80 px-4 py-3 shadow-sm;
+  }
+}

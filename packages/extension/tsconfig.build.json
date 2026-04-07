@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["chrome"],
     "rootDir": "src",
@@ -16,10 +17,11 @@
   },
   "include": [
     "src/background.ts",
-    "src/popup.ts",
-    "src/options.ts",
     "src/offscreen.ts",
     "src/lib/**/*.ts",
+    "src/lib/**/*.tsx",
+    "src/ui/**/*.ts",
+    "src/ui/**/*.tsx",
     "src/**/*.d.ts",
     "types/**/*.d.ts"
   ]

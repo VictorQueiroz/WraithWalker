@@ -4,6 +4,7 @@
     "allowImportingTsExtensions": true,
     "allowJs": false,
     "checkJs": false,
+    "jsx": "react-jsx",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["DOM", "ES2022"],
@@ -11,6 +12,7 @@
   },
   "include": [
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "types/**/*.d.ts"
   ],
   "exclude": [

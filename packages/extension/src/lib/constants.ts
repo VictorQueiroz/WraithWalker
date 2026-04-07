@@ -15,8 +15,7 @@ export const STORAGE_KEYS = {
 export const DEFAULT_NATIVE_HOST_CONFIG: NativeHostConfig = {
   hostName: "com.wraithwalker.host",
   rootPath: "",
-  commandTemplate: 'code "$DIR"',
-  urlTemplate: "",
+  editorLaunchOverrides: {},
   verifiedAt: null,
   lastVerificationError: "",
   lastOpenError: ""
@@ -70,10 +69,10 @@ export interface EditorPreset {
 }
 
 export const EDITOR_PRESETS: EditorPreset[] = [
+  { id: "cursor", label: "Cursor", commandTemplate: 'cursor "$DIR"', urlTemplate: "cursor://file/$DIR_URI/" },
   { id: "vscode", label: "VS Code", commandTemplate: 'code "$DIR"', urlTemplate: "vscode://file/$DIR_URI/" },
-  { id: "cursor", label: "Cursor", commandTemplate: 'cursor "$DIR"' },
   { id: "antigravity", label: "Antigravity", commandTemplate: 'antigravity "$DIR"' },
   { id: "windsurf", label: "Windsurf", commandTemplate: 'windsurf "$DIR"' }
 ];
 
-export const DEFAULT_EDITOR_ID = "vscode";
+export const DEFAULT_EDITOR_ID = "cursor";

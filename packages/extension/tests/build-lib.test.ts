@@ -19,6 +19,8 @@ describe("build layout helpers", () => {
     expect(paths.libEmitDir).toBe(path.join(process.cwd(), ".ts-emit", "lib"));
     expect(paths.distVendorFile).toBe(path.join(process.cwd(), "dist", "vendor", "idb.js"));
     expect(paths.vendorSource).toMatch(/idb[/\\]build[/\\]index\.js$/);
+    expect(paths.uiStylesSource).toBe(path.join(process.cwd(), "src", "ui", "styles.css"));
+    expect(paths.distCssFile).toBe(path.join(process.cwd(), "dist", "app.css"));
   });
 
   it("assembles dist runtime copies directly from emit output rather than root artifacts", () => {
@@ -64,10 +66,6 @@ describe("build layout helpers", () => {
       {
         sourcePath: path.join(process.cwd(), "static", "offscreen.html"),
         targetPath: path.join(process.cwd(), "dist", "offscreen.html")
-      },
-      {
-        sourcePath: path.join(process.cwd(), "static", "app.css"),
-        targetPath: path.join(process.cwd(), "dist", "app.css")
       },
       {
         sourcePath: path.join(process.cwd(), "static", "assets", "logo.svg"),
@@ -135,8 +133,20 @@ describe("rewriteIdbSpecifiers", () => {
 });
 
 const distIdbPath = path.join(process.cwd(), "dist", "lib", "idb.js");
+const distPopupPath = path.join(process.cwd(), "dist", "popup.js");
+const distOptionsPath = path.join(process.cwd(), "dist", "options.js");
+const distCssPath = path.join(process.cwd(), "dist", "app.css");
 
 describe("dist output", () => {
+  it.skipIf(!(existsSync(distPopupPath) && existsSync(distOptionsPath) && existsSync(distCssPath)))(
+    "emits the React popup/options bundles and the shared Tailwind stylesheet",
+    () => {
+      expect(existsSync(distPopupPath)).toBe(true);
+      expect(existsSync(distOptionsPath)).toBe(true);
+      expect(existsSync(distCssPath)).toBe(true);
+    }
+  );
+
   it.skipIf(!existsSync(distIdbPath))(
     "contains no bare idb specifiers in the built lib/idb.js",
     async () => {

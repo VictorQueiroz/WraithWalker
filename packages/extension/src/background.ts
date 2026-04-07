@@ -1,10 +1,16 @@
 import { buildSessionSnapshot } from "./lib/background-helpers.js";
-import { getNativeHostConfig as defaultGetNativeHostConfig, getSiteConfigs as defaultGetSiteConfigs, setLastSessionSnapshot as defaultSetLastSessionSnapshot, setNativeHostConfig as defaultSetNativeHostConfig } from "./lib/chrome-storage.js";
-import { DEFAULT_NATIVE_HOST_CONFIG, EDITOR_PRESETS, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
+import {
+  getNativeHostConfig as defaultGetNativeHostConfig,
+  getPreferredEditorId as defaultGetPreferredEditorId,
+  getSiteConfigs as defaultGetSiteConfigs,
+  setLastSessionSnapshot as defaultSetLastSessionSnapshot,
+  setNativeHostConfig as defaultSetNativeHostConfig
+} from "./lib/chrome-storage.js";
+import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
+import { buildEditorLaunchUrl, resolveEditorLaunch } from "./lib/editor-launch.js";
 import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
-import type { EditorPreset } from "./lib/constants.js";
 import type { AttachedTabState, NativeHostConfig, RequestEntry, RootSentinel, SessionSnapshot, SiteConfig } from "./lib/types.js";
 
 const DEBUGGER_VERSION = "1.3";
@@ -83,6 +89,7 @@ interface BackgroundState {
   requests: Map<string, RequestEntry>;
   enabledOrigins: string[];
   siteConfigsByOrigin: Map<string, SiteConfig>;
+  preferredEditorId: string;
   lastError: string;
   rootReady: boolean;
   rootSentinel: RootSentinel | null;
@@ -111,6 +118,7 @@ interface BackgroundDependencies {
   chromeApi?: ChromeApi;
   getSiteConfigs?: typeof defaultGetSiteConfigs;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
+  getPreferredEditorId?: typeof defaultGetPreferredEditorId;
   setLastSessionSnapshot?: typeof defaultSetLastSessionSnapshot;
   setNativeHostConfig?: typeof defaultSetNativeHostConfig;
   createSessionController?: (dependencies: Parameters<typeof defaultCreateSessionController>[0]) => SessionControllerApi;
@@ -154,29 +162,11 @@ function isTestMode(): boolean {
   return Boolean((globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean }).__WRAITHWALKER_TEST__);
 }
 
-function findEditorPreset(editorId?: string): EditorPreset | undefined {
-  return EDITOR_PRESETS.find((preset) => preset.id === editorId);
-}
-
-function normalizePathForUrl(rootPath: string): string {
-  return rootPath.replaceAll("\\", "/");
-}
-
-function buildEditorLaunchUrl(urlTemplate: string, rootPath: string, rootId: string): string {
-  const normalizedPath = normalizePathForUrl(rootPath);
-  const url = urlTemplate
-    .replaceAll("$DIR_COMPONENT", encodeURIComponent(normalizedPath))
-    .replaceAll("$DIR_URI", encodeURI(normalizedPath))
-    .replaceAll("$ROOT_ID", encodeURIComponent(rootId))
-    .replaceAll("$DIR", normalizedPath);
-
-  return new URL(url).toString();
-}
-
 export function createBackgroundRuntime({
   chromeApi = chrome as unknown as ChromeApi,
   getSiteConfigs = defaultGetSiteConfigs,
   getNativeHostConfig = defaultGetNativeHostConfig,
+  getPreferredEditorId = defaultGetPreferredEditorId,
   setLastSessionSnapshot = defaultSetLastSessionSnapshot,
   setNativeHostConfig = defaultSetNativeHostConfig,
   createSessionController = defaultCreateSessionController,
@@ -189,6 +179,7 @@ export function createBackgroundRuntime({
     requests: new Map(),
     enabledOrigins: [],
     siteConfigsByOrigin: new Map(),
+    preferredEditorId: DEFAULT_EDITOR_ID,
     lastError: "",
     rootReady: false,
     rootSentinel: null,
@@ -203,10 +194,15 @@ export function createBackgroundRuntime({
   }
 
   async function refreshStoredConfig(): Promise<void> {
-    const [sites, nativeHostConfig] = await Promise.all([getSiteConfigs(), getNativeHostConfig()]);
+    const [sites, nativeHostConfig, preferredEditorId] = await Promise.all([
+      getSiteConfigs(),
+      getNativeHostConfig(),
+      getPreferredEditorId()
+    ]);
     state.enabledOrigins = sites.map((site: SiteConfig) => site.origin);
     state.siteConfigsByOrigin = new Map(sites.map((site: SiteConfig) => [site.origin, site]));
     state.nativeHostConfig = { ...DEFAULT_NATIVE_HOST_CONFIG, ...nativeHostConfig };
+    state.preferredEditorId = preferredEditorId || DEFAULT_EDITOR_ID;
   }
 
   async function snapshotState(): Promise<SessionSnapshot> {
@@ -365,7 +361,8 @@ export function createBackgroundRuntime({
 
   async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
     await refreshStoredConfig();
-    await generateContext(editorId);
+    const resolvedEditorId = editorId || state.preferredEditorId;
+    await generateContext(resolvedEditorId);
 
     const rootResult = await ensureRootReady({ requestPermission: true });
     if (!rootResult.ok) {
@@ -379,8 +376,8 @@ export function createBackgroundRuntime({
       return { ok: false, error };
     }
 
-    const preset = findEditorPreset(editorId);
-    const urlTemplate = (state.nativeHostConfig.urlTemplate || preset?.urlTemplate || "").trim();
+    const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
+    const urlTemplate = launch.urlTemplate.trim();
 
     if (urlTemplate) {
       const urlResult = await openDirectoryViaUrlTemplate(urlTemplate, rootPath, rootResult.sentinel);
@@ -403,7 +400,7 @@ export function createBackgroundRuntime({
         type: "openDirectory",
         path: rootPath,
         expectedRootId: rootResult.sentinel.rootId,
-        commandTemplate: commandTemplate || state.nativeHostConfig.commandTemplate
+        commandTemplate: commandTemplate || launch.commandTemplate
       });
 
       if (!response?.ok) {
@@ -541,7 +538,7 @@ export function createBackgroundRuntime({
 
     Promise.resolve()
       .then(async () => {
-        if (changes.siteConfigs || changes.nativeHostConfig) {
+        if (changes.siteConfigs || changes.nativeHostConfig || changes.preferredEditorId) {
           await refreshStoredConfig();
         }
         if (changes.siteConfigs && state.sessionActive) {

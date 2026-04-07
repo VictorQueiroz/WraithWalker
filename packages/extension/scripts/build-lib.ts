@@ -7,7 +7,6 @@ export const STATIC_EXTENSION_FILES = [
   "popup.html",
   "options.html",
   "offscreen.html",
-  "app.css",
   "assets/logo.svg",
   "assets/icons/icon-16.png",
   "assets/icons/icon-32.png",
@@ -27,6 +26,8 @@ export interface BuildPaths {
   coreFixtureLayoutSource: string;
   distVendorCoreDir: string;
   distVendorCoreFixtureLayoutFile: string;
+  uiStylesSource: string;
+  distCssFile: string;
 }
 
 export interface CopySpec {
@@ -53,7 +54,9 @@ export function createBuildPaths(rootDir: string): BuildPaths {
     distVendorFile: path.join(distDir, "vendor", "idb.js"),
     coreFixtureLayoutSource: path.resolve(rootDir, "../core/out/fixture-layout.mjs"),
     distVendorCoreDir: path.join(distDir, "vendor", "wraithwalker-core"),
-    distVendorCoreFixtureLayoutFile: path.join(distDir, "vendor", "wraithwalker-core", "fixture-layout.js")
+    distVendorCoreFixtureLayoutFile: path.join(distDir, "vendor", "wraithwalker-core", "fixture-layout.js"),
+    uiStylesSource: path.join(rootDir, "src", "ui", "styles.css"),
+    distCssFile: path.join(distDir, "app.css")
   };
 }
 

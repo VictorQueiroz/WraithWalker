@@ -91,8 +91,16 @@ async function loadOffscreenModule() {
   return import("../src/offscreen.ts");
 }
 
+async function loadOffscreenModuleOutsideTestMode() {
+  vi.resetModules();
+  delete globalThis.__WRAITHWALKER_TEST__;
+  return import("../src/offscreen.ts");
+}
+
 afterEach(() => {
   delete globalThis.__WRAITHWALKER_TEST__;
+  delete globalThis.chrome;
+  vi.doUnmock("../src/lib/context-generator.js");
   vi.restoreAllMocks();
 });
 
@@ -148,6 +156,28 @@ describe("offscreen entrypoint", () => {
     await expect(runtime.handleMessage({ target: "offscreen", type: "fs.ensureRoot" })).resolves.toEqual({
       ok: false,
       error: "No root directory selected."
+    });
+  });
+
+  it("returns the sentinel and permission when ensure-root succeeds", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ensure" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    await expect(runtime.handleMessage({ target: "offscreen", type: "fs.ensureRoot" })).resolves.toEqual({
+      ok: true,
+      sentinel: { rootId: "root-ensure" },
+      permission: "granted"
     });
   });
 
@@ -240,6 +270,105 @@ describe("offscreen entrypoint", () => {
       }
     });
     expect(readResult && "bodyBase64" in readResult ? readResult.bodyBase64 : undefined).toBeTypeOf("string");
+  });
+
+  it("returns root-state errors when fixture writes are attempted without a selected root", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      ensureRootSentinel: vi.fn(),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn()
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.writeFixture",
+        payload: {
+          descriptor: {
+            bodyPath: "fixtures/app.js",
+            requestPath: "fixtures/app.js.__request.json",
+            metaPath: "fixtures/app.js.__response.json"
+          },
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/app.js",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-03T00:00:00.000Z"
+          },
+          response: {
+            body: "console.log('hello');",
+            bodyEncoding: "utf8",
+            meta: {
+              status: 200,
+              statusText: "OK",
+              headers: [{ name: "Content-Type", value: "application/javascript" }],
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              url: "https://cdn.example.com/app.js",
+              method: "GET",
+              capturedAt: "2026-04-03T00:00:00.000Z",
+              bodyEncoding: "utf8",
+              bodySuggestedExtension: "js"
+            }
+          }
+        }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "No root directory selected.",
+      permission: undefined
+    });
+  });
+
+  it("generates editor context from the selected root", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const generate = vi.fn().mockResolvedValue(undefined);
+    const createContextGenerator = vi.fn(() => ({ generate }));
+    vi.doMock("../src/lib/context-generator.js", () => ({
+      createContextGenerator
+    }));
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-context" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.generateContext",
+        payload: {
+          editorId: "cursor",
+          siteConfigs: [{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]
+        }
+      })
+    ).resolves.toEqual({ ok: true });
+
+    expect(createContextGenerator).toHaveBeenCalledWith({
+      rootHandle,
+      gateway: expect.any(Object),
+      siteConfigs: [{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]
+    });
+    expect(generate).toHaveBeenCalledWith("cursor");
   });
 
   it("writes a per-domain JSON manifest for mirrored static assets", async () => {
@@ -654,6 +783,21 @@ describe("offscreen entrypoint", () => {
     globalThis.chrome = chromeApi as any;
 
     bootstrapOffscreen();
+
+    expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
+  });
+
+  it("bootstraps automatically outside test mode", async () => {
+    const chromeApi = {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      }
+    };
+    globalThis.chrome = chromeApi as any;
+
+    await loadOffscreenModuleOutsideTestMode();
 
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
   });

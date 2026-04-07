@@ -21,6 +21,7 @@ export default defineConfig({
         "src/lib/capture-policy.ts",
         "src/lib/context-generator.ts",
         "src/lib/chrome-storage.ts",
+        "src/lib/editor-launch.ts",
         "src/lib/file-system-gateway.ts",
         "src/lib/fixture-mapper.ts",
         "src/lib/fixture-repository.ts",
@@ -30,7 +31,9 @@ export default defineConfig({
         "src/lib/root-handle.ts",
         "src/lib/session-controller.ts",
         "src/lib/storage-layout.ts",
-        "src/lib/type-extractor.ts"
+        "src/lib/type-extractor.ts",
+        "src/ui/**/*.ts",
+        "src/ui/**/*.tsx"
       ],
       thresholds: {
         statements: 90,

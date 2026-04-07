@@ -35,11 +35,15 @@ export interface SiteConfig {
   dumpAllowlistPatterns: string[];
 }
 
+export interface EditorLaunchOverride {
+  commandTemplate?: string;
+  urlTemplate?: string;
+}
+
 export interface NativeHostConfig {
   hostName: string;
   rootPath: string;
-  commandTemplate: string;
-  urlTemplate?: string;
+  editorLaunchOverrides: Record<string, EditorLaunchOverride>;
   verifiedAt: string | null;
   lastVerificationError: string;
   lastOpenError: string;
