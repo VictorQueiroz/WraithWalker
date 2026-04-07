@@ -64,10 +64,11 @@ export interface EditorPreset {
   label: string;
   commandTemplate: string;
   urlTemplate?: string;
+  appUrl?: string;
 }
 
 export const EDITOR_PRESETS: EditorPreset[] = [
-  { id: "cursor", label: "Cursor", commandTemplate: 'cursor "$DIR"', urlTemplate: "cursor://file/$DIR_URI/" },
+  { id: "cursor", label: "Cursor", commandTemplate: 'cursor "$DIR"', urlTemplate: "cursor://file/$DIR_URI/", appUrl: "cursor://" },
   { id: "vscode", label: "VS Code", commandTemplate: 'code "$DIR"', urlTemplate: "vscode://file/$DIR_URI/" },
   { id: "antigravity", label: "Antigravity", commandTemplate: 'antigravity "$DIR"' },
   { id: "windsurf", label: "Windsurf", commandTemplate: 'windsurf "$DIR"' }

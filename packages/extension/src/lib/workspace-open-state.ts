@@ -9,11 +9,17 @@ export type CaptureRootState =
 
 export type EditorLaunchState =
   | {
-      kind: "ready_via_url";
+      kind: "ready_via_url_root";
       editorId: string;
       editorLabel: string;
       urlTemplate: string;
       launchPath: string;
+    }
+  | {
+      kind: "ready_via_url_app";
+      editorId: string;
+      editorLabel: string;
+      url: string;
     }
   | {
       kind: "ready_via_native";
@@ -76,21 +82,38 @@ export function deriveEditorLaunchState(
 ): EditorLaunchState {
   const launch = resolveEditorLaunch(nativeHostConfig, editorId);
   const launchPath = nativeHostConfig.launchPath.trim();
+  const appUrl = launch.appUrl.trim();
 
   if (launch.urlTemplate.trim()) {
     return launchPath
       ? {
-          kind: "ready_via_url",
+          kind: "ready_via_url_root",
           editorId: launch.editorId,
           editorLabel: launch.preset.label,
           urlTemplate: launch.urlTemplate.trim(),
           launchPath
         }
-      : {
+      : !launch.hasCustomUrlOverride && appUrl
+        ? {
+            kind: "ready_via_url_app",
+            editorId: launch.editorId,
+            editorLabel: launch.preset.label,
+            url: appUrl
+          }
+        : {
           kind: "missing_launch_path",
           editorId: launch.editorId,
           editorLabel: launch.preset.label
         };
+  }
+
+  if (!launch.hasCustomUrlOverride && appUrl) {
+    return {
+      kind: "ready_via_url_app",
+      editorId: launch.editorId,
+      editorLabel: launch.preset.label,
+      url: appUrl
+    };
   }
 
   if (!launchPath) {
@@ -131,7 +154,7 @@ export function deriveEditorLaunchState(
 export function createMissingLaunchPathAlert(editorLabel: string): PopupAlertState {
   return {
     variant: "destructive",
-    text: `Set the absolute editor launch path in Settings before opening ${editorLabel}. Chrome does not expose local folder paths from the directory picker.`
+    text: `Set the absolute editor launch path in Settings to open the remembered root in ${editorLabel}. Chrome does not expose local folder paths from the directory picker.`
   };
 }
 

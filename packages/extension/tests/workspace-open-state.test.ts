@@ -21,15 +21,16 @@ describe("workspace open state", () => {
       ...DEFAULT_NATIVE_HOST_CONFIG,
       launchPath: "/tmp/fixtures"
     }, "cursor")).toMatchObject({
-      kind: "ready_via_url",
+      kind: "ready_via_url_root",
       editorId: "cursor",
       launchPath: "/tmp/fixtures"
     });
 
     expect(deriveEditorLaunchState(DEFAULT_NATIVE_HOST_CONFIG, "cursor")).toEqual({
-      kind: "missing_launch_path",
+      kind: "ready_via_url_app",
       editorId: "cursor",
-      editorLabel: "Cursor"
+      editorLabel: "Cursor",
+      url: "cursor://"
     });
 
     expect(deriveEditorLaunchState({
@@ -60,6 +61,19 @@ describe("workspace open state", () => {
       kind: "ready_via_native",
       editorId: "windsurf",
       launchPath: "/tmp/fixtures"
+    });
+
+    expect(deriveEditorLaunchState({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      editorLaunchOverrides: {
+        cursor: {
+          urlTemplate: "cursor://file/$DIR_URI/"
+        }
+      }
+    }, "cursor")).toEqual({
+      kind: "missing_launch_path",
+      editorId: "cursor",
+      editorLabel: "Cursor"
     });
   });
 
@@ -104,7 +118,7 @@ describe("workspace open state", () => {
       actionDiagnostic: createMissingLaunchPathAlert("Cursor")
     })).toEqual({
       variant: "destructive",
-      text: "Set the absolute editor launch path in Settings before opening Cursor. Chrome does not expose local folder paths from the directory picker."
+      text: "Set the absolute editor launch path in Settings to open the remembered root in Cursor. Chrome does not expose local folder paths from the directory picker."
     });
   });
 });

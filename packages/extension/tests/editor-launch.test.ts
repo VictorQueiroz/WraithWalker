@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
 import {
+  buildEditorAppUrl,
   buildEditorLaunchUrl,
   getEditorLaunchOverride,
   normalizeNativeHostConfig,
@@ -49,6 +50,7 @@ describe("editor launch helpers", () => {
       editorId: "cursor",
       urlTemplate: "custom://open?folder=$DIR_COMPONENT",
       commandTemplate: 'custom "$DIR"',
+      appUrl: "cursor://",
       hasCustomUrlOverride: true,
       hasCustomCommandOverride: true
     });
@@ -79,5 +81,9 @@ describe("editor launch helpers", () => {
       "/tmp/my fixtures",
       "root-123"
     )).toBe("vscode://file//tmp/my%20fixtures/?root=root-123&folder=%2Ftmp%2Fmy%20fixtures");
+  });
+
+  it("builds bare editor app urls for URL-only app launches", () => {
+    expect(buildEditorAppUrl("cursor://")).toBe("cursor://");
   });
 });

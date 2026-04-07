@@ -127,8 +127,10 @@ export interface ResolvedEditorLaunch {
   preset: EditorPreset;
   override: EditorLaunchOverride;
   urlTemplate: string;
+  appUrl: string;
   commandTemplate: string;
   hasBuiltInUrlTemplate: boolean;
+  hasBuiltInAppUrl: boolean;
   hasCustomUrlOverride: boolean;
   hasCustomCommandOverride: boolean;
 }
@@ -140,6 +142,7 @@ export function resolveEditorLaunch(
   const preset = findEditorPreset(editorId) ?? findEditorPreset(DEFAULT_EDITOR_ID)!;
   const override = getEditorLaunchOverride(nativeHostConfig, preset.id);
   const builtInUrlTemplate = trimOptionalString(preset.urlTemplate) ?? "";
+  const builtInAppUrl = trimOptionalString(preset.appUrl) ?? "";
   const builtInCommandTemplate = trimOptionalString(preset.commandTemplate) ?? "";
 
   return {
@@ -147,8 +150,10 @@ export function resolveEditorLaunch(
     preset,
     override,
     urlTemplate: trimOptionalString(override.urlTemplate) ?? builtInUrlTemplate,
+    appUrl: builtInAppUrl,
     commandTemplate: trimOptionalString(override.commandTemplate) ?? builtInCommandTemplate,
     hasBuiltInUrlTemplate: Boolean(builtInUrlTemplate),
+    hasBuiltInAppUrl: Boolean(builtInAppUrl),
     hasCustomUrlOverride: Boolean(trimOptionalString(override.urlTemplate)),
     hasCustomCommandOverride: Boolean(trimOptionalString(override.commandTemplate))
   };
@@ -167,4 +172,8 @@ export function buildEditorLaunchUrl(urlTemplate: string, rootPath: string, root
     .replaceAll("$DIR", normalizedPath);
 
   return new URL(url).toString();
+}
+
+export function buildEditorAppUrl(appUrl: string): string {
+  return new URL(appUrl).toString();
 }

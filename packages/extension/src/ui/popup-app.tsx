@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { buildEditorLaunchUrl } from "../lib/editor-launch.js";
+import { buildEditorAppUrl, buildEditorLaunchUrl } from "../lib/editor-launch.js";
 import type { BackgroundMessage, ErrorResult, NativeOpenResult } from "../lib/messages.js";
 import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
 import {
@@ -185,7 +185,7 @@ export function PopupApp({
         return;
       }
 
-      if (nextEditorLaunchState.kind === "ready_via_url") {
+      if (nextEditorLaunchState.kind === "ready_via_url_root") {
         openExternalUrl(buildEditorLaunchUrl(
           nextEditorLaunchState.urlTemplate,
           nextEditorLaunchState.launchPath,
@@ -194,6 +194,15 @@ export function PopupApp({
         setActionAlert({
           variant: "success",
           text: `Requested ${nextEditorLaunchState.editorLabel} to open the capture root.`
+        });
+        return;
+      }
+
+      if (nextEditorLaunchState.kind === "ready_via_url_app") {
+        openExternalUrl(buildEditorAppUrl(nextEditorLaunchState.url));
+        setActionAlert({
+          variant: "success",
+          text: `Opened ${nextEditorLaunchState.editorLabel}.`
         });
         return;
       }

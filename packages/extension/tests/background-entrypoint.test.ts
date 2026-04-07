@@ -591,7 +591,7 @@ describe("background entrypoint", () => {
     });
   });
 
-  it("surfaces a dedicated launch-path error before URL-based editor opens", async () => {
+  it("opens Cursor itself when no absolute launch path is available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     chromeApi.runtime.sendMessage
@@ -628,12 +628,11 @@ describe("background entrypoint", () => {
 
     const result = await runtime.openDirectoryInEditor();
 
-    expect(chromeApi.tabs.create).not.toHaveBeenCalled();
-    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      ok: false,
-      error: "Set the absolute editor launch path in Settings before opening Cursor. Chrome does not expose local folder paths from the directory picker."
+    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+      url: "cursor://"
     });
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
   });
 
   it("surfaces native verification failures and root-sentinel errors", async () => {
@@ -699,7 +698,7 @@ describe("background entrypoint", () => {
       .mockResolvedValueOnce({ ok: true, permission: "granted" });  // fs.ensureRoot
     await expect(sentinelRuntime.openDirectoryInEditor()).resolves.toEqual({
       ok: false,
-      error: "Cannot read properties of undefined (reading 'rootId')"
+      error: "Root sentinel is missing a rootId."
     });
   });
 

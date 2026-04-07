@@ -760,7 +760,7 @@ export function OptionsApp({
                         placeholder="/Users/you/wraithwalker-fixtures"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Needed for editor URL launches. Chrome remembers the chosen directory handle, but it does not expose the absolute local path back to the extension.
+                        Needed when you want the editor to open the remembered root directly, or when using the native host fallback. Cursor can still launch via <code>cursor://</code> without it, but Chrome does not expose the absolute local path back to the extension.
                       </p>
                     </div>
                     <Separator />

@@ -6,7 +6,7 @@ import {
   setLastSessionSnapshot as defaultSetLastSessionSnapshot
 } from "./lib/chrome-storage.js";
 import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
-import { buildEditorLaunchUrl, resolveEditorLaunch } from "./lib/editor-launch.js";
+import { buildEditorAppUrl, buildEditorLaunchUrl, resolveEditorLaunch } from "./lib/editor-launch.js";
 import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
@@ -190,6 +190,11 @@ export function createBackgroundRuntime({
     state.lastError = message || "";
   }
 
+  function getRequiredRootId(rootResult: RootReadySuccess): string | null {
+    const rootId = (rootResult.sentinel as RootSentinel | undefined)?.rootId;
+    return typeof rootId === "string" && rootId.trim() ? rootId : null;
+  }
+
   async function refreshStoredConfig(): Promise<void> {
     const [sites, nativeHostConfig, preferredEditorId] = await Promise.all([
       getSiteConfigs(),
@@ -284,11 +289,16 @@ export function createBackgroundRuntime({
       return { ok: false, error };
     }
 
+    const rootId = getRequiredRootId(resolvedRoot);
+    if (!rootId) {
+      return { ok: false, error: "Root sentinel is missing a rootId." };
+    }
+
     try {
       const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
         type: "verifyRoot",
         path: state.nativeHostConfig.launchPath,
-        expectedRootId: resolvedRoot.sentinel.rootId
+        expectedRootId: rootId
       });
 
       if (!response?.ok) {
@@ -312,10 +322,10 @@ export function createBackgroundRuntime({
     }
   }
 
-  async function openDirectoryViaUrlTemplate(urlTemplate: string, rootPath: string, rootSentinel: RootSentinel): Promise<NativeOpenResult> {
+  async function openEditorViaUrl(url: string): Promise<NativeOpenResult> {
     try {
       await chromeApi.tabs.create({
-        url: buildEditorLaunchUrl(urlTemplate, rootPath, rootSentinel.rootId)
+        url
       });
       return { ok: true };
     } catch (error) {
@@ -329,22 +339,32 @@ export function createBackgroundRuntime({
     await generateContext(resolvedEditorId);
     const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
     const urlTemplate = launch.urlTemplate.trim();
+    const appUrl = launch.appUrl.trim();
+    const canLaunchEditorApp = Boolean(appUrl && !launch.hasCustomUrlOverride);
+    const launchPath = state.nativeHostConfig.launchPath.trim();
+
+    if (!launchPath && canLaunchEditorApp) {
+      return openEditorViaUrl(buildEditorAppUrl(appUrl));
+    }
 
     const rootResult = await ensureRootReady({ requestPermission: true });
     if (!rootResult.ok) {
       return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
     }
 
-    const launchPath = state.nativeHostConfig.launchPath.trim();
     if (!launchPath) {
       const error = urlTemplate
-        ? `Set the absolute editor launch path in Settings before opening ${launch.preset.label}. Chrome does not expose local folder paths from the directory picker.`
+        ? `Set the absolute editor launch path in Settings to open the remembered root in ${launch.preset.label}. Chrome does not expose local folder paths from the directory picker.`
         : "Configure the shared editor launch path in the options page first.";
       return { ok: false, error };
     }
 
     if (urlTemplate) {
-      return openDirectoryViaUrlTemplate(urlTemplate, launchPath, rootResult.sentinel);
+      const rootId = getRequiredRootId(rootResult);
+      if (!rootId) {
+        return { ok: false, error: "Root sentinel is missing a rootId." };
+      }
+      return openEditorViaUrl(buildEditorLaunchUrl(urlTemplate, launchPath, rootId));
     }
 
     const verification = await verifyNativeHostRoot({ rootResult });

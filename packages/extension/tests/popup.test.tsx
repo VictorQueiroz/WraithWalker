@@ -149,7 +149,42 @@ describe("popup entrypoint", () => {
     }
   });
 
-  it("does not show the missing launch path on load, only after open is clicked", async () => {
+  it("opens Cursor itself through the bare URL scheme when no launch path is configured", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const openExternalUrl = vi.fn();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      openExternalUrl,
+      ...createRootDeps()
+    });
+
+    try {
+      expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
+
+      await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
+      expect(openExternalUrl).toHaveBeenCalledWith("cursor://");
+      expect(runtime.sendMessage).not.toHaveBeenCalledWith({
+        type: "native.open",
+        editorId: "cursor"
+      });
+      expect(await screen.findByText("Opened Cursor.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("still asks for a launch path when the chosen editor needs one to open the remembered root", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
@@ -163,7 +198,7 @@ describe("popup entrypoint", () => {
       runtime,
       setIntervalFn: fakeSetInterval,
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
-      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode"),
       ...createRootDeps()
     });
 
@@ -171,8 +206,8 @@ describe("popup entrypoint", () => {
       expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
       expect(screen.queryByText(/Set the absolute editor launch path in Settings/i)).toBeNull();
 
-      await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
-      expect(await screen.findByText(/Set the absolute editor launch path in Settings/i)).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Open in VS Code" }));
+      expect(await screen.findByText(/Set the absolute editor launch path in Settings to open the remembered root in VS Code/i)).toBeTruthy();
     } finally {
       popup.unmount();
     }
