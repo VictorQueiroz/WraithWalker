@@ -64,6 +64,8 @@ async function buildRuntime() {
   await buildEsbuild({
     bundle: true,
     entryPoints: {
+      background: path.join(ROOT, "src", "background.ts"),
+      offscreen: path.join(ROOT, "src", "offscreen.ts"),
       popup: path.join(ROOT, "src", "popup.ts"),
       options: path.join(ROOT, "src", "options.ts")
     },

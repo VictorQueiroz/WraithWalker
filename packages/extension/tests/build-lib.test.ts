@@ -133,14 +133,18 @@ describe("rewriteIdbSpecifiers", () => {
 });
 
 const distIdbPath = path.join(process.cwd(), "dist", "lib", "idb.js");
+const distBackgroundPath = path.join(process.cwd(), "dist", "background.js");
+const distOffscreenPath = path.join(process.cwd(), "dist", "offscreen.js");
 const distPopupPath = path.join(process.cwd(), "dist", "popup.js");
 const distOptionsPath = path.join(process.cwd(), "dist", "options.js");
 const distCssPath = path.join(process.cwd(), "dist", "app.css");
 
 describe("dist output", () => {
-  it.skipIf(!(existsSync(distPopupPath) && existsSync(distOptionsPath) && existsSync(distCssPath)))(
-    "emits the React popup/options bundles and the shared Tailwind stylesheet",
+  it.skipIf(!(existsSync(distBackgroundPath) && existsSync(distOffscreenPath) && existsSync(distPopupPath) && existsSync(distOptionsPath) && existsSync(distCssPath)))(
+    "emits bundled background/offscreen/popup/options runtime files and the shared Tailwind stylesheet",
     () => {
+      expect(existsSync(distBackgroundPath)).toBe(true);
+      expect(existsSync(distOffscreenPath)).toBe(true);
       expect(existsSync(distPopupPath)).toBe(true);
       expect(existsSync(distOptionsPath)).toBe(true);
       expect(existsSync(distCssPath)).toBe(true);
@@ -153,6 +157,15 @@ describe("dist output", () => {
       const content = await fs.readFile(distIdbPath, "utf-8");
       expect(content).not.toMatch(/from\s+["']idb["']/);
       expect(content).toContain('from "../vendor/idb.js"');
+    }
+  );
+
+  it.skipIf(!existsSync(distBackgroundPath))(
+    "contains no bare @trpc/client imports in the built background bundle",
+    async () => {
+      const content = await fs.readFile(distBackgroundPath, "utf-8");
+      expect(content).not.toMatch(/from\s+["']@trpc\/client["']/);
+      expect(content).not.toContain('"@trpc/client"');
     }
   );
 });
