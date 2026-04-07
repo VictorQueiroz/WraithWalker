@@ -6,6 +6,7 @@ import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, Sit
 export const DEFAULT_WRAITHWALKER_SERVER_TRPC_URL = "http://127.0.0.1:4319/trpc";
 export const WRAITHWALKER_SERVER_CACHE_TTL_MS = 5_000;
 export const WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS = 750;
+export const WRAITHWALKER_SERVER_SOURCE_HEADER = "wraithwalker-extension";
 
 export interface ServerFixtureReadResultMissing {
   exists: false;
@@ -92,10 +93,10 @@ export function createWraithWalkerServerClient(
 ): WraithWalkerServerClient {
   const trpc = createTRPCClient<AppRouter>({
     links: [
-      httpBatchLink({
-        url,
-        fetch: createTimedFetch(timeoutMs, fetchImpl)
-      })
+      httpBatchLink(createWraithWalkerServerTransportOptions(url, {
+        timeoutMs,
+        fetchImpl
+      }))
     ]
   }) as any;
 
@@ -119,5 +120,28 @@ export function createWraithWalkerServerClient(
     generateContext(payload) {
       return trpc.fixtures.generateContext.mutate(payload) as Promise<{ ok: true }>;
     }
+  };
+}
+
+export function createWraithWalkerServerTransportOptions(
+  url = DEFAULT_WRAITHWALKER_SERVER_TRPC_URL,
+  {
+    timeoutMs = WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS,
+    fetchImpl = fetch
+  }: {
+    timeoutMs?: number;
+    fetchImpl?: typeof fetch;
+  } = {}
+) {
+  return {
+    url,
+    // Force POST for batched queries so the browser never builds oversized loopback URLs.
+    methodOverride: "POST" as const,
+    headers() {
+      return {
+        "x-trpc-source": WRAITHWALKER_SERVER_SOURCE_HEADER
+      };
+    },
+    fetch: createTimedFetch(timeoutMs, fetchImpl)
   };
 }

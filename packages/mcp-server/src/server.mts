@@ -525,7 +525,8 @@ export async function startHttpServer(
 
   app.use(HTTP_TRPC_PATH, trpcExpress.createExpressMiddleware({
     router: trpcRouter,
-    createContext: () => ({})
+    createContext: () => ({}),
+    allowMethodOverride: true
   }));
 
   app.all(HTTP_MCP_PATH, async (req, res) => {

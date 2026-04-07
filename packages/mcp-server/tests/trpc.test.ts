@@ -14,11 +14,31 @@ import { startHttpServer } from "../src/server.mts";
 import { createWraithwalkerRouter, type AppRouter } from "../src/trpc.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
-async function createClient(serverUrl: string) {
+function createClient(
+  serverUrl: string,
+  {
+    methodOverride,
+    headers,
+    fetchImpl
+  }: {
+    methodOverride?: "POST";
+    headers?: Record<string, string>;
+    fetchImpl?: typeof fetch;
+  } = {}
+) {
   return createTRPCClient<AppRouter>({
     links: [
       httpBatchLink({
-        url: serverUrl
+        url: serverUrl,
+        ...(methodOverride ? { methodOverride } : {}),
+        ...(headers
+          ? {
+              headers() {
+                return headers;
+              }
+            }
+          : {}),
+        ...(fetchImpl ? { fetch: fetchImpl } : {})
       })
     ]
   });
@@ -286,6 +306,58 @@ describe("tRPC capture backend", () => {
         }
       });
       expect(deniedPreflight.status).toBe(403);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("supports extension-style POST batched queries without oversized GET URLs", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const descriptor = await createDescriptor();
+    let lastRequest: { method?: string; url: string } | null = null;
+    let lastResponse: Response | null = null;
+
+    try {
+      const client = createClient(server.trpcUrl, {
+        methodOverride: "POST",
+        headers: {
+          Origin: "chrome-extension://test-extension-id",
+          "x-trpc-source": "wraithwalker-extension"
+        },
+        fetchImpl: async (input, init) => {
+          const response = await fetch(input, init);
+          lastRequest = {
+            method: init?.method ?? (input instanceof Request ? input.method : undefined),
+            url: typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+          };
+          lastResponse = response.clone();
+          return response;
+        }
+      });
+
+      const results = await Promise.all([
+        client.fixtures.has.query({ descriptor }),
+        client.fixtures.has.query({ descriptor }),
+        client.fixtures.has.query({ descriptor })
+      ]);
+
+      expect(results).toEqual([
+        expect.objectContaining({ exists: false }),
+        expect.objectContaining({ exists: false }),
+        expect.objectContaining({ exists: false })
+      ]);
+      expect(lastRequest).toEqual(expect.objectContaining({
+        method: "POST"
+      }));
+      expect(lastRequest?.url).toContain("/fixtures.has,fixtures.has,fixtures.has");
+      expect(lastRequest?.url).not.toContain("input=%7B");
+      expect(lastResponse?.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
     } finally {
       await server.close();
     }

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createTimedFetch,
+  createWraithWalkerServerTransportOptions,
   isServerCacheFresh,
+  WRAITHWALKER_SERVER_SOURCE_HEADER,
   WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS
 } from "../src/lib/wraithwalker-server.js";
 
@@ -42,5 +44,31 @@ describe("wraithwalker server client helpers", () => {
   it("keeps the exported default timeout meaningful for local server probes", () => {
     expect(WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS).toBeGreaterThan(0);
     expect(WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS).toBeLessThanOrEqual(1_000);
+  });
+
+  it("forces POST batching for extension-side local server traffic", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok", { status: 200 }));
+    const transport = createWraithWalkerServerTransportOptions("http://127.0.0.1:4319/trpc", {
+      timeoutMs: 42,
+      fetchImpl
+    });
+
+    expect(transport.url).toBe("http://127.0.0.1:4319/trpc");
+    expect(transport.methodOverride).toBe("POST");
+    expect(await transport.headers()).toEqual({
+      "x-trpc-source": WRAITHWALKER_SERVER_SOURCE_HEADER
+    });
+
+    await transport.fetch("http://127.0.0.1:4319/trpc/system.info", {
+      method: "POST"
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://127.0.0.1:4319/trpc/system.info",
+      expect.objectContaining({
+        method: "POST",
+        signal: expect.any(AbortSignal)
+      })
+    );
   });
 });
