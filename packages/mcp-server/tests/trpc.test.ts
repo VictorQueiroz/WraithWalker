@@ -237,6 +237,60 @@ describe("tRPC capture backend", () => {
     }
   });
 
+  it("allows browser extension CORS requests to the tRPC endpoint and rejects regular web origins", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+
+    try {
+      const queryUrl = `${server.trpcUrl}/system.info?batch=1&input=${encodeURIComponent("{}")}`;
+
+      const extensionResponse = await fetch(queryUrl, {
+        headers: {
+          Origin: "chrome-extension://test-extension-id"
+        }
+      });
+      expect(extensionResponse.status).toBe(200);
+      expect(extensionResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
+
+      const preflightResponse = await fetch(`${server.trpcUrl}/fixtures.writeIfAbsent`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "chrome-extension://test-extension-id",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type, x-trpc-source"
+        }
+      });
+      expect(preflightResponse.status).toBe(204);
+      expect(preflightResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
+      expect(preflightResponse.headers.get("access-control-allow-headers")).toBe("content-type, x-trpc-source");
+      expect(preflightResponse.headers.get("vary")).toBe("Origin");
+
+      const webOriginResponse = await fetch(queryUrl, {
+        headers: {
+          Origin: "https://example.com"
+        }
+      });
+      expect(webOriginResponse.status).toBe(200);
+      expect(webOriginResponse.headers.get("access-control-allow-origin")).toBeNull();
+
+      const deniedPreflight = await fetch(`${server.trpcUrl}/fixtures.writeIfAbsent`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://example.com",
+          "Access-Control-Request-Method": "POST"
+        }
+      });
+      expect(deniedPreflight.status).toBe(403);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("supports direct caller usage for the typed tRPC router", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-trpc-",

@@ -27,6 +27,7 @@ import {
   readSiteConfigs,
   resolveFixturePath
 } from "./fixture-reader.mjs";
+import { appendVaryHeader, buildLocalServerCorsHeaders } from "./local-server-cors.mjs";
 import { createWraithwalkerRouter, HTTP_TRPC_PATH } from "./trpc.mjs";
 
 const SERVER_NAME = "wraithwalker";
@@ -489,6 +490,37 @@ export async function startHttpServer(
       mcpUrl: urls.mcpUrl,
       trpcUrl: urls.trpcUrl
     })
+  });
+
+  app.use(HTTP_TRPC_PATH, (req, res, next) => {
+    const origin = typeof req.headers.origin === "string"
+      ? req.headers.origin
+      : undefined;
+    const requestedHeaders = typeof req.headers["access-control-request-headers"] === "string"
+      ? req.headers["access-control-request-headers"]
+      : undefined;
+    const corsHeaders = buildLocalServerCorsHeaders({
+      origin,
+      requestedHeaders
+    });
+
+    if (corsHeaders) {
+      for (const [name, value] of Object.entries(corsHeaders)) {
+        if (name.toLowerCase() === "vary") {
+          res.setHeader("Vary", appendVaryHeader(res.getHeader("Vary"), value));
+          continue;
+        }
+
+        res.setHeader(name, value);
+      }
+    }
+
+    if (req.method === "OPTIONS") {
+      res.status(corsHeaders ? 204 : 403).end();
+      return;
+    }
+
+    next();
   });
 
   app.use(HTTP_TRPC_PATH, trpcExpress.createExpressMiddleware({
