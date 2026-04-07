@@ -4,217 +4,135 @@
 
 # WraithWalker
 
-**Turn any web application into a locally editable, replayable environment.**
+**Turn a web app into local files you can edit, inspect, and feed to AI tooling.**
 
-WraithWalker is a Chrome extension that captures network responses as plain files on your filesystem and serves them back on subsequent requests. Edit a JSON API response, patch a JS bundle, swap out a stylesheet — then reload the page and see the result. No proxy, no build step, no source access required.
+WraithWalker has three parts:
 
-## How It Works
+1. **Extraction of files (Extension)**  
+   Capture responses from a running web app and save them as plain files on disk.
+2. **AI agentic coding**  
+   Generate context, inferred types, and editor-friendly workspace metadata from the captured app.
+3. **MCP server (optional)**  
+   Expose the captured fixture root to AI agents over MCP when you want tool-based inspection.
 
-1. **Enable an origin** in the options page (e.g. `https://app.example.com`).
-2. **Start a session** from the toolbar popup.
-3. **Browse normally.** WraithWalker intercepts requests via `chrome.debugger`, lets the browser fetch live responses, and saves them as local files.
-4. **On the next request**, if a matching fixture file exists on disk, WraithWalker serves it instead of hitting the network.
-5. **Edit any fixture** in your editor. The browser picks up your changes on the next load.
+## Extraction of Files (Extension)
 
-### Storage Modes
+The Chrome extension is the core workflow.
 
-| Mode | Best for | How it stores files |
-|------|----------|-------------------|
-| **Simple** (default) | Readable file trees, quick edits | Mirrors the original URL structure: `cdn.example.com/assets/app.js`. Metadata lives in a hidden `.wraithwalker/` directory. |
-| **Advanced** | Full request/response archival | Groups everything under origin-keyed directories with request and response metadata alongside each fixture. |
+1. Add an exact origin in the options page, like `https://app.example.com`.
+2. Choose a capture root directory.
+3. Start a session from the popup.
+4. Browse normally.
+5. WraithWalker saves matching responses as local files and replays them on future requests.
 
-### Dump Allowlist Patterns
+You can then edit:
 
-Each site can have one or more regex patterns controlling which requests get persisted. For example, `\.css$` and `\.js$` will capture only stylesheets and scripts while letting everything else pass through to the live server.
+- JSON API responses
+- JS bundles and chunks
+- CSS files
+- HTML documents
+- other captured asset responses
 
-## AI Agent Integration
+Simple mode is the default. It mirrors readable file paths like:
 
-WraithWalker is designed to bridge captured network fixtures with AI agentic coding workflows.
-
-### Context Generation
-
-When you click **"Open in {Editor}"** from the popup — or run `wraithwalker context` from the CLI — WraithWalker auto-generates context files in the fixture root:
-
-- **`CLAUDE.md`** — API endpoint inventory, inferred response shapes, static asset summary, and suggested agent tasks
-- **`.cursorrules`** — generated for Cursor, `.windsurfrules` for Windsurf
-- **`.wraithwalker/types/*.d.ts`** — TypeScript interfaces inferred from captured JSON responses
-
-This gives the AI agent instant situational awareness about the captured application.
-
-### Editor Picker
-
-A split button in the popup lets you choose between **Cursor**, **Antigravity**, **VS Code**, and **Windsurf**. Your last-used editor is remembered as the default.
-
-### Scenario Snapshots
-
-Save the current fixture state as a named scenario (e.g. "logged-in-admin", "empty-cart", "error-state") and switch between them from the popup or CLI. Scenarios are stored in `.wraithwalker/scenarios/`.
-
-### MCP Server
-
-The `@wraithwalker/mcp-server` package exposes captured fixtures programmatically via the [Model Context Protocol](https://modelcontextprotocol.io/):
-
-| Tool | Description |
-|------|-------------|
-| `list-origins` | Summarize all captured origins |
-| `list-assets` | List captured static assets for an origin with filtering and pagination |
-| `list-endpoints` | API endpoints for a given origin, including a fixture directory identifier |
-| `search-content` | Search live fixture content across assets, endpoint bodies, and text-like files |
-| `read-endpoint-fixture` | Read response metadata and body for a listed API endpoint fixture |
-| `read-fixture` | Read a fixture response body by root-bounded relative path |
-| `read-fixture-snippet` | Read a bounded text snippet from a large fixture file |
-| `read-manifest` | Read RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
-| `list-scenarios` | Enumerate saved scenario snapshots |
-| `diff-scenarios` | Compare two scenarios — added, removed, and changed endpoints, with missing-scenario validation |
-
-WraithWalker supports two MCP transport modes from the same fixture root:
-
-```bash
-wraithwalker serve          # stdio for existing local process-spawned clients
-wraithwalker serve --http   # Streamable HTTP at http://127.0.0.1:4319/mcp
+```text
+cdn.example.com/assets/app.js
+.wraithwalker/simple/...
 ```
 
-When you use `--http`, WraithWalker prints the final MCP URL, available tools, and a reminder to copy that URL into your AI client.
+That means the visible files stay easy to inspect, while metadata lives under `.wraithwalker/`.
 
-The intended agent workflow is progressive:
+## AI Agentic Coding
 
-1. `list-origins`
-2. `list-assets` and/or `list-endpoints`
-3. `search-content`
-4. `read-fixture-snippet`
-5. raw reads like `read-fixture`, `read-endpoint-fixture`, or `read-manifest` only when needed
+Once a fixture root exists, WraithWalker helps agents understand the captured app.
 
-You can also run the package bin directly:
+It can generate:
+
+- `CLAUDE.md`
+- editor rule files like `.cursorrules`
+- inferred TypeScript types in `.wraithwalker/types/*.d.ts`
+
+The goal is simple: give an AI coding agent a usable local workspace even when you do not have the original source code.
+
+Typical flow:
 
 ```bash
-node packages/mcp-server/out/bin.mjs /path/to/fixture-root
-node packages/mcp-server/out/bin.mjs --http /path/to/fixture-root
+wraithwalker context --editor cursor
 ```
 
-See [`docs/mcp-clients.md`](docs/mcp-clients.md) for Claude Code, Cursor, Windsurf, Codex, and generic HTTP setup examples.
+You can also save and switch scenarios so agents can work against different captured states like:
 
-## Features
+- `logged-in`
+- `empty-state`
+- `error-state`
 
-- **Per-origin control** — enable exactly the origins you need, each with its own storage mode and allowlist patterns.
-- **Capture and replay** — live responses are saved as files; existing files are served back without hitting the network.
-- **Editable fixtures** — files are plain text on your filesystem. Edit them with any tool.
-- **Two storage modes** — Simple mode for human-readable paths, Advanced mode for full archival.
-- **Static asset manifests** — `RESOURCE_MANIFEST.json` maps original URLs to saved file paths for each domain.
-- **Git-friendly** — fixture directories are plain files and folders. Branch, diff, and share them like code.
-- **Context generation** — auto-generated CLAUDE.md and TypeScript types from captured responses.
-- **Scenario snapshots** — save and switch between named fixture states from the popup or CLI.
-- **MCP server** — expose fixtures to any MCP-compatible AI agent.
-- **Fixture diffing** — compare scenarios to detect regressions, new endpoints, and contract changes.
-- **CLI tool** — manage fixture roots, generate context, and handle scenarios from the terminal.
-- **Editor integration** — split button for Cursor, Antigravity, VS Code, and Windsurf with an optional native-messaging host.
+## MCP Server (Optional)
 
-## Getting Started
+If you want an agent to inspect the fixture root through tools instead of only raw files, run the MCP server.
 
-Build all packages:
+```bash
+wraithwalker serve
+wraithwalker serve --http
+```
+
+The MCP server can:
+
+- list origins
+- list assets
+- list endpoints
+- search content
+- read fixture bodies and snippets
+- read endpoint fixtures
+- diff scenarios
+
+Use it when your AI client supports MCP. Skip it if file-based workflows are enough.
+
+## Quick Start
+
+Install and build everything:
 
 ```bash
 npm install
 npm run build
 ```
 
-### Load the Chrome Extension
+Load the extension:
 
-1. Open `chrome://extensions`.
-2. Enable Developer mode.
-3. Click **Load unpacked**.
-4. Select the [`packages/extension/dist/`](packages/extension/dist/) directory.
+1. Open `chrome://extensions`
+2. Enable Developer mode
+3. Click **Load unpacked**
+4. Select [`packages/extension/dist`](packages/extension/dist)
 
-Then open the extension options page to add origins and choose a root capture directory.
-
-### Use the CLI
-
-Initialize a fixture root and generate context:
+Useful commands:
 
 ```bash
 wraithwalker init /path/to/fixtures
-wraithwalker import-har ./captures/app.har /path/to/fixtures --top-origin https://app.example.com
-wraithwalker status
+wraithwalker import-har ./capture.har /path/to/fixtures
+wraithwalker sync /path/to/chrome-overrides
 wraithwalker context --editor cursor
+wraithwalker serve --http
 ```
 
-## Project Structure
+## Packages
 
-This is a [Turborepo](https://turbo.build/) monorepo with 5 packages:
+This repo is a Turborepo with five packages:
 
-| Package | Description |
-|---------|-------------|
-| [`packages/core`](packages/core/) | Shared Node-side domain logic for fixture roots, fixture readers, scenarios, and context generation |
-| [`packages/extension`](packages/extension/) | Chrome extension — service worker, popup, options page, offscreen document, and shared library |
-| [`packages/native-host`](packages/native-host/) | Optional Node.js native-messaging host for editor integration and scenario management |
-| [`packages/mcp-server`](packages/mcp-server/) | MCP server for programmatic fixture access, endpoint listing, and scenario diffing |
-| [`packages/cli`](packages/cli/) | CLI tool — `wraithwalker init`, `import-har`, `status`, `context`, `scenarios`, `serve` |
-
-## CLI
-
-The `wraithwalker` CLI manages fixture roots, generates context files, and handles scenarios from the terminal.
-
-```bash
-wraithwalker init [dir]              # Create a fixture root
-wraithwalker import-har <har-file> [dir] [--top-origin <origin>] # Populate a simple-mode fixture root from a HAR
-wraithwalker status                  # Show origins, endpoints, scenarios
-wraithwalker context [--editor <id>] # Regenerate CLAUDE.md and .d.ts types
-wraithwalker scenarios list          # List saved scenarios
-wraithwalker scenarios save <name>   # Save current fixtures as scenario
-wraithwalker scenarios switch <name> # Switch to a saved scenario
-wraithwalker scenarios diff <a> <b>  # Compare two scenarios
-wraithwalker serve [--http] [--host <host>] [--port <port>] # Start the MCP server
-```
-
-The CLI discovers the nearest fixture root by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one, or `wraithwalker import-har` to bootstrap a fresh root and populate it from a HAR file in default simple mode.
-
-### CLI Theming
-
-The CLI theme is data-driven and configurable through layered JSON config:
-
-- Global config:
-  - Linux: `${XDG_CONFIG_HOME:-~/.config}/wraithwalker/config.json`
-  - macOS: `~/Library/Application Support/WraithWalker/config.json`
-  - Windows: `%APPDATA%/WraithWalker/config.json`
-- Project config: `<fixture-root>/.wraithwalker/cli.json`
-
-Project config overrides global config. Themes can customize semantic styles, icons, banner art or phrases, indent, and label width without changing the command layout.
-
-```json
-{
-  "theme": {
-    "name": "wraithwalker",
-    "overrides": {
-      "styles": {
-        "heading": ["bold", "cyan"]
-      },
-      "icons": {
-        "bullet": "•"
-      },
-      "banner": {
-        "phrases": ["Custom phrase"]
-      },
-      "indent": "    ",
-      "labelWidth": 16
-    }
-  }
-}
-```
-
-## Native Host
-
-The native host opens your capture root in an editor and manages scenario snapshots (save, switch, list). It is optional and not packaged automatically — setup is manual so you can adjust the path, extension ID, and editor command for your environment.
-
-See [`packages/native-host/README.md`](packages/native-host/README.md) for setup instructions.
+- [`packages/core`](packages/core): shared fixture and scenario logic
+- [`packages/extension`](packages/extension): Chrome extension
+- [`packages/cli`](packages/cli): command-line interface
+- [`packages/mcp-server`](packages/mcp-server): MCP server
+- [`packages/native-host`](packages/native-host): optional native host for editor/scenario helpers
 
 ## Development
 
 ```bash
-npm run build      # build all packages
-npm test           # run release checks and package test suites
-npm run typecheck  # type-check all packages
+npm run build
+npm test
+npm run typecheck
 ```
 
-CI runs typecheck, test, and build on every pull request and push to `main` via GitHub Actions.
+More detailed setup notes live in:
 
-npm release bootstrap and GitHub Release publishing steps live in [`docs/npm-releases.md`](docs/npm-releases.md).
-
-IndexedDB access uses the [`idb`](https://www.npmjs.com/package/idb) package. Additional reference notes live in [`docs/`](docs/).
+- [`packages/native-host/README.md`](packages/native-host/README.md)
+- [`docs/mcp-clients.md`](docs/mcp-clients.md)
+- [`docs/npm-releases.md`](docs/npm-releases.md)
