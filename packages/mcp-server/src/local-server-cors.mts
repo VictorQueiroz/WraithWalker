@@ -20,22 +20,30 @@ export function isAllowedLocalServerOrigin(origin: string | undefined): boolean 
 
 export function buildLocalServerCorsHeaders({
   origin,
-  requestedHeaders
+  requestedHeaders,
+  requestedPrivateNetwork
 }: {
   origin?: string;
   requestedHeaders?: string;
+  requestedPrivateNetwork?: string;
 }): Record<string, string> | null {
   if (!isAllowedLocalServerOrigin(origin)) {
     return null;
   }
 
-  return {
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Origin": origin!,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": requestedHeaders?.trim() || DEFAULT_ALLOWED_HEADERS,
     "Access-Control-Max-Age": "600",
     Vary: "Origin"
   };
+
+  if (requestedPrivateNetwork?.trim().toLowerCase() === "true") {
+    headers["Access-Control-Allow-Private-Network"] = "true";
+  }
+
+  return headers;
 }
 
 export function appendVaryHeader(

@@ -268,6 +268,12 @@ describe("tRPC capture backend", () => {
 
     try {
       const queryUrl = `${server.trpcUrl}/system.info?batch=1&input=${encodeURIComponent("{}")}`;
+      const descriptor = await createDescriptor({
+        url: "https://api.example.com/users",
+        resourceType: "Fetch",
+        mimeType: "application/json"
+      });
+      const mutationUrl = `${server.trpcUrl}/fixtures.writeIfAbsent?batch=1`;
 
       const extensionResponse = await fetch(queryUrl, {
         headers: {
@@ -277,18 +283,63 @@ describe("tRPC capture backend", () => {
       expect(extensionResponse.status).toBe(200);
       expect(extensionResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
 
-      const preflightResponse = await fetch(`${server.trpcUrl}/fixtures.writeIfAbsent`, {
+      const preflightResponse = await fetch(mutationUrl, {
         method: "OPTIONS",
         headers: {
           Origin: "chrome-extension://test-extension-id",
           "Access-Control-Request-Method": "POST",
-          "Access-Control-Request-Headers": "content-type, x-trpc-source"
+          "Access-Control-Request-Headers": "content-type, x-trpc-source",
+          "Access-Control-Request-Private-Network": "true"
         }
       });
       expect(preflightResponse.status).toBe(204);
       expect(preflightResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
       expect(preflightResponse.headers.get("access-control-allow-headers")).toBe("content-type, x-trpc-source");
+      expect(preflightResponse.headers.get("access-control-allow-private-network")).toBe("true");
       expect(preflightResponse.headers.get("vary")).toBe("Origin");
+
+      const mutationResponse = await fetch(mutationUrl, {
+        method: "POST",
+        headers: {
+          Origin: "chrome-extension://test-extension-id",
+          "content-type": "application/json",
+          "x-trpc-source": "wraithwalker-extension"
+        },
+        body: JSON.stringify({
+          0: {
+            descriptor,
+            request: {
+              topOrigin: descriptor.topOrigin,
+              url: descriptor.requestUrl,
+              method: descriptor.method,
+              headers: [],
+              body: "",
+              bodyEncoding: "utf8",
+              bodyHash: descriptor.bodyHash,
+              queryHash: descriptor.queryHash,
+              capturedAt: "2026-04-07T00:00:00.000Z"
+            },
+            response: {
+              body: JSON.stringify({ ok: true }),
+              bodyEncoding: "utf8",
+              meta: {
+                status: 200,
+                statusText: "OK",
+                headers: [{ name: "Content-Type", value: "application/json" }],
+                mimeType: "application/json",
+                resourceType: "Fetch",
+                url: descriptor.requestUrl,
+                method: descriptor.method,
+                capturedAt: "2026-04-07T00:00:00.000Z",
+                bodyEncoding: "utf8",
+                bodySuggestedExtension: "json"
+              }
+            }
+          }
+        })
+      });
+      expect(mutationResponse.status).toBe(200);
+      expect(mutationResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
 
       const webOriginResponse = await fetch(queryUrl, {
         headers: {
@@ -298,7 +349,7 @@ describe("tRPC capture backend", () => {
       expect(webOriginResponse.status).toBe(200);
       expect(webOriginResponse.headers.get("access-control-allow-origin")).toBeNull();
 
-      const deniedPreflight = await fetch(`${server.trpcUrl}/fixtures.writeIfAbsent`, {
+      const deniedPreflight = await fetch(mutationUrl, {
         method: "OPTIONS",
         headers: {
           Origin: "https://example.com",

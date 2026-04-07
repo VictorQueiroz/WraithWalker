@@ -499,9 +499,13 @@ export async function startHttpServer(
     const requestedHeaders = typeof req.headers["access-control-request-headers"] === "string"
       ? req.headers["access-control-request-headers"]
       : undefined;
+    const requestedPrivateNetwork = typeof req.headers["access-control-request-private-network"] === "string"
+      ? req.headers["access-control-request-private-network"]
+      : undefined;
     const corsHeaders = buildLocalServerCorsHeaders({
       origin,
-      requestedHeaders
+      requestedHeaders,
+      requestedPrivateNetwork
     });
 
     if (corsHeaders) {

@@ -33,6 +33,21 @@ describe("local server cors policy", () => {
     })).toBeNull();
   });
 
+  it("allows private-network preflight when the browser requests it for loopback access", () => {
+    expect(buildLocalServerCorsHeaders({
+      origin: "chrome-extension://abc123",
+      requestedHeaders: "content-type, x-trpc-source",
+      requestedPrivateNetwork: "true"
+    })).toEqual({
+      "Access-Control-Allow-Origin": "chrome-extension://abc123",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "content-type, x-trpc-source",
+      "Access-Control-Allow-Private-Network": "true",
+      "Access-Control-Max-Age": "600",
+      Vary: "Origin"
+    });
+  });
+
   it("appends Origin to existing vary headers without duplicating entries", () => {
     expect(appendVaryHeader("trpc-accept, accept", "Origin")).toBe("trpc-accept, accept, Origin");
     expect(appendVaryHeader("Origin, accept", "Origin")).toBe("Origin, accept");
