@@ -118,6 +118,115 @@ describe("background entrypoint", () => {
     expect(runtime.state.enabledOrigins).toEqual(["https://app.example.com"]);
   });
 
+  it("does not block session.getState while the local server probe is still pending", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const never = new Promise<never>(() => undefined);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => ({
+        getSystemInfo: vi.fn(() => never),
+        hasFixture: vi.fn(),
+        readFixture: vi.fn(),
+        writeFixtureIfAbsent: vi.fn(),
+        generateContext: vi.fn()
+      })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+
+    const stateResult = await Promise.race([
+      runtime.handleRuntimeMessage({ type: "session.getState" }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("session.getState timed out")), 50))
+    ]);
+
+    expect(stateResult).toMatchObject({
+      sessionActive: false,
+      captureDestination: "none",
+      captureRootPath: ""
+    });
+  });
+
+  it("keeps retrying server detection and switches to the server root once it responds", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const getSystemInfo = vi.fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({
+        version: "0.6.1",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => ({
+        getSystemInfo,
+        hasFixture: vi.fn(),
+        readFixture: vi.fn(),
+        writeFixtureIfAbsent: vi.fn(),
+        generateContext: vi.fn()
+      })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    expect(runtime.state.serverInfo).toBeNull();
+
+    runtime.state.serverCheckedAt = 0;
+    const firstState = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    expect(firstState).toMatchObject({
+      captureDestination: "none",
+      captureRootPath: ""
+    });
+
+    await flushPromises();
+
+    const secondState = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    expect(secondState).toMatchObject({
+      captureDestination: "server",
+      captureRootPath: "/tmp/server-root",
+      rootReady: true
+    });
+  });
+
   it("routes debugger events into the request lifecycle handlers", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();

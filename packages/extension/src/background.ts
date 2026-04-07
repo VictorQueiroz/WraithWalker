@@ -157,6 +157,20 @@ interface BackgroundDependencies {
   initialState?: Partial<BackgroundState>;
 }
 
+function createUnavailableServerClient(): WraithWalkerServerClient {
+  const unavailable = async (): Promise<never> => {
+    throw new Error("Local WraithWalker server unavailable.");
+  };
+
+  return {
+    getSystemInfo: unavailable,
+    hasFixture: unavailable,
+    readFixture: unavailable,
+    writeFixtureIfAbsent: unavailable,
+    generateContext: unavailable
+  };
+}
+
 function debuggerTarget(tabId: number): DebuggeeTarget {
   return { tabId };
 }
@@ -200,11 +214,13 @@ export function createBackgroundRuntime({
   getNativeHostConfig = defaultGetNativeHostConfig,
   getPreferredEditorId = defaultGetPreferredEditorId,
   setLastSessionSnapshot = defaultSetLastSessionSnapshot,
-  createWraithWalkerServerClient = defaultCreateWraithWalkerServerClient,
+  createWraithWalkerServerClient,
   createSessionController = defaultCreateSessionController,
   createRequestLifecycle = defaultCreateRequestLifecycle,
   initialState = {}
 }: BackgroundDependencies = {}) {
+  const resolvedCreateWraithWalkerServerClient = createWraithWalkerServerClient
+    ?? (isTestMode() ? createUnavailableServerClient : defaultCreateWraithWalkerServerClient);
   const state: BackgroundState = {
     sessionActive: false,
     attachedTabs: new Map(),
@@ -223,7 +239,8 @@ export function createBackgroundRuntime({
     ...initialState
   };
 
-  const serverClient = createWraithWalkerServerClient();
+  const serverClient = resolvedCreateWraithWalkerServerClient();
+  let serverRefreshPromise: Promise<typeof state.serverInfo> | null = null;
 
   let listenersRegistered = false;
 
@@ -253,22 +270,40 @@ export function createBackgroundRuntime({
       return state.serverInfo;
     }
 
-    try {
-      const info = await serverClient.getSystemInfo();
-      state.serverInfo = {
-        rootPath: info.rootPath,
-        sentinel: info.sentinel,
-        baseUrl: info.baseUrl,
-        mcpUrl: info.mcpUrl,
-        trpcUrl: info.trpcUrl
-      };
-      state.serverCheckedAt = Date.now();
-      updateEffectiveRootState();
-      return state.serverInfo;
-    } catch {
-      markServerOffline();
-      return null;
+    if (serverRefreshPromise) {
+      return serverRefreshPromise;
     }
+
+    serverRefreshPromise = (async () => {
+      try {
+        const info = await serverClient.getSystemInfo();
+        state.serverInfo = {
+          rootPath: info.rootPath,
+          sentinel: info.sentinel,
+          baseUrl: info.baseUrl,
+          mcpUrl: info.mcpUrl,
+          trpcUrl: info.trpcUrl
+        };
+        state.serverCheckedAt = Date.now();
+        updateEffectiveRootState();
+        return state.serverInfo;
+      } catch {
+        markServerOffline();
+        return null;
+      } finally {
+        serverRefreshPromise = null;
+      }
+    })();
+
+    return serverRefreshPromise;
+  }
+
+  function queueServerRefresh({ force = false }: { force?: boolean } = {}): void {
+    if (!force && isServerCacheFresh(state.serverCheckedAt)) {
+      return;
+    }
+
+    void refreshServerInfo({ force }).catch(() => undefined);
   }
 
   function getRequiredRootId(rootResult: RootReadySuccess): string | null {
@@ -288,7 +323,7 @@ export function createBackgroundRuntime({
   }
 
   async function snapshotState(): Promise<SessionSnapshot> {
-    await refreshServerInfo();
+    queueServerRefresh();
 
     return buildSessionSnapshot({
       sessionActive: state.sessionActive,
@@ -994,20 +1029,16 @@ export function createBackgroundRuntime({
     chromeApi.storage.onChanged.addListener(handleStorageChanged);
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
     chromeApi.runtime.onStartup.addListener(() => {
-      Promise.all([
-        refreshStoredConfig(),
-        refreshServerInfo({ force: true })
-      ]).catch((error: unknown) => {
+      refreshStoredConfig().catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
+      queueServerRefresh({ force: true });
     });
     chromeApi.runtime.onInstalled.addListener(() => {
-      Promise.all([
-        refreshStoredConfig(),
-        refreshServerInfo({ force: true })
-      ]).catch((error: unknown) => {
+      refreshStoredConfig().catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
+      queueServerRefresh({ force: true });
     });
     listenersRegistered = true;
   }
@@ -1015,7 +1046,7 @@ export function createBackgroundRuntime({
   async function start(): Promise<void> {
     registerListeners();
     await refreshStoredConfig();
-    await refreshServerInfo({ force: true });
+    queueServerRefresh({ force: true });
   }
 
   return {

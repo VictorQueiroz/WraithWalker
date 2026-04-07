@@ -307,6 +307,36 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("shows a subtle connected indicator when the local WraithWalker server is active", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue(createSnapshot({
+        rootReady: true,
+        captureDestination: "server",
+        captureRootPath: "/tmp/server-root"
+      })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      expect(await screen.findByText("Connected.")).toBeTruthy();
+      expect(screen.getByText(/Using local WraithWalker server root\./i)).toBeTruthy();
+      expect(screen.getByText("/tmp/server-root")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
   it("opens the options page from the lightweight settings action", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();

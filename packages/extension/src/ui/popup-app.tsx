@@ -182,9 +182,14 @@ export function PopupApp({
               Start capture, open the remembered root, or jump straight to Settings.
             </p>
             {snapshot?.captureDestination === "server" ? (
-              <p className="text-xs text-muted-foreground">
-                Using local WraithWalker server root: {snapshot.captureRootPath}
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-emerald-600">Connected.</span> Using local WraithWalker server root.
+                </p>
+                <p className="text-xs break-all text-muted-foreground">
+                  {snapshot.captureRootPath}
+                </p>
+              </div>
             ) : null}
           </div>
 
