@@ -20,7 +20,7 @@ npm run build
 
 Then:
 
-1. Load [`/Users/victorqueiroz/Projects/WraithWalker/packages/extension/dist`](/Users/victorqueiroz/Projects/WraithWalker/packages/extension/dist) as an unpacked Chrome extension.
+1. Load `packages/extension/dist` as an unpacked Chrome extension.
 2. Add the origins you want to capture.
 3. Choose a capture root.
 4. Start a session.
@@ -37,6 +37,6 @@ wraithwalker serve --http
 
 ## Docs
 
-- [Extension and Cursor workflow](/Users/victorqueiroz/Projects/WraithWalker/docs/extension-workflow.md)
-- [MCP clients](/Users/victorqueiroz/Projects/WraithWalker/docs/mcp-clients.md)
-- [npm releases](/Users/victorqueiroz/Projects/WraithWalker/docs/npm-releases.md)
+- [Extension and Cursor workflow](docs/extension-workflow.md)
+- [MCP clients](docs/mcp-clients.md)
+- [npm releases](docs/npm-releases.md)
