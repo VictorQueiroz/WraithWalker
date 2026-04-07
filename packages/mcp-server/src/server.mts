@@ -3,9 +3,9 @@ import type { AddressInfo } from "node:net";
 import type { Server as HttpServer } from "node:http";
 
 import * as trpcExpress from "@trpc/server/adapters/express";
+import express from "express";
 import { createRoot } from "@wraithwalker/core/root";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -36,6 +36,7 @@ const SERVER_VERSION = "0.6.1";
 export const HTTP_MCP_PATH = "/mcp";
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 4319;
+export const DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES = 25 * 1024 * 1024;
 
 export const MCP_TOOL_NAMES = [
   "list-origins",
@@ -81,6 +82,60 @@ function renderJson(value: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
   };
+}
+
+function createHostHeaderValidationMiddleware(
+  allowedHostnames: readonly string[]
+): express.RequestHandler {
+  return (req, res, next) => {
+    const hostHeader = req.headers.host;
+    if (!hostHeader) {
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Missing Host header"
+        },
+        id: null
+      });
+      return;
+    }
+
+    let hostname: string;
+    try {
+      hostname = new URL(`http://${hostHeader}`).hostname;
+    } catch {
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: `Invalid Host header: ${hostHeader}`
+        },
+        id: null
+      });
+      return;
+    }
+
+    if (!allowedHostnames.includes(hostname)) {
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: `Invalid Host: ${hostname}`
+        },
+        id: null
+      });
+      return;
+    }
+
+    next();
+  };
+}
+
+function createLoopbackHttpApp() {
+  const app = express();
+  app.use(createHostHeaderValidationMiddleware(["localhost", "127.0.0.1", "[::1]"]));
+  return app;
 }
 
 function registerTools(server: McpServer, rootPath: string): void {
@@ -472,7 +527,7 @@ export async function startHttpServer(
   }
 
   const sentinel = await createRoot(rootPath);
-  const app = createMcpExpressApp({ host });
+  const app = createLoopbackHttpApp();
   const sessions = new Map<string, HttpSession>();
   const urls = {
     baseUrl: "",
@@ -530,8 +585,11 @@ export async function startHttpServer(
   app.use(HTTP_TRPC_PATH, trpcExpress.createExpressMiddleware({
     router: trpcRouter,
     createContext: () => ({}),
-    allowMethodOverride: true
+    allowMethodOverride: true,
+    maxBodySize: DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES
   }));
+
+  app.use(HTTP_MCP_PATH, express.json());
 
   app.all(HTTP_MCP_PATH, async (req, res) => {
     const sessionId = getSessionId(req.headers["mcp-session-id"]);

@@ -10,7 +10,7 @@ import {
 import { readSentinel } from "@wraithwalker/core/root";
 
 import { createFixtureRepository } from "../src/fixture-repository.mts";
-import { startHttpServer } from "../src/server.mts";
+import { DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES, startHttpServer } from "../src/server.mts";
 import { createWraithwalkerRouter, type AppRouter } from "../src/trpc.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
@@ -274,6 +274,7 @@ describe("tRPC capture backend", () => {
         mimeType: "application/json"
       });
       const mutationUrl = `${server.trpcUrl}/fixtures.writeIfAbsent?batch=1`;
+      const largePayload = "x".repeat(150_000);
 
       const extensionResponse = await fetch(queryUrl, {
         headers: {
@@ -320,7 +321,7 @@ describe("tRPC capture backend", () => {
               capturedAt: "2026-04-07T00:00:00.000Z"
             },
             response: {
-              body: JSON.stringify({ ok: true }),
+              body: JSON.stringify({ ok: true, payload: largePayload }),
               bodyEncoding: "utf8",
               meta: {
                 status: 200,
@@ -340,6 +341,49 @@ describe("tRPC capture backend", () => {
       });
       expect(mutationResponse.status).toBe(200);
       expect(mutationResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
+
+      const oversizedMutationResponse = await fetch(mutationUrl, {
+        method: "POST",
+        headers: {
+          Origin: "chrome-extension://test-extension-id",
+          "content-type": "application/json",
+          "x-trpc-source": "wraithwalker-extension"
+        },
+        body: JSON.stringify({
+          0: {
+            descriptor,
+            request: {
+              topOrigin: descriptor.topOrigin,
+              url: descriptor.requestUrl,
+              method: descriptor.method,
+              headers: [],
+              body: "",
+              bodyEncoding: "utf8",
+              bodyHash: descriptor.bodyHash,
+              queryHash: descriptor.queryHash,
+              capturedAt: "2026-04-07T00:00:00.000Z"
+            },
+            response: {
+              body: "x".repeat(DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES + 1),
+              bodyEncoding: "utf8",
+              meta: {
+                status: 200,
+                statusText: "OK",
+                headers: [{ name: "Content-Type", value: "application/json" }],
+                mimeType: "application/json",
+                resourceType: "Fetch",
+                url: descriptor.requestUrl,
+                method: descriptor.method,
+                capturedAt: "2026-04-07T00:00:00.000Z",
+                bodyEncoding: "utf8",
+                bodySuggestedExtension: "json"
+              }
+            }
+          }
+        })
+      });
+      expect(oversizedMutationResponse.status).toBe(413);
+      expect(oversizedMutationResponse.headers.get("access-control-allow-origin")).toBe("chrome-extension://test-extension-id");
 
       const webOriginResponse = await fetch(queryUrl, {
         headers: {
