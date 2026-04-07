@@ -115,13 +115,15 @@ describe("popup entrypoint", () => {
     }
   });
 
-  it("opens Cursor through the URL scheme without sending native.open", async () => {
+  it("routes Cursor opening through the shared background flow", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
-    const openExternalUrl = vi.fn();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -131,31 +133,31 @@ describe("popup entrypoint", () => {
       setIntervalFn: fakeSetInterval,
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
       getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
-      openExternalUrl,
       ...createRootDeps()
     });
 
     try {
       await user.click(await screen.findByRole("button", { name: "Open in Cursor" }));
 
-      expect(openExternalUrl).toHaveBeenCalledWith("cursor://file//tmp/fixtures/");
-      expect(runtime.sendMessage).not.toHaveBeenCalledWith({
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
         type: "native.open",
         editorId: "cursor"
       });
-      expect(await screen.findByText("Requested Cursor to open the capture root.")).toBeTruthy();
+      expect(await screen.findByText("Opened Cursor and sent the fixture brief to Cursor Chat.")).toBeTruthy();
     } finally {
       popup.unmount();
     }
   });
 
-  it("opens Cursor itself through the bare URL scheme when no launch path is configured", async () => {
+  it("still uses the shared background flow when no launch path is configured", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
-    const openExternalUrl = vi.fn();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -165,7 +167,6 @@ describe("popup entrypoint", () => {
       setIntervalFn: fakeSetInterval,
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
       getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
-      openExternalUrl,
       ...createRootDeps()
     });
 
@@ -173,23 +174,28 @@ describe("popup entrypoint", () => {
       expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
-      expect(openExternalUrl).toHaveBeenCalledWith("cursor://");
-      expect(runtime.sendMessage).not.toHaveBeenCalledWith({
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
         type: "native.open",
         editorId: "cursor"
       });
-      expect(await screen.findByText("Opened Cursor.")).toBeTruthy();
+      expect(await screen.findByText("Opened Cursor and sent the fixture brief to Cursor Chat.")).toBeTruthy();
     } finally {
       popup.unmount();
     }
   });
 
-  it("asks for a launch path when a custom Cursor URL override needs the remembered root path", async () => {
+  it("surfaces background open failures only after the open button is clicked", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const user = userEvent.setup();
     const runtime = {
-      sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce({
+          ok: false,
+          error: "Cursor prompt launch failed."
+        })
+        .mockResolvedValueOnce(createSnapshot()),
       openOptionsPage: vi.fn()
     };
 
@@ -210,10 +216,10 @@ describe("popup entrypoint", () => {
 
     try {
       expect(await screen.findByText("Session is idle. Start it when you want matching tabs to attach automatically.")).toBeTruthy();
-      expect(screen.queryByText(/Set the absolute editor launch path in Settings/i)).toBeNull();
+      expect(screen.queryByText(/Cursor prompt launch failed/i)).toBeNull();
 
       await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
-      expect(await screen.findByText(/Set the absolute editor launch path in Settings to open the remembered root in Cursor/i)).toBeTruthy();
+      expect(await screen.findByText("Cursor prompt launch failed.")).toBeTruthy();
     } finally {
       popup.unmount();
     }

@@ -177,3 +177,21 @@ export function buildEditorLaunchUrl(urlTemplate: string, rootPath: string, root
 export function buildEditorAppUrl(appUrl: string): string {
   return new URL(appUrl).toString();
 }
+
+export function buildCursorPromptText(origins: string[]): string {
+  const originSummary = origins.length
+    ? origins.join(", ")
+    : "none selected yet";
+
+  return [
+    "This folder is a WraithWalker fixture root with dumped website assets, manifests, API fixtures, and replay metadata.",
+    `Selected origins: ${originSummary}.`,
+    "Read the workspace context files first, then Prettify minified or dumped contents before reasoning about them.",
+    "Start by understanding the structure of the website across the selected origins before making changes.",
+    "Use RESOURCE_MANIFEST.json files, sidecar metadata, and API fixtures to map how requests, chunks, and pages fit together.",
+  ].join("\n");
+}
+
+export function buildCursorPromptUrl(promptText: string): string {
+  return `cursor://anysphere.cursor-deeplink/prompt?text=${encodeURIComponent(promptText)}`;
+}

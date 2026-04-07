@@ -1,11 +1,8 @@
 import * as React from "react";
 
-import { buildEditorAppUrl, buildEditorLaunchUrl } from "../lib/editor-launch.js";
 import type { BackgroundMessage, ErrorResult, NativeOpenResult } from "../lib/messages.js";
 import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
 import {
-  createMissingLaunchPathAlert,
-  createMissingNativeHostAlert,
   deriveCaptureRootState,
   deriveEditorLaunchState,
   resolvePopupAlert,
@@ -35,7 +32,6 @@ export interface PopupAppProps {
   setIntervalFn?: typeof setInterval;
   refreshIntervalMs?: number;
   editorPresets?: EditorPreset[];
-  openExternalUrl?: (url: string) => void;
 }
 
 function getErrorMessage(result: { error?: string }): string {
@@ -59,10 +55,7 @@ export function PopupApp({
   queryRootPermission,
   setIntervalFn = setInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
-  editorPresets = EDITOR_PRESETS,
-  openExternalUrl = (url: string) => {
-    window.location.href = url;
-  }
+  editorPresets = EDITOR_PRESETS
 }: PopupAppProps) {
   const [snapshot, setSnapshot] = React.useState<SessionSnapshot | null>(null);
   const [nativeHostConfig, setNativeHostConfig] = React.useState<NativeHostConfig>(DEFAULT_NATIVE_HOST_CONFIG);
@@ -170,47 +163,15 @@ export function PopupApp({
         return;
       }
 
-      if (nextEditorLaunchState.kind === "missing_launch_path") {
-        setActionAlert(createMissingLaunchPathAlert(nextEditorLaunchState.editorLabel));
-        return;
-      }
-
-      if (nextEditorLaunchState.kind === "missing_native_host") {
-        setActionAlert(createMissingNativeHostAlert(nextEditorLaunchState.editorLabel));
-        return;
-      }
-
-      if (nextEditorLaunchState.kind === "ready_via_url_root") {
-        openExternalUrl(buildEditorLaunchUrl(
-          nextEditorLaunchState.urlTemplate,
-          nextEditorLaunchState.launchPath,
-          "popup-root"
-        ));
-        setActionAlert({
-          variant: "success",
-          text: `Requested ${nextEditorLaunchState.editorLabel} to open the capture root.`
-        });
-        return;
-      }
-
-      if (nextEditorLaunchState.kind === "ready_via_url_app") {
-        openExternalUrl(buildEditorAppUrl(nextEditorLaunchState.url));
-        setActionAlert({
-          variant: "success",
-          text: `Opened ${nextEditorLaunchState.editorLabel}.`
-        });
-        return;
-      }
-
       const result = await sendMessage<NativeOpenResult>(runtime, {
         type: "native.open",
-        editorId: nextEditorLaunchState.editorId
+        editorId: DEFAULT_EDITOR_ID
       });
       await refreshState(false);
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? `Opened the capture root in ${nextEditorLaunchState.editorLabel}.`
+          ? `Opened ${preferredEditor.label} and sent the fixture brief to Cursor Chat.`
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {

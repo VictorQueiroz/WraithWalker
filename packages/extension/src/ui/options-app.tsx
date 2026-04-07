@@ -729,7 +729,7 @@ export function OptionsApp({
                         placeholder="/Users/you/wraithwalker-fixtures"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Needed when you want the editor to open the remembered root directly, or when using the native host fallback. Cursor can still launch via <code>cursor://</code> without it, but Chrome does not expose the absolute local path back to the extension.
+                        Needed when you want Cursor to open the remembered root directly, or when using the native host fallback. Without it, Cursor can still launch and receive the workspace brief through its prompt deeplink, but Chrome does not expose the absolute local path back to the extension.
                       </p>
                     </div>
                     <Separator />

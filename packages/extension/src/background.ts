@@ -6,7 +6,13 @@ import {
   setLastSessionSnapshot as defaultSetLastSessionSnapshot
 } from "./lib/chrome-storage.js";
 import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
-import { buildEditorAppUrl, buildEditorLaunchUrl, resolveEditorLaunch } from "./lib/editor-launch.js";
+import {
+  buildCursorPromptText,
+  buildCursorPromptUrl,
+  buildEditorAppUrl,
+  buildEditorLaunchUrl,
+  resolveEditorLaunch
+} from "./lib/editor-launch.js";
 import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
@@ -333,23 +339,54 @@ export function createBackgroundRuntime({
     }
   }
 
+  async function openEditorViaUrls(urls: string[]): Promise<NativeOpenResult> {
+    for (const url of urls) {
+      const result = await openEditorViaUrl(url);
+      if (!result.ok) {
+        return result;
+      }
+    }
+
+    return { ok: true };
+  }
+
   async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
     await refreshStoredConfig();
     const resolvedEditorId = editorId || state.preferredEditorId;
-    await generateContext(resolvedEditorId);
     const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
     const urlTemplate = launch.urlTemplate.trim();
     const appUrl = launch.appUrl.trim();
     const canLaunchEditorApp = Boolean(appUrl && !launch.hasCustomUrlOverride);
     const launchPath = state.nativeHostConfig.launchPath.trim();
+    const isCursorLaunch = launch.editorId === DEFAULT_EDITOR_ID;
+    const cursorPromptUrl = isCursorLaunch
+      ? buildCursorPromptUrl(buildCursorPromptText(state.enabledOrigins))
+      : "";
 
-    if (!launchPath && canLaunchEditorApp) {
-      return openEditorViaUrl(buildEditorAppUrl(appUrl));
-    }
+    await generateContext(resolvedEditorId);
 
     const rootResult = await ensureRootReady({ requestPermission: true });
     if (!rootResult.ok) {
       return { ok: false, error: getErrorMessage(rootResult as ErrorResult) };
+    }
+
+    if (isCursorLaunch) {
+      const urls: string[] = [];
+
+      if (launchPath && urlTemplate) {
+        const rootId = getRequiredRootId(rootResult);
+        if (!rootId) {
+          return { ok: false, error: "Root sentinel is missing a rootId." };
+        }
+        urls.push(buildEditorLaunchUrl(urlTemplate, launchPath, rootId));
+      }
+
+      urls.push(cursorPromptUrl);
+      return openEditorViaUrls(urls);
+    }
+
+    if (!launchPath && canLaunchEditorApp) {
+      return openEditorViaUrl(buildEditorAppUrl(appUrl));
     }
 
     if (!launchPath) {

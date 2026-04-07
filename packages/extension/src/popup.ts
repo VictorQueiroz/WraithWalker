@@ -23,7 +23,6 @@ export interface PopupDependencies {
   loadStoredRootHandle?: typeof defaultLoadStoredRootHandle;
   queryRootPermission?: typeof defaultQueryRootPermission;
   editorPresets?: EditorPreset[];
-  openExternalUrl?: (url: string) => void;
 }
 
 function isTestMode(): boolean {
@@ -39,11 +38,9 @@ export async function initPopup({
   getNativeHostConfig = defaultGetNativeHostConfig,
   loadStoredRootHandle = defaultLoadStoredRootHandle,
   queryRootPermission = defaultQueryRootPermission,
-  editorPresets = EDITOR_PRESETS,
-  openExternalUrl = (url: string) => {
-    windowRef.location.href = url;
-  }
+  editorPresets = EDITOR_PRESETS
 }: PopupDependencies = {}) {
+  void windowRef;
   const container = documentRef.getElementById("root");
   if (!container) {
     throw new Error("Popup root container not found.");
@@ -58,8 +55,7 @@ export async function initPopup({
       queryRootPermission,
       setIntervalFn,
       refreshIntervalMs,
-      editorPresets,
-      openExternalUrl
+      editorPresets
     })
   );
 

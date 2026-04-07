@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
 import {
+  buildCursorPromptText,
+  buildCursorPromptUrl,
   buildEditorAppUrl,
   buildEditorLaunchUrl,
   getEditorLaunchOverride,
@@ -85,5 +87,19 @@ describe("editor launch helpers", () => {
 
   it("builds bare editor app urls for URL-only app launches", () => {
     expect(buildEditorAppUrl("cursor://")).toBe("cursor://");
+  });
+
+  it("builds a Cursor prompt deeplink with the workspace brief", () => {
+    const promptText = buildCursorPromptText([
+      "https://app.example.com",
+      "https://cdn.example.com"
+    ]);
+
+    expect(promptText).toContain("WraithWalker fixture root");
+    expect(promptText).toContain("Prettify");
+    expect(promptText).toContain("https://app.example.com, https://cdn.example.com");
+    expect(buildCursorPromptUrl(promptText)).toContain(
+      "cursor://anysphere.cursor-deeplink/prompt?text="
+    );
   });
 });

@@ -411,7 +411,9 @@ describe("background entrypoint", () => {
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
       getNativeHostConfig: vi.fn().mockResolvedValue({
         ...DEFAULT_NATIVE_HOST_CONFIG,
         launchPath: "/tmp/fixtures"
@@ -435,9 +437,15 @@ describe("background entrypoint", () => {
 
     const result = await runtime.handleRuntimeMessage({ type: "native.open" });
 
-    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+    expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(1, {
       url: "cursor://file//tmp/fixtures/"
     });
+    expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(2, {
+      url: expect.stringContaining("cursor://anysphere.cursor-deeplink/prompt?text=")
+    });
+    const promptUrl = chromeApi.tabs.create.mock.calls[1][0].url;
+    expect(decodeURIComponent(promptUrl.split("text=")[1])).toContain("Selected origins: https://app.example.com.");
+    expect(decodeURIComponent(promptUrl.split("text=")[1])).toContain("Prettify");
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
@@ -533,9 +541,10 @@ describe("background entrypoint", () => {
 
     const result = await runtime.openDirectoryInEditor(undefined, "cursor");
 
-    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+    expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(1, {
       url: "custom://open?folder=%2Ftmp%2Ffixtures"
     });
+    expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: false, error: "External protocol handler failed." });
   });
@@ -629,8 +638,9 @@ describe("background entrypoint", () => {
     const result = await runtime.openDirectoryInEditor(undefined, "cursor");
 
     expect(chromeApi.tabs.create).toHaveBeenCalledWith({
-      url: "cursor://"
+      url: expect.stringContaining("cursor://anysphere.cursor-deeplink/prompt?text=")
     });
+    expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
