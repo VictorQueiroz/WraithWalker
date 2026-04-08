@@ -19,6 +19,14 @@ import {
   type FixtureRepositoryStorage,
   type FixtureResponsePayload
 } from "./fixture-repository.mjs";
+import {
+  createScenarioTraceStore,
+  type ScenarioTraceRecord,
+  type ScenarioTraceStorage,
+  type ScenarioTraceSummary,
+  type ScenarioTraceStep,
+  type ScenarioTraceLinkedFixture
+} from "./scenario-traces.mjs";
 import type { SiteConfigLike } from "./fixtures.mjs";
 import type { RootSentinel } from "./root.mjs";
 import {
@@ -43,6 +51,13 @@ export interface RootRuntimeStorage<TRoot> extends FixtureRepositoryStorage<TRoo
   writeText(root: TRoot, relativePath: string, content: string): Promise<void>;
   listDirectory(root: TRoot, relativePath: string): Promise<RootRuntimeDirectoryEntry[]>;
 }
+
+export type {
+  ScenarioTraceLinkedFixture,
+  ScenarioTraceRecord,
+  ScenarioTraceStep,
+  ScenarioTraceSummary
+} from "./scenario-traces.mjs";
 
 interface CreateWraithwalkerRootRuntimeDependencies<TRoot> {
   root: TRoot;
@@ -372,6 +387,12 @@ export function createWraithwalkerRootRuntime<TRoot>({
     });
   }
 
+  const scenarioTraceStore = createScenarioTraceStore({
+    root,
+    storage: storage as ScenarioTraceStorage<TRoot>,
+    ensureReady
+  });
+
   async function has(descriptor: FixtureDescriptor): Promise<boolean> {
     return (await createRepository()).exists(descriptor);
   }
@@ -422,6 +443,13 @@ export function createWraithwalkerRootRuntime<TRoot>({
     has,
     read,
     writeIfAbsent,
-    generateContext
+    generateContext,
+    getActiveTrace: scenarioTraceStore.getActiveTrace,
+    listTraces: scenarioTraceStore.listTraces,
+    readTrace: scenarioTraceStore.readTrace,
+    startTrace: scenarioTraceStore.startTrace,
+    stopTrace: scenarioTraceStore.stopTrace,
+    recordClick: scenarioTraceStore.recordClick,
+    linkFixture: scenarioTraceStore.linkFixture
   };
 }

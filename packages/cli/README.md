@@ -152,6 +152,11 @@ The server auto-creates the root with the normal `.wraithwalker/root.json` boots
 
 When the local server is running, the browser extension automatically prefers it for capture, fixture reads, context generation, and Cursor open flows. The local root picker remains the fallback when the server is unavailable.
 
+The same server also tracks extension heartbeats and guided scenario traces. Those traces are stored under:
+
+- `.wraithwalker/scenario-traces/active.json`
+- `.wraithwalker/scenario-traces/<traceId>/trace.json`
+
 Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and local-only by design.
 
 ## Development

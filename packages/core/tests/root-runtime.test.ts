@@ -147,6 +147,69 @@ describe("root runtime", () => {
     expect(ensureSentinel).toHaveBeenCalledTimes(1);
   });
 
+  it("shares guided scenario trace storage through the same root runtime", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-root-runtime-"
+    });
+    const rootFs = createFixtureRootFs(root.rootPath);
+    const runtime = createWraithwalkerRootRuntime({
+      root: rootFs,
+      storage: createStorage(rootFs)
+    });
+
+    const armed = await runtime.startTrace({
+      traceId: "trace-guided",
+      name: "Guided trace",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      createdAt: "2026-04-08T00:00:00.000Z"
+    });
+    expect(armed.status).toBe("armed");
+    expect((await runtime.getActiveTrace())?.traceId).toBe("trace-guided");
+
+    const recording = await runtime.recordClick({
+      traceId: "trace-guided",
+      step: {
+        stepId: "step-1",
+        tabId: 7,
+        recordedAt: "2026-04-08T00:00:01.000Z",
+        pageUrl: "https://app.example.com/dashboard",
+        topOrigin: "https://app.example.com",
+        selector: "#login-button",
+        tagName: "button",
+        textSnippet: "Login"
+      }
+    });
+    expect(recording?.status).toBe("recording");
+
+    const linked = await runtime.linkFixture({
+      traceId: "trace-guided",
+      tabId: 7,
+      requestedAt: "2026-04-08T00:00:02.000Z",
+      fixture: {
+        bodyPath: "cdn.example.com/assets/app.js",
+        requestUrl: "https://cdn.example.com/assets/app.js",
+        resourceType: "Script",
+        capturedAt: "2026-04-08T00:00:02.500Z"
+      }
+    });
+    expect(linked.linked).toBe(true);
+    expect(linked.trace?.steps[0]?.linkedFixtures).toEqual([
+      expect.objectContaining({
+        bodyPath: "cdn.example.com/assets/app.js"
+      })
+    ]);
+
+    const completed = await runtime.stopTrace("trace-guided", "2026-04-08T00:00:03.000Z");
+    expect(completed.status).toBe("completed");
+    expect(await runtime.listTraces()).toEqual([
+      expect.objectContaining({
+        traceId: "trace-guided",
+        status: "completed"
+      })
+    ]);
+  });
+
   it("generates shared context and type files for static assets, API fixtures, and empty origins", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-root-runtime-"
@@ -402,7 +465,7 @@ describe("root runtime", () => {
         },
         writeJson: async () => {},
         writeBody: async () => {},
-        readOptionalJson: async (_root, relativePath) => {
+        readOptionalJson: async <T>(_root, relativePath) => {
           if (relativePath.endsWith("/plain-text/response.meta.json")) {
             return {
               status: 200,
@@ -415,7 +478,7 @@ describe("root runtime", () => {
               capturedAt: "2026-04-07T00:00:00.000Z",
               bodyEncoding: "utf8",
               bodySuggestedExtension: "txt"
-            };
+            } as T;
           }
 
           if (relativePath.endsWith("/missing-mime/response.meta.json")) {
@@ -430,7 +493,7 @@ describe("root runtime", () => {
               capturedAt: "2026-04-07T00:00:00.000Z",
               bodyEncoding: "utf8",
               bodySuggestedExtension: "txt"
-            };
+            } as T;
           }
 
           return null;

@@ -7,6 +7,7 @@ import {
   STORAGE_KEYS
 } from "../src/lib/constants.js";
 import {
+  getOrCreateExtensionClientId,
   getNativeHostConfig,
   getPreferredEditorId,
   getSiteConfigs,
@@ -150,6 +151,18 @@ describe("chrome storage helpers", () => {
   it("persists the preferred editor id", async () => {
     await setPreferredEditorId("windsurf");
     expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.PREFERRED_EDITOR]: "windsurf" });
+  });
+
+  it("returns the stored extension client id when present", async () => {
+    storageGet.mockResolvedValue({ [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-1" });
+    await expect(getOrCreateExtensionClientId()).resolves.toBe("client-1");
+    expect(storageSet).not.toHaveBeenCalled();
+  });
+
+  it("creates and persists an extension client id when missing", async () => {
+    storageGet.mockResolvedValue({});
+    await expect(getOrCreateExtensionClientId(() => "client-2")).resolves.toBe("client-2");
+    expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-2" });
   });
 
   it("normalizes native host config with the stored preferred editor when persisting", async () => {

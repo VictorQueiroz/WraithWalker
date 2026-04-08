@@ -72,16 +72,19 @@ export function createRequestEntry({
   existingEntry,
   tabId,
   requestId,
-  topOrigin
+  topOrigin,
+  requestedAt = new Date().toISOString()
 }: {
   existingEntry?: RequestEntry | null;
   tabId: number;
   requestId: string;
   topOrigin: string;
+  requestedAt?: string;
 }): RequestEntry {
   return existingEntry || {
     tabId,
     requestId,
+    requestedAt,
     topOrigin,
     method: "GET",
     url: "",

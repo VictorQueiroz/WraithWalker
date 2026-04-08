@@ -10,6 +10,7 @@ import {
 import { readSentinel } from "@wraithwalker/core/root";
 
 import { createFixtureRepository } from "../src/fixture-repository.mts";
+import { createServerRootRuntime } from "../src/root-runtime.mts";
 import { DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES, startHttpServer } from "../src/server.mts";
 import { createWraithwalkerRouter, type AppRouter } from "../src/trpc.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
@@ -684,6 +685,19 @@ describe("tRPC capture backend", () => {
       sentinel,
       serverName: "wraithwalker",
       serverVersion: "0.6.1",
+      extensionSessions: {
+        heartbeat: async ({ clientId, extensionVersion, sessionActive, enabledOrigins }) => ({
+          connected: true,
+          captureReady: sessionActive && enabledOrigins.length > 0,
+          sessionActive,
+          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+          extensionVersion,
+          clientId,
+          captureDestination: "server" as const,
+          enabledOrigins,
+          activeTrace: null
+        })
+      },
       getServerUrls: () => ({
         baseUrl: "http://127.0.0.1:4319",
         mcpUrl: "http://127.0.0.1:4319/mcp",
@@ -749,6 +763,129 @@ describe("tRPC capture backend", () => {
       editorId: "cursor"
     });
     expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain("WraithWalker Fixture Context");
+  });
+
+  it("serves extension heartbeats and guided trace record/link operations", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    const sentinel = await readSentinel(root.rootPath);
+    const rootRuntime = createServerRootRuntime({
+      rootPath: root.rootPath,
+      sentinel
+    });
+
+    await rootRuntime.startTrace({
+      traceId: "trace-http",
+      name: "HTTP trace",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      createdAt: "2026-04-08T00:00:00.000Z"
+    });
+
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      runtime: rootRuntime,
+      extensionSessions: {
+        heartbeat: async ({ clientId, extensionVersion, sessionActive, enabledOrigins }) => ({
+          connected: true,
+          captureReady: sessionActive && enabledOrigins.length > 0,
+          sessionActive,
+          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+          extensionVersion,
+          clientId,
+          captureDestination: "server" as const,
+          enabledOrigins,
+          activeTrace: await rootRuntime.getActiveTrace()
+        })
+      },
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+    const descriptor = await createDescriptor({
+      url: "https://cdn.example.com/assets/app.js",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+
+    const heartbeat = await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    expect(heartbeat.activeTrace).toEqual(
+      expect.objectContaining({
+        traceId: "trace-http"
+      })
+    );
+
+    const recorded = await caller.scenarioTraces.recordClick({
+      traceId: "trace-http",
+      step: {
+        stepId: "step-1",
+        tabId: 3,
+        recordedAt: "2026-04-08T00:00:01.000Z",
+        pageUrl: "https://app.example.com/settings",
+        topOrigin: "https://app.example.com",
+        selector: "#save-button",
+        tagName: "button",
+        textSnippet: "Save"
+      }
+    });
+    expect(recorded).toEqual(
+      expect.objectContaining({
+        recorded: true,
+        activeTrace: expect.objectContaining({
+          status: "recording"
+        })
+      })
+    );
+
+    await rootRuntime.writeIfAbsent({
+      descriptor,
+      request: createRequestPayload(descriptor, "2026-04-08T00:00:02.000Z"),
+      response: {
+        body: "console.log('trace');",
+        bodyEncoding: "utf8",
+        meta: createResponseMeta(descriptor, {
+          mimeType: "application/javascript",
+          resourceType: "Script",
+          bodySuggestedExtension: "js",
+          capturedAt: "2026-04-08T00:00:02.500Z"
+        })
+      }
+    });
+
+    const linked = await caller.scenarioTraces.linkFixture({
+      traceId: "trace-http",
+      tabId: 3,
+      requestedAt: "2026-04-08T00:00:02.000Z",
+      fixture: {
+        bodyPath: descriptor.bodyPath,
+        requestUrl: descriptor.requestUrl,
+        resourceType: "Script",
+        capturedAt: "2026-04-08T00:00:02.500Z"
+      }
+    });
+    expect(linked.linked).toBe(true);
+    expect(linked.trace?.steps[0]?.linkedFixtures).toEqual([
+      expect.objectContaining({
+        bodyPath: descriptor.bodyPath
+      })
+    ]);
+
+    await expect(
+      fs.readFile(root.resolve(".wraithwalker/scenario-traces/trace-http/trace.json"), "utf8")
+    ).resolves.toContain(`"bodyPath": "${descriptor.bodyPath}"`);
   });
 
   it("rejects non-loopback HTTP hosts", async () => {

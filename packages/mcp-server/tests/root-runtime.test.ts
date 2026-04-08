@@ -76,6 +76,55 @@ describe("server root runtime adapter", () => {
     await expect(fs.readFile(path.join(root.rootPath, ".cursorrules"), "utf8")).resolves.toContain("Cursor Agent Brief");
   });
 
+  it("stores guided traces in the shared server root runtime", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-root-runtime-"
+    });
+    const runtime = createServerRootRuntime({
+      rootPath: root.rootPath,
+      sentinel: root.sentinel
+    });
+
+    await runtime.startTrace({
+      traceId: "trace-server",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      createdAt: "2026-04-08T00:00:00.000Z"
+    });
+    await runtime.recordClick({
+      traceId: "trace-server",
+      step: {
+        stepId: "step-1",
+        tabId: 3,
+        recordedAt: "2026-04-08T00:00:01.000Z",
+        pageUrl: "https://app.example.com/settings",
+        topOrigin: "https://app.example.com",
+        selector: "#save-button",
+        tagName: "button",
+        textSnippet: "Save"
+      }
+    });
+    const linked = await runtime.linkFixture({
+      traceId: "trace-server",
+      tabId: 3,
+      requestedAt: "2026-04-08T00:00:02.000Z",
+      fixture: {
+        bodyPath: "cdn.example.com/assets/settings.js",
+        requestUrl: "https://cdn.example.com/assets/settings.js",
+        resourceType: "Script",
+        capturedAt: "2026-04-08T00:00:02.500Z"
+      }
+    });
+
+    expect(linked.linked).toBe(true);
+    expect(await runtime.readTrace("trace-server")).toEqual(
+      expect.objectContaining({
+        traceId: "trace-server",
+        status: "recording"
+      })
+    );
+  });
+
   it("creates a sentinel on demand and throws a clear error when a body disappears mid-read", async () => {
     const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-mcp-root-runtime-"));
     const runtime = createServerRootRuntime({ rootPath });

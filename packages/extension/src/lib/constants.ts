@@ -13,7 +13,8 @@ export const STORAGE_KEYS = {
   SITES: "siteConfigs",
   NATIVE_HOST: "nativeHostConfig",
   LAST_SESSION: "lastSessionSnapshot",
-  PREFERRED_EDITOR: "preferredEditorId"
+  PREFERRED_EDITOR: "preferredEditorId",
+  EXTENSION_CLIENT_ID: "extensionClientId"
 } as const;
 
 export const DEFAULT_NATIVE_HOST_CONFIG: NativeHostConfig = {
@@ -62,6 +63,7 @@ export const STATIC_RESOURCE_MANIFEST_FILE = "RESOURCE_MANIFEST.json";
 export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 1;
 
 export const POPUP_REFRESH_INTERVAL_MS = 1500;
+export const SERVER_HEARTBEAT_INTERVAL_MS = 5_000;
 
 export interface EditorPreset {
   id: string;

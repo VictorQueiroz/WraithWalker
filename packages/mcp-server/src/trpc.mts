@@ -5,9 +5,11 @@ import {
   type ResponseMeta
 } from "@wraithwalker/core/fixture-layout";
 import type { SiteConfigLike } from "@wraithwalker/core/fixtures";
+import type { ScenarioTraceRecord } from "@wraithwalker/core/scenario-traces";
 import type { RootSentinel } from "@wraithwalker/core/root";
 import { z } from "zod";
 
+import type { ExtensionStatus } from "./extension-session.mjs";
 import { createServerRootRuntime } from "./root-runtime.mjs";
 
 export const HTTP_TRPC_PATH = "/trpc";
@@ -106,11 +108,24 @@ export interface TrpcSystemInfo {
   trpcUrl: string;
 }
 
+export interface TrpcHeartbeatInfo extends TrpcSystemInfo {
+  activeTrace: ScenarioTraceRecord | null;
+}
+
 export interface CreateWraithwalkerRouterDependencies {
   rootPath: string;
   sentinel: RootSentinel;
   serverName: string;
   serverVersion: string;
+  runtime?: ReturnType<typeof createServerRootRuntime>;
+  extensionSessions: {
+    heartbeat(input: {
+      clientId: string;
+      extensionVersion: string;
+      sessionActive: boolean;
+      enabledOrigins: string[];
+    }): Promise<ExtensionStatus>;
+  };
   getServerUrls: () => {
     baseUrl: string;
     mcpUrl: string;
@@ -125,10 +140,10 @@ export function createWraithwalkerRouter({
   sentinel,
   serverName,
   serverVersion,
+  runtime = createServerRootRuntime({ rootPath, sentinel }),
+  extensionSessions,
   getServerUrls
 }: CreateWraithwalkerRouterDependencies) {
-  const runtime = createServerRootRuntime({ rootPath, sentinel });
-
   return t.router({
     system: t.router({
       info: t.procedure.query((): TrpcSystemInfo => ({
@@ -138,6 +153,26 @@ export function createWraithwalkerRouter({
         sentinel,
         ...getServerUrls()
       }))
+    }),
+    extension: t.router({
+      heartbeat: t.procedure
+        .input(z.object({
+          clientId: z.string().min(1),
+          extensionVersion: z.string().min(1),
+          sessionActive: z.boolean(),
+          enabledOrigins: z.array(z.string())
+        }))
+        .mutation(async ({ input }): Promise<TrpcHeartbeatInfo> => {
+          const status = await extensionSessions.heartbeat(input);
+          return {
+            serverName,
+            serverVersion,
+            rootPath,
+            sentinel,
+            ...getServerUrls(),
+            activeTrace: status.activeTrace
+          };
+        })
     }),
     fixtures: t.router({
       has: t.procedure
@@ -189,6 +224,48 @@ export function createWraithwalkerRouter({
           });
           return { ok: true as const };
         })
+    }),
+    scenarioTraces: t.router({
+      recordClick: t.procedure
+        .input(z.object({
+          traceId: z.string(),
+          step: z.object({
+            stepId: z.string(),
+            tabId: z.number().int().nonnegative(),
+            recordedAt: z.string(),
+            pageUrl: z.string(),
+            topOrigin: z.string(),
+            selector: z.string(),
+            tagName: z.string(),
+            textSnippet: z.string(),
+            role: z.string().optional(),
+            ariaLabel: z.string().optional(),
+            href: z.string().optional()
+          })
+        }))
+        .mutation(async ({ input }) => {
+          const trace = await runtime.recordClick({
+            traceId: input.traceId,
+            step: input.step
+          });
+          return {
+            recorded: Boolean(trace),
+            activeTrace: trace
+          };
+        }),
+      linkFixture: t.procedure
+        .input(z.object({
+          traceId: z.string(),
+          tabId: z.number().int().nonnegative(),
+          requestedAt: z.string(),
+          fixture: z.object({
+            bodyPath: z.string(),
+            requestUrl: z.string(),
+            resourceType: z.string(),
+            capturedAt: z.string()
+          })
+        }))
+        .mutation(async ({ input }) => runtime.linkFixture(input))
     })
   });
 }

@@ -64,6 +64,8 @@ export interface RootSentinel {
 
 export interface AttachedTabState {
   topOrigin: string;
+  traceScriptIdentifier?: string | null;
+  traceArmedForTraceId?: string | null;
 }
 
 export interface StorageState {
@@ -71,11 +73,13 @@ export interface StorageState {
   nativeHostConfig?: Partial<NativeHostConfig>;
   lastSessionSnapshot?: SessionSnapshot;
   preferredEditorId?: string;
+  extensionClientId?: string;
 }
 
 export interface RequestEntry {
   tabId: number;
   requestId: string;
+  requestedAt: string;
   topOrigin: string;
   method: string;
   url: string;

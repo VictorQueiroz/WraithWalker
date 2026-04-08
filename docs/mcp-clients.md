@@ -30,6 +30,16 @@ Many MCP clients accept a JSON config shaped like this:
 
 WraithWalker's MCP tools are storage-mode agnostic. Simple mode is usually the easiest to browse alongside MCP because the dumped file paths mirror the original site structure.
 
+When the browser extension is connected to the local server, MCP can also inspect extension readiness and guided scenario traces through:
+
+- `extension-status`
+- `start-scenario-trace`
+- `stop-scenario-trace`
+- `list-scenario-traces`
+- `read-scenario-trace`
+
+More: [Guided scenario traces](./guided-scenario-traces.md)
+
 ## Codex
 
 Codex supports HTTP MCP servers directly.

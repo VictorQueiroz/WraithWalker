@@ -2,10 +2,12 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
+import type { AppRouter } from "../src/trpc.mts";
 import { isLoopbackHost, startHttpServer, startServer } from "../src/server.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
@@ -59,6 +61,16 @@ async function connectHttpClient(rootPath: string) {
     await server.close();
     throw error;
   }
+}
+
+function createTrpcClient(serverUrl: string) {
+  return createTRPCClient<AppRouter>({
+    links: [
+      httpBatchLink({
+        url: serverUrl
+      })
+    ]
+  });
 }
 
 async function createFixtureRootWithData() {
@@ -197,15 +209,20 @@ describe("mcp server", () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
         "diff-scenarios",
+        "extension-status",
         "list-assets",
         "list-endpoints",
         "list-origins",
+        "list-scenario-traces",
         "list-scenarios",
         "read-endpoint-fixture",
         "read-fixture",
         "read-fixture-snippet",
         "read-manifest",
-        "search-content"
+        "read-scenario-trace",
+        "search-content",
+        "start-scenario-trace",
+        "stop-scenario-trace"
       ]);
     } finally {
       await client.close();
@@ -1258,6 +1275,115 @@ describe("mcp server", () => {
     }
   });
 
+  it("reports that no extension is connected before guided tracing starts", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const statusResult = await client.callTool({ name: "extension-status", arguments: {} });
+      expect(JSON.parse(readTextContent(statusResult))).toEqual(
+        expect.objectContaining({
+          connected: false,
+          captureReady: false
+        })
+      );
+
+      const startResult = await client.callTool({
+        name: "start-scenario-trace",
+        arguments: { name: "Trace without extension" }
+      });
+      expect(startResult.isError).toBe(true);
+      expect(readTextContent(startResult)).toContain("No connected extension is available");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("starts, reads, lists, and stops guided traces after a tRPC extension heartbeat", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const trpcClient = createTrpcClient(server.trpcUrl);
+
+    try {
+      const heartbeat = await trpcClient.extension.heartbeat.mutate({
+        clientId: "client-1",
+        extensionVersion: "1.0.0",
+        sessionActive: true,
+        enabledOrigins: ["https://app.example.com"]
+      });
+      expect(heartbeat.activeTrace).toBeNull();
+
+      const statusResult = await client.callTool({ name: "extension-status", arguments: {} });
+      expect(JSON.parse(readTextContent(statusResult))).toEqual(
+        expect.objectContaining({
+          connected: true,
+          captureReady: true,
+          clientId: "client-1",
+          enabledOrigins: ["https://app.example.com"]
+        })
+      );
+
+      const startResult = await client.callTool({
+        name: "start-scenario-trace",
+        arguments: { name: "Settings trace" }
+      });
+      expect(startResult.isError).toBeFalsy();
+      const startedTrace = JSON.parse(readTextContent(startResult));
+      expect(startedTrace).toEqual(
+        expect.objectContaining({
+          name: "Settings trace",
+          status: "armed",
+          extensionClientId: "client-1"
+        })
+      );
+
+      const listResult = await client.callTool({ name: "list-scenario-traces", arguments: {} });
+      expect(JSON.parse(readTextContent(listResult))).toEqual([
+        expect.objectContaining({
+          traceId: startedTrace.traceId,
+          status: "armed"
+        })
+      ]);
+
+      const readResult = await client.callTool({
+        name: "read-scenario-trace",
+        arguments: { traceId: startedTrace.traceId }
+      });
+      expect(JSON.parse(readTextContent(readResult))).toEqual(
+        expect.objectContaining({
+          traceId: startedTrace.traceId,
+          status: "armed"
+        })
+      );
+
+      const stopResult = await client.callTool({
+        name: "stop-scenario-trace",
+        arguments: { traceId: startedTrace.traceId }
+      });
+      expect(JSON.parse(readTextContent(stopResult))).toEqual(
+        expect.objectContaining({
+          traceId: startedTrace.traceId,
+          status: "completed"
+        })
+      );
+
+      await expect(
+        fs.readFile(path.join(root.rootPath, ".wraithwalker", "scenario-traces", startedTrace.traceId, "trace.json"), "utf8")
+      ).resolves.toContain(`"traceId": "${startedTrace.traceId}"`);
+    } finally {
+      await transport.close();
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("serves the same tools over Streamable HTTP", async () => {
     const root = await createFixtureRootWithData();
     const { client, server, transport } = await connectHttpClient(root.rootPath);
@@ -1266,6 +1392,11 @@ describe("mcp server", () => {
       expect(server.port).toBeGreaterThan(0);
       expect(server.url).toContain(`:${server.port}/mcp`);
       expect(server.tools).toEqual([
+        "extension-status",
+        "start-scenario-trace",
+        "stop-scenario-trace",
+        "list-scenario-traces",
+        "read-scenario-trace",
         "list-origins",
         "list-assets",
         "list-endpoints",
@@ -1281,15 +1412,20 @@ describe("mcp server", () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
         "diff-scenarios",
+        "extension-status",
         "list-assets",
         "list-endpoints",
         "list-origins",
+        "list-scenario-traces",
         "list-scenarios",
         "read-endpoint-fixture",
         "read-fixture",
         "read-fixture-snippet",
         "read-manifest",
-        "search-content"
+        "read-scenario-trace",
+        "search-content",
+        "start-scenario-trace",
+        "stop-scenario-trace"
       ]);
 
       const fixtureResult = await client.callTool({

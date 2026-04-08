@@ -1,6 +1,9 @@
 export const ROOT_SENTINEL_RELATIVE_PATH = ".wraithwalker/root.json";
 export const ROOT_SENTINEL_SCHEMA_VERSION = 1;
 export const SCENARIOS_DIR = ".wraithwalker/scenarios";
+export const SCENARIO_TRACES_DIR = ".wraithwalker/scenario-traces";
+export const SCENARIO_TRACE_ACTIVE_FILE = `${SCENARIO_TRACES_DIR}/active.json`;
+export const SCENARIO_TRACE_SCHEMA_VERSION = 1;
 
 export const SIMPLE_METADATA_DIR = ".wraithwalker";
 export const SIMPLE_METADATA_TREE = "simple";

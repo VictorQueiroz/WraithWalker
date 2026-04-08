@@ -44,6 +44,7 @@ When the extension detects the local server at `http://127.0.0.1:4319/trpc`, it 
 - capture writes go through the local WraithWalker server
 - context generation goes through the local WraithWalker server
 - **Open in Cursor** uses the server root path
+- guided scenario traces are stored in the server root under `.wraithwalker/scenario-traces`
 
 If the server is not running, the extension falls back to the remembered local root exactly as before.
 
@@ -100,6 +101,23 @@ WraithWalker writes the supporting workspace context into:
 - `.wraithwalker/types/*.d.ts`
 
 The goal is simple: let the agent make sense of the dumped CSS, JS, and other accessed files that were captured during the session.
+
+## Guided Scenario Traces
+
+When the local server is running, MCP can ask whether the extension is connected and ready to capture.
+
+That makes it possible to run guided scenario traces without changing the extension UI:
+
+1. Start `wraithwalker serve`
+2. Start an extension session
+3. Ask `extension-status` from MCP
+4. Start a scenario trace from MCP
+5. Ask the user to click the relevant parts of the app
+6. Stop the trace and inspect `.wraithwalker/scenario-traces/<traceId>/trace.json`
+
+The extension uses the Chrome Debugger API for this flow, not a general content-script messaging layer. It installs a page-side click collector through DevTools Protocol `Runtime` and `Page`, then links captured fixtures back to those click steps.
+
+More: [Guided scenario traces](./guided-scenario-traces.md)
 
 ## Launch Path Vs Remembered Root
 

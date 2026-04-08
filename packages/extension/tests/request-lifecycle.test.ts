@@ -162,6 +162,7 @@ describe("request lifecycle", () => {
     const entry = {
       tabId: 1,
       requestId: "req-existing",
+      requestedAt: "2026-04-08T00:00:00.000Z",
       descriptor,
       method: "GET",
       url: "https://cdn.example.com/app.js",

@@ -167,4 +167,56 @@ describe("extension root runtime adapter", () => {
     expect(rootHandle.files.has(".cursorrules")).toBe(true);
     expect(ensureSentinel).toHaveBeenCalledTimes(1);
   });
+
+  it("persists guided traces through the browser root runtime adapter", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createExtensionRootRuntime({
+      rootHandle: asRootHandle(rootHandle),
+      gateway: createGateway(),
+      ensureSentinel: vi.fn().mockResolvedValue({
+        rootId: "root-extension",
+        schemaVersion: 1,
+        createdAt: "2026-04-08T00:00:00.000Z"
+      })
+    });
+
+    await runtime.startTrace({
+      traceId: "trace-browser",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      createdAt: "2026-04-08T00:00:00.000Z"
+    });
+    await runtime.recordClick({
+      traceId: "trace-browser",
+      step: {
+        stepId: "step-1",
+        tabId: 1,
+        recordedAt: "2026-04-08T00:00:01.000Z",
+        pageUrl: "https://app.example.com",
+        topOrigin: "https://app.example.com",
+        selector: "#primary-action",
+        tagName: "button",
+        textSnippet: "Continue"
+      }
+    });
+    const linked = await runtime.linkFixture({
+      traceId: "trace-browser",
+      tabId: 1,
+      requestedAt: "2026-04-08T00:00:02.000Z",
+      fixture: {
+        bodyPath: "cdn.example.com/assets/app.js",
+        requestUrl: "https://cdn.example.com/assets/app.js",
+        resourceType: "Script",
+        capturedAt: "2026-04-08T00:00:02.500Z"
+      }
+    });
+
+    expect(linked.linked).toBe(true);
+    expect(await runtime.getActiveTrace()).toEqual(
+      expect.objectContaining({
+        traceId: "trace-browser",
+        status: "recording"
+      })
+    );
+  });
 });

@@ -46,3 +46,16 @@ export async function getPreferredEditorId(): Promise<string> {
 export async function setPreferredEditorId(editorId: string): Promise<void> {
   await storageSet({ [STORAGE_KEYS.PREFERRED_EDITOR]: editorId });
 }
+
+export async function getOrCreateExtensionClientId(
+  createId: () => string = () => crypto.randomUUID()
+): Promise<string> {
+  const { [STORAGE_KEYS.EXTENSION_CLIENT_ID]: storedId } = await storageGet([STORAGE_KEYS.EXTENSION_CLIENT_ID]);
+  if (typeof storedId === "string" && storedId.trim()) {
+    return storedId;
+  }
+
+  const clientId = createId();
+  await storageSet({ [STORAGE_KEYS.EXTENSION_CLIENT_ID]: clientId });
+  return clientId;
+}

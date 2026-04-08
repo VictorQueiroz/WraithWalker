@@ -76,6 +76,11 @@ interface InterceptionMiddlewareDependencies {
   }) => Promise<void>;
   getResponseBody: (tabId: number, requestId: string) => Promise<ResponseBodyResponse>;
   setLastError: (message: string) => void;
+  onFixturePersisted?: (payload: {
+    descriptor: FixtureDescriptor;
+    entry: RequestEntry;
+    capturedAt: string;
+  }) => Promise<void> | void;
 }
 
 export function createInterceptionMiddleware({
@@ -86,7 +91,8 @@ export function createInterceptionMiddleware({
   continueRequest,
   fulfillRequest,
   getResponseBody,
-  setLastError
+  setLastError,
+  onFixturePersisted
 }: InterceptionMiddlewareDependencies) {
   async function ensureRequestBody(
     entry: RequestEntry,
@@ -194,15 +200,23 @@ export function createInterceptionMiddleware({
     const descriptor = await ensureDescriptor(entry);
     const responseBody = await getResponseBody(tabId, requestId);
     const bodyEncoding = responseBody.base64Encoded ? "base64" : "utf8";
+    const capturedAt = new Date().toISOString();
+    const meta = buildResponseMeta(entry, bodyEncoding, capturedAt);
 
     await repository.writeIfAbsent({
       descriptor,
-      request: buildRequestPayload(entry),
+      request: buildRequestPayload(entry, capturedAt),
       response: {
         body: responseBody.body,
         bodyEncoding,
-        meta: buildResponseMeta(entry, bodyEncoding)
+        meta
       }
+    });
+
+    await onFixturePersisted?.({
+      descriptor,
+      entry,
+      capturedAt: meta.capturedAt
     });
   }
 

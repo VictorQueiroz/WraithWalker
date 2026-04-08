@@ -1,11 +1,18 @@
 import { buildSessionSnapshot } from "./lib/background-helpers.js";
 import {
+  getOrCreateExtensionClientId as defaultGetOrCreateExtensionClientId,
   getNativeHostConfig as defaultGetNativeHostConfig,
   getPreferredEditorId as defaultGetPreferredEditorId,
   getSiteConfigs as defaultGetSiteConfigs,
   setLastSessionSnapshot as defaultSetLastSessionSnapshot
 } from "./lib/chrome-storage.js";
-import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, OFFSCREEN_REASONS, OFFSCREEN_URL } from "./lib/constants.js";
+import {
+  DEFAULT_EDITOR_ID,
+  DEFAULT_NATIVE_HOST_CONFIG,
+  OFFSCREEN_REASONS,
+  OFFSCREEN_URL,
+  SERVER_HEARTBEAT_INTERVAL_MS
+} from "./lib/constants.js";
 import {
   buildCursorPromptText,
   buildCursorPromptUrl,
@@ -31,10 +38,13 @@ import type {
 import {
   createWraithWalkerServerClient as defaultCreateWraithWalkerServerClient,
   isServerCacheFresh,
+  type ServerScenarioTraceRecord,
   type WraithWalkerServerClient
 } from "./lib/wraithwalker-server.js";
 
 const DEBUGGER_VERSION = "1.3";
+const TRACE_BINDING_NAME = "__wraithwalkerTraceBinding";
+const HEARTBEAT_ALARM_NAME = "wraithwalker-server-heartbeat";
 type DetachReason = "target_closed" | "canceled_by_user";
 
 interface DebuggeeTarget {
@@ -43,6 +53,7 @@ interface DebuggeeTarget {
 
 interface RuntimeApi {
   getURL(path: string): string;
+  getManifest?: () => { version?: string };
   sendMessage(message: unknown): Promise<unknown>;
   sendNativeMessage(hostName: string, message: Record<string, unknown>): Promise<Record<string, unknown>>;
   onMessage: {
@@ -55,6 +66,14 @@ interface RuntimeApi {
     addListener(listener: () => void): void;
   };
   getContexts?: (filter: { contextTypes: string[]; documentUrls: string[] }) => Promise<unknown[]>;
+}
+
+interface AlarmsApi {
+  create(name: string, alarmInfo: { when?: number }): void;
+  clear(name: string): Promise<boolean> | boolean;
+  onAlarm: {
+    addListener(listener: (alarm: { name: string }) => void): void;
+  };
 }
 
 interface DebuggerApi {
@@ -102,6 +121,7 @@ interface ChromeApi {
   tabs: TabsApi;
   storage: StorageApi;
   offscreen: OffscreenApi;
+  alarms?: AlarmsApi;
 }
 
 interface BackgroundState {
@@ -117,6 +137,8 @@ interface BackgroundState {
   rootReady: boolean;
   rootSentinel: RootSentinel | null;
   nativeHostConfig: NativeHostConfig;
+  extensionClientId: string;
+  extensionVersion: string;
   serverInfo: {
     rootPath: string;
     sentinel: RootSentinel;
@@ -124,6 +146,7 @@ interface BackgroundState {
     mcpUrl: string;
     trpcUrl: string;
   } | null;
+  activeTrace: ServerScenarioTraceRecord | null;
   serverCheckedAt: number;
 }
 
@@ -150,6 +173,7 @@ interface BackgroundDependencies {
   getSiteConfigs?: typeof defaultGetSiteConfigs;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getPreferredEditorId?: typeof defaultGetPreferredEditorId;
+  getOrCreateExtensionClientId?: typeof defaultGetOrCreateExtensionClientId;
   setLastSessionSnapshot?: typeof defaultSetLastSessionSnapshot;
   createWraithWalkerServerClient?: typeof defaultCreateWraithWalkerServerClient;
   createSessionController?: (dependencies: Parameters<typeof defaultCreateSessionController>[0]) => SessionControllerApi;
@@ -164,11 +188,117 @@ function createUnavailableServerClient(): WraithWalkerServerClient {
 
   return {
     getSystemInfo: unavailable,
+    heartbeat: unavailable,
     hasFixture: unavailable,
     readFixture: unavailable,
     writeFixtureIfAbsent: unavailable,
-    generateContext: unavailable
+    generateContext: unavailable,
+    recordTraceClick: unavailable,
+    linkTraceFixture: unavailable
   };
+}
+
+interface TraceBindingPayload {
+  pageUrl: string;
+  topOrigin: string;
+  selector: string;
+  tagName: string;
+  textSnippet: string;
+  role?: string;
+  ariaLabel?: string;
+  href?: string;
+  recordedAt?: string;
+}
+
+function buildTraceCollectorSource(bindingName: string): string {
+  return `(() => {
+    const BINDING_NAME = ${JSON.stringify(bindingName)};
+    const STATE_KEY = "__wraithwalkerTraceState";
+    const DISABLE_KEY = "__wraithwalkerDisableTrace";
+    const esc = (value) => {
+      if (globalThis.CSS && typeof globalThis.CSS.escape === "function") {
+        return globalThis.CSS.escape(value);
+      }
+      return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\\\$&");
+    };
+    const clip = (value, limit = 160) => String(value || "").replace(/\\s+/g, " ").trim().slice(0, limit);
+    const indexInType = (el) => {
+      let index = 1;
+      let node = el;
+      while ((node = node.previousElementSibling)) {
+        if (node.tagName === el.tagName) index += 1;
+      }
+      return index;
+    };
+    const segmentFor = (el) => {
+      const tag = el.tagName.toLowerCase();
+      if (el.id) return "#" + esc(el.id);
+      for (const attr of ["data-testid", "data-test", "data-qa"]) {
+        const value = el.getAttribute(attr);
+        if (value) return tag + "[" + attr + "=" + JSON.stringify(value) + "]";
+      }
+      let segment = tag;
+      const role = el.getAttribute("role");
+      if (role) segment += "[role=" + JSON.stringify(role) + "]";
+      else {
+        const classes = [...el.classList]
+          .filter((name) => /^[a-zA-Z0-9_-]+$/.test(name))
+          .slice(0, 2);
+        if (classes.length) {
+          segment += classes.map((name) => "." + esc(name)).join("");
+        }
+      }
+      const parent = el.parentElement;
+      if (parent) {
+        const siblings = [...parent.children].filter((candidate) => candidate.tagName === el.tagName);
+        if (siblings.length > 1) {
+          segment += ":nth-of-type(" + indexInType(el) + ")";
+        }
+      }
+      return segment;
+    };
+    const selectorFor = (element) => {
+      const parts = [];
+      let current = element;
+      while (current && current.nodeType === Node.ELEMENT_NODE && parts.length < 8) {
+        const segment = segmentFor(current);
+        parts.unshift(segment);
+        if (segment.startsWith("#")) break;
+        current = current.parentElement;
+      }
+      return parts.join(" > ");
+    };
+    const handler = (event) => {
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+      const target = path.find((value) => value instanceof Element);
+      if (!(target instanceof Element) || typeof globalThis[BINDING_NAME] !== "function") {
+        return;
+      }
+      const payload = {
+        recordedAt: new Date().toISOString(),
+        pageUrl: globalThis.location?.href || "",
+        topOrigin: globalThis.location?.origin || "",
+        selector: selectorFor(target),
+        tagName: target.tagName.toLowerCase(),
+        textSnippet: clip(target.textContent || target.getAttribute("aria-label") || target.getAttribute("title") || ""),
+        role: target.getAttribute("role") || undefined,
+        ariaLabel: target.getAttribute("aria-label") || undefined,
+        href: target instanceof HTMLAnchorElement ? target.href : (target.getAttribute("href") || undefined)
+      };
+      globalThis[BINDING_NAME](JSON.stringify(payload));
+    };
+    const previous = globalThis[STATE_KEY];
+    if (previous && typeof previous.disable === "function") {
+      previous.disable();
+    }
+    globalThis[STATE_KEY] = {
+      disable() {
+        globalThis.removeEventListener("click", handler, true);
+      }
+    };
+    globalThis[DISABLE_KEY] = () => globalThis[STATE_KEY]?.disable?.();
+    globalThis.addEventListener("click", handler, true);
+  })();`;
 }
 
 function debuggerTarget(tabId: number): DebuggeeTarget {
@@ -213,6 +343,7 @@ export function createBackgroundRuntime({
   getSiteConfigs = defaultGetSiteConfigs,
   getNativeHostConfig = defaultGetNativeHostConfig,
   getPreferredEditorId = defaultGetPreferredEditorId,
+  getOrCreateExtensionClientId = defaultGetOrCreateExtensionClientId,
   setLastSessionSnapshot = defaultSetLastSessionSnapshot,
   createWraithWalkerServerClient,
   createSessionController = defaultCreateSessionController,
@@ -234,13 +365,17 @@ export function createBackgroundRuntime({
     rootReady: false,
     rootSentinel: null,
     nativeHostConfig: { ...DEFAULT_NATIVE_HOST_CONFIG },
+    extensionClientId: "",
+    extensionVersion: chromeApi.runtime.getManifest?.().version || "0.0.0",
     serverInfo: null,
+    activeTrace: null,
     serverCheckedAt: 0,
     ...initialState
   };
 
   const serverClient = resolvedCreateWraithWalkerServerClient();
   let serverRefreshPromise: Promise<typeof state.serverInfo> | null = null;
+  let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 
   let listenersRegistered = false;
 
@@ -261,8 +396,54 @@ export function createBackgroundRuntime({
 
   function markServerOffline(): void {
     state.serverInfo = null;
+    state.activeTrace = null;
     state.serverCheckedAt = Date.now();
     updateEffectiveRootState();
+    scheduleHeartbeat();
+    void syncTraceBindings().catch(() => undefined);
+  }
+
+  function shouldKeepHeartbeatAlive(): boolean {
+    return state.sessionActive || Boolean(state.activeTrace);
+  }
+
+  function clearHeartbeatTimer(): void {
+    if (heartbeatTimer) {
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  function scheduleHeartbeatAlarm(): void {
+    if (!chromeApi.alarms) {
+      return;
+    }
+
+    chromeApi.alarms.create(HEARTBEAT_ALARM_NAME, {
+      when: Date.now() + SERVER_HEARTBEAT_INTERVAL_MS
+    });
+  }
+
+  async function clearHeartbeatAlarm(): Promise<void> {
+    if (!chromeApi.alarms) {
+      return;
+    }
+
+    await chromeApi.alarms.clear(HEARTBEAT_ALARM_NAME);
+  }
+
+  function scheduleHeartbeat(): void {
+    clearHeartbeatTimer();
+    void clearHeartbeatAlarm().catch(() => undefined);
+
+    if (!shouldKeepHeartbeatAlive()) {
+      return;
+    }
+
+    heartbeatTimer = setTimeout(() => {
+      void refreshServerInfo({ force: true }).catch(() => undefined);
+    }, SERVER_HEARTBEAT_INTERVAL_MS);
+    scheduleHeartbeatAlarm();
   }
 
   async function refreshServerInfo({ force = false }: { force?: boolean } = {}): Promise<typeof state.serverInfo> {
@@ -276,7 +457,16 @@ export function createBackgroundRuntime({
 
     serverRefreshPromise = (async () => {
       try {
-        const info = await serverClient.getSystemInfo();
+        if (!state.extensionClientId) {
+          state.extensionClientId = await getOrCreateExtensionClientId();
+        }
+        const info = await serverClient.heartbeat({
+          clientId: state.extensionClientId,
+          extensionVersion: state.extensionVersion,
+          sessionActive: state.sessionActive,
+          enabledOrigins: [...state.enabledOrigins]
+        });
+        const previousTraceId = state.activeTrace?.traceId || null;
         state.serverInfo = {
           rootPath: info.rootPath,
           sentinel: info.sentinel,
@@ -284,8 +474,13 @@ export function createBackgroundRuntime({
           mcpUrl: info.mcpUrl,
           trpcUrl: info.trpcUrl
         };
+        state.activeTrace = info.activeTrace;
         state.serverCheckedAt = Date.now();
         updateEffectiveRootState();
+        scheduleHeartbeat();
+        if (previousTraceId !== (info.activeTrace?.traceId || null)) {
+          await syncTraceBindings();
+        }
         return state.serverInfo;
       } catch {
         markServerOffline();
@@ -312,14 +507,17 @@ export function createBackgroundRuntime({
   }
 
   async function refreshStoredConfig(): Promise<void> {
-    const [sites, nativeHostConfig] = await Promise.all([
+    const [sites, nativeHostConfig, extensionClientId] = await Promise.all([
       getSiteConfigs(),
-      getNativeHostConfig()
+      getNativeHostConfig(),
+      getOrCreateExtensionClientId()
     ]);
     state.enabledOrigins = sites.map((site: SiteConfig) => site.origin);
     state.siteConfigsByOrigin = new Map(sites.map((site: SiteConfig) => [site.origin, site]));
     state.nativeHostConfig = { ...DEFAULT_NATIVE_HOST_CONFIG, ...nativeHostConfig };
     state.preferredEditorId = DEFAULT_EDITOR_ID;
+    state.extensionClientId = extensionClientId;
+    state.extensionVersion = chromeApi.runtime.getManifest?.().version || state.extensionVersion || "0.0.0";
   }
 
   async function snapshotState(): Promise<SessionSnapshot> {
@@ -763,19 +961,174 @@ export function createBackgroundRuntime({
     }
   }
 
+  async function recordTraceClick(tabId: number, payload: TraceBindingPayload): Promise<void> {
+    if (!state.serverInfo || !state.activeTrace) {
+      return;
+    }
+
+    try {
+      const result = await serverClient.recordTraceClick({
+        traceId: state.activeTrace.traceId,
+        step: {
+          stepId: crypto.randomUUID(),
+          tabId,
+          recordedAt: payload.recordedAt || new Date().toISOString(),
+          pageUrl: payload.pageUrl,
+          topOrigin: payload.topOrigin || state.attachedTabs.get(tabId)?.topOrigin || "",
+          selector: payload.selector,
+          tagName: payload.tagName,
+          textSnippet: payload.textSnippet,
+          ...(payload.role ? { role: payload.role } : {}),
+          ...(payload.ariaLabel ? { ariaLabel: payload.ariaLabel } : {}),
+          ...(payload.href ? { href: payload.href } : {})
+        }
+      });
+      state.activeTrace = result.activeTrace;
+      scheduleHeartbeat();
+    } catch {
+      markServerOffline();
+    }
+  }
+
+  async function linkTraceFixtureIfNeeded({
+    descriptor,
+    entry,
+    capturedAt
+  }: {
+    descriptor: FixtureDescriptor;
+    entry: RequestEntry;
+    capturedAt: string;
+  }): Promise<void> {
+    if (!state.serverInfo || !state.activeTrace || !entry.requestedAt) {
+      return;
+    }
+
+    try {
+      const result = await serverClient.linkTraceFixture({
+        traceId: state.activeTrace.traceId,
+        tabId: entry.tabId,
+        requestedAt: entry.requestedAt,
+        fixture: {
+          bodyPath: descriptor.bodyPath,
+          requestUrl: descriptor.requestUrl,
+          resourceType: entry.resourceType || "Other",
+          capturedAt
+        }
+      });
+      state.activeTrace = result.trace;
+      scheduleHeartbeat();
+    } catch {
+      markServerOffline();
+    }
+  }
+
+  async function armTraceForTab(tabId: number): Promise<void> {
+    const tabState = state.attachedTabs.get(tabId);
+    const activeTrace = state.activeTrace;
+    if (!tabState || !activeTrace || !state.serverInfo || !state.sessionActive) {
+      return;
+    }
+
+    if (tabState.traceArmedForTraceId === activeTrace.traceId) {
+      return;
+    }
+
+    try {
+      await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.addBinding", {
+        name: TRACE_BINDING_NAME
+      });
+    } catch {
+      // The binding may already be registered for this target.
+    }
+
+    const source = buildTraceCollectorSource(TRACE_BINDING_NAME);
+
+    if (tabState.traceScriptIdentifier) {
+      try {
+        await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Page.removeScriptToEvaluateOnNewDocument", {
+          identifier: tabState.traceScriptIdentifier
+        });
+      } catch {
+        // Ignore stale script identifiers on refresh/navigate races.
+      }
+    }
+
+    const injected = await chromeApi.debugger.sendCommand<{ identifier?: string }>(
+      debuggerTarget(tabId),
+      "Page.addScriptToEvaluateOnNewDocument",
+      { source }
+    );
+    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.evaluate", {
+      expression: source,
+      awaitPromise: false,
+      returnByValue: false
+    });
+
+    tabState.traceScriptIdentifier = injected.identifier || null;
+    tabState.traceArmedForTraceId = activeTrace.traceId;
+  }
+
+  async function disarmTraceForTab(tabId: number): Promise<void> {
+    const tabState = state.attachedTabs.get(tabId);
+    if (!tabState) {
+      return;
+    }
+
+    if (tabState.traceScriptIdentifier) {
+      try {
+        await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Page.removeScriptToEvaluateOnNewDocument", {
+          identifier: tabState.traceScriptIdentifier
+        });
+      } catch {
+        // Ignore stale script identifiers on detached targets.
+      }
+    }
+
+    try {
+      await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.evaluate", {
+        expression: "globalThis.__wraithwalkerDisableTrace?.()",
+        awaitPromise: false,
+        returnByValue: false
+      });
+    } catch {
+      // Ignore detached tabs or unavailable execution contexts.
+    }
+
+    tabState.traceScriptIdentifier = null;
+    tabState.traceArmedForTraceId = null;
+  }
+
+  async function syncTraceBindings(): Promise<void> {
+    const shouldArm = Boolean(state.serverInfo && state.activeTrace && state.sessionActive);
+    const tabIds = [...state.attachedTabs.keys()];
+
+    await Promise.all(tabIds.map((tabId) => shouldArm
+      ? armTraceForTab(tabId)
+      : disarmTraceForTab(tabId)));
+  }
+
   async function attachTab(tabId: number, topOrigin: string): Promise<void> {
     if (state.attachedTabs.has(tabId)) {
-      state.attachedTabs.set(tabId, { topOrigin });
+      const existing = state.attachedTabs.get(tabId)!;
+      existing.topOrigin = topOrigin;
+      await syncTraceBindings();
       return;
     }
 
     await chromeApi.debugger.attach(debuggerTarget(tabId), DEBUGGER_VERSION);
     await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Network.enable");
+    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.enable");
+    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Page.enable");
     await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Network.setCacheDisabled", { cacheDisabled: true });
     await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Fetch.enable", {
       patterns: [{ urlPattern: "*" }]
     });
-    state.attachedTabs.set(tabId, { topOrigin });
+    state.attachedTabs.set(tabId, {
+      topOrigin,
+      traceScriptIdentifier: null,
+      traceArmedForTraceId: null
+    });
+    await syncTraceBindings();
   }
 
   async function detachTab(tabId: number): Promise<void> {
@@ -783,6 +1136,7 @@ export function createBackgroundRuntime({
       return;
     }
 
+    await disarmTraceForTab(tabId);
     state.attachedTabs.delete(tabId);
     for (const key of [...state.requests.keys()]) {
       if (key.startsWith(`${tabId}:`)) {
@@ -846,11 +1200,21 @@ export function createBackgroundRuntime({
         localOperation: () => localWriteFixture(payload)
       })
     },
-    getSiteConfigForOrigin: (topOrigin: string) => state.siteConfigsByOrigin.get(topOrigin)
+    getSiteConfigForOrigin: (topOrigin: string) => state.siteConfigsByOrigin.get(topOrigin),
+    onFixturePersisted: linkTraceFixtureIfNeeded
   });
 
   async function handleDebuggerEvent(source: DebuggeeTarget, method: string, params: unknown): Promise<void> {
     try {
+      if (method === "Runtime.bindingCalled" && source.tabId) {
+        const event = params as { name?: string; payload?: string };
+        if (event.name === TRACE_BINDING_NAME && typeof event.payload === "string") {
+          const parsed = JSON.parse(event.payload) as TraceBindingPayload;
+          await recordTraceClick(source.tabId, parsed);
+        }
+        return;
+      }
+
       if (method === "Fetch.requestPaused") {
         await requestLifecycle.handleFetchRequestPaused(source, params as never);
         return;
@@ -891,6 +1255,11 @@ export function createBackgroundRuntime({
       return;
     }
 
+    for (const key of [...state.requests.keys()]) {
+      if (key.startsWith(`${source.tabId}:`)) {
+        state.requests.delete(key);
+      }
+    }
     state.attachedTabs.delete(source.tabId);
   }
 
@@ -902,6 +1271,14 @@ export function createBackgroundRuntime({
 
   function handleTabRemoved(tabId: number): void {
     detachTab(tabId).catch(() => {});
+  }
+
+  function handleAlarm(alarm: { name: string }): void {
+    if (alarm.name !== HEARTBEAT_ALARM_NAME) {
+      return;
+    }
+
+    void refreshServerInfo({ force: true }).catch(() => undefined);
   }
 
   function handleStorageChanged(changes: Record<string, unknown>, areaName: string): void {
@@ -927,10 +1304,18 @@ export function createBackgroundRuntime({
     switch (message.type) {
       case "session.getState":
         return snapshotState();
-      case "session.start":
-        return sessionController.startSession();
-      case "session.stop":
-        return sessionController.stopSession();
+      case "session.start": {
+        const result = await sessionController.startSession();
+        queueServerRefresh({ force: true });
+        scheduleHeartbeat();
+        return result;
+      }
+      case "session.stop": {
+        const result = await sessionController.stopSession();
+        queueServerRefresh({ force: true });
+        scheduleHeartbeat();
+        return result;
+      }
       case "root.verify": {
         const result = await ensureRootReady({ requestPermission: true });
         await persistSnapshot();
@@ -1028,6 +1413,7 @@ export function createBackgroundRuntime({
     chromeApi.tabs.onRemoved.addListener(handleTabRemoved);
     chromeApi.storage.onChanged.addListener(handleStorageChanged);
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
+    chromeApi.alarms?.onAlarm.addListener(handleAlarm);
     chromeApi.runtime.onStartup.addListener(() => {
       refreshStoredConfig().catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
@@ -1047,6 +1433,7 @@ export function createBackgroundRuntime({
     registerListeners();
     await refreshStoredConfig();
     queueServerRefresh({ force: true });
+    scheduleHeartbeat();
   }
 
   return {

@@ -78,6 +78,11 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
+| `extension-status` | — | Report whether the browser extension is connected, capture-ready, and currently using the server root |
+| `start-scenario-trace` | optional `name` | Start a guided click trace for the connected extension |
+| `stop-scenario-trace` | `traceId` | Stop a guided click trace and keep it on disk |
+| `list-scenario-traces` | — | List stored guided traces from `.wraithwalker/scenario-traces` |
+| `read-scenario-trace` | `traceId` | Read one stored guided trace with its steps and linked fixtures |
 | `list-origins` | optional `search` | List all captured origins with endpoint counts, asset counts, and manifest presence |
 | `list-assets` | `origin`, optional filters | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, and body availability (`hasBody`, `bodySize`) |
 | `list-endpoints` | `origin` | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath` |
@@ -96,12 +101,17 @@ The same HTTP server also exposes a small typed tRPC backend used by the browser
 Current procedures:
 
 - `system.info`
+- `extension.heartbeat`
 - `fixtures.has`
 - `fixtures.read`
 - `fixtures.writeIfAbsent`
 - `fixtures.generateContext`
+- `scenarioTraces.recordClick`
+- `scenarioTraces.linkFixture`
 
 When the extension detects the default loopback server at `http://127.0.0.1:4319/trpc`, it prefers the server root for capture, fixture reads, context generation, and Cursor open flows. If the server is unavailable, the extension falls back to its remembered local root flow.
+
+Guided traces are server-root-only in v1 and live under `.wraithwalker/scenario-traces/`.
 
 ## Recommended Workflow
 

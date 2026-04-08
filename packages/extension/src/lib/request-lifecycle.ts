@@ -117,6 +117,11 @@ interface RequestLifecycleDependencies {
   }) => Promise<FixtureDescriptor>;
   createInterceptionMiddleware?: typeof defaultCreateInterceptionMiddleware;
   requestKey?: (tabId: number, requestId: string) => string;
+  onFixturePersisted?: (payload: {
+    descriptor: FixtureDescriptor;
+    entry: RequestEntry;
+    capturedAt: string;
+  }) => Promise<void> | void;
 }
 
 export function createRequestLifecycle({
@@ -128,7 +133,8 @@ export function createRequestLifecycle({
   getSiteConfigForOrigin,
   createFixtureDescriptor = defaultCreateFixtureDescriptor,
   createInterceptionMiddleware = defaultCreateInterceptionMiddleware,
-  requestKey = (tabId, requestId) => `${tabId}:${requestId}`
+  requestKey = (tabId, requestId) => `${tabId}:${requestId}`,
+  onFixturePersisted
 }: RequestLifecycleDependencies) {
   function ensureRequestEntry(tabId: number, requestId: string): RequestEntry {
     const key = requestKey(tabId, requestId);
@@ -224,7 +230,8 @@ export function createRequestLifecycle({
     fulfillRequest: (tabId, payload) => sendDebuggerCommand(tabId, "Fetch.fulfillRequest", payload),
     getResponseBody: (tabId, requestId) =>
       sendDebuggerCommand<ResponseBodyResponse>(tabId, "Network.getResponseBody", { requestId }),
-    setLastError
+    setLastError,
+    onFixturePersisted
   });
 
   async function ensureDescriptor(entry: RequestEntry): Promise<FixtureDescriptor> {
@@ -265,6 +272,7 @@ export function createRequestLifecycle({
     }
 
     const entry = ensureRequestEntry(tabId, params.requestId);
+    entry.requestedAt = new Date().toISOString();
     entry.topOrigin = state.attachedTabs.get(tabId)?.topOrigin || entry.topOrigin;
     entry.method = params.request.method.toUpperCase();
     entry.url = params.request.url;

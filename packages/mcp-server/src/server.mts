@@ -11,6 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { createExtensionSessionTracker } from "./extension-session.mjs";
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import {
@@ -28,6 +29,7 @@ import {
   resolveFixturePath
 } from "./fixture-reader.mjs";
 import { appendVaryHeader, buildLocalServerCorsHeaders } from "./local-server-cors.mjs";
+import { createServerRootRuntime } from "./root-runtime.mjs";
 import { createWraithwalkerRouter, HTTP_TRPC_PATH } from "./trpc.mjs";
 
 const SERVER_NAME = "wraithwalker";
@@ -39,6 +41,11 @@ export const DEFAULT_HTTP_PORT = 4319;
 export const DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES = 25 * 1024 * 1024;
 
 export const MCP_TOOL_NAMES = [
+  "extension-status",
+  "start-scenario-trace",
+  "stop-scenario-trace",
+  "list-scenario-traces",
+  "read-scenario-trace",
   "list-origins",
   "list-assets",
   "list-endpoints",
@@ -138,7 +145,17 @@ function createLoopbackHttpApp() {
   return app;
 }
 
-function registerTools(server: McpServer, rootPath: string): void {
+function registerTools(
+  server: McpServer,
+  rootPath: string,
+  {
+    runtime,
+    extensionSessions
+  }: {
+    runtime: ReturnType<typeof createServerRootRuntime>;
+    extensionSessions: ReturnType<typeof createExtensionSessionTracker>;
+  }
+): void {
   async function resolveSiteConfig(origin: string) {
     const configs = await readSiteConfigs(rootPath);
     return {
@@ -165,6 +182,97 @@ function registerTools(server: McpServer, rootPath: string): void {
       isError: true
     };
   }
+
+  server.tool(
+    "extension-status",
+    "Report whether the browser extension is connected to this local server and ready to capture",
+    {},
+    async () => renderJson(await extensionSessions.getStatus())
+  );
+
+  server.tool(
+    "start-scenario-trace",
+    "Start a guided click-trace that the extension will record into the current WraithWalker root",
+    {
+      name: z.string().trim().min(1).optional().describe("Optional human-friendly name for the trace")
+    },
+    async ({ name }) => {
+      const status = await extensionSessions.getStatus();
+      if (!status.connected) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: "No connected extension is available for guided tracing."
+          }],
+          isError: true
+        };
+      }
+
+      const activeTrace = await runtime.getActiveTrace();
+      if (activeTrace) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Trace "${activeTrace.traceId}" is already active. Stop it before starting another trace.`
+          }],
+          isError: true
+        };
+      }
+
+      const trace = await runtime.startTrace({
+        traceId: crypto.randomUUID(),
+        name,
+        selectedOrigins: status.enabledOrigins,
+        extensionClientId: status.clientId
+      });
+
+      return renderJson(trace);
+    }
+  );
+
+  server.tool(
+    "stop-scenario-trace",
+    "Stop a guided click-trace and keep it as a completed scenario trace on disk",
+    {
+      traceId: z.string().describe("Trace ID returned by start-scenario-trace")
+    },
+    async ({ traceId }) => {
+      try {
+        return renderJson(await runtime.stopTrace(traceId));
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "list-scenario-traces",
+    "List guided scenario traces stored in the current WraithWalker root",
+    {},
+    async () => renderJson(await runtime.listTraces())
+  );
+
+  server.tool(
+    "read-scenario-trace",
+    "Read a stored guided scenario trace by ID",
+    {
+      traceId: z.string().describe("Trace ID returned by start-scenario-trace or list-scenario-traces")
+    },
+    async ({ traceId }) => {
+      const trace = await runtime.readTrace(traceId);
+      if (!trace) {
+        return {
+          content: [{ type: "text" as const, text: `Trace "${traceId}" not found.` }],
+          isError: true
+        };
+      }
+
+      return renderJson(trace);
+    }
+  );
 
   server.tool(
     "list-origins",
@@ -456,12 +564,21 @@ function registerTools(server: McpServer, rootPath: string): void {
   );
 }
 
-function createConnectedServer(rootPath: string): McpServer {
+function createConnectedServer(
+  rootPath: string,
+  {
+    runtime,
+    extensionSessions
+  }: {
+    runtime: ReturnType<typeof createServerRootRuntime>;
+    extensionSessions: ReturnType<typeof createExtensionSessionTracker>;
+  }
+): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION
   });
-  registerTools(server, rootPath);
+  registerTools(server, rootPath, { runtime, extensionSessions });
   return server;
 }
 
@@ -510,7 +627,12 @@ export async function startServer(
   rootPath: string,
   options: StartServerOptions = {}
 ): Promise<McpServer> {
-  const server = createConnectedServer(rootPath);
+  const sentinel = await createRoot(rootPath);
+  const runtime = createServerRootRuntime({ rootPath, sentinel });
+  const extensionSessions = createExtensionSessionTracker({
+    getActiveTrace: () => runtime.getActiveTrace()
+  });
+  const server = createConnectedServer(rootPath, { runtime, extensionSessions });
   const transport = options.transport ?? new StdioServerTransport();
   await server.connect(transport);
   return server;
@@ -534,12 +656,18 @@ export async function startHttpServer(
     mcpUrl: "",
     trpcUrl: ""
   };
+  const runtime = createServerRootRuntime({ rootPath, sentinel });
+  const extensionSessions = createExtensionSessionTracker({
+    getActiveTrace: () => runtime.getActiveTrace()
+  });
 
   const trpcRouter = createWraithwalkerRouter({
     rootPath,
     sentinel,
     serverName: SERVER_NAME,
     serverVersion: SERVER_VERSION,
+    runtime,
+    extensionSessions,
     getServerUrls: () => ({
       baseUrl: urls.baseUrl,
       mcpUrl: urls.mcpUrl,
@@ -610,7 +738,7 @@ export async function startHttpServer(
           return;
         }
 
-        const server = createConnectedServer(rootPath);
+        const server = createConnectedServer(rootPath, { runtime, extensionSessions });
         let initializedSessionId: string | undefined;
         let transport: StreamableHTTPServerTransport;
 
