@@ -16,9 +16,14 @@ function main() {
   const version = parseReleaseVersion(process.argv[2]);
   const rootDir = process.cwd();
   const updatedPackages = withReleaseVersion(loadPublishablePackages(rootDir), version);
-  const updatedWorkspacePackages = syncInternalDependencyPins(loadWorkspacePackages(rootDir), version);
+  const updatedPackageMap = new Map(
+    updatedPackages.map((entry) => [entry.name, entry])
+  );
+  const mergedWorkspacePackages = loadWorkspacePackages(rootDir).map((entry) => (
+    updatedPackageMap.get(entry.name) ?? entry
+  ));
+  const updatedWorkspacePackages = syncInternalDependencyPins(mergedWorkspacePackages, version);
 
-  writePublishablePackages(updatedPackages);
   writePublishablePackages(updatedWorkspacePackages);
   refreshPackageLock(rootDir);
 

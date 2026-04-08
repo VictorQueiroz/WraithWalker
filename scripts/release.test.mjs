@@ -91,6 +91,24 @@ test("syncInternalDependencyPins updates private workspace dependency pins witho
   });
 });
 
+test("release prepare style merge preserves publishable versions while syncing private workspace pins", () => {
+  const updatedPackages = withReleaseVersion(createWorkspaceEntries().filter(({ manifest }) => manifest.private !== true), "1.2.3");
+  const updatedPackageMap = new Map(updatedPackages.map((entry) => [entry.name, entry]));
+  const mergedWorkspaceEntries = createWorkspaceEntries().map((entry) => (
+    updatedPackageMap.get(entry.name) ?? entry
+  ));
+  const updatedWorkspaceEntries = syncInternalDependencyPins(mergedWorkspaceEntries, "1.2.3");
+  const coreEntry = updatedWorkspaceEntries.find(({ name }) => name === "@wraithwalker/core");
+  const extensionEntry = updatedWorkspaceEntries.find(({ name }) => name === "@wraithwalker/extension");
+
+  assert.equal(coreEntry.manifest.version, "1.2.3");
+  assert.equal(extensionEntry.manifest.version, "0.1.0");
+  assert.deepEqual(extensionEntry.manifest.dependencies, {
+    "@wraithwalker/core": "1.2.3",
+    react: "^19.2.0"
+  });
+});
+
 test("validateReleaseState accepts matching public packages", () => {
   const updatedEntries = withReleaseVersion(createWorkspaceEntries(), "2.0.0");
   const publishableEntries = updatedEntries.filter(({ manifest }) => manifest.private !== true);
