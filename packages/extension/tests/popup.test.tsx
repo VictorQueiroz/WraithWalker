@@ -121,6 +121,7 @@ describe("popup entrypoint", () => {
     try {
       expect(await screen.findByRole("button", { name: "Stop Session" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Open in Cursor" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Open in folder" })).toBeNull();
       expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
       expect(screen.getAllByRole("button")).toHaveLength(3);
       expect(screen.queryByText("Managed Origins")).toBeNull();
@@ -419,6 +420,83 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("opens the server root in the OS file manager through the shared background flow", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        }))
+        .mockResolvedValueOnce({ ok: true })
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open in folder" }));
+
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
+        type: "native.revealRoot"
+      });
+      expect(await screen.findByText("Opened the server root in the OS file manager.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("surfaces shared background reveal errors through the single status area", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        }))
+        .mockResolvedValueOnce({
+          ok: false,
+          error: "Reveal failed."
+        })
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open in folder" }));
+      expect(await screen.findByText("Reveal failed.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
   it("prioritizes stored session errors in the single status area", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
@@ -496,6 +574,50 @@ describe("popup entrypoint", () => {
       expect(await screen.findByText("Connected.")).toBeTruthy();
       expect(screen.getByText(/Using local WraithWalker server root\./i)).toBeTruthy();
       expect(screen.getByText("/tmp/server-root")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Open in folder" })).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("disables popup actions while the server-folder reveal is in flight", async () => {
+    const { PopupApp } = await import("../src/ui/popup-app.tsx");
+    const user = userEvent.setup();
+    const revealResult = createDeferred<{ ok: true }>();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        }))
+        .mockImplementationOnce(() => revealResult.promise)
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = render(React.createElement(PopupApp, {
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      clearIntervalFn: vi.fn() as typeof clearInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      ...createRootDeps({ hasHandle: false })
+    }));
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open in folder" }));
+
+      const openingButton = await screen.findByRole("button", { name: "Opening..." });
+      expect((openingButton as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "Start Session" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "Open in Cursor" }) as HTMLButtonElement).disabled).toBe(true);
+
+      revealResult.resolve({ ok: true });
+      await flushPromises();
+
+      expect(await screen.findByText("Opened the server root in the OS file manager.")).toBeTruthy();
     } finally {
       popup.unmount();
     }

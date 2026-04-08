@@ -63,7 +63,7 @@ export function PopupApp({
   const [nativeHostConfig, setNativeHostConfig] = React.useState<NativeHostConfig>(DEFAULT_NATIVE_HOST_CONFIG);
   const [captureRootState, setCaptureRootState] = React.useState<CaptureRootState>({ kind: "missing_handle" });
   const [actionAlert, setActionAlert] = React.useState<PopupAlertState | null>(null);
-  const [busyAction, setBusyAction] = React.useState<"toggle" | "open" | null>(null);
+  const [busyAction, setBusyAction] = React.useState<"toggle" | "open" | "reveal" | null>(null);
   const preferredEditor = React.useMemo(
     () => resolvePreferredEditor(DEFAULT_EDITOR_ID, editorPresets),
     [editorPresets]
@@ -174,6 +174,29 @@ export function PopupApp({
     }
   }
 
+  async function handleRevealFolder() {
+    setBusyAction("reveal");
+    try {
+      const result = await sendMessage<NativeOpenResult>(runtime, {
+        type: "native.revealRoot"
+      });
+      await refreshState(false);
+      setActionAlert({
+        variant: result.ok ? "success" : "destructive",
+        text: result.ok
+          ? "Opened the server root in the OS file manager."
+          : getErrorMessage(result as ErrorResult)
+      });
+    } catch (error) {
+      setActionAlert({
+        variant: "destructive",
+        text: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <main className="min-w-[360px] p-4">
       <div className="extension-shell">
@@ -213,6 +236,16 @@ export function PopupApp({
             >
               {busyAction === "open" ? "Opening..." : `Open in ${preferredEditor.label}`}
             </Button>
+            {snapshot?.captureDestination === "server" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busyAction !== null}
+                onClick={handleRevealFolder}
+              >
+                {busyAction === "reveal" ? "Opening..." : "Open in folder"}
+              </Button>
+            ) : null}
             <Button type="button" variant="ghost" onClick={() => runtime.openOptionsPage()}>
               Settings
             </Button>
