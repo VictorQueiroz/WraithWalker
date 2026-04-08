@@ -235,6 +235,17 @@ describe("offscreen entrypoint", () => {
         dumpAllowlistPatterns: ["\\.svg$"]
       }]
     });
+
+    const metadataHandle = await rootHandle.getDirectoryHandle(".wraithwalker");
+    const configHandle = await metadataHandle.getFileHandle("config.json");
+    expect(JSON.parse(await (await configHandle.getFile()).text())).toEqual({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]
+    });
   });
 
   it("reads effective site configs by merging configured and discovered origins", async () => {
@@ -583,6 +594,36 @@ describe("offscreen entrypoint", () => {
     const cursorRulesHandle = await rootHandle.getFileHandle(".cursorrules");
     expect(await (await claudeHandle.getFile()).text()).toContain("WraithWalker Fixture Context");
     expect(await (await cursorRulesHandle.getFile()).text()).toContain("Cursor Agent Brief");
+  });
+
+  it("returns a root-state error when generating editor context without a selected root", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      ensureRootSentinel: vi.fn(),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn()
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.generateContext",
+        payload: {
+          editorId: "cursor",
+          siteConfigs: []
+        }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "No root directory selected.",
+      permission: undefined
+    });
   });
 
   it("writes a per-domain JSON manifest for mirrored static assets", async () => {

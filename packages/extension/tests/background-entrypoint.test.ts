@@ -579,6 +579,63 @@ describe("background entrypoint", () => {
     }));
   });
 
+  it("returns an empty configured site config list when the local offscreen payload is malformed", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      switch (message.type) {
+        case "fs.ensureRoot":
+          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+        case "fs.readConfiguredSiteConfigs":
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: { origin: "broken" } } as any;
+        case "fs.readEffectiveSiteConfigs":
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: [] };
+        default:
+          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+      }
+    });
+    const serverClient = createMockServerClient({
+      heartbeat: vi.fn().mockRejectedValue(new Error("server unavailable"))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    await expect(runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" })).resolves.toEqual({
+      ok: true,
+      sentinel: { rootId: "local-root" },
+      siteConfigs: []
+    });
+  });
+
   it("reads effective site configs from the server when connected", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
@@ -632,6 +689,63 @@ describe("background entrypoint", () => {
     expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       target: "offscreen"
     }));
+  });
+
+  it("returns an empty effective site config list when the local offscreen payload is malformed", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      switch (message.type) {
+        case "fs.ensureRoot":
+          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+        case "fs.readConfiguredSiteConfigs":
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: [] };
+        case "fs.readEffectiveSiteConfigs":
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: { origin: "broken" } } as any;
+        default:
+          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+      }
+    });
+    const serverClient = createMockServerClient({
+      heartbeat: vi.fn().mockRejectedValue(new Error("server unavailable"))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    await expect(runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" })).resolves.toEqual({
+      ok: true,
+      sentinel: { rootId: "local-root" },
+      siteConfigs: []
+    });
   });
 
   it("writes configured site configs to the server when connected without dual-writing locally", async () => {
@@ -876,6 +990,83 @@ describe("background entrypoint", () => {
       target: "offscreen",
       type: "fs.writeConfiguredSiteConfigs"
     }));
+  });
+
+  it("preserves server authority when local config refresh reads malformed site config data", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      if (message.type === "fs.readEffectiveSiteConfigs") {
+        return {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          siteConfigs: { origin: "broken" }
+        } as any;
+      }
+
+      return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+    });
+    const serverClient = createMockServerClient({
+      heartbeat: vi.fn().mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: [{
+          origin: "https://server.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }],
+        activeTrace: null
+      })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+    expect(runtime.state.localSiteConfigsByOrigin.size).toBe(0);
+
+    chromeApi.storage.onChanged.listeners[0]({
+      preferredEditorId: {
+        oldValue: "cursor",
+        newValue: "windsurf"
+      }
+    }, "local");
+    await flushPromises();
+
+    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+    expect(runtime.state.siteConfigsByOrigin.has("https://server.example.com")).toBe(true);
+    expect(runtime.state.localSiteConfigsByOrigin.size).toBe(0);
   });
 
   it("falls back to the local root when a server-backed effective config read fails", async () => {
@@ -1645,6 +1836,94 @@ describe("background entrypoint", () => {
         capturedAt: "2026-04-08T00:00:02.500Z"
       }
     });
+  });
+
+  it("marks the server offline when linking a persisted fixture to an active trace fails", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const activeTrace = createActiveTrace();
+    let requestLifecycleDependencies: any;
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([{
+        origin: "https://local.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$"]
+      }]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
+        activeTrace,
+        heartbeat: vi.fn().mockResolvedValue({
+          version: "1.0.0",
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc",
+          siteConfigs: [{
+            origin: "https://server.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.svg$"]
+          }],
+          activeTrace
+        }),
+        linkTraceFixture: vi.fn().mockRejectedValue(new Error("link failed"))
+      })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn((dependencies) => {
+        requestLifecycleDependencies = dependencies;
+        return {
+          handleFetchRequestPaused: vi.fn(),
+          handleNetworkRequestWillBeSent: vi.fn(),
+          handleNetworkResponseReceived: vi.fn(),
+          handleNetworkLoadingFinished: vi.fn(),
+          handleNetworkLoadingFailed: vi.fn()
+        };
+      })
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+
+    await requestLifecycleDependencies.onFixturePersisted({
+      descriptor: {
+        bodyPath: "cdn.example.com/assets/app.js",
+        requestUrl: "https://cdn.example.com/assets/app.js"
+      },
+      entry: {
+        tabId: 3,
+        requestId: "request-1",
+        requestedAt: "2026-04-08T00:00:02.000Z",
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/assets/app.js",
+        requestHeaders: [],
+        requestBody: "",
+        requestBodyEncoding: "utf8",
+        descriptor: null,
+        resourceType: "Script",
+        mimeType: "application/javascript",
+        replayed: false,
+        responseStatus: 200,
+        responseStatusText: "OK",
+        responseHeaders: []
+      },
+      capturedAt: "2026-04-08T00:00:02.500Z"
+    });
+
+    expect(runtime.state.serverInfo).toBeNull();
+    expect(runtime.state.activeTrace).toBeNull();
+    expect(runtime.state.enabledOrigins).toEqual(["https://local.example.com"]);
   });
 
   it("returns null when the server reports that a fixture does not exist", async () => {
@@ -3146,6 +3425,43 @@ describe("background entrypoint", () => {
 
     await runtime.handleRuntimeMessage({ type: "session.stop" });
     expect(chromeApi.offscreen.closeDocument).toHaveBeenCalled();
+  });
+
+  it("reuses an existing offscreen document and skips closing when none remains on session stop", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.runtime.getContexts
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([]);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await runtime.handleRuntimeMessage({ type: "session.stop" });
+
+    expect(chromeApi.offscreen.createDocument).not.toHaveBeenCalled();
+    expect(chromeApi.offscreen.closeDocument).not.toHaveBeenCalled();
   });
 
   it("cleans up tab state even when debugger detach fails during tab removal", async () => {

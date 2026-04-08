@@ -739,6 +739,17 @@ export function createBackgroundRuntime({
     };
   }
 
+  function normalizeSiteConfigsResult(result: SiteConfigsResult): SiteConfigsResult {
+    if (result.ok !== true) {
+      return result;
+    }
+
+    return toSiteConfigsResult(
+      Array.isArray(result.siteConfigs) ? result.siteConfigs : [],
+      result.sentinel
+    );
+  }
+
   function mergeLegacySiteConfigs(configuredSiteConfigs: SiteConfig[], legacySiteConfigs: SiteConfig[]): SiteConfig[] {
     const merged = new Map<string, SiteConfig>();
 
@@ -909,7 +920,9 @@ export function createBackgroundRuntime({
     const serverInfo = await refreshServerInfo({ force: true });
     if (!serverInfo) {
       await ensureLegacySiteConfigsMigrated();
-      return sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs");
+      return normalizeSiteConfigsResult(
+        await sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs")
+      );
     }
 
     try {
@@ -920,7 +933,9 @@ export function createBackgroundRuntime({
       const localRoot = await ensureLocalRootReady({ silent: true });
       if (localRoot.ok) {
         await ensureLegacySiteConfigsMigrated();
-        return sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs");
+        return normalizeSiteConfigsResult(
+          await sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs")
+        );
       }
 
       const message = error instanceof Error ? error.message : String(error);
@@ -935,7 +950,9 @@ export function createBackgroundRuntime({
     const serverInfo = await refreshServerInfo({ force: true });
     if (!serverInfo) {
       await ensureLegacySiteConfigsMigrated();
-      return sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs");
+      return normalizeSiteConfigsResult(
+        await sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs")
+      );
     }
 
     try {
@@ -946,7 +963,9 @@ export function createBackgroundRuntime({
       const localRoot = await ensureLocalRootReady({ silent: true });
       if (localRoot.ok) {
         await ensureLegacySiteConfigsMigrated();
-        return sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs");
+        return normalizeSiteConfigsResult(
+          await sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs")
+        );
       }
 
       const message = error instanceof Error ? error.message : String(error);
@@ -961,9 +980,9 @@ export function createBackgroundRuntime({
     const serverInfo = await refreshServerInfo({ force: true });
     if (!serverInfo) {
       await ensureLegacySiteConfigsMigrated();
-      const result = await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", {
+      const result = normalizeSiteConfigsResult(await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", {
         siteConfigs
-      });
+      }));
       if (result.ok) {
         await refreshStoredConfig();
         if (state.sessionActive && !state.serverInfo) {
@@ -989,9 +1008,9 @@ export function createBackgroundRuntime({
       }
 
       await ensureLegacySiteConfigsMigrated();
-      const result = await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", {
+      const result = normalizeSiteConfigsResult(await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", {
         siteConfigs
-      });
+      }));
       if (result.ok) {
         await refreshStoredConfig();
         if (state.sessionActive && !state.serverInfo) {
