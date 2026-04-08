@@ -555,6 +555,197 @@ describe("background entrypoint", () => {
     );
   });
 
+  it("re-arms traced tabs even when removing the previous trace script fails", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    const firstTrace = createActiveTrace();
+    const secondTrace = createActiveTrace({ traceId: "trace-2" });
+    let nextTrace = firstTrace;
+    let injectedCount = 0;
+    const heartbeat = vi.fn().mockImplementation(async () => ({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: nextTrace
+    }));
+    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
+      if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+        throw new Error("stale trace script");
+      }
+
+      if (method === "Page.addScriptToEvaluateOnNewDocument") {
+        injectedCount += 1;
+        return { identifier: `trace-script-${injectedCount}` };
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace: firstTrace }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-1");
+
+    nextTrace = secondTrace;
+    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    await flushPromises();
+
+    expect(runtime.state.activeTrace?.traceId).toBe("trace-2");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-2");
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.removeScriptToEvaluateOnNewDocument",
+      { identifier: "trace-script-1" }
+    );
+  });
+
+  it("keeps tabs attached without arming trace scripts when no active trace is available", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace: null }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBeNull();
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.addBinding",
+      expect.anything()
+    );
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.addScriptToEvaluateOnNewDocument",
+      expect.anything()
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.evaluate",
+      {
+        expression: "globalThis.__wraithwalkerDisableTrace?.()",
+        awaitPromise: false,
+        returnByValue: false
+      }
+    );
+  });
+
+  it("ignores tabs that disappear before trace disarm runs", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    const activeTrace = createActiveTrace();
+    const heartbeat = vi.fn()
+      .mockResolvedValueOnce({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace
+      })
+      .mockResolvedValueOnce({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace
+      })
+      .mockRejectedValueOnce(new Error("server offline"));
+    let injectedCount = 0;
+    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
+      if (method === "Page.addScriptToEvaluateOnNewDocument") {
+        injectedCount += 1;
+        return { identifier: `trace-script-${injectedCount}` };
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    const originalKeys = runtime.state.attachedTabs.keys.bind(runtime.state.attachedTabs);
+    const attachedTabs = runtime.state.attachedTabs as Map<number, unknown> & { keys: typeof runtime.state.attachedTabs.keys };
+    attachedTabs.keys = function* () {
+      for (const tabId of originalKeys()) {
+        yield tabId;
+        runtime.state.attachedTabs.delete(tabId);
+      }
+    };
+    chromeApi.debugger.sendCommand.mockClear();
+
+    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    await flushPromises();
+
+    expect(runtime.state.serverInfo).toBeNull();
+    expect(runtime.state.activeTrace).toBeNull();
+    expect(runtime.state.attachedTabs.size).toBe(0);
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.removeScriptToEvaluateOnNewDocument",
+      expect.anything()
+    );
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.evaluate",
+      expect.objectContaining({
+        expression: "globalThis.__wraithwalkerDisableTrace?.()"
+      })
+    );
+  });
+
   it("disarms trace bindings during session stop even when debugger cleanup commands fail", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
