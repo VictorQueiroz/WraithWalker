@@ -32,9 +32,19 @@ export const PUBLISHABLE_PACKAGES = Object.freeze([
   }
 ]);
 
+export const WORKSPACE_PACKAGES = Object.freeze([
+  ...PUBLISHABLE_PACKAGES,
+  {
+    name: "@wraithwalker/extension",
+    relativePath: "packages/extension/package.json"
+  }
+]);
+
 const PUBLISHABLE_PACKAGE_NAMES = new Set(
   PUBLISHABLE_PACKAGES.map(({ name }) => name)
 );
+
+const WORKSPACE_PACKAGE_NAMES = new Set(WORKSPACE_PACKAGES.map(({ name }) => name));
 
 export function parseReleaseVersion(value, label = "version") {
   if (!RELEASE_VERSION_PATTERN.test(value ?? "")) {
@@ -73,6 +83,18 @@ export function loadPublishablePackages(rootDir = process.cwd()) {
   });
 }
 
+export function loadWorkspacePackages(rootDir = process.cwd()) {
+  return WORKSPACE_PACKAGES.map(({ name, relativePath }) => {
+    const filePath = path.join(rootDir, relativePath);
+    return {
+      name,
+      relativePath,
+      filePath,
+      manifest: readJson(filePath)
+    };
+  });
+}
+
 export function withReleaseVersion(entries, version) {
   const releaseVersion = parseReleaseVersion(version);
 
@@ -88,6 +110,29 @@ export function withReleaseVersion(entries, version) {
 
       for (const dependencyName of Object.keys(dependencyMap)) {
         if (PUBLISHABLE_PACKAGE_NAMES.has(dependencyName)) {
+          dependencyMap[dependencyName] = releaseVersion;
+        }
+      }
+    }
+
+    return { ...entry, manifest };
+  });
+}
+
+export function syncInternalDependencyPins(entries, version) {
+  const releaseVersion = parseReleaseVersion(version);
+
+  return entries.map((entry) => {
+    const manifest = structuredClone(entry.manifest);
+
+    for (const field of INTERNAL_DEPENDENCY_FIELDS) {
+      const dependencyMap = manifest[field];
+      if (!dependencyMap) {
+        continue;
+      }
+
+      for (const dependencyName of Object.keys(dependencyMap)) {
+        if (WORKSPACE_PACKAGE_NAMES.has(dependencyName)) {
           dependencyMap[dependencyName] = releaseVersion;
         }
       }

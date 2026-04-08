@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  syncInternalDependencyPins,
   parseReleaseTag,
   validateReleaseState,
   withReleaseVersion
@@ -47,6 +48,15 @@ function createWorkspaceEntries() {
         "@wraithwalker/mcp-server": "*",
         commander: "^12.0.0"
       }
+    }),
+    createEntry("@wraithwalker/extension", "packages/extension/package.json", {
+      name: "@wraithwalker/extension",
+      version: "0.1.0",
+      private: true,
+      dependencies: {
+        "@wraithwalker/core": "0.1.0",
+        react: "^19.2.0"
+      }
     })
   ];
 }
@@ -68,9 +78,23 @@ test("withReleaseVersion updates package versions and internal pins", () => {
   });
 });
 
+test("syncInternalDependencyPins updates private workspace dependency pins without bumping versions", () => {
+  const updatedEntries = syncInternalDependencyPins(createWorkspaceEntries(), "1.2.3");
+  const extensionEntry = updatedEntries.find(
+    ({ name }) => name === "@wraithwalker/extension"
+  );
+
+  assert.equal(extensionEntry.manifest.version, "0.1.0");
+  assert.deepEqual(extensionEntry.manifest.dependencies, {
+    "@wraithwalker/core": "1.2.3",
+    react: "^19.2.0"
+  });
+});
+
 test("validateReleaseState accepts matching public packages", () => {
   const updatedEntries = withReleaseVersion(createWorkspaceEntries(), "2.0.0");
-  assert.doesNotThrow(() => validateReleaseState(updatedEntries, "2.0.0"));
+  const publishableEntries = updatedEntries.filter(({ manifest }) => manifest.private !== true);
+  assert.doesNotThrow(() => validateReleaseState(publishableEntries, "2.0.0"));
 });
 
 test("validateReleaseState rejects unresolved internal dependency pins", () => {
@@ -78,7 +102,7 @@ test("validateReleaseState rejects unresolved internal dependency pins", () => {
   updatedEntries[3].manifest.dependencies["@wraithwalker/core"] = "*";
 
   assert.throws(
-    () => validateReleaseState(updatedEntries, "2.0.0"),
+    () => validateReleaseState(updatedEntries.filter(({ manifest }) => manifest.private !== true), "2.0.0"),
     /@wraithwalker\/cli pins @wraithwalker\/core to \*/
   );
 });
