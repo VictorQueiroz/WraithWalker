@@ -12,6 +12,7 @@ export default defineConfig({
         "src/fixture-repository.mts",
         "src/har-import.mts",
         "src/overrides-sync.mts",
+        "src/root-runtime.mts",
         "src/root-fs.mts"
       ],
       thresholds: {

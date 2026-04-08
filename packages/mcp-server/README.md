@@ -34,7 +34,8 @@ The server resolves its root path in this order:
 
 1. first CLI argument
 2. `WRAITHWALKER_ROOT`
-3. platform default content root
+3. the current WraithWalker root discovered from `cwd` or its parents
+4. platform default content root
 
 Platform default content roots:
 

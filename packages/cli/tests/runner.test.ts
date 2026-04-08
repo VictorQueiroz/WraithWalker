@@ -295,6 +295,25 @@ describe("cli runner", () => {
     });
   });
 
+  it("reuses the current WraithWalker root when serve is run inside one", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createFixtureRoot();
+
+    const exitCode = await runCli(["serve"], {
+      cwd: path.join(root.rootPath, ".wraithwalker"),
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
+      host: "127.0.0.1",
+      port: 4319
+    });
+  });
+
   it("starts the HTTP MCP server with default connection details", async () => {
     const { runCli } = await loadRunner();
     const root = await createFixtureRoot();

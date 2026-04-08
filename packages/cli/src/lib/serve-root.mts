@@ -1,6 +1,8 @@
 import os from "node:os";
 import path from "node:path";
 
+import { findRoot } from "@wraithwalker/core/root";
+
 function resolveMaybeRelative(cwd: string, value: string): string {
   return path.isAbsolute(value)
     ? value
@@ -33,7 +35,7 @@ export function resolveDefaultServeRoot({
   return path.join(xdgDataHome, "wraithwalker");
 }
 
-export function resolveServeRoot({
+export async function resolveServeRoot({
   cwd,
   explicitDir,
   env = process.env,
@@ -45,7 +47,7 @@ export function resolveServeRoot({
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
   homeDir?: string;
-}): string {
+}): Promise<string> {
   if (explicitDir) {
     return resolveMaybeRelative(cwd, explicitDir);
   }
@@ -53,6 +55,13 @@ export function resolveServeRoot({
   const envRoot = env.WRAITHWALKER_ROOT?.trim();
   if (envRoot) {
     return resolveMaybeRelative(cwd, envRoot);
+  }
+
+  try {
+    const foundRoot = await findRoot(cwd);
+    return foundRoot.rootPath;
+  } catch {
+    // Fall back to the platform default root when the current working tree is not inside a fixture root.
   }
 
   return resolveDefaultServeRoot({ env, platform, homeDir });

@@ -48,7 +48,7 @@ describe("capture policy", () => {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
       mode: "simple",
-      dumpAllowlistPatterns: ["\\.css$", "\\.js$", "\\.json$"]
+      dumpAllowlistPatterns: ["\\.css$", "\\.js$", "\\.wasm$"]
     };
     const policy = createCapturePolicy({
       getSiteConfigForOrigin: () => siteConfig
@@ -67,7 +67,7 @@ describe("capture policy", () => {
     expect(policy.shouldPersist({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/data.json"
+      url: "https://cdn.example.com/runtime.wasm"
     })).toBe(true);
     expect(policy.shouldPersist({
       topOrigin: "https://app.example.com",

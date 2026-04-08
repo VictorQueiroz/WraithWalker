@@ -1,8 +1,6 @@
-import path from "node:path";
-
-export const ROOT_SENTINEL_RELATIVE_PATH = path.join(".wraithwalker", "root.json");
+export const ROOT_SENTINEL_RELATIVE_PATH = ".wraithwalker/root.json";
 export const ROOT_SENTINEL_SCHEMA_VERSION = 1;
-export const SCENARIOS_DIR = path.join(".wraithwalker", "scenarios");
+export const SCENARIOS_DIR = ".wraithwalker/scenarios";
 
 export const SIMPLE_METADATA_DIR = ".wraithwalker";
 export const SIMPLE_METADATA_TREE = "simple";

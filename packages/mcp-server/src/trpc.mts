@@ -1,17 +1,14 @@
 import { initTRPC } from "@trpc/server";
 import {
   type FixtureDescriptor,
-  type HeaderEntry,
   type RequestPayload,
   type ResponseMeta
 } from "@wraithwalker/core/fixture-layout";
-import { generateContext } from "@wraithwalker/core/context";
 import type { SiteConfigLike } from "@wraithwalker/core/fixtures";
 import type { RootSentinel } from "@wraithwalker/core/root";
-import { createFixtureRootFs } from "@wraithwalker/core/root-fs";
 import { z } from "zod";
 
-import { createFixtureRepository } from "./fixture-repository.mjs";
+import { createServerRootRuntime } from "./root-runtime.mjs";
 
 export const HTTP_TRPC_PATH = "/trpc";
 
@@ -130,14 +127,7 @@ export function createWraithwalkerRouter({
   serverVersion,
   getServerUrls
 }: CreateWraithwalkerRouterDependencies) {
-  const rootFs = createFixtureRootFs(rootPath);
-  const repository = createFixtureRepository({ rootPath, sentinel, rootFs });
-  const contextGateway = {
-    readText: async (_nextRootPath: string, relativePath: string) =>
-      rootFs.readText(relativePath),
-    writeText: async (_nextRootPath: string, relativePath: string, content: string) =>
-      rootFs.writeText(relativePath, content)
-  };
+  const runtime = createServerRootRuntime({ rootPath, sentinel });
 
   return t.router({
     system: t.router({
@@ -153,13 +143,13 @@ export function createWraithwalkerRouter({
       has: t.procedure
         .input(z.object({ descriptor: fixtureDescriptorSchema }))
         .query(async ({ input }) => ({
-          exists: await repository.exists(input.descriptor as FixtureDescriptor),
+          exists: await runtime.has(input.descriptor as FixtureDescriptor),
           sentinel
         })),
       read: t.procedure
         .input(z.object({ descriptor: fixtureDescriptorSchema }))
         .query(async ({ input }) => {
-          const fixture = await repository.read(input.descriptor as FixtureDescriptor);
+          const fixture = await runtime.read(input.descriptor as FixtureDescriptor);
           if (!fixture) {
             return {
               exists: false as const,
@@ -182,7 +172,7 @@ export function createWraithwalkerRouter({
           request: requestPayloadSchema,
           response: fixtureResponsePayloadSchema
         }))
-        .mutation(async ({ input }) => repository.writeIfAbsent({
+        .mutation(async ({ input }) => runtime.writeIfAbsent({
           descriptor: input.descriptor as FixtureDescriptor,
           request: input.request as RequestPayload,
           response: input.response as { body: string; bodyEncoding: "utf8" | "base64"; meta: ResponseMeta }
@@ -193,7 +183,10 @@ export function createWraithwalkerRouter({
           editorId: z.string().optional()
         }))
         .mutation(async ({ input }) => {
-          await generateContext(rootPath, contextGateway, input.editorId, input.siteConfigs as SiteConfigLike[]);
+          await runtime.generateContext({
+            editorId: input.editorId,
+            siteConfigs: input.siteConfigs as SiteConfigLike[]
+          });
           return { ok: true as const };
         })
     })

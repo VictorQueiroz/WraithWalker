@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_DUMP_ALLOWLIST_PATTERN, DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "../src/lib/constants.js";
+import {
+  DEFAULT_DUMP_ALLOWLIST_PATTERN,
+  DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+  DEFAULT_NATIVE_HOST_CONFIG,
+  STORAGE_KEYS
+} from "../src/lib/constants.js";
 import {
   getNativeHostConfig,
   getPreferredEditorId,
@@ -52,7 +57,7 @@ describe("chrome storage helpers", () => {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
         mode: "advanced",
-        dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
+        dumpAllowlistPatterns: DEFAULT_DUMP_ALLOWLIST_PATTERNS
       }
     ]);
   });

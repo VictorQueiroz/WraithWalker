@@ -89,7 +89,7 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
   async execute(context, args) {
     void args.http;
 
-    const rootPath = resolveServeRoot({
+    const rootPath = await resolveServeRoot({
       cwd: context.cwd,
       explicitDir: args.dir,
       env: context.env,

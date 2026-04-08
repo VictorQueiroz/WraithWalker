@@ -391,7 +391,7 @@ describe("options entrypoint", () => {
         id: ROOT_DIRECTORY_PICKER_ID
       });
       expect(screen.queryByText(/Aborted/i)).toBeNull();
-      expect(screen.getByText(/No capture root is connected yet/i)).toBeTruthy();
+      expect(screen.getByText(/No WraithWalker root directory is connected yet/i)).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -473,7 +473,7 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText("Capture Root")).toBeTruthy();
+      expect(await screen.findByText("WraithWalker Root")).toBeTruthy();
       expect(screen.queryByText("Preferred Editor")).toBeNull();
       await userEvent.setup().click(screen.getByRole("button", { name: "Show" }));
       expect(await screen.findByLabelText("Custom URL Override For Cursor")).toBeTruthy();
@@ -514,9 +514,9 @@ describe("options entrypoint", () => {
 
     try {
       expect(await screen.findByRole("button", { name: "Change Root Directory" })).toBeTruthy();
-      expect(screen.getByText("Root access is ready. Root ID: root-ready.")).toBeTruthy();
+      expect(screen.getByText("WraithWalker root access is ready. Root ID: root-ready.")).toBeTruthy();
       expect(screen.getByText("root-ready")).toBeTruthy();
-      expect(screen.getByText("Capture Root")).toBeTruthy();
+      expect(screen.getByText("WraithWalker Root")).toBeTruthy();
       expect(screen.getByText("Enabled Origins")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Open Launch Folder" })).toBeTruthy();
       expect(screen.queryByText("Default root path")).toBeNull();

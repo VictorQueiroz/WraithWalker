@@ -206,7 +206,7 @@ export function resolvePopupAlert({
   if (!snapshot.rootReady && captureRootState.kind !== "ready") {
     return {
       variant: "destructive",
-      text: "Reconnect the capture root in Settings before starting or opening the workspace."
+      text: "Reconnect the WraithWalker root directory in Settings before starting or opening the workspace."
     };
   }
 

@@ -334,11 +334,6 @@ describe("offscreen entrypoint", () => {
 
   it("generates editor context from the selected root", async () => {
     const rootHandle = new MemoryDirectoryHandle();
-    const generate = vi.fn().mockResolvedValue(undefined);
-    const createContextGenerator = vi.fn(() => ({ generate }));
-    vi.doMock("../src/lib/context-generator.js", () => ({
-      createContextGenerator
-    }));
     const { createOffscreenRuntime } = await loadOffscreenModule();
     const runtime = createOffscreenRuntime({
       runtime: {
@@ -363,12 +358,10 @@ describe("offscreen entrypoint", () => {
       })
     ).resolves.toEqual({ ok: true });
 
-    expect(createContextGenerator).toHaveBeenCalledWith({
-      rootHandle,
-      gateway: expect.any(Object),
-      siteConfigs: [{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]
-    });
-    expect(generate).toHaveBeenCalledWith("cursor");
+    const claudeHandle = await rootHandle.getFileHandle("CLAUDE.md");
+    const cursorRulesHandle = await rootHandle.getFileHandle(".cursorrules");
+    expect(await (await claudeHandle.getFile()).text()).toContain("WraithWalker Fixture Context");
+    expect(await (await cursorRulesHandle.getFile()).text()).toContain("Cursor Agent Brief");
   });
 
   it("writes a per-domain JSON manifest for mirrored static assets", async () => {

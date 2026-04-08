@@ -4,7 +4,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      "@wraithwalker/core/fixture-layout": fileURLToPath(new URL("../core/src/fixture-layout.mts", import.meta.url))
+      "@wraithwalker/core/fixture-layout": fileURLToPath(new URL("../core/src/fixture-layout.mts", import.meta.url)),
+      "@wraithwalker/core/root-runtime": fileURLToPath(new URL("../core/src/root-runtime.mts", import.meta.url))
     }
   },
   test: {
@@ -28,6 +29,7 @@ export default defineConfig({
         "src/lib/idb.ts",
         "src/lib/interception-middleware.ts",
         "src/lib/request-lifecycle.ts",
+        "src/lib/root-runtime.ts",
         "src/lib/root-handle.ts",
         "src/lib/session-controller.ts",
         "src/lib/storage-layout.ts",

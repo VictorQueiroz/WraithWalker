@@ -82,6 +82,11 @@ describe("site config", () => {
       const config = createSiteConfig("app.example.com");
       expect(config.dumpAllowlistPatterns).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
       expect(Array.isArray(config.dumpAllowlistPatterns)).toBe(true);
+      expect(config.dumpAllowlistPatterns).toEqual([
+        DEFAULT_DUMP_ALLOWLIST_PATTERN,
+        "\\.css$",
+        "\\.wasm$"
+      ]);
     });
   });
 
@@ -103,6 +108,15 @@ describe("site config", () => {
 
     it("matches the last pattern", () => {
       expect(shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/data.json")).toBe(true);
+    });
+
+    it("matches wasm files when a wasm pattern is present", () => {
+      const wasmSite: SiteConfig = {
+        ...baseSite,
+        dumpAllowlistPatterns: ["\\.wasm$"]
+      };
+
+      expect(shouldDumpRequest(wasmSite, "GET", "https://cdn.example.com/pkg/app.wasm")).toBe(true);
     });
 
     it("rejects when no pattern matches", () => {

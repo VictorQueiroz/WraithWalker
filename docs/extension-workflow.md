@@ -2,7 +2,7 @@
 
 ## What The Extension Does
 
-The Chrome extension captures matching network responses from selected origins and writes them into a local fixture root.
+The Chrome extension captures matching network responses from selected origins and writes them into a local WraithWalker root directory.
 
 In simple mode, readable asset files stay visible in the root, while replay metadata lives under `.wraithwalker/`.
 
@@ -11,20 +11,23 @@ Typical captured content includes:
 - HTML documents
 - JavaScript bundles and chunks
 - CSS
+- WebAssembly binaries
 - fonts and images
 - API fixtures and response metadata
+
+By default, newly created origin configs dump matching JavaScript/TypeScript, CSS, and WebAssembly files.
 
 ## Capture Flow
 
 1. Add one or more exact origins in Settings.
-2. Choose a capture root with the directory picker.
+2. Choose a WraithWalker root directory with the directory picker.
 3. Start the session from the popup.
 4. Browse the target site normally.
-5. WraithWalker writes matching responses into the fixture root.
+5. WraithWalker writes matching responses into the WraithWalker root directory.
 
 Nothing is captured unless the session is running.
 
-The extension remembers the previously granted directory handle. Chrome does not expose the absolute local path for that picked directory back to the extension, so the remembered root is permission-based, not path-based.
+The extension remembers the previously granted directory handle. Chrome does not expose the absolute local path for that picked directory back to the extension, so the remembered WraithWalker root is permission-based, not path-based.
 
 ## Local Server Preference
 
@@ -60,7 +63,7 @@ That means the folder can contain:
 
 This is the folder Cursor opens, and it is the folder the agent reasons about.
 
-When the local WraithWalker server is active, the “root folder” is the server’s content root. By default that is:
+When the local WraithWalker server is active, the “root folder” is the server’s content root. With no explicit root configured, WraithWalker first reuses the current fixture root if one is already present in the working tree. Otherwise it falls back to:
 
 - macOS: `~/Library/Application Support/WraithWalker`
 - Linux: `${XDG_DATA_HOME:-~/.local/share}/wraithwalker`

@@ -99,7 +99,7 @@ function RootStatusSummary({ rootState }: { rootState: RootState | null }) {
   if (!rootState || !rootState.hasHandle) {
     return (
       <Alert variant="default">
-        No capture root is connected yet. Choose one to start writing fixtures to disk.
+        No WraithWalker root directory is connected yet. Choose one to start writing fixtures to disk.
       </Alert>
     );
   }
@@ -107,14 +107,14 @@ function RootStatusSummary({ rootState }: { rootState: RootState | null }) {
   if (rootState.permission !== "granted") {
     return (
       <Alert variant="destructive">
-        Chrome still knows this root, but write access needs to be reconnected before capture can start.
+        Chrome still knows this WraithWalker root directory, but write access needs to be reconnected before capture can start.
       </Alert>
     );
   }
 
   return (
     <Alert variant="success">
-      Root access is ready.
+      WraithWalker root access is ready.
       {rootState.sentinel ? ` Root ID: ${rootState.sentinel.rootId}.` : ""}
     </Alert>
   );
@@ -567,7 +567,7 @@ export function OptionsApp({
             <div className="space-y-2">
               <Badge variant="default">WraithWalker Settings</Badge>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Capture root first, everything else second.</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">Choose the WraithWalker root first, everything else second.</h1>
                 <p className="max-w-2xl text-sm text-muted-foreground">
                   Reuse the last granted root, keep exact origins tidy, and make Cursor the default one-click workspace action.
                 </p>
@@ -582,8 +582,8 @@ export function OptionsApp({
             <Card>
               <CardHeader>
                 <SectionIntro
-                  title="Capture Root"
-                  description="This Chrome-granted directory is remembered and reused whenever permission is still available."
+                  title="WraithWalker Root"
+                  description="This Chrome-granted WraithWalker root directory is remembered and reused whenever permission is still available."
                 />
               </CardHeader>
               <CardContent className="grid gap-4">

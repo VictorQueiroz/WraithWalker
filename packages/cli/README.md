@@ -139,7 +139,8 @@ By default the server binds to `127.0.0.1:4319` and chooses its content root in 
 
 1. explicit `dir`
 2. `WRAITHWALKER_ROOT`
-3. platform default content root
+3. the current WraithWalker root discovered from `cwd` or its parents
+4. platform default content root
 
 Platform default content roots:
 

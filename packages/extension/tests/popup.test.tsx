@@ -361,7 +361,7 @@ describe("popup entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText(/Reconnect the capture root in Settings/i)).toBeTruthy();
+      expect(await screen.findByText(/Reconnect the WraithWalker root directory in Settings/i)).toBeTruthy();
     } finally {
       popup.unmount();
     }

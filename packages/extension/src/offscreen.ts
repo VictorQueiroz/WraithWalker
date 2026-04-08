@@ -1,7 +1,6 @@
 import type { ErrorResult, FixtureHasResult, FixtureReadResult, FixtureWriteResult, OffscreenMessage, RootReadyResult } from "./lib/messages.js";
-import { createContextGenerator as defaultCreateContextGenerator } from "./lib/context-generator.js";
 import { createFileSystemGateway } from "./lib/file-system-gateway.js";
-import { createFixtureRepository } from "./lib/fixture-repository.js";
+import { createExtensionRootRuntime } from "./lib/root-runtime.js";
 import { ensureRootSentinel as defaultEnsureRootSentinel, loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission, requestRootPermission as defaultRequestRootPermission } from "./lib/root-handle.js";
 import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel } from "./lib/types.js";
 
@@ -22,6 +21,7 @@ interface RootStateSuccess {
   rootHandle: FileSystemDirectoryHandle;
   sentinel: RootSentinel;
   permission: PermissionState;
+  runtime: ReturnType<typeof createExtensionRootRuntime>;
 }
 
 type RootStateResult = RootStateSuccess | ErrorResult;
@@ -100,8 +100,13 @@ export function createOffscreenRuntime({
       return { ok: false, error: "Root directory access is not granted.", permission };
     }
 
-    const sentinel = await ensureRootSentinel(rootHandle);
-    return { ok: true, rootHandle, sentinel, permission };
+    const runtime = createExtensionRootRuntime({
+      rootHandle,
+      gateway: fileSystemGateway,
+      ensureSentinel: ensureRootSentinel
+    });
+    const sentinel = await runtime.ensureReady();
+    return { ok: true, rootHandle, sentinel, permission, runtime };
   }
 
   async function handleHasFixture(payload: { descriptor: FixtureDescriptor }): Promise<FixtureHasResult> {
@@ -110,12 +115,7 @@ export function createOffscreenRuntime({
       return toErrorResult(rootState as ErrorResult);
     }
 
-    const repository = createFixtureRepository({
-      rootHandle: rootState.rootHandle,
-      sentinel: rootState.sentinel,
-      gateway: fileSystemGateway
-    });
-    return { ok: true, exists: await repository.exists(payload.descriptor) };
+    return { ok: true, exists: await rootState.runtime.has(payload.descriptor) };
   }
 
   async function handleReadFixture(payload: { descriptor: FixtureDescriptor }): Promise<FixtureReadResult> {
@@ -124,12 +124,7 @@ export function createOffscreenRuntime({
       return toErrorResult(rootState as ErrorResult);
     }
 
-    const repository = createFixtureRepository({
-      rootHandle: rootState.rootHandle,
-      sentinel: rootState.sentinel,
-      gateway: fileSystemGateway
-    });
-    const fixture = await repository.read(payload.descriptor);
+    const fixture = await rootState.runtime.read(payload.descriptor);
 
     if (!fixture) {
       return { ok: true, exists: false };
@@ -156,12 +151,7 @@ export function createOffscreenRuntime({
       return toErrorResult(rootState as ErrorResult);
     }
 
-    const repository = createFixtureRepository({
-      rootHandle: rootState.rootHandle,
-      sentinel: rootState.sentinel,
-      gateway: fileSystemGateway
-    });
-    await repository.writeIfAbsent(payload);
+    await rootState.runtime.writeIfAbsent(payload);
 
     return {
       ok: true,
@@ -195,12 +185,10 @@ export function createOffscreenRuntime({
       case "fs.generateContext": {
         const rootState = await getRootState();
         if (!rootState.ok) return rootState;
-        const generator = defaultCreateContextGenerator({
-          rootHandle: rootState.rootHandle,
-          gateway: fileSystemGateway,
+        await rootState.runtime.generateContext({
+          editorId: message.payload.editorId,
           siteConfigs: message.payload.siteConfigs
         });
-        await generator.generate(message.payload.editorId);
         return { ok: true };
       }
     }

@@ -47,9 +47,17 @@ export function createFileSystemGateway({
   }
 
   async function writeJson(rootHandle: FileSystemDirectoryHandle, relativePath: string, value: unknown): Promise<void> {
+    await writeText(rootHandle, relativePath, JSON.stringify(value, null, 2));
+  }
+
+  async function writeText(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string,
+    content: string
+  ): Promise<void> {
     const handle = await resolveFileHandle(rootHandle, relativePath, true);
     const writer = await handle.createWritable();
-    await writer.write(JSON.stringify(value, null, 2));
+    await writer.write(content);
     await writer.close();
   }
 
@@ -124,6 +132,7 @@ export function createFileSystemGateway({
     ensureDirectory,
     resolveFileHandle,
     exists,
+    writeText,
     writeJson,
     writeBody,
     readJson,
