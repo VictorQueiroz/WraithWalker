@@ -255,6 +255,66 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("updates popup state after a successful session toggle", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot({ lastError: "Old capture error." }))
+        .mockResolvedValueOnce(createSnapshot({ sessionActive: true, lastError: "" })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      expect(await screen.findByText("Old capture error.")).toBeTruthy();
+
+      await user.click(screen.getByRole("button", { name: "Start Session" }));
+
+      expect(await screen.findByRole("button", { name: "Stop Session" })).toBeTruthy();
+      expect(screen.queryByText("Old capture error.")).toBeNull();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("surfaces thrown open-editor errors through the single status area", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockRejectedValueOnce(new Error("Cursor protocol failed.")),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open in Cursor" }));
+      expect(await screen.findByText("Cursor protocol failed.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
   it("prioritizes stored session errors in the single status area", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();

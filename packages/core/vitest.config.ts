@@ -9,6 +9,7 @@ export default defineConfig({
       include: [
         "src/fixture-presentation.mts",
         "src/fixture-layout.mts",
+        "src/fixture-repository.mts",
         "src/har-import.mts",
         "src/overrides-sync.mts",
         "src/root-fs.mts"

@@ -1,8 +1,13 @@
+import { promises as fs } from "node:fs";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { createRequestLifecycle } from "../src/lib/request-lifecycle.js";
 import { createFixtureDescriptor as realCreateFixtureDescriptor } from "../src/lib/fixture-mapper.js";
 import type { SiteConfig } from "../src/lib/types.js";
+import { createWraithWalkerServerClient } from "../src/lib/wraithwalker-server.js";
+import { startHttpServer } from "../../mcp-server/src/server.mts";
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 interface LifecycleHarnessOptions {
   siteConfig?: SiteConfig;
@@ -501,6 +506,145 @@ describe("request lifecycle", () => {
       })
     );
     expect(harness.state.requests.size).toBe(0);
+  });
+
+  it("writes captured simple-mode assets into the live server root instead of the local fallback root", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-live-server-"
+    });
+    const localRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-local-root-"
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-07T00:00:00.000Z",
+      mode: "simple",
+      dumpAllowlistPatterns: ["\\.js$"]
+    };
+    const state = {
+      sessionActive: true,
+      attachedTabs: new Map([[1, { topOrigin: "https://app.example.com" }]]),
+      requests: new Map<string, any>()
+    };
+    const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
+      if (method === "Network.getResponseBody") {
+        return {
+          body: "console.log('from live server');",
+          base64Encoded: false
+        };
+      }
+      return { method, params };
+    });
+
+    const lifecycle = createRequestLifecycle({
+      state,
+      sendDebuggerCommand: ((tabId, method, params) => sendDebuggerCommandMock(tabId, method, params) as Promise<any>),
+      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+      setLastError: vi.fn(),
+      repository: {
+        exists: async (descriptor) => (await serverClient.hasFixture(descriptor)).exists,
+        read: async (descriptor) => {
+          const fixture = await serverClient.readFixture(descriptor);
+          if (!fixture.exists) {
+            return null;
+          }
+
+          return {
+            request: fixture.request,
+            meta: fixture.meta,
+            bodyBase64: fixture.bodyBase64,
+            size: fixture.size
+          };
+        },
+        writeIfAbsent: (payload) => serverClient.writeFixtureIfAbsent(payload)
+      },
+      createFixtureDescriptor: realCreateFixtureDescriptor,
+      getSiteConfigForOrigin: vi.fn((topOrigin) => (
+        topOrigin === "https://app.example.com"
+          ? siteConfig
+          : undefined
+      ))
+    });
+    const descriptor = await realCreateFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/app.js",
+      siteMode: "simple",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+
+    try {
+      lifecycle.handleNetworkRequestWillBeSent(
+        { tabId: 1 },
+        {
+          requestId: "req-live-server",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {}
+          },
+          type: "Script"
+        }
+      );
+      lifecycle.handleNetworkResponseReceived(
+        { tabId: 1 },
+        {
+          requestId: "req-live-server",
+          response: {
+            status: 200,
+            statusText: "OK",
+            headers: { "Content-Type": "application/javascript" },
+            mimeType: "application/javascript"
+          },
+          type: "Script"
+        }
+      );
+
+      await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-live-server" });
+
+      expect(await fs.readFile(serverRoot.resolve(descriptor.bodyPath), "utf8")).toBe("console.log('from live server');");
+      expect(await serverRoot.readJson(descriptor.requestPath)).toEqual(expect.objectContaining({
+        topOrigin: "https://app.example.com",
+        url: descriptor.requestUrl,
+        method: "GET"
+      }));
+      expect(await serverRoot.readJson(descriptor.metaPath)).toEqual(expect.objectContaining({
+        status: 200,
+        mimeType: "application/javascript",
+        resourceType: "Script"
+      }));
+      expect(await serverRoot.readJson(descriptor.manifestPath || "")).toEqual(expect.objectContaining({
+        resourcesByPathname: expect.objectContaining({
+          "/assets/app.js": [
+            expect.objectContaining({
+              bodyPath: descriptor.bodyPath,
+              requestPath: descriptor.requestPath,
+              metaPath: descriptor.metaPath
+            })
+          ]
+        })
+      }));
+      expect(await serverClient.hasFixture(descriptor)).toEqual(expect.objectContaining({
+        exists: true
+      }));
+      await expect(fs.access(localRoot.resolve(descriptor.bodyPath))).rejects.toThrow();
+      await expect(fs.access(localRoot.resolve(descriptor.requestPath))).rejects.toThrow();
+      await expect(fs.access(localRoot.resolve(descriptor.metaPath))).rejects.toThrow();
+      if (descriptor.manifestPath) {
+        await expect(fs.access(localRoot.resolve(descriptor.manifestPath))).rejects.toThrow();
+      }
+      expect(state.requests.size).toBe(0);
+    } finally {
+      await server.close();
+    }
   });
 
   it("skips fixture writing when the site allowlist does not match the request pathname", async () => {

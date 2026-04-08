@@ -677,6 +677,58 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("surfaces launch-folder failures as a destructive flash message", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(async (message: { type: string }) => {
+      switch (message.type) {
+        case "scenario.list":
+          return { ok: true, scenarios: ["baseline"] };
+        case "native.revealRoot":
+          return { ok: false, error: "Reveal failed." };
+        default:
+          return { ok: true };
+      }
+    });
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+        hostName: "com.example.host",
+        launchPath: "/tmp/fixtures"
+      })),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" }),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Open Launch Folder" }));
+      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.revealRoot" });
+      expect(await screen.findByText("Reveal failed.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("moves scenario save and switch controls into settings", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();

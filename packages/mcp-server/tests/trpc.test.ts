@@ -44,6 +44,48 @@ function createClient(
   });
 }
 
+function createRequestPayload(descriptor: FixtureDescriptor, capturedAt = "2026-04-07T00:00:00.000Z"): RequestPayload {
+  return {
+    topOrigin: descriptor.topOrigin,
+    url: descriptor.requestUrl,
+    method: descriptor.method,
+    headers: [],
+    body: "",
+    bodyEncoding: "utf8",
+    bodyHash: descriptor.bodyHash,
+    queryHash: descriptor.queryHash,
+    capturedAt
+  };
+}
+
+function createResponseMeta(
+  descriptor: FixtureDescriptor,
+  {
+    mimeType,
+    resourceType,
+    bodySuggestedExtension,
+    capturedAt = "2026-04-07T00:00:00.000Z"
+  }: {
+    mimeType: string;
+    resourceType: string;
+    bodySuggestedExtension: string;
+    capturedAt?: string;
+  }
+): ResponseMeta {
+  return {
+    status: 200,
+    statusText: "OK",
+    headers: [{ name: "Content-Type", value: mimeType }],
+    mimeType,
+    resourceType,
+    url: descriptor.requestUrl,
+    method: descriptor.method,
+    capturedAt,
+    bodyEncoding: "utf8",
+    bodySuggestedExtension
+  };
+}
+
 async function createDescriptor(overrides: Partial<{
   topOrigin: string;
   method: string;
@@ -252,6 +294,174 @@ describe("tRPC capture backend", () => {
       }));
       expect(await root.readJson<{ users: Array<{ id: number }> }>(descriptor.bodyPath)).toEqual({ users: [{ id: 1 }] });
       expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain("WraithWalker Fixture Context");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("returns exists=false for reads of missing fixtures over HTTP tRPC", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = createClient(server.trpcUrl);
+    const descriptor = await createDescriptor({
+      url: "https://api.example.com/missing",
+      resourceType: "Fetch",
+      mimeType: "application/json"
+    });
+
+    try {
+      const fixture = await client.fixtures.read.query({ descriptor });
+      expect(fixture).toEqual({
+        exists: false,
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String),
+          schemaVersion: 1
+        })
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("writes and serves a simple-mode static asset using the extension-compatible on-disk contract", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = createClient(server.trpcUrl);
+    const descriptor = await createDescriptor({
+      url: "https://cdn.example.com/styles/app.css",
+      resourceType: "Stylesheet",
+      mimeType: "text/css"
+    });
+    const request = createRequestPayload(descriptor);
+    const meta = createResponseMeta(descriptor, {
+      mimeType: "text/css",
+      resourceType: "Stylesheet",
+      bodySuggestedExtension: "css"
+    });
+
+    try {
+      const writeResult = await client.fixtures.writeIfAbsent.mutate({
+        descriptor,
+        request,
+        response: {
+          body: ".app { color: red; }",
+          bodyEncoding: "utf8",
+          meta
+        }
+      });
+
+      expect(writeResult).toEqual({
+        written: true,
+        descriptor,
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String)
+        })
+      });
+
+      expect(await root.readJson<RequestPayload>(descriptor.requestPath)).toEqual(request);
+      expect(await root.readJson<ResponseMeta>(descriptor.metaPath)).toEqual(meta);
+      expect(await fs.readFile(root.resolve(descriptor.bodyPath), "utf8")).toBe(".app { color: red; }");
+
+      const manifest = await root.readJson<{
+        resourcesByPathname: Record<string, Array<{ bodyPath: string; requestPath: string; metaPath: string; mimeType: string; resourceType: string }>>;
+      }>(".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json");
+      expect(manifest.resourcesByPathname["/styles/app.css"]).toEqual([
+        expect.objectContaining({
+          bodyPath: descriptor.bodyPath,
+          requestPath: descriptor.requestPath,
+          metaPath: descriptor.metaPath,
+          mimeType: "text/css",
+          resourceType: "Stylesheet"
+        })
+      ]);
+
+      const readResult = await client.fixtures.read.query({ descriptor });
+      expect(readResult).toEqual({
+        exists: true,
+        request,
+        meta,
+        bodyBase64: Buffer.from(".app { color: red; }", "utf8").toString("base64"),
+        size: Buffer.byteLength(".app { color: red; }"),
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String)
+        })
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("writes and serves a simple-mode API fixture without creating a static asset manifest entry", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = createClient(server.trpcUrl);
+    const descriptor = await createDescriptor({
+      url: "https://api.example.com/users",
+      resourceType: "Fetch",
+      mimeType: "application/json"
+    });
+    const request = createRequestPayload(descriptor);
+    const meta = createResponseMeta(descriptor, {
+      mimeType: "application/json",
+      resourceType: "Fetch",
+      bodySuggestedExtension: "json"
+    });
+    const body = JSON.stringify({ users: [{ id: 1, name: "Ada" }] });
+
+    try {
+      const writeResult = await client.fixtures.writeIfAbsent.mutate({
+        descriptor,
+        request,
+        response: {
+          body,
+          bodyEncoding: "utf8",
+          meta
+        }
+      });
+      expect(writeResult.written).toBe(true);
+
+      expect(await root.readJson<RequestPayload>(descriptor.requestPath)).toEqual(request);
+      expect(await root.readJson<ResponseMeta>(descriptor.metaPath)).toEqual(meta);
+      expect(await fs.readFile(root.resolve(descriptor.bodyPath), "utf8")).toBe(body);
+
+      await expect(
+        fs.access(root.resolve(".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"))
+      ).rejects.toThrow();
+
+      const hasResult = await client.fixtures.has.query({ descriptor });
+      expect(hasResult).toEqual({
+        exists: true,
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String)
+        })
+      });
+
+      const readResult = await client.fixtures.read.query({ descriptor });
+      expect(readResult).toEqual({
+        exists: true,
+        request,
+        meta,
+        bodyBase64: Buffer.from(body, "utf8").toString("base64"),
+        size: Buffer.byteLength(body),
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String)
+        })
+      });
     } finally {
       await server.close();
     }
@@ -488,6 +698,10 @@ describe("tRPC capture backend", () => {
     }));
 
     expect(await caller.fixtures.has({ descriptor })).toEqual({
+      exists: false,
+      sentinel
+    });
+    expect(await caller.fixtures.read({ descriptor })).toEqual({
       exists: false,
       sentinel
     });

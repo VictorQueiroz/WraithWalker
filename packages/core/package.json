@@ -27,6 +27,7 @@
   ],
   "exports": {
     "./fixture-layout": "./out/fixture-layout.mjs",
+    "./fixture-repository": "./out/fixture-repository.mjs",
     "./root": "./out/root.mjs",
     "./root-fs": "./out/root-fs.mjs",
     "./fixtures": "./out/fixtures.mjs",
