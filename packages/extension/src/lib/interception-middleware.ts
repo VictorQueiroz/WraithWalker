@@ -11,6 +11,23 @@ interface ResponseBodyResponse {
   base64Encoded?: boolean;
 }
 
+function normalizeReplayStatusCode(value: number): number {
+  return Number.isInteger(value) && value >= 100 && value <= 999
+    ? value
+    : 200;
+}
+
+function normalizeResponsePhrase(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return /^[\t\x20-\x7E]+$/.test(trimmed)
+    ? trimmed
+    : undefined;
+}
+
 interface InterceptionMiddlewareDependencies {
   capturePolicy: {
     getSiteConfig: (topOrigin: string) => SiteConfig | undefined;
@@ -55,7 +72,7 @@ interface InterceptionMiddlewareDependencies {
     responseCode: number;
     responseHeaders: HeaderEntry[];
     body: string;
-    responsePhrase: string;
+    responsePhrase?: string;
   }) => Promise<void>;
   getResponseBody: (tabId: number, requestId: string) => Promise<ResponseBodyResponse>;
   setLastError: (message: string) => void;
@@ -140,12 +157,15 @@ export function createInterceptionMiddleware({
 
       entry.replayed = true;
 
+      const responseCode = normalizeReplayStatusCode(fixture.meta.status);
+      const responsePhrase = normalizeResponsePhrase(fixture.meta.statusText);
+
       await fulfillRequest(tabId, {
         requestId: pausedRequestId,
-        responseCode: fixture.meta.status,
+        responseCode,
         responseHeaders: replayResponseHeaders(fixture.meta.headers),
         body: fixture.bodyBase64,
-        responsePhrase: fixture.meta.statusText
+        ...(responsePhrase ? { responsePhrase } : {})
       });
     } catch (error) {
       setLastError(error instanceof Error ? error.message : String(error));

@@ -74,6 +74,56 @@ describe("interception middleware", () => {
       responseCode: 200,
       responseHeaders: [{ name: "Content-Type", value: "application/javascript" }]
     }));
+    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
+      responsePhrase: "OK"
+    }));
+  });
+
+  it("sanitizes invalid replay status codes and omits unsafe response phrases", async () => {
+    const fulfillRequest = vi.fn();
+    const middleware = createInterceptionMiddleware({
+      capturePolicy: {
+        getSiteConfig: vi.fn().mockReturnValue({ mode: "simple" }),
+        shouldPersist: vi.fn().mockReturnValue(true)
+      },
+      storageLayout: {
+        describeRequest: vi.fn().mockResolvedValue({ bodyHash: "", queryHash: "", topOrigin: "https://app.example.com" })
+      },
+      repository: {
+        exists: vi.fn().mockResolvedValue(true),
+        read: vi.fn().mockResolvedValue({
+          request: { method: "GET", url: "https://cdn.example.com/app.js" },
+          meta: {
+            status: 42,
+            statusText: "Broken\nPhrase",
+            headers: [{ name: "Content-Type", value: "application/javascript" }]
+          },
+          bodyBase64: "Y29uc29sZS5sb2coJ2hpJyk7",
+          size: 18
+        }),
+        writeIfAbsent: vi.fn()
+      },
+      populatePostData: vi.fn(),
+      continueRequest: vi.fn(),
+      fulfillRequest,
+      getResponseBody: vi.fn(),
+      setLastError: vi.fn()
+    });
+
+    await middleware.replayFromRepository({
+      entry: createEntry(),
+      tabId: 1,
+      pausedRequestId: "fetch-invalid",
+      networkRequestId: "network-invalid"
+    });
+
+    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
+      requestId: "fetch-invalid",
+      responseCode: 200
+    }));
+    expect(fulfillRequest).not.toHaveBeenCalledWith(1, expect.objectContaining({
+      responsePhrase: expect.anything()
+    }));
   });
 
   it("continues the request when no fixture exists", async () => {

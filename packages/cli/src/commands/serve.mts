@@ -113,19 +113,31 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
     };
   },
   render(output, result) {
+    const routesPanel = [
+      "  one loopback port, two local surfaces, one shared root",
+      "",
+      `  root  ${result.rootPath}`,
+      `  base  ${result.baseUrl}`,
+      `  mcp   ${result.url}`,
+      `  trpc  ${result.trpcUrl}`
+    ].join("\n");
+
+    output.banner();
     output.heading("WraithWalker Server Ready");
-    output.keyValue("Root", result.rootPath);
+    output.block(routesPanel);
     output.keyValue("Host", result.host);
     output.keyValue("Port", result.port);
-    output.keyValue("Base URL", result.baseUrl);
-    output.keyValue("MCP URL", result.url);
-    output.keyValue("tRPC URL", result.trpcUrl);
+
+    output.heading("Flow");
+    output.listItem(`Agents and MCP clients talk to ${result.url}`);
+    output.listItem(`The extension streams capture and context through ${result.trpcUrl}`);
+    output.listItem("While this server is running, the extension automatically prefers this root.");
 
     output.heading("Tools");
     for (const tool of result.tools) {
       output.listItem(tool);
     }
 
-    output.info("The extension will automatically prefer the local WraithWalker server at the tRPC URL above when it is running.");
+    output.info("Press Ctrl+C to close the local server.");
   }
 };

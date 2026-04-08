@@ -350,9 +350,12 @@ describe("cli runner", () => {
       host: "127.0.0.1",
       port: 4319
     });
+    expect(capture.logs.join("\n")).toContain("one loopback port, two local surfaces, one shared root");
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/mcp");
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/trpc");
+    expect(capture.logs.join("\n")).toContain("Agents and MCP clients talk to http://127.0.0.1:4319/mcp");
     expect(capture.logs.join("\n")).toContain("list-origins");
+    expect(capture.logs.join("\n")).toContain("Press Ctrl+C to close the local server.");
   });
 
   it("accepts custom HTTP host and port values when a root dir is explicit", async () => {
