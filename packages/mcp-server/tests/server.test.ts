@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -10,6 +11,86 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AppRouter } from "../src/trpc.mts";
 import { isLoopbackHost, startHttpServer, startServer } from "../src/server.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
+
+async function loadServerModuleWithMockedExpress({
+  address = { address: "127.0.0.1", family: "IPv4", port: 4319 },
+  closeError,
+  transportHandleRequest
+}: {
+  address?: AddressInfo | string | null;
+  closeError?: Error;
+  transportHandleRequest?: (req: unknown, res: unknown, body: unknown) => Promise<unknown> | unknown;
+} = {}) {
+  vi.resetModules();
+
+  const fakeApp = {
+    use: vi.fn(),
+    all: vi.fn(),
+    listen: vi.fn()
+  };
+  const fakeListener = {
+    once: vi.fn(),
+    address: vi.fn(() => address as never),
+    close: vi.fn((callback?: (error?: Error | null) => void) => callback?.(closeError ?? null))
+  };
+  fakeApp.listen.mockImplementation((_port: number, _host: string, callback?: () => void) => {
+    if (callback) {
+      queueMicrotask(callback);
+    }
+    return fakeListener;
+  });
+
+  const expressMock = Object.assign(vi.fn(() => fakeApp), {
+    json: vi.fn(() => "json-middleware")
+  });
+  const fakeMcpServerInstances: Array<{
+    tool: ReturnType<typeof vi.fn>;
+    connect: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+  }> = [];
+  class FakeMcpServer {
+    tool = vi.fn();
+    connect = vi.fn().mockResolvedValue(undefined);
+    close = vi.fn().mockResolvedValue(undefined);
+
+    constructor() {
+      fakeMcpServerInstances.push(this);
+    }
+  }
+  const fakeTransportInstances: Array<{
+    close: ReturnType<typeof vi.fn>;
+    handleRequest: ReturnType<typeof vi.fn>;
+    onclose?: () => void;
+  }> = [];
+  class FakeStreamableHTTPServerTransport {
+    close = vi.fn().mockResolvedValue(undefined);
+    handleRequest = vi.fn(async (req: unknown, res: unknown, body: unknown) => transportHandleRequest?.(req, res, body));
+    onclose?: () => void;
+
+    constructor(options: { onsessioninitialized?: (sessionId: string) => void }) {
+      fakeTransportInstances.push(this);
+      queueMicrotask(() => options.onsessioninitialized?.("session-1"));
+    }
+  }
+  vi.doMock("express", () => ({
+    default: expressMock
+  }));
+  vi.doMock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
+    McpServer: FakeMcpServer
+  }));
+  vi.doMock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
+    StreamableHTTPServerTransport: FakeStreamableHTTPServerTransport
+  }));
+
+  try {
+    const module = await import("../src/server.mts");
+    return { module, fakeApp, fakeListener, expressMock, fakeMcpServerInstances, fakeTransportInstances };
+  } finally {
+    vi.doUnmock("express");
+    vi.doUnmock("@modelcontextprotocol/sdk/server/mcp.js");
+    vi.doUnmock("@modelcontextprotocol/sdk/server/streamableHttp.js");
+  }
+}
 
 function readTextContent(result: unknown): string {
   if (!result || typeof result !== "object" || !("content" in result) || !Array.isArray(result.content)) {
@@ -1573,6 +1654,92 @@ describe("mcp server", () => {
       await server.close();
     } finally {
       await client.close().catch(() => undefined);
+    }
+  });
+
+  it("throws when the HTTP listener address cannot be resolved", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-address-",
+      rootId: "root-mcp-server-address"
+    });
+    const { module } = await loadServerModuleWithMockedExpress({
+      address: "pipe"
+    });
+
+    await expect(
+      module.startHttpServer(root.rootPath, { host: "127.0.0.1", port: 0 })
+    ).rejects.toThrow("Could not resolve the HTTP listener address.");
+  });
+
+  it("propagates listener close errors from the HTTP handle", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-close-",
+      rootId: "root-mcp-server-close"
+    });
+    const { module } = await loadServerModuleWithMockedExpress({
+      closeError: new Error("Close failed.")
+    });
+
+    const server = await module.startHttpServer(root.rootPath, { host: "127.0.0.1", port: 0 });
+    await expect(server.close()).rejects.toThrow("Close failed.");
+  });
+
+  it("closes a newly created HTTP MCP session when the transport handler throws", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-transport-",
+      rootId: "root-mcp-server-transport"
+    });
+    const transportError = new Error("Transport failed.");
+    const { module, fakeApp, fakeMcpServerInstances, fakeTransportInstances } = await loadServerModuleWithMockedExpress({
+      transportHandleRequest: async () => {
+        throw transportError;
+      }
+    });
+
+    const server = await module.startHttpServer(root.rootPath, { host: "127.0.0.1", port: 0 });
+    const mcpHandler = fakeApp.all.mock.calls.find(([route]) => route === "/mcp")?.[1] as (
+      req: Record<string, unknown>,
+      res: {
+        headersSent: boolean;
+        status: (code: number) => unknown;
+        json: (payload: unknown) => unknown;
+      }
+    ) => Promise<void>;
+    const response = {
+      headersSent: false,
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis()
+    };
+
+    try {
+      await mcpHandler(
+        {
+          headers: {},
+          method: "POST",
+          body: {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+              protocolVersion: "2024-11-05",
+              capabilities: {},
+              clientInfo: { name: "test-client", version: "1.0.0" }
+            }
+          }
+        },
+        response
+      );
+
+      expect(response.status).toHaveBeenCalledWith(500);
+      expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
+        error: expect.objectContaining({
+          message: expect.stringContaining("Transport failed.")
+        })
+      }));
+      expect(fakeTransportInstances[0]?.close).toHaveBeenCalled();
+      expect(fakeMcpServerInstances[0]?.close).toHaveBeenCalled();
+    } finally {
+      await server.close();
     }
   });
 });

@@ -127,6 +127,53 @@ describe("interception middleware", () => {
     }));
   });
 
+  it("omits empty response phrases after trimming", async () => {
+    const fulfillRequest = vi.fn();
+    const middleware = createInterceptionMiddleware({
+      capturePolicy: {
+        getSiteConfig: vi.fn().mockReturnValue({ mode: "simple" }),
+        shouldPersist: vi.fn().mockReturnValue(true)
+      },
+      storageLayout: {
+        describeRequest: vi.fn().mockResolvedValue({ bodyHash: "", queryHash: "", topOrigin: "https://app.example.com" })
+      },
+      repository: {
+        exists: vi.fn().mockResolvedValue(true),
+        read: vi.fn().mockResolvedValue({
+          request: { method: "GET", url: "https://cdn.example.com/app.js" },
+          meta: {
+            status: 200,
+            statusText: "   ",
+            headers: [{ name: "Content-Type", value: "application/javascript" }]
+          },
+          bodyBase64: "Y29uc29sZS5sb2coJ2hpJyk7",
+          size: 18
+        }),
+        writeIfAbsent: vi.fn()
+      },
+      populatePostData: vi.fn(),
+      continueRequest: vi.fn(),
+      fulfillRequest,
+      getResponseBody: vi.fn(),
+      setLastError: vi.fn()
+    });
+
+    await middleware.replayFromRepository({
+      entry: createEntry(),
+      tabId: 1,
+      pausedRequestId: "fetch-empty-phrase",
+      networkRequestId: "network-empty-phrase"
+    });
+
+    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
+      requestId: "fetch-empty-phrase",
+      responseCode: 200
+    }));
+    expect(fulfillRequest).not.toHaveBeenCalledWith(1, expect.objectContaining({
+      responsePhrase: expect.anything()
+    }));
+  });
+
   it("continues the request when no fixture exists", async () => {
     const continueRequest = vi.fn();
     const middleware = createInterceptionMiddleware({
@@ -219,6 +266,55 @@ describe("interception middleware", () => {
           method: "POST"
         })
       })
+    }));
+  });
+
+  it("notifies the fixture-persisted hook after a successful write", async () => {
+    const onFixturePersisted = vi.fn();
+    const middleware = createInterceptionMiddleware({
+      capturePolicy: {
+        getSiteConfig: vi.fn().mockReturnValue({ mode: "advanced" }),
+        shouldPersist: vi.fn().mockReturnValue(true)
+      },
+      storageLayout: {
+        describeRequest: vi.fn().mockResolvedValue({
+          bodyHash: "body-1",
+          queryHash: "query-1",
+          topOrigin: "https://app.example.com"
+        })
+      },
+      repository: {
+        exists: vi.fn(),
+        read: vi.fn(),
+        writeIfAbsent: vi.fn().mockResolvedValue({ written: true })
+      },
+      populatePostData: vi.fn().mockResolvedValue({
+        body: "",
+        encoding: "utf8"
+      }),
+      continueRequest: vi.fn(),
+      fulfillRequest: vi.fn(),
+      getResponseBody: vi.fn().mockResolvedValue({
+        body: "console.log('ok')",
+        base64Encoded: false
+      }),
+      setLastError: vi.fn(),
+      onFixturePersisted
+    });
+
+    const entry = createEntry();
+    await middleware.persistResponse({
+      entry,
+      tabId: 1,
+      requestId: "req-hook"
+    });
+
+    expect(onFixturePersisted).toHaveBeenCalledWith(expect.objectContaining({
+      entry,
+      descriptor: expect.objectContaining({
+        topOrigin: "https://app.example.com"
+      }),
+      capturedAt: expect.any(String)
     }));
   });
 

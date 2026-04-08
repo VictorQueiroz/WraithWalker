@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
+import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
@@ -48,6 +49,19 @@ function createRootDeps({
 }
 
 const fakeSetInterval = ((_handler: TimerHandler, _timeout?: number) => 1) as typeof setInterval;
+
+async function flushPromises() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
 
 async function loadPopupModule() {
   vi.resetModules();
@@ -112,6 +126,32 @@ describe("popup entrypoint", () => {
       expect(screen.queryByText("Managed Origins")).toBeNull();
       expect(screen.queryByText("Attached Tabs")).toBeNull();
       expect(runtime.sendMessage).toHaveBeenCalledWith({ type: "session.getState" });
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("falls back to the first configured editor preset when the default preset is absent", async () => {
+    const { PopupApp } = await import("../src/ui/popup-app.tsx");
+    const popup = render(React.createElement(PopupApp, {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue(createSnapshot()),
+        openOptionsPage: vi.fn()
+      },
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      setIntervalFn: fakeSetInterval,
+      clearIntervalFn: vi.fn() as typeof clearInterval,
+      editorPresets: [{
+        id: "zed",
+        label: "Zed",
+        urlTemplate: "zed://file/$DIR_URI/",
+        commandTemplate: "zed $DIR_PATH"
+      }],
+      ...createRootDeps()
+    }));
+
+    try {
+      expect(await screen.findByRole("button", { name: "Open in Zed" })).toBeTruthy();
     } finally {
       popup.unmount();
     }
@@ -287,6 +327,70 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("stops the session when the background reports that capture is already active", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot({ sessionActive: true }))
+        .mockResolvedValueOnce(createSnapshot({ sessionActive: false })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Stop Session" }));
+
+      expect(runtime.sendMessage).toHaveBeenNthCalledWith(2, { type: "session.stop" });
+      expect(await screen.findByRole("button", { name: "Start Session" })).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("stops the session even when the current snapshot has not loaded yet", async () => {
+    const { PopupApp } = await import("../src/ui/popup-app.tsx");
+    const user = userEvent.setup();
+    const initialSnapshot = createDeferred<SessionSnapshot>();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockImplementationOnce(() => initialSnapshot.promise)
+        .mockResolvedValueOnce(createSnapshot({ sessionActive: true }))
+        .mockResolvedValueOnce(createSnapshot({ sessionActive: false })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = render(React.createElement(PopupApp, {
+      runtime,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      setIntervalFn: fakeSetInterval,
+      clearIntervalFn: vi.fn() as typeof clearInterval,
+      ...createRootDeps()
+    }));
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Start Session" }));
+
+      expect(runtime.sendMessage).toHaveBeenNthCalledWith(2, { type: "session.getState" });
+      expect(runtime.sendMessage).toHaveBeenNthCalledWith(3, { type: "session.stop" });
+
+      initialSnapshot.resolve(createSnapshot({ sessionActive: false }));
+      await flushPromises();
+      expect(await screen.findByRole("button", { name: "Start Session" })).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
   it("surfaces thrown open-editor errors through the single status area", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
@@ -394,6 +498,62 @@ describe("popup entrypoint", () => {
       expect(screen.getByText("/tmp/server-root")).toBeTruthy();
     } finally {
       popup.unmount();
+    }
+  });
+
+  it("refreshes through the polling interval, clears action alerts, and cleans up the interval", async () => {
+    const { PopupApp } = await import("../src/ui/popup-app.tsx");
+    const user = userEvent.setup();
+    let intervalHandler: (() => void) | undefined;
+    const setIntervalCalls: Array<{ timeout?: number }> = [];
+    const intervalId = 42 as unknown as ReturnType<typeof setInterval>;
+    const setIntervalFn = ((handler: TimerHandler, timeout?: number) => {
+      setIntervalCalls.push({ timeout });
+      intervalHandler = handler as () => void;
+      return intervalId;
+    }) as typeof setInterval;
+    const clearIntervalFn = vi.fn();
+    const runtime = {
+      sendMessage: vi.fn()
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root"
+        }))
+        .mockResolvedValueOnce({ ok: false, error: "Cursor prompt launch failed." })
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root"
+        }))
+        .mockResolvedValueOnce(createSnapshot({
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = render(React.createElement(PopupApp, {
+      runtime,
+      setIntervalFn,
+      clearIntervalFn: clearIntervalFn as typeof clearInterval,
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      ...createRootDeps()
+    }));
+
+    try {
+      expect(setIntervalCalls).toHaveLength(1);
+      await user.click(await screen.findByRole("button", { name: "Open in Cursor" }));
+      expect(await screen.findByText("Cursor prompt launch failed.")).toBeTruthy();
+
+      expect(intervalHandler).toBeTypeOf("function");
+      intervalHandler?.();
+      await flushPromises();
+
+      expect(await screen.findByText("Connected.")).toBeTruthy();
+      expect(screen.queryByText("Cursor prompt launch failed.")).toBeNull();
+    } finally {
+      popup.unmount();
+      await flushPromises();
+      expect(clearIntervalFn).toHaveBeenCalledWith(intervalId);
     }
   });
 

@@ -17,6 +17,7 @@ export interface PopupDependencies {
   windowRef?: Window;
   runtime?: RuntimeApi;
   setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
   refreshIntervalMs?: number;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getPreferredEditorId?: () => Promise<string>;
@@ -34,6 +35,7 @@ export async function initPopup({
   windowRef = window,
   runtime = chrome.runtime as unknown as RuntimeApi,
   setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   getNativeHostConfig = defaultGetNativeHostConfig,
   loadStoredRootHandle = defaultLoadStoredRootHandle,
@@ -54,6 +56,7 @@ export async function initPopup({
       loadStoredRootHandle,
       queryRootPermission,
       setIntervalFn,
+      clearIntervalFn,
       refreshIntervalMs,
       editorPresets
     })

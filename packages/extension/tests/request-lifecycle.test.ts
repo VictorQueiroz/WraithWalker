@@ -509,6 +509,60 @@ describe("request lifecycle", () => {
     expect(harness.state.requests.size).toBe(0);
   });
 
+  it("records fixture write failures through lastError and still clears the request entry", async () => {
+    const harness = createLifecycleHarness();
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.writeFixture") {
+        return { ok: false, error: "Fixture write failed remotely." };
+      }
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: false };
+      }
+      return { ok: true };
+    });
+
+    harness.lifecycle.handleNetworkRequestWillBeSent(
+      { tabId: 1 },
+      {
+        requestId: "req-write-fail",
+        request: {
+          method: "POST",
+          url: "https://api.example.com/graphql",
+          headers: { "Content-Type": "application/json" }
+        },
+        type: "XHR"
+      }
+    );
+    harness.lifecycle.handleNetworkResponseReceived(
+      { tabId: 1 },
+      {
+        requestId: "req-write-fail",
+        response: {
+          status: 201,
+          statusText: "Created",
+          headers: { "Content-Type": "application/json" },
+          mimeType: "application/json"
+        },
+        type: "XHR"
+      }
+    );
+
+    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-write-fail" });
+
+    expect(harness.setLastError).toHaveBeenCalledWith("Fixture write failed remotely.");
+    expect(harness.state.requests.size).toBe(0);
+  });
+
+  it("ignores loading-finished events without a tab id", async () => {
+    const harness = createLifecycleHarness();
+    harness.state.requests.set("1:req-no-tab", { requestId: "req-no-tab" } as any);
+
+    await harness.lifecycle.handleNetworkLoadingFinished({}, { requestId: "req-no-tab" });
+
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Network.getResponseBody", expect.anything());
+    expect(harness.state.requests.has("1:req-no-tab")).toBe(true);
+  });
+
   it("writes captured simple-mode assets into the live server root instead of the local fallback root", async () => {
     const serverRoot = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-extension-live-server-"

@@ -499,6 +499,132 @@ describe("background entrypoint", () => {
     expect(chromeApi.alarms.create).toHaveBeenCalledWith("wraithwalker-server-heartbeat", expect.any(Object));
   });
 
+  it("re-arms traced tabs when the active trace changes", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    const firstTrace = createActiveTrace();
+    const secondTrace = createActiveTrace({ traceId: "trace-2" });
+    let nextTrace = firstTrace;
+    let injectedCount = 0;
+    const heartbeat = vi.fn().mockImplementation(async () => ({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: nextTrace
+    }));
+    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
+      if (method === "Page.addScriptToEvaluateOnNewDocument") {
+        injectedCount += 1;
+        return { identifier: `trace-script-${injectedCount}` };
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace: firstTrace }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-1");
+
+    nextTrace = secondTrace;
+    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    await flushPromises();
+
+    expect(runtime.state.activeTrace?.traceId).toBe("trace-2");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-2");
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.removeScriptToEvaluateOnNewDocument",
+      { identifier: "trace-script-1" }
+    );
+  });
+
+  it("disarms trace bindings during session stop even when debugger cleanup commands fail", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method, params) => {
+      if (method === "Page.addScriptToEvaluateOnNewDocument") {
+        return { identifier: "trace-script-1" };
+      }
+
+      if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+        throw new Error("stale trace script");
+      }
+
+      if (method === "Runtime.evaluate" && (params as { expression?: string } | undefined)?.expression === "globalThis.__wraithwalkerDisableTrace?.()") {
+        throw new Error("execution context missing");
+      }
+
+      return undefined;
+    });
+    const activeTrace = createActiveTrace();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
+        heartbeat: vi.fn().mockResolvedValue({
+          version: "1.0.0",
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc",
+          activeTrace
+        }),
+        activeTrace
+      }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-1");
+
+    const snapshot = await runtime.handleRuntimeMessage({ type: "session.stop" });
+
+    expect("sessionActive" in snapshot && snapshot.sessionActive).toBe(false);
+    expect(runtime.state.attachedTabs.has(7)).toBe(false);
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.removeScriptToEvaluateOnNewDocument",
+      { identifier: "trace-script-1" }
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.evaluate",
+      {
+        expression: "globalThis.__wraithwalkerDisableTrace?.()",
+        awaitPromise: false,
+        returnByValue: false
+      }
+    );
+    expect(chromeApi.debugger.detach).toHaveBeenCalledWith({ tabId: 7 });
+  });
+
   it("forwards debugger binding payloads to the server and links persisted fixtures to the active trace", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
@@ -2292,6 +2418,72 @@ describe("background entrypoint", () => {
     expect(chromeApi.debugger.attach).toHaveBeenCalledTimes(2);
   });
 
+  it("removes only matching request entries on non-user debugger detach", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    runtime.state.sessionActive = true;
+    runtime.state.attachedTabs.set(8, { topOrigin: "https://app.example.com" });
+    runtime.state.attachedTabs.set(9, { topOrigin: "https://cdn.example.com" });
+    runtime.state.requests.set("8:req-1", { requestId: "req-1" } as any);
+    runtime.state.requests.set("8:req-2", { requestId: "req-2" } as any);
+    runtime.state.requests.set("9:req-3", { requestId: "req-3" } as any);
+
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 8 }, "target_closed");
+    await flushPromises();
+
+    expect(runtime.state.sessionActive).toBe(true);
+    expect(runtime.state.attachedTabs.has(8)).toBe(false);
+    expect(runtime.state.attachedTabs.has(9)).toBe(true);
+    expect(runtime.state.requests.has("8:req-1")).toBe(false);
+    expect(runtime.state.requests.has("8:req-2")).toBe(false);
+    expect(runtime.state.requests.has("9:req-3")).toBe(true);
+  });
+
+  it("cleans up detached tabs even when there are no matching request entries", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    runtime.state.attachedTabs.set(12, { topOrigin: "https://app.example.com" });
+    runtime.state.requests.set("99:req-1", { requestId: "req-1" } as any);
+
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 12 }, "target_closed");
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.has(12)).toBe(false);
+    expect(runtime.state.requests.has("99:req-1")).toBe(true);
+  });
+
   it("refreshes configuration and reconciles tabs on relevant storage changes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
@@ -2327,6 +2519,83 @@ describe("background entrypoint", () => {
 
     expect(getSiteConfigs).toHaveBeenCalledTimes(2);
     expect(sessionController.reconcileTabs).toHaveBeenCalled();
+  });
+
+  it("refreshes config for preferred editor changes without reconciling tabs", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const getSiteConfigs = vi.fn().mockResolvedValue([]);
+    const getNativeHostConfig = vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
+    const sessionController = {
+      startSession: vi.fn(),
+      stopSession: vi.fn(),
+      reconcileTabs: vi.fn().mockResolvedValue(undefined),
+      handleTabStateChange: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs,
+      getNativeHostConfig,
+      setLastSessionSnapshot: vi.fn(),
+      createSessionController: vi.fn(() => sessionController),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    getSiteConfigs.mockClear();
+    getNativeHostConfig.mockClear();
+    runtime.state.sessionActive = true;
+
+    runtime.handleStorageChanged({ preferredEditorId: { newValue: "cursor" } }, "local");
+    await flushPromises();
+
+    expect(getSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(getNativeHostConfig).toHaveBeenCalledTimes(1);
+    expect(sessionController.reconcileTabs).not.toHaveBeenCalled();
+  });
+
+  it("ignores unrelated local storage changes", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const getSiteConfigs = vi.fn().mockResolvedValue([]);
+    const getNativeHostConfig = vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs,
+      getNativeHostConfig,
+      setLastSessionSnapshot: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    getSiteConfigs.mockClear();
+    getNativeHostConfig.mockClear();
+
+    runtime.handleStorageChanged({ randomKey: { newValue: 1 } }, "local");
+    await flushPromises();
+
+    expect(getSiteConfigs).not.toHaveBeenCalled();
+    expect(getNativeHostConfig).not.toHaveBeenCalled();
   });
 
   it("updates tab state, startup state, and storage errors through registered listeners", async () => {
@@ -2380,6 +2649,54 @@ describe("background entrypoint", () => {
     chromeApi.storage.onChanged.listeners[0]({ nativeHostConfig: { newValue: {} } }, "local");
     await flushPromises();
     expect(runtime.state.lastError).toBe("Storage refresh failed.");
+  });
+
+  it("only refreshes the server on heartbeat alarms", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+    heartbeat.mockClear();
+
+    chromeApi.alarms.onAlarm.listeners[0]({ name: "different-alarm" });
+    await flushPromises();
+    expect(heartbeat).not.toHaveBeenCalled();
+
+    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    await flushPromises();
+    expect(heartbeat).toHaveBeenCalledTimes(1);
   });
 
   it("routes Network.requestWillBeSent and Network.responseReceived events", async () => {

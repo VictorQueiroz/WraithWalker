@@ -625,6 +625,51 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("hides advanced native-host controls again after they are expanded", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: createRuntimeSendMessage()
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    try {
+      expect(await screen.findByText(/Hidden by default so the common flow stays simple/i)).toBeTruthy();
+      expect(screen.queryByLabelText("Native Host Name")).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Show" }));
+      expect(await screen.findByLabelText("Native Host Name")).toBeTruthy();
+
+      await user.click(screen.getByRole("button", { name: "Hide" }));
+      expect(screen.queryByLabelText("Native Host Name")).toBeNull();
+      expect(screen.getByText(/Hidden by default so the common flow stays simple/i)).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("opens the configured launch folder through the OS handler", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();

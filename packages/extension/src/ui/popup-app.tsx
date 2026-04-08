@@ -30,6 +30,7 @@ export interface PopupAppProps {
   loadStoredRootHandle: () => Promise<FileSystemDirectoryHandle | undefined>;
   queryRootPermission: (rootHandle?: FileSystemDirectoryHandle | null) => Promise<PermissionState>;
   setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
   refreshIntervalMs?: number;
   editorPresets?: EditorPreset[];
 }
@@ -54,6 +55,7 @@ export function PopupApp({
   loadStoredRootHandle,
   queryRootPermission,
   setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   editorPresets = EDITOR_PRESETS
 }: PopupAppProps) {
@@ -116,9 +118,9 @@ export function PopupApp({
 
     return () => {
       active = false;
-      clearInterval(intervalId);
+      clearIntervalFn(intervalId);
     };
-  }, [refreshEnvironment, refreshIntervalMs, refreshState, setIntervalFn]);
+  }, [clearIntervalFn, refreshEnvironment, refreshIntervalMs, refreshState, setIntervalFn]);
 
   const alert = resolvePopupAlert({
     snapshot,

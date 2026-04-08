@@ -38,6 +38,38 @@ describe("editor launch helpers", () => {
     });
   });
 
+  it("does not keep empty or invalid launch overrides", () => {
+    expect(normalizeNativeHostConfig({
+      editorLaunchOverrides: {
+        cursor: {
+          commandTemplate: "   ",
+          urlTemplate: ""
+        }
+      }
+    })).toEqual(DEFAULT_NATIVE_HOST_CONFIG);
+  });
+
+  it("keeps explicit preferred-editor overrides instead of overwriting them with legacy globals", () => {
+    expect(normalizeNativeHostConfig({
+      commandTemplate: 'legacy "$DIR"',
+      urlTemplate: "legacy://workspace?folder=$DIR_COMPONENT",
+      editorLaunchOverrides: {
+        cursor: {
+          commandTemplate: 'custom "$DIR"',
+          urlTemplate: "custom://workspace?folder=$DIR_COMPONENT"
+        }
+      }
+    }, "cursor")).toEqual({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      editorLaunchOverrides: {
+        cursor: {
+          commandTemplate: 'custom "$DIR"',
+          urlTemplate: "custom://workspace?folder=$DIR_COMPONENT"
+        }
+      }
+    });
+  });
+
   it("lets per-editor overrides replace built-in launch settings", () => {
     const config = updateEditorLaunchOverride(DEFAULT_NATIVE_HOST_CONFIG, "cursor", {
       urlTemplate: "custom://open?folder=$DIR_COMPONENT",
@@ -56,6 +88,17 @@ describe("editor launch helpers", () => {
       hasCustomUrlOverride: true,
       hasCustomCommandOverride: true
     });
+  });
+
+  it("deletes per-editor overrides when the replacement is empty", () => {
+    const withOverride = updateEditorLaunchOverride(DEFAULT_NATIVE_HOST_CONFIG, "cursor", {
+      urlTemplate: "custom://open?folder=$DIR_COMPONENT"
+    });
+
+    expect(updateEditorLaunchOverride(withOverride, "cursor", {
+      urlTemplate: "   ",
+      commandTemplate: ""
+    })).toEqual(DEFAULT_NATIVE_HOST_CONFIG);
   });
 
   it("keeps undocumented editors on command fallback unless a custom url override is added", () => {
