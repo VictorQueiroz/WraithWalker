@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { preferMtsSourcePlugin } from "../../test-support/vitest-utils.ts";
 
 export default defineConfig({
+  plugins: [preferMtsSourcePlugin()],
   test: {
     environment: "node",
     coverage: {

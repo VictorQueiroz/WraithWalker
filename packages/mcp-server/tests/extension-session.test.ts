@@ -15,6 +15,7 @@ describe("extension session tracker", () => {
         extensionClientId: "client-1",
         steps: []
       }),
+      getEffectiveSiteConfigs: async () => [],
       now: () => 0
     });
 
@@ -31,6 +32,11 @@ describe("extension session tracker", () => {
     let now = Date.parse("2026-04-08T00:00:00.000Z");
     const tracker = createExtensionSessionTracker({
       getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }],
       now: () => now
     });
 
@@ -45,7 +51,9 @@ describe("extension session tracker", () => {
         connected: true,
         captureReady: true,
         captureDestination: "server",
-        clientId: "client-1"
+        clientId: "client-1",
+        enabledOrigins: ["https://app.example.com"],
+        siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })]
       })
     );
 
@@ -57,7 +65,8 @@ describe("extension session tracker", () => {
         captureReady: false,
         sessionActive: false,
         captureDestination: "none",
-        enabledOrigins: []
+        enabledOrigins: [],
+        siteConfigs: []
       })
     );
   });

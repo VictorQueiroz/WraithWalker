@@ -11,7 +11,6 @@ describe("fixture diff", () => {
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "a",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -20,7 +19,6 @@ describe("fixture diff", () => {
       body: "{\"users\":[]}"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "b",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -43,7 +41,6 @@ describe("fixture diff", () => {
 
     await root.ensureScenario("a");
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "b",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -65,7 +62,6 @@ describe("fixture diff", () => {
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "a",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -89,7 +85,6 @@ describe("fixture diff", () => {
     const metaB = { status: 500, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "a",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -98,7 +93,6 @@ describe("fixture diff", () => {
       body: "{\"users\":[]}"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "b",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -154,7 +148,6 @@ describe("fixture diff", () => {
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "a",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -163,7 +156,6 @@ describe("fixture diff", () => {
       body: "{\"data\":1}"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "b",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -183,7 +175,6 @@ describe("fixture diff", () => {
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "POST" };
 
     await root.writeApiFixture({
-      mode: "simple",
       scenario: "a",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",

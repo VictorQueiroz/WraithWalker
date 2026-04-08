@@ -3,9 +3,11 @@ import path from "node:path";
 import ignore from "ignore";
 
 import {
-  SIMPLE_MODE_METADATA_DIR,
-  SIMPLE_MODE_METADATA_TREE,
+  CAPTURE_ASSETS_DIR,
+  MANIFESTS_DIR,
   STATIC_RESOURCE_MANIFEST_FILE,
+} from "./constants.mjs";
+import {
   STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION,
   buildRequestPayload,
   buildResponseMeta,
@@ -137,16 +139,16 @@ function createManifest(topOrigin: string): StaticResourceManifest {
 function getMetadataPaths(topOrigin: string, visiblePath: string) {
   const topOriginKey = originToKey(topOrigin);
   const hiddenRoot = joinRelativePath(
-    SIMPLE_MODE_METADATA_DIR,
-    SIMPLE_MODE_METADATA_TREE,
+    CAPTURE_ASSETS_DIR,
     topOriginKey,
     visiblePath
   );
 
   return {
+    bodyPath: `${hiddenRoot}.__body`,
+    projectionPath: visiblePath,
     manifestPath: joinRelativePath(
-      SIMPLE_MODE_METADATA_DIR,
-      SIMPLE_MODE_METADATA_TREE,
+      MANIFESTS_DIR,
       topOriginKey,
       STATIC_RESOURCE_MANIFEST_FILE
     ),
@@ -330,7 +332,7 @@ async function walkOverrideDirectory(
       }
 
       if (entry.isDirectory()) {
-        if (entry.name === SIMPLE_MODE_METADATA_DIR) {
+        if (entry.name === ".wraithwalker") {
           continue;
         }
         await visit(relativePath, contexts);
@@ -554,6 +556,8 @@ export async function syncOverridesDirectory(
       method: "GET"
     }, candidate.bodyEncoding, candidate.capturedAt));
 
+    await rootFs.copyRecursive(candidate.relativePath, metadataPaths.bodyPath);
+
     const manifest = manifests.get(metadataPaths.manifestPath)
       || createManifest(candidate.topOrigin);
     manifests.set(metadataPaths.manifestPath, upsertStaticResourceManifest(manifest, {
@@ -561,7 +565,8 @@ export async function syncOverridesDirectory(
       requestOrigin: candidate.topOrigin,
       pathname: requestUrl.pathname,
       search: requestUrl.search,
-      bodyPath: candidate.relativePath,
+      bodyPath: metadataPaths.bodyPath,
+      projectionPath: metadataPaths.projectionPath,
       requestPath: metadataPaths.requestPath,
       metaPath: metadataPaths.metaPath,
       mimeType,

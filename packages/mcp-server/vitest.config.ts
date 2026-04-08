@@ -1,16 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { preferMtsSourcePlugin } from "../../test-support/vitest-utils.ts";
+
+const coreSrcDir = `${fileURLToPath(new URL("../core/src/", import.meta.url))}`;
 
 export default defineConfig({
+  plugins: [preferMtsSourcePlugin()],
   resolve: {
-    alias: {
-      "@wraithwalker/core/root": fileURLToPath(new URL("../core/src/root.mts", import.meta.url)),
-      "@wraithwalker/core/root-runtime": fileURLToPath(new URL("../core/src/root-runtime.mts", import.meta.url)),
-      "@wraithwalker/core/scenario-traces": fileURLToPath(new URL("../core/src/scenario-traces.mts", import.meta.url)),
-      "@wraithwalker/core/fixtures": fileURLToPath(new URL("../core/src/fixtures.mts", import.meta.url)),
-      "@wraithwalker/core/scenarios": fileURLToPath(new URL("../core/src/scenarios.mts", import.meta.url)),
-      "@wraithwalker/core/context": fileURLToPath(new URL("../core/src/context.mts", import.meta.url))
-    }
+    alias: [
+      {
+        find: /^@wraithwalker\/core\/(.+)$/,
+        replacement: `${coreSrcDir}$1.mts`
+      }
+    ]
   },
   test: {
     environment: "node",

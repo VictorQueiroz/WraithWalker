@@ -1,8 +1,8 @@
-import type { ErrorResult, FixtureHasResult, FixtureReadResult, FixtureWriteResult, OffscreenMessage, RootReadyResult } from "./lib/messages.js";
+import type { ErrorResult, FixtureHasResult, FixtureReadResult, FixtureWriteResult, OffscreenMessage, RootReadyResult, SiteConfigsResult } from "./lib/messages.js";
 import { createFileSystemGateway } from "./lib/file-system-gateway.js";
 import { createExtensionRootRuntime } from "./lib/root-runtime.js";
 import { ensureRootSentinel as defaultEnsureRootSentinel, loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission, requestRootPermission as defaultRequestRootPermission } from "./lib/root-handle.js";
-import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel } from "./lib/types.js";
+import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SiteConfig } from "./lib/types.js";
 
 interface RuntimeApi {
   onMessage: {
@@ -52,6 +52,9 @@ function isKnownOffscreenMessage(message: unknown): message is OffscreenMessage 
 
   return [
     "fs.ensureRoot",
+    "fs.readConfiguredSiteConfigs",
+    "fs.readEffectiveSiteConfigs",
+    "fs.writeConfiguredSiteConfigs",
     "fs.hasFixture",
     "fs.readFixture",
     "fs.writeFixture",
@@ -160,7 +163,50 @@ export function createOffscreenRuntime({
     };
   }
 
-  async function handleMessage(message: unknown): Promise<RootReadyResult | FixtureHasResult | FixtureReadResult | FixtureWriteResult | { ok: true } | undefined> {
+  async function handleReadConfiguredSiteConfigs(): Promise<SiteConfigsResult> {
+    const rootState = await getRootState();
+    if (!rootState.ok) {
+      return toErrorResult(rootState as ErrorResult);
+    }
+
+    return {
+      ok: true,
+      siteConfigs: await rootState.runtime.readConfiguredSiteConfigs(),
+      sentinel: rootState.sentinel
+    };
+  }
+
+  async function handleReadEffectiveSiteConfigs(): Promise<SiteConfigsResult> {
+    const rootState = await getRootState();
+    if (!rootState.ok) {
+      return toErrorResult(rootState as ErrorResult);
+    }
+
+    return {
+      ok: true,
+      siteConfigs: await rootState.runtime.readEffectiveSiteConfigs(),
+      sentinel: rootState.sentinel
+    };
+  }
+
+  async function handleWriteConfiguredSiteConfigs(payload: {
+    siteConfigs: SiteConfig[];
+  }): Promise<SiteConfigsResult> {
+    const rootState = await getRootState();
+    if (!rootState.ok) {
+      return toErrorResult(rootState as ErrorResult);
+    }
+
+    await rootState.runtime.writeConfiguredSiteConfigs(payload.siteConfigs);
+
+    return {
+      ok: true,
+      siteConfigs: await rootState.runtime.readConfiguredSiteConfigs(),
+      sentinel: rootState.sentinel
+    };
+  }
+
+  async function handleMessage(message: unknown): Promise<RootReadyResult | SiteConfigsResult | FixtureHasResult | FixtureReadResult | FixtureWriteResult | { ok: true } | undefined> {
     if (!isOffscreenTargetMessage(message)) {
       return undefined;
     }
@@ -176,6 +222,12 @@ export function createOffscreenRuntime({
           ? { ok: true, sentinel: result.sentinel, permission: result.permission }
           : result;
       }
+      case "fs.readConfiguredSiteConfigs":
+        return handleReadConfiguredSiteConfigs();
+      case "fs.readEffectiveSiteConfigs":
+        return handleReadEffectiveSiteConfigs();
+      case "fs.writeConfiguredSiteConfigs":
+        return handleWriteConfiguredSiteConfigs(message.payload);
       case "fs.hasFixture":
         return handleHasFixture(message.payload);
       case "fs.readFixture":

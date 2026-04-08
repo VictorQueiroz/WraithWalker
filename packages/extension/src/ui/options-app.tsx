@@ -13,7 +13,7 @@ import {
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
 import { createSiteConfig, isValidDumpAllowlistPatterns } from "../lib/site-config.js";
-import type { NativeHostConfig, RootSentinel, SiteConfig } from "../lib/types.js";
+import type { NativeHostConfig, RootSentinel, SessionSnapshot, SiteConfig } from "../lib/types.js";
 import {
   Alert,
   Badge,
@@ -25,7 +25,6 @@ import {
   CardTitle,
   Input,
   Label,
-  Select,
   Separator,
   Textarea
 } from "./components.js";
@@ -95,7 +94,40 @@ function formatDumpAllowlistPatterns(patterns: string[]): string {
   return patterns.join("\n");
 }
 
-function RootStatusSummary({ rootState }: { rootState: RootState | null }) {
+function hasConfiguredRoot(rootState: RootState | null): boolean {
+  return Boolean(rootState?.hasHandle && rootState.permission === "granted");
+}
+
+function createAddedSiteConfig(originInput: string): SiteConfig {
+  const siteConfig = createSiteConfig(originInput);
+  return {
+    ...siteConfig,
+    dumpAllowlistPatterns: [...new Set([
+      ...siteConfig.dumpAllowlistPatterns,
+      "\\.json$"
+    ])]
+  };
+}
+
+function RootStatusSummary({
+  rootState,
+  serverConnected,
+  serverRootPath
+}: {
+  rootState: RootState | null;
+  serverConnected: boolean;
+  serverRootPath?: string;
+}) {
+  if (serverConnected && (!rootState || !rootState.hasHandle)) {
+    return (
+      <Alert variant="default">
+        Connected to the local WraithWalker server.
+        {serverRootPath ? ` Settings changes are using ${serverRootPath}.` : " Settings changes are using the server root."}
+        {" "}A browser-local root is optional fallback only.
+      </Alert>
+    );
+  }
+
   if (!rootState || !rootState.hasHandle) {
     return (
       <Alert variant="default">
@@ -137,21 +169,21 @@ function SectionIntro({
 
 function SiteCard({
   siteConfig,
+  disabled = false,
   onSave,
   onRemove
 }: {
   siteConfig: SiteConfig;
-  onSave: (origin: string, patch: Pick<SiteConfig, "mode" | "dumpAllowlistPatterns">) => Promise<void>;
+  disabled?: boolean;
+  onSave: (origin: string, patch: Pick<SiteConfig, "dumpAllowlistPatterns">) => Promise<void>;
   onRemove: (origin: string) => Promise<void>;
 }) {
-  const [mode, setMode] = React.useState(siteConfig.mode);
   const [patternsText, setPatternsText] = React.useState(formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns));
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
 
   React.useEffect(() => {
-    setMode(siteConfig.mode);
     setPatternsText(formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns));
-  }, [siteConfig.dumpAllowlistPatterns, siteConfig.mode]);
+  }, [siteConfig.dumpAllowlistPatterns]);
 
   return (
     <Card className="bg-white/80">
@@ -165,12 +197,11 @@ function SiteCard({
             <Button
               type="button"
               variant="secondary"
-              disabled={busy !== null}
+              disabled={busy !== null || disabled}
               onClick={async () => {
                 setBusy("save");
                 try {
                   await onSave(siteConfig.origin, {
-                    mode,
                     dumpAllowlistPatterns: parseDumpAllowlistPatterns(patternsText)
                   });
                 } finally {
@@ -183,7 +214,7 @@ function SiteCard({
             <Button
               type="button"
               variant="destructive"
-              disabled={busy !== null}
+              disabled={busy !== null || disabled}
               onClick={async () => {
                 setBusy("remove");
                 try {
@@ -200,21 +231,11 @@ function SiteCard({
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-2">
-          <Label htmlFor={`mode-${siteConfig.origin}`}>Storage Mode</Label>
-          <Select
-            id={`mode-${siteConfig.origin}`}
-            value={mode}
-            onChange={(event) => setMode(event.currentTarget.value as SiteConfig["mode"])}
-          >
-            <option value="simple">Simple</option>
-            <option value="advanced">Advanced</option>
-          </Select>
-        </div>
-        <div className="grid gap-2">
           <Label htmlFor={`patterns-${siteConfig.origin}`}>Dump Allowlist Patterns</Label>
           <Textarea
             id={`patterns-${siteConfig.origin}`}
             value={patternsText}
+            disabled={disabled}
             onChange={(event) => setPatternsText(event.currentTarget.value)}
             placeholder={"\\.m?(js|ts)x?$"}
           />
@@ -242,6 +263,7 @@ export function OptionsApp({
   const [sites, setSites] = React.useState<SiteConfig[]>([]);
   const [siteOriginInput, setSiteOriginInput] = React.useState("");
   const [rootState, setRootState] = React.useState<RootState | null>(null);
+  const [sessionSnapshot, setSessionSnapshot] = React.useState<SessionSnapshot | null>(null);
   const [nativeHostConfig, setNativeHostConfigState] = React.useState<NativeHostConfig | null>(null);
   const [scenarioNames, setScenarioNames] = React.useState<string[]>([]);
   const [scenarioName, setScenarioName] = React.useState("");
@@ -257,6 +279,14 @@ export function OptionsApp({
   const cursorOverride = nativeHostConfig
     ? getEditorLaunchOverride(nativeHostConfig, cursorEditor.id)
     : {};
+  const serverConnected = sessionSnapshot?.captureDestination === "server";
+  const canEditSites = serverConnected || hasConfiguredRoot(rootState);
+
+  const refreshSessionSnapshot = React.useCallback(async () => {
+    const snapshot = await sendMessage<SessionSnapshot>(chromeApi.runtime, { type: "session.getState" });
+    setSessionSnapshot(snapshot);
+    return snapshot;
+  }, [chromeApi.runtime]);
 
   const refreshRootState = React.useCallback(async () => {
     const rootHandle = await loadStoredRootHandle();
@@ -307,11 +337,13 @@ export function OptionsApp({
   const refreshAll = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [nextSites, nextNativeConfig] = await Promise.all([
-        getSiteConfigs(),
+      const nextSites = await getSiteConfigs();
+      const [nextSessionSnapshot, nextNativeConfig] = await Promise.all([
+        refreshSessionSnapshot(),
         getNativeHostConfig()
       ]);
       setSites(nextSites);
+      setSessionSnapshot(nextSessionSnapshot);
       setNativeHostConfigState(nextNativeConfig);
       await Promise.all([refreshRootState(), refreshScenarios()]);
     } finally {
@@ -321,7 +353,8 @@ export function OptionsApp({
     getNativeHostConfig,
     getSiteConfigs,
     refreshRootState,
-    refreshScenarios
+    refreshScenarios,
+    refreshSessionSnapshot
   ]);
 
   React.useEffect(() => {
@@ -332,6 +365,10 @@ export function OptionsApp({
     event.preventDefault();
     setFlash(null);
     try {
+      if (!canEditSites) {
+        throw new Error("Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns.");
+      }
+
       const origin = normalizeSiteInput(siteOriginInput);
       const permissionPattern = originToPermissionPattern(origin);
       const granted = await chromeApi.permissions.request({ origins: [permissionPattern] });
@@ -339,11 +376,12 @@ export function OptionsApp({
         throw new Error(`Host access was not granted for ${permissionPattern}.`);
       }
 
-      const nextSites = [...sites, createSiteConfig(origin)]
+      const nextSites = [...sites, createAddedSiteConfig(origin)]
         .sort((left, right) => left.origin.localeCompare(right.origin));
       await setSiteConfigs(nextSites);
       setSites(nextSites);
       setSiteOriginInput("");
+      await refreshSessionSnapshot();
       setFlash({
         variant: "success",
         text: "Origin added and host access granted."
@@ -356,7 +394,15 @@ export function OptionsApp({
     }
   }
 
-  async function handleUpdateSite(origin: string, patch: Pick<SiteConfig, "mode" | "dumpAllowlistPatterns">) {
+  async function handleUpdateSite(origin: string, patch: Pick<SiteConfig, "dumpAllowlistPatterns">) {
+    if (!canEditSites) {
+      setFlash({
+        variant: "destructive",
+        text: "Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns."
+      });
+      return;
+    }
+
     if (!isValidDumpAllowlistPatterns(patch.dumpAllowlistPatterns)) {
       setFlash({
         variant: "destructive",
@@ -370,13 +416,13 @@ export function OptionsApp({
         site.origin === origin
           ? {
               ...site,
-              mode: patch.mode,
               dumpAllowlistPatterns: patch.dumpAllowlistPatterns
             }
           : site
       ));
       await setSiteConfigs(nextSites);
       setSites(nextSites);
+      await refreshSessionSnapshot();
       setFlash({
         variant: "success",
         text: `Updated ${origin}.`
@@ -392,11 +438,16 @@ export function OptionsApp({
   async function handleRemoveSite(origin: string) {
     setFlash(null);
     try {
+      if (!canEditSites) {
+        throw new Error("Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns.");
+      }
+
       const permissionPattern = originToPermissionPattern(origin);
-      await chromeApi.permissions.remove({ origins: [permissionPattern] });
       const nextSites = sites.filter((site) => site.origin !== origin);
       await setSiteConfigs(nextSites);
       setSites(nextSites);
+      await Promise.resolve(chromeApi.permissions.remove({ origins: [permissionPattern] })).catch(() => false);
+      await refreshSessionSnapshot();
       setFlash({
         variant: "success",
         text: `Removed ${origin}.`
@@ -587,7 +638,11 @@ export function OptionsApp({
                 />
               </CardHeader>
               <CardContent className="grid gap-4">
-                <RootStatusSummary rootState={rootState} />
+                <RootStatusSummary
+                  rootState={rootState}
+                  serverConnected={serverConnected}
+                  serverRootPath={sessionSnapshot?.captureRootPath}
+                />
                 {rootState?.sentinel ? (
                   <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3 text-sm">
                     <div className="font-medium">Root ID</div>
@@ -610,25 +665,39 @@ export function OptionsApp({
               <CardHeader>
                 <SectionIntro
                   title="Enabled Origins"
-                  description="Grant exact host access one origin at a time and keep storage mode changes deliberate."
+                  description="Grant exact host access one origin at a time. These origin rules are stored in the connected local server root when available, otherwise in the selected WraithWalker root."
                 />
               </CardHeader>
               <CardContent className="grid gap-4">
+                {serverConnected ? (
+                  <Alert variant="success">
+                    Connected to the local WraithWalker server.
+                    {sessionSnapshot?.captureRootPath ? ` Editing ${sessionSnapshot.captureRootPath}.` : " Editing the server root."}
+                  </Alert>
+                ) : null}
                 <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={handleAddSite}>
                   <Input
                     aria-label="Exact origin"
                     placeholder="https://app.example.com"
+                    disabled={!canEditSites}
                     value={siteOriginInput}
                     onChange={(event) => setSiteOriginInput(event.currentTarget.value)}
                   />
-                  <Button type="submit">Add Origin</Button>
+                  <Button type="submit" disabled={!canEditSites}>
+                    Add Origin
+                  </Button>
                 </form>
                 <div className="grid gap-3">
-                  {sites.length > 0 ? (
+                  {!canEditSites ? (
+                    <Alert variant="default">
+                      Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns.
+                    </Alert>
+                  ) : sites.length > 0 ? (
                     sites.map((siteConfig) => (
                       <SiteCard
                         key={siteConfig.origin}
                         siteConfig={siteConfig}
+                        disabled={!canEditSites}
                         onSave={handleUpdateSite}
                         onRemove={handleRemoveSite}
                       />

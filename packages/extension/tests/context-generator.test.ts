@@ -145,7 +145,6 @@ describe("context generator", () => {
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: ["\\.js$"]
     }];
 
@@ -179,9 +178,10 @@ describe("context generator", () => {
           requestOrigin: "https://cdn.example.com",
           pathname: "/assets/app.js",
           search: "",
-          bodyPath: "cdn.example.com/assets/app.js",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
+          bodyPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
+          projectionPath: "cdn.example.com/assets/app.js",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
           mimeType: "application/javascript",
           resourceType: "Script",
           capturedAt: "2026-04-03T00:00:00.000Z"
@@ -191,9 +191,10 @@ describe("context generator", () => {
           requestOrigin: "https://cdn.example.com",
           pathname: "/assets/style.css",
           search: "",
-          bodyPath: "cdn.example.com/assets/style.css",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/style.css.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/style.css.__response.json",
+          bodyPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__body",
+          projectionPath: "cdn.example.com/assets/style.css",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__response.json",
           mimeType: "text/css",
           resourceType: "Stylesheet",
           capturedAt: "2026-04-03T00:00:00.000Z"
@@ -203,14 +204,13 @@ describe("context generator", () => {
 
     await gateway.writeJson(
       asRoot(root),
-      `.wraithwalker/simple/https__app.example.com/${STATIC_RESOURCE_MANIFEST_FILE}`,
+      `.wraithwalker/manifests/https__app.example.com/${STATIC_RESOURCE_MANIFEST_FILE}`,
       manifest
     );
 
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.js$"]
     }];
 
@@ -239,14 +239,13 @@ describe("context generator", () => {
       bodySuggestedExtension: "json"
     };
 
-    const basePath = "https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc123__b-def456";
+    const basePath = ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc123__b-def456";
     await gateway.writeJson(asRoot(root), `${basePath}/${FIXTURE_FILE_NAMES.API_META}`, meta);
     await writeTextFile(gateway, asRoot(root), `${basePath}/response.body`, JSON.stringify({ users: [{ id: 1, name: "Alice" }], total: 1 }));
 
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: ["\\.js$"]
     }];
 
@@ -266,7 +265,6 @@ describe("context generator", () => {
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: ["\\.js$"]
     }];
 
@@ -283,7 +281,6 @@ describe("context generator", () => {
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: ["\\.js$"]
     }];
 
@@ -306,14 +303,13 @@ describe("context generator", () => {
       bodyEncoding: "utf8", bodySuggestedExtension: "json"
     };
 
-    const basePath = "https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def";
+    const basePath = ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def";
     await gateway.writeJson(asRoot(root), `${basePath}/${FIXTURE_FILE_NAMES.API_META}`, meta);
     await writeTextFile(gateway, asRoot(root), `${basePath}/response.body`, JSON.stringify({ users: [{ id: 1, name: "Alice" }], total: 1 }));
 
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: ["\\.js$"]
     }];
 
@@ -350,14 +346,13 @@ describe("context generator", () => {
 
     await gateway.writeJson(
       asRoot(root),
-      "https__app.example.com/origins/https__api.example.com/http/POST/users__q-abc__b-def/" + FIXTURE_FILE_NAMES.API_META,
+      ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/users__q-abc__b-def/" + FIXTURE_FILE_NAMES.API_META,
       meta
     );
 
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: []
     }];
 

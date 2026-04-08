@@ -111,7 +111,6 @@ interface RequestLifecycleDependencies {
     url: string;
     postData?: string;
     postDataEncoding?: string;
-    siteMode?: SiteConfig["mode"];
     resourceType?: string;
     mimeType?: string;
   }) => Promise<FixtureDescriptor>;

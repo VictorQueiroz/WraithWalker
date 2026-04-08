@@ -1,9 +1,11 @@
 import { buildSessionSnapshot } from "./lib/background-helpers.js";
 import {
+  getLegacySiteConfigsMigrated as defaultGetLegacySiteConfigsMigrated,
   getOrCreateExtensionClientId as defaultGetOrCreateExtensionClientId,
   getNativeHostConfig as defaultGetNativeHostConfig,
   getPreferredEditorId as defaultGetPreferredEditorId,
-  getSiteConfigs as defaultGetSiteConfigs,
+  getSiteConfigs as defaultGetLegacySiteConfigs,
+  setLegacySiteConfigsMigrated as defaultSetLegacySiteConfigsMigrated,
   setLastSessionSnapshot as defaultSetLastSessionSnapshot
 } from "./lib/chrome-storage.js";
 import {
@@ -20,9 +22,10 @@ import {
   buildEditorLaunchUrl,
   resolveEditorLaunch
 } from "./lib/editor-launch.js";
-import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess } from "./lib/messages.js";
+import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess, SiteConfigsResult } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
+import { normalizeSiteConfigs as defaultNormalizeSiteConfigs } from "./lib/site-config.js";
 import type {
   AttachedTabState,
   FixtureDescriptor,
@@ -130,6 +133,8 @@ interface BackgroundState {
   requests: Map<string, RequestEntry>;
   enabledOrigins: string[];
   siteConfigsByOrigin: Map<string, SiteConfig>;
+  localEnabledOrigins: string[];
+  localSiteConfigsByOrigin: Map<string, SiteConfig>;
   preferredEditorId: string;
   lastError: string;
   localRootReady: boolean;
@@ -148,6 +153,7 @@ interface BackgroundState {
   } | null;
   activeTrace: ServerScenarioTraceRecord | null;
   serverCheckedAt: number;
+  legacySiteConfigsMigrated: boolean;
 }
 
 interface SessionControllerApi {
@@ -170,14 +176,18 @@ interface RequestLifecycleApi {
 
 interface BackgroundDependencies {
   chromeApi?: ChromeApi;
-  getSiteConfigs?: typeof defaultGetSiteConfigs;
+  getSiteConfigs?: () => Promise<SiteConfig[]>;
+  getLegacySiteConfigs?: typeof defaultGetLegacySiteConfigs;
+  getLegacySiteConfigsMigrated?: typeof defaultGetLegacySiteConfigsMigrated;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getPreferredEditorId?: typeof defaultGetPreferredEditorId;
   getOrCreateExtensionClientId?: typeof defaultGetOrCreateExtensionClientId;
+  setLegacySiteConfigsMigrated?: typeof defaultSetLegacySiteConfigsMigrated;
   setLastSessionSnapshot?: typeof defaultSetLastSessionSnapshot;
   createWraithWalkerServerClient?: typeof defaultCreateWraithWalkerServerClient;
   createSessionController?: (dependencies: Parameters<typeof defaultCreateSessionController>[0]) => SessionControllerApi;
   createRequestLifecycle?: (dependencies: Parameters<typeof defaultCreateRequestLifecycle>[0]) => RequestLifecycleApi;
+  normalizeSiteConfigs?: typeof defaultNormalizeSiteConfigs;
   initialState?: Partial<BackgroundState>;
 }
 
@@ -190,6 +200,9 @@ function createUnavailableServerClient(): WraithWalkerServerClient {
     getSystemInfo: unavailable,
     heartbeat: unavailable,
     hasFixture: unavailable,
+    readConfiguredSiteConfigs: unavailable,
+    readEffectiveSiteConfigs: unavailable,
+    writeConfiguredSiteConfigs: unavailable,
     readFixture: unavailable,
     writeFixtureIfAbsent: unavailable,
     generateContext: unavailable,
@@ -320,6 +333,9 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
     "session.getState",
     "session.start",
     "session.stop",
+    "config.readConfiguredSiteConfigs",
+    "config.readEffectiveSiteConfigs",
+    "config.writeConfiguredSiteConfigs",
     "root.verify",
     "native.verify",
     "native.open",
@@ -340,14 +356,18 @@ function isTestMode(): boolean {
 
 export function createBackgroundRuntime({
   chromeApi = chrome as unknown as ChromeApi,
-  getSiteConfigs = defaultGetSiteConfigs,
+  getSiteConfigs,
+  getLegacySiteConfigs = defaultGetLegacySiteConfigs,
+  getLegacySiteConfigsMigrated = defaultGetLegacySiteConfigsMigrated,
   getNativeHostConfig = defaultGetNativeHostConfig,
   getPreferredEditorId = defaultGetPreferredEditorId,
   getOrCreateExtensionClientId = defaultGetOrCreateExtensionClientId,
+  setLegacySiteConfigsMigrated = defaultSetLegacySiteConfigsMigrated,
   setLastSessionSnapshot = defaultSetLastSessionSnapshot,
   createWraithWalkerServerClient,
   createSessionController = defaultCreateSessionController,
   createRequestLifecycle = defaultCreateRequestLifecycle,
+  normalizeSiteConfigs = defaultNormalizeSiteConfigs,
   initialState = {}
 }: BackgroundDependencies = {}) {
   const resolvedCreateWraithWalkerServerClient = createWraithWalkerServerClient
@@ -358,6 +378,8 @@ export function createBackgroundRuntime({
     requests: new Map(),
     enabledOrigins: [],
     siteConfigsByOrigin: new Map(),
+    localEnabledOrigins: [],
+    localSiteConfigsByOrigin: new Map(),
     preferredEditorId: DEFAULT_EDITOR_ID,
     lastError: "",
     localRootReady: false,
@@ -370,6 +392,7 @@ export function createBackgroundRuntime({
     serverInfo: null,
     activeTrace: null,
     serverCheckedAt: 0,
+    legacySiteConfigsMigrated: false,
     ...initialState
   };
 
@@ -381,6 +404,44 @@ export function createBackgroundRuntime({
 
   function setLastError(message: string) {
     state.lastError = message || "";
+  }
+
+  function normalizeEffectiveSiteConfigs(siteConfigs: SiteConfig[]): SiteConfig[] {
+    return normalizeSiteConfigs(siteConfigs as Array<Partial<SiteConfig> & { origin: string }>);
+  }
+
+  function haveSameSiteConfigs(left: SiteConfig[], right: SiteConfig[]): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((siteConfig, index) => (
+      siteConfig.origin === right[index]?.origin
+      && siteConfig.createdAt === right[index]?.createdAt
+      && siteConfig.dumpAllowlistPatterns.length === right[index]?.dumpAllowlistPatterns.length
+      && siteConfig.dumpAllowlistPatterns.every(
+        (pattern, patternIndex) => pattern === right[index]?.dumpAllowlistPatterns[patternIndex]
+      )
+    ));
+  }
+
+  function currentEffectiveSiteConfigs(): SiteConfig[] {
+    return normalizeEffectiveSiteConfigs([...state.siteConfigsByOrigin.values()]);
+  }
+
+  function applyEffectiveSiteConfigs(siteConfigs: SiteConfig[]): boolean {
+    const normalized = normalizeEffectiveSiteConfigs(siteConfigs);
+    if (haveSameSiteConfigs(currentEffectiveSiteConfigs(), normalized)) {
+      return false;
+    }
+
+    state.enabledOrigins = normalized.map((siteConfig) => siteConfig.origin);
+    state.siteConfigsByOrigin = new Map(normalized.map((siteConfig) => [siteConfig.origin, siteConfig]));
+    return true;
+  }
+
+  function restoreLocalEffectiveSiteConfigs(): boolean {
+    return applyEffectiveSiteConfigs([...state.localSiteConfigsByOrigin.values()]);
   }
 
   function updateEffectiveRootState(): void {
@@ -398,9 +459,13 @@ export function createBackgroundRuntime({
     state.serverInfo = null;
     state.activeTrace = null;
     state.serverCheckedAt = Date.now();
+    const siteConfigsChanged = restoreLocalEffectiveSiteConfigs();
     updateEffectiveRootState();
     scheduleHeartbeat();
     void syncTraceBindings().catch(() => undefined);
+    if (siteConfigsChanged && state.sessionActive) {
+      void sessionController.reconcileTabs().catch(() => undefined);
+    }
   }
 
   function shouldKeepHeartbeatAlive(): boolean {
@@ -467,6 +532,9 @@ export function createBackgroundRuntime({
           enabledOrigins: [...state.enabledOrigins]
         });
         const previousTraceId = state.activeTrace?.traceId || null;
+        const siteConfigsChanged = applyEffectiveSiteConfigs(
+          info.siteConfigs ?? [...state.localSiteConfigsByOrigin.values()]
+        );
         state.serverInfo = {
           rootPath: info.rootPath,
           sentinel: info.sentinel,
@@ -480,6 +548,9 @@ export function createBackgroundRuntime({
         scheduleHeartbeat();
         if (previousTraceId !== (info.activeTrace?.traceId || null)) {
           await syncTraceBindings();
+        }
+        if (siteConfigsChanged && state.sessionActive) {
+          await sessionController.reconcileTabs();
         }
         return state.serverInfo;
       } catch {
@@ -507,13 +578,26 @@ export function createBackgroundRuntime({
   }
 
   async function refreshStoredConfig(): Promise<void> {
-    const [sites, nativeHostConfig, extensionClientId] = await Promise.all([
-      getSiteConfigs(),
+    const [nativeHostConfig, extensionClientId, legacySiteConfigsMigrated] = await Promise.all([
       getNativeHostConfig(),
-      getOrCreateExtensionClientId()
+      getOrCreateExtensionClientId(),
+      state.legacySiteConfigsMigrated
+        ? Promise.resolve(true)
+        : getLegacySiteConfigsMigrated()
     ]);
-    state.enabledOrigins = sites.map((site: SiteConfig) => site.origin);
-    state.siteConfigsByOrigin = new Map(sites.map((site: SiteConfig) => [site.origin, site]));
+    state.legacySiteConfigsMigrated ||= legacySiteConfigsMigrated;
+
+    if (!getSiteConfigs) {
+      await ensureLegacySiteConfigsMigrated();
+    }
+
+    const sites = await (getSiteConfigs ? getSiteConfigs() : readLocalEffectiveSiteConfigs());
+    const normalizedSites = normalizeEffectiveSiteConfigs(sites);
+    state.localEnabledOrigins = normalizedSites.map((site: SiteConfig) => site.origin);
+    state.localSiteConfigsByOrigin = new Map(normalizedSites.map((site: SiteConfig) => [site.origin, site]));
+    if (!state.serverInfo) {
+      applyEffectiveSiteConfigs(normalizedSites);
+    }
     state.nativeHostConfig = { ...DEFAULT_NATIVE_HOST_CONFIG, ...nativeHostConfig };
     state.preferredEditorId = DEFAULT_EDITOR_ID;
     state.extensionClientId = extensionClientId;
@@ -584,10 +668,133 @@ export function createBackgroundRuntime({
     } as OffscreenMessage) as Promise<T>;
   }
 
+  function isLocalRootConfigUnavailable(result: ErrorResult): boolean {
+    return result.error === "No root directory selected."
+      || result.error === "Root directory access is not granted.";
+  }
+
+  async function readLocalEffectiveSiteConfigs(): Promise<SiteConfig[]> {
+    const result = await sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs");
+    if (!result) {
+      return [];
+    }
+
+    if (result.ok === true) {
+      if (!Array.isArray(result.siteConfigs)) {
+        return [];
+      }
+
+      return normalizeEffectiveSiteConfigs(result.siteConfigs);
+    }
+
+    if (isLocalRootConfigUnavailable(result)) {
+      return [];
+    }
+
+    throw new Error(getErrorMessage(result));
+  }
+
+  async function readLocalConfiguredSiteConfigs(): Promise<SiteConfig[]> {
+    const result = await sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs");
+    if (!result) {
+      return [];
+    }
+
+    if (result.ok === true) {
+      if (!Array.isArray(result.siteConfigs)) {
+        return [];
+      }
+
+      return normalizeEffectiveSiteConfigs(result.siteConfigs);
+    }
+
+    if (isLocalRootConfigUnavailable(result)) {
+      return [];
+    }
+
+    throw new Error(getErrorMessage(result));
+  }
+
+  async function writeLocalConfiguredSiteConfigs(siteConfigs: SiteConfig[]): Promise<SiteConfig[]> {
+    const result = await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", { siteConfigs });
+    if (!result) {
+      throw new Error("Failed to update root config.");
+    }
+
+    if (result.ok === true) {
+      return normalizeEffectiveSiteConfigs(result.siteConfigs ?? []);
+    }
+
+    throw new Error(getErrorMessage(result));
+  }
+
+  function toSiteConfigsResult(
+    siteConfigs: SiteConfig[],
+    sentinel: RootSentinel
+  ): SiteConfigsResult {
+    return {
+      ok: true,
+      siteConfigs: normalizeEffectiveSiteConfigs(siteConfigs),
+      sentinel
+    };
+  }
+
+  function mergeLegacySiteConfigs(configuredSiteConfigs: SiteConfig[], legacySiteConfigs: SiteConfig[]): SiteConfig[] {
+    const merged = new Map<string, SiteConfig>();
+
+    for (const siteConfig of legacySiteConfigs) {
+      merged.set(siteConfig.origin, {
+        ...siteConfig,
+        dumpAllowlistPatterns: [...siteConfig.dumpAllowlistPatterns]
+      });
+    }
+
+    for (const siteConfig of configuredSiteConfigs) {
+      merged.set(siteConfig.origin, {
+        ...siteConfig,
+        dumpAllowlistPatterns: [...siteConfig.dumpAllowlistPatterns]
+      });
+    }
+
+    return normalizeEffectiveSiteConfigs([...merged.values()]);
+  }
+
+  async function ensureLegacySiteConfigsMigrated(): Promise<void> {
+    if (state.legacySiteConfigsMigrated) {
+      return;
+    }
+
+    const rootResult = await ensureLocalRootReady({ silent: true });
+    if (!rootResult.ok) {
+      return;
+    }
+
+    const legacySiteConfigs = normalizeEffectiveSiteConfigs(await getLegacySiteConfigs());
+    if (legacySiteConfigs.length > 0) {
+      const configuredSiteConfigs = await readLocalConfiguredSiteConfigs();
+      const mergedSiteConfigs = mergeLegacySiteConfigs(configuredSiteConfigs, legacySiteConfigs);
+      if (!haveSameSiteConfigs(configuredSiteConfigs, mergedSiteConfigs)) {
+        await writeLocalConfiguredSiteConfigs(mergedSiteConfigs);
+      }
+    }
+
+    await setLegacySiteConfigsMigrated(true);
+    state.legacySiteConfigsMigrated = true;
+  }
+
   async function ensureLocalRootReady(
     { requestPermission = false, silent = false }: { requestPermission?: boolean; silent?: boolean } = {}
   ): Promise<RootReadyResult> {
     const result = await sendOffscreenMessage<RootReadyResult>("fs.ensureRoot", { requestPermission });
+    if (!result) {
+      state.localRootReady = false;
+      state.localRootSentinel = null;
+      updateEffectiveRootState();
+      if (!silent) {
+        setLastError("No root directory selected.");
+      }
+      return { ok: false, error: "No root directory selected." };
+    }
     state.localRootReady = Boolean(result.ok);
     state.localRootSentinel = result.ok ? result.sentinel : null;
     updateEffectiveRootState();
@@ -695,6 +902,103 @@ export function createBackgroundRuntime({
 
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Local WraithWalker server is unavailable and no fallback root is ready. ${message}`);
+    }
+  }
+
+  async function readConfiguredSiteConfigsForAuthority(): Promise<SiteConfigsResult> {
+    const serverInfo = await refreshServerInfo({ force: true });
+    if (!serverInfo) {
+      await ensureLegacySiteConfigsMigrated();
+      return sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs");
+    }
+
+    try {
+      const result = await serverClient.readConfiguredSiteConfigs();
+      return toSiteConfigsResult(result.siteConfigs ?? [], result.sentinel);
+    } catch (error) {
+      markServerOffline();
+      const localRoot = await ensureLocalRootReady({ silent: true });
+      if (localRoot.ok) {
+        await ensureLegacySiteConfigsMigrated();
+        return sendOffscreenMessage<SiteConfigsResult>("fs.readConfiguredSiteConfigs");
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        error: `Local WraithWalker server is unavailable and no fallback root is ready. ${message}`
+      };
+    }
+  }
+
+  async function readEffectiveSiteConfigsForAuthority(): Promise<SiteConfigsResult> {
+    const serverInfo = await refreshServerInfo({ force: true });
+    if (!serverInfo) {
+      await ensureLegacySiteConfigsMigrated();
+      return sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs");
+    }
+
+    try {
+      const result = await serverClient.readEffectiveSiteConfigs();
+      return toSiteConfigsResult(result.siteConfigs ?? [], result.sentinel);
+    } catch (error) {
+      markServerOffline();
+      const localRoot = await ensureLocalRootReady({ silent: true });
+      if (localRoot.ok) {
+        await ensureLegacySiteConfigsMigrated();
+        return sendOffscreenMessage<SiteConfigsResult>("fs.readEffectiveSiteConfigs");
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        error: `Local WraithWalker server is unavailable and no fallback root is ready. ${message}`
+      };
+    }
+  }
+
+  async function writeConfiguredSiteConfigsForAuthority(siteConfigs: SiteConfig[]): Promise<SiteConfigsResult> {
+    const serverInfo = await refreshServerInfo({ force: true });
+    if (!serverInfo) {
+      await ensureLegacySiteConfigsMigrated();
+      const result = await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", {
+        siteConfigs
+      });
+      if (result.ok) {
+        await refreshStoredConfig();
+        if (state.sessionActive && !state.serverInfo) {
+          await sessionController.reconcileTabs();
+        }
+      }
+      return result;
+    }
+
+    try {
+      const result = await serverClient.writeConfiguredSiteConfigs(siteConfigs);
+      await refreshServerInfo({ force: true });
+      return toSiteConfigsResult(result.siteConfigs ?? [], result.sentinel);
+    } catch (error) {
+      markServerOffline();
+      const localRoot = await ensureLocalRootReady({ silent: true });
+      if (!localRoot.ok) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          error: `Local WraithWalker server is unavailable and no fallback root is ready. ${message}`
+        };
+      }
+
+      await ensureLegacySiteConfigsMigrated();
+      const result = await sendOffscreenMessage<SiteConfigsResult>("fs.writeConfiguredSiteConfigs", {
+        siteConfigs
+      });
+      if (result.ok) {
+        await refreshStoredConfig();
+        if (state.sessionActive && !state.serverInfo) {
+          await sessionController.reconcileTabs();
+        }
+      }
+      return result;
     }
   }
 
@@ -1288,11 +1592,8 @@ export function createBackgroundRuntime({
 
     Promise.resolve()
       .then(async () => {
-        if (changes.siteConfigs || changes.nativeHostConfig || changes.preferredEditorId) {
+        if (changes.nativeHostConfig || changes.preferredEditorId) {
           await refreshStoredConfig();
-        }
-        if (changes.siteConfigs && state.sessionActive) {
-          await sessionController.reconcileTabs();
         }
       })
       .catch((error: unknown) => {
@@ -1304,7 +1605,14 @@ export function createBackgroundRuntime({
     switch (message.type) {
       case "session.getState":
         return snapshotState();
+      case "config.readConfiguredSiteConfigs":
+        return readConfiguredSiteConfigsForAuthority();
+      case "config.readEffectiveSiteConfigs":
+        return readEffectiveSiteConfigsForAuthority();
+      case "config.writeConfiguredSiteConfigs":
+        return writeConfiguredSiteConfigsForAuthority(message.siteConfigs);
       case "session.start": {
+        await refreshServerInfo({ force: true });
         const result = await sessionController.startSession();
         queueServerRefresh({ force: true });
         scheduleHeartbeat();

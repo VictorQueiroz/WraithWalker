@@ -60,6 +60,11 @@ export interface ServerScenarioTraceRecord {
   steps: ServerScenarioTraceStep[];
 }
 
+export interface TrpcSiteConfigsInfo {
+  siteConfigs: SiteConfig[];
+  sentinel: RootSentinel;
+}
+
 export interface WraithWalkerServerClient {
   getSystemInfo(): Promise<TrpcSystemInfo>;
   heartbeat(payload: {
@@ -69,6 +74,9 @@ export interface WraithWalkerServerClient {
     enabledOrigins: string[];
   }): Promise<TrpcHeartbeatInfo>;
   hasFixture(descriptor: FixtureDescriptor): Promise<{ exists: boolean; sentinel: RootSentinel }>;
+  readConfiguredSiteConfigs(): Promise<TrpcSiteConfigsInfo>;
+  readEffectiveSiteConfigs(): Promise<TrpcSiteConfigsInfo>;
+  writeConfiguredSiteConfigs(siteConfigs: SiteConfig[]): Promise<TrpcSiteConfigsInfo>;
   readFixture(descriptor: FixtureDescriptor): Promise<ServerFixtureReadResult>;
   writeFixtureIfAbsent(payload: {
     descriptor: FixtureDescriptor;
@@ -161,6 +169,15 @@ export function createWraithWalkerServerClient(
     },
     hasFixture(descriptor) {
       return trpc.fixtures.has.query({ descriptor }) as Promise<{ exists: boolean; sentinel: RootSentinel }>;
+    },
+    readConfiguredSiteConfigs() {
+      return trpc.config.readConfiguredSiteConfigs.query() as Promise<TrpcSiteConfigsInfo>;
+    },
+    readEffectiveSiteConfigs() {
+      return trpc.config.readEffectiveSiteConfigs.query() as Promise<TrpcSiteConfigsInfo>;
+    },
+    writeConfiguredSiteConfigs(siteConfigs) {
+      return trpc.config.writeConfiguredSiteConfigs.mutate({ siteConfigs }) as Promise<TrpcSiteConfigsInfo>;
     },
     readFixture(descriptor) {
       return trpc.fixtures.read.query({ descriptor }) as Promise<ServerFixtureReadResult>;

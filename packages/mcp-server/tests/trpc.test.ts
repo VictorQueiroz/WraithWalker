@@ -91,7 +91,6 @@ async function createDescriptor(overrides: Partial<{
   topOrigin: string;
   method: string;
   url: string;
-  siteMode: "simple" | "advanced";
   resourceType: string;
   mimeType: string;
 }> = {}): Promise<FixtureDescriptor> {
@@ -99,14 +98,13 @@ async function createDescriptor(overrides: Partial<{
     topOrigin: overrides.topOrigin || "https://app.example.com",
     method: overrides.method || "GET",
     url: overrides.url || "https://cdn.example.com/assets/app.js",
-    siteMode: overrides.siteMode || "simple",
     resourceType: overrides.resourceType || "Script",
     mimeType: overrides.mimeType || "application/javascript"
   });
 }
 
 describe("tRPC capture backend", () => {
-  it("reads fallback request and response metadata when only the body file exists", async () => {
+  it("requires canonical metadata for simple-mode assets", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-trpc-",
       rootId: "root-trpc"
@@ -125,27 +123,13 @@ describe("tRPC capture backend", () => {
     });
     await root.writeText(apiDescriptor.bodyPath, JSON.stringify({ ok: true }));
 
-    expect(await repository.exists(descriptor)).toBe(true);
+    expect(await repository.exists(descriptor)).toBe(false);
     expect(await repository.exists(apiDescriptor)).toBe(false);
     expect(await repository.read(await createDescriptor({
       url: "https://cdn.example.com/assets/missing.js"
     }))).toBeNull();
 
-    const fixture = await repository.read(descriptor);
-    expect(fixture).toEqual(expect.objectContaining({
-      request: expect.objectContaining({
-        topOrigin: "https://app.example.com",
-        url: "https://cdn.example.com/assets/app.js",
-        method: "GET"
-      }),
-      meta: expect.objectContaining({
-        status: 200,
-        statusText: "OK",
-        mimeType: "application/javascript",
-        method: "GET"
-      })
-    }));
-    expect(fixture?.size).toBeGreaterThan(0);
+    expect(await repository.read(descriptor)).toBeNull();
   });
 
   it("writes fixtures and static manifests only once", async () => {
@@ -209,7 +193,7 @@ describe("tRPC capture backend", () => {
     expect(firstWrite.written).toBe(true);
     expect(secondWrite.written).toBe(false);
     const manifest = await root.readJson<{ resourcesByPathname: Record<string, unknown[]> }>(
-      ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
     );
     expect(manifest.resourcesByPathname["/styles/app.css"]).toHaveLength(1);
   });
@@ -284,7 +268,6 @@ describe("tRPC capture backend", () => {
         siteConfigs: [{
           origin: "https://app.example.com",
           createdAt: "2026-04-07T00:00:00.000Z",
-          mode: "simple",
           dumpAllowlistPatterns: ["\\.js$"]
         }],
         editorId: "cursor"
@@ -295,6 +278,120 @@ describe("tRPC capture backend", () => {
       }));
       expect(await root.readJson<{ users: Array<{ id: number }> }>(descriptor.bodyPath)).toEqual({ users: [{ id: 1 }] });
       expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain("WraithWalker Fixture Context");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reads and writes explicit configured site configs over HTTP tRPC", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://configured.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = await createClient(server.trpcUrl);
+
+    try {
+      const configured = await client.config.readConfiguredSiteConfigs.query();
+      expect(configured.sentinel.rootId).toBeTruthy();
+      expect(configured.siteConfigs).toEqual([{
+        origin: "https://configured.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]);
+
+      const updated = await client.config.writeConfiguredSiteConfigs.mutate({
+        siteConfigs: [{
+          origin: "https://server-write.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }]
+      });
+
+      expect(updated).toEqual({
+        sentinel: expect.objectContaining({ rootId: expect.any(String) }),
+        siteConfigs: [{
+          origin: "https://server-write.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }]
+      });
+      await expect(root.readJson(root.projectConfigRelativePath())).resolves.toEqual({
+        schemaVersion: 1,
+        sites: [{
+          origin: "https://server-write.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }]
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("returns effective site configs that merge explicit config with discovered origins", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-"
+    });
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://configured.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = await createClient(server.trpcUrl);
+    const descriptor = await createDescriptor({
+      topOrigin: "https://discovered.example.com",
+      url: "https://discovered.example.com/assets/app.js",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+
+    try {
+      await client.fixtures.writeIfAbsent.mutate({
+        descriptor,
+        request: createRequestPayload(descriptor),
+        response: {
+          body: "console.log('discovered');",
+          bodyEncoding: "utf8",
+          meta: createResponseMeta(descriptor, {
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            bodySuggestedExtension: "js"
+          })
+        }
+      });
+
+      const effective = await client.config.readEffectiveSiteConfigs.query();
+
+      expect(effective.siteConfigs).toEqual([
+        {
+          origin: "https://configured.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        },
+        {
+          origin: "https://discovered.example.com",
+          createdAt: expect.any(String),
+          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$"]
+        }
+      ]);
     } finally {
       await server.close();
     }
@@ -375,7 +472,7 @@ describe("tRPC capture backend", () => {
 
       const manifest = await root.readJson<{
         resourcesByPathname: Record<string, Array<{ bodyPath: string; requestPath: string; metaPath: string; mimeType: string; resourceType: string }>>;
-      }>(".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json");
+      }>(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
       expect(manifest.resourcesByPathname["/styles/app.css"]).toEqual([
         expect.objectContaining({
           bodyPath: descriptor.bodyPath,
@@ -391,8 +488,158 @@ describe("tRPC capture backend", () => {
         exists: true,
         request,
         meta,
-        bodyBase64: Buffer.from(".app { color: red; }", "utf8").toString("base64"),
-        size: Buffer.byteLength(".app { color: red; }"),
+        bodyBase64: Buffer.from(".app {\n  color: red;\n}", "utf8").toString("base64"),
+        size: Buffer.byteLength(".app {\n  color: red;\n}"),
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String)
+        })
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("stores query-specific sidecars for simple-mode asset variants while keeping the visible asset path stable", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-query-variants-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = createClient(server.trpcUrl);
+    const firstDescriptor = await createDescriptor({
+      topOrigin: "https://domain-b.example.com",
+      url: "https://domain-a.example.com/a.js?prop1=&prop2=B",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const secondDescriptor = await createDescriptor({
+      topOrigin: "https://domain-b.example.com",
+      url: "https://domain-a.example.com/a.js?cache-bust=true&retry-attempt=2",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+
+    expect(firstDescriptor.bodyPath).not.toBe(secondDescriptor.bodyPath);
+    expect(firstDescriptor.projectionPath).toBe(secondDescriptor.projectionPath);
+    expect(firstDescriptor.requestPath).not.toBe(secondDescriptor.requestPath);
+    expect(firstDescriptor.metaPath).not.toBe(secondDescriptor.metaPath);
+
+    try {
+      const firstMeta = createResponseMeta(firstDescriptor, {
+        mimeType: "application/javascript",
+        resourceType: "Script",
+        bodySuggestedExtension: "js"
+      });
+      const secondMeta = {
+        ...createResponseMeta(secondDescriptor, {
+          mimeType: "application/javascript",
+          resourceType: "Script",
+          bodySuggestedExtension: "js",
+          capturedAt: "2026-04-07T00:00:01.000Z"
+        }),
+        headers: [
+          { name: "Content-Type", value: "application/javascript" },
+          { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" }
+        ]
+      };
+
+      expect(await client.fixtures.writeIfAbsent.mutate({
+        descriptor: firstDescriptor,
+        request: createRequestPayload(firstDescriptor),
+        response: {
+          body: "console.log('shared body');",
+          bodyEncoding: "utf8",
+          meta: firstMeta
+        }
+      })).toEqual(expect.objectContaining({ written: true }));
+      expect(await client.fixtures.writeIfAbsent.mutate({
+        descriptor: secondDescriptor,
+        request: createRequestPayload(secondDescriptor, "2026-04-07T00:00:01.000Z"),
+        response: {
+          body: "console.log('should not overwrite body');",
+          bodyEncoding: "utf8",
+          meta: secondMeta
+        }
+      })).toEqual(expect.objectContaining({ written: true }));
+
+      expect(await fs.readFile(root.resolve(firstDescriptor.bodyPath), "utf8")).toBe("console.log('shared body');");
+      expect(await fs.readFile(root.resolve(secondDescriptor.bodyPath), "utf8")).toBe("console.log('should not overwrite body');");
+      expect(await fs.readFile(root.resolve(firstDescriptor.projectionPath!), "utf8")).toBe("console.log(\"shared body\");");
+      expect(await root.readJson<RequestPayload>(firstDescriptor.requestPath)).toEqual(createRequestPayload(firstDescriptor));
+      expect(await root.readJson<RequestPayload>(secondDescriptor.requestPath)).toEqual(
+        createRequestPayload(secondDescriptor, "2026-04-07T00:00:01.000Z")
+      );
+      expect(await root.readJson<ResponseMeta>(secondDescriptor.metaPath)).toEqual(secondMeta);
+
+      const readResult = await client.fixtures.read.query({ descriptor: secondDescriptor });
+      expect(readResult).toEqual(expect.objectContaining({
+        exists: true,
+        meta: secondMeta,
+        bodyBase64: Buffer.from("console.log(\"shared body\");", "utf8").toString("base64")
+      }));
+
+      const manifest = await root.readJson<{
+        resourcesByPathname: Record<string, Array<{ requestUrl: string; search: string; bodyPath: string }>>;
+      }>(".wraithwalker/manifests/https__domain-b.example.com/RESOURCE_MANIFEST.json");
+      expect(manifest.resourcesByPathname["/a.js"]).toEqual([
+        expect.objectContaining({
+          requestUrl: secondDescriptor.requestUrl,
+          search: "?cache-bust=true&retry-attempt=2",
+          bodyPath: secondDescriptor.bodyPath
+        }),
+        expect.objectContaining({
+          requestUrl: firstDescriptor.requestUrl,
+          search: "?prop1=&prop2=B",
+          bodyPath: firstDescriptor.bodyPath
+        })
+      ]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("serves an edited human-facing projection body over HTTP tRPC for asset fixtures", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-projection-read-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const client = createClient(server.trpcUrl);
+    const descriptor = await createDescriptor({
+      url: "https://cdn.example.com/assets/app.js",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const request = createRequestPayload(descriptor);
+    const meta = createResponseMeta(descriptor, {
+      mimeType: "application/javascript",
+      resourceType: "Script",
+      bodySuggestedExtension: "js"
+    });
+
+    try {
+      await client.fixtures.writeIfAbsent.mutate({
+        descriptor,
+        request,
+        response: {
+          body: "console.log('canonical');",
+          bodyEncoding: "utf8",
+          meta
+        }
+      });
+      await fs.writeFile(root.resolve(descriptor.projectionPath!), "window.__projection__ = true;\n");
+
+      const readResult = await client.fixtures.read.query({ descriptor });
+      expect(readResult).toEqual({
+        exists: true,
+        request,
+        meta,
+        bodyBase64: Buffer.from("window.__projection__ = true;\n", "utf8").toString("base64"),
+        size: Buffer.byteLength("window.__projection__ = true;\n"),
         sentinel: expect.objectContaining({
           rootId: expect.any(String)
         })
@@ -441,7 +688,7 @@ describe("tRPC capture backend", () => {
       expect(await fs.readFile(root.resolve(descriptor.bodyPath), "utf8")).toBe(body);
 
       await expect(
-        fs.access(root.resolve(".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"))
+        fs.access(root.resolve(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"))
       ).rejects.toThrow();
 
       const hasResult = await client.fixtures.has.query({ descriptor });
@@ -695,6 +942,11 @@ describe("tRPC capture backend", () => {
           clientId,
           captureDestination: "server" as const,
           enabledOrigins,
+          siteConfigs: enabledOrigins.map((origin) => ({
+            origin,
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          })),
           activeTrace: null
         })
       },
@@ -708,7 +960,8 @@ describe("tRPC capture backend", () => {
 
     expect(await caller.system.info()).toEqual(expect.objectContaining({
       rootPath: root.rootPath,
-      sentinel: expect.objectContaining({ rootId: "root-trpc" })
+      sentinel: expect.objectContaining({ rootId: "root-trpc" }),
+      siteConfigs: []
     }));
 
     expect(await caller.fixtures.has({ descriptor })).toEqual({
@@ -757,7 +1010,6 @@ describe("tRPC capture backend", () => {
       siteConfigs: [{
         origin: "https://app.example.com",
         createdAt: "2026-04-07T00:00:00.000Z",
-        mode: "simple",
         dumpAllowlistPatterns: ["\\.js$"]
       }],
       editorId: "cursor"
@@ -800,6 +1052,11 @@ describe("tRPC capture backend", () => {
           clientId,
           captureDestination: "server" as const,
           enabledOrigins,
+          siteConfigs: enabledOrigins.map((origin) => ({
+            origin,
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          })),
           activeTrace: await rootRuntime.getActiveTrace()
         })
       },
@@ -827,6 +1084,9 @@ describe("tRPC capture backend", () => {
         traceId: "trace-http"
       })
     );
+    expect(heartbeat.siteConfigs).toEqual([
+      expect.objectContaining({ origin: "https://app.example.com" })
+    ]);
 
     const recorded = await caller.scenarioTraces.recordClick({
       traceId: "trace-http",

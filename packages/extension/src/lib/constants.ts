@@ -1,7 +1,5 @@
 import type { NativeHostConfig } from "./types.js";
 
-export const DEFAULT_SITE_MODE = "simple" as const;
-export const LEGACY_SITE_MODE = "advanced" as const;
 export const DEFAULT_DUMP_ALLOWLIST_PATTERN = "\\.m?(js|ts)x?$";
 export const DEFAULT_DUMP_ALLOWLIST_PATTERNS: string[] = [
   DEFAULT_DUMP_ALLOWLIST_PATTERN,
@@ -11,6 +9,7 @@ export const DEFAULT_DUMP_ALLOWLIST_PATTERNS: string[] = [
 
 export const STORAGE_KEYS = {
   SITES: "siteConfigs",
+  LEGACY_SITES_MIGRATED: "legacySiteConfigsMigrated",
   NATIVE_HOST: "nativeHostConfig",
   LAST_SESSION: "lastSessionSnapshot",
   PREFERRED_EDITOR: "preferredEditorId",
@@ -32,8 +31,6 @@ export const ROOT_SENTINEL_DIR = ".wraithwalker";
 export const ROOT_SENTINEL_FILE = "root.json";
 export const ROOT_SENTINEL_SCHEMA_VERSION = 1;
 export const ROOT_DIRECTORY_PICKER_ID = "wraithwalker-root";
-export const SIMPLE_MODE_METADATA_DIR = ".wraithwalker";
-export const SIMPLE_MODE_METADATA_TREE = "simple";
 
 export const OFFSCREEN_URL = "offscreen.html";
 export const OFFSCREEN_REASONS = ["BLOBS"] as const;
@@ -60,7 +57,7 @@ export const FIXTURE_FILE_NAMES = {
 } as const;
 
 export const STATIC_RESOURCE_MANIFEST_FILE = "RESOURCE_MANIFEST.json";
-export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 1;
+export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 2;
 
 export const POPUP_REFRESH_INTERVAL_MS = 1500;
 export const SERVER_HEARTBEAT_INTERVAL_MS = 5_000;

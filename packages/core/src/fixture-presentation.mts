@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import * as prettier from "prettier";
 
 export interface PrettifyFixtureTextOptions {
@@ -41,6 +39,25 @@ const SUPPORTED_EXTENSIONS = new Set([
   ...HTML_EXTENSIONS,
   ...CSS_EXTENSIONS
 ]);
+
+export interface FixtureBodyPayload {
+  body: string;
+  bodyEncoding: "utf8" | "base64";
+}
+
+export interface ProjectionBodyPayloadOptions {
+  relativePath: string;
+  payload: FixtureBodyPayload;
+  mimeType?: string | null;
+  resourceType?: string | null;
+}
+
+function extname(relativePath: string): string {
+  const lastSlashIndex = Math.max(relativePath.lastIndexOf("/"), relativePath.lastIndexOf("\\"));
+  const baseName = lastSlashIndex >= 0 ? relativePath.slice(lastSlashIndex + 1) : relativePath;
+  const lastDotIndex = baseName.lastIndexOf(".");
+  return lastDotIndex > 0 ? baseName.slice(lastDotIndex).toLowerCase() : "";
+}
 
 function normalizeMimeType(value?: string | null): string {
   return (value || "").split(";")[0]?.trim().toLowerCase() || "";
@@ -95,7 +112,7 @@ function extensionFromResourceType(resourceType: string): string | null {
 }
 
 function extensionFromPath(relativePath: string): string | null {
-  const extension = path.extname(relativePath).toLowerCase();
+  const extension = extname(relativePath);
   return SUPPORTED_EXTENSIONS.has(extension) ? extension : null;
 }
 
@@ -134,7 +151,7 @@ function resolvePrettyExtension(options: PrettifyFixtureTextOptions): string | n
 }
 
 function applyPrettyExtension(relativePath: string, extension: string): string {
-  const existingExtension = path.extname(relativePath);
+  const existingExtension = extname(relativePath);
   if (existingExtension.toLowerCase() === extension) {
     return relativePath;
   }
@@ -168,4 +185,46 @@ export async function prettifyFixtureText(options: PrettifyFixtureTextOptions): 
   } catch {
     return options.text;
   }
+}
+
+function decodeBase64(value: string): Uint8Array {
+  if (typeof atob === "function") {
+    const decoded = atob(value);
+    return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  }
+
+  return Uint8Array.from(Buffer.from(value, "base64"));
+}
+
+export function decodeFixtureBodyText(payload: FixtureBodyPayload): string | null {
+  if (payload.bodyEncoding === "utf8") {
+    return payload.body;
+  }
+
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(decodeBase64(payload.body));
+  } catch {
+    return null;
+  }
+}
+
+export async function createProjectedFixturePayload(
+  options: ProjectionBodyPayloadOptions
+): Promise<FixtureBodyPayload> {
+  const text = decodeFixtureBodyText(options.payload);
+  if (text === null) {
+    return options.payload;
+  }
+
+  const projectedText = await prettifyFixtureText({
+    relativePath: options.relativePath,
+    text,
+    mimeType: options.mimeType,
+    resourceType: options.resourceType
+  });
+
+  return {
+    body: projectedText,
+    bodyEncoding: "utf8"
+  };
 }

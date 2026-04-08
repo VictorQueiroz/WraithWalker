@@ -1,3 +1,18 @@
+import {
+  CAPTURE_ASSETS_DIR,
+  CAPTURE_HTTP_DIR,
+  FIXTURE_FILE_NAMES,
+  MANIFESTS_DIR,
+  STATIC_RESOURCE_MANIFEST_FILE
+} from "./constants.mjs";
+export {
+  CAPTURE_ASSETS_DIR,
+  CAPTURE_HTTP_DIR,
+  FIXTURE_FILE_NAMES,
+  MANIFESTS_DIR,
+  STATIC_RESOURCE_MANIFEST_FILE
+} from "./constants.mjs";
+
 const SAFE_SEGMENT_REGEX = /[^a-zA-Z0-9._-]+/g;
 
 const SIMPLE_MIME_BY_EXTENSION = new Map<string, string>([
@@ -60,16 +75,7 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade"
 ]);
 
-export const SIMPLE_MODE_METADATA_DIR = ".wraithwalker";
-export const SIMPLE_MODE_METADATA_TREE = "simple";
-export const FIXTURE_FILE_NAMES = {
-  API_REQUEST: "request.json",
-  API_META: "response.meta.json"
-} as const;
-export const STATIC_RESOURCE_MANIFEST_FILE = "RESOURCE_MANIFEST.json";
-export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 1;
-
-export type SiteMode = "simple" | "advanced";
+export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 2;
 
 export interface HeaderEntry {
   name: string;
@@ -90,11 +96,11 @@ export interface FixtureDescriptorBase {
   requestOriginKey: string;
   requestUrl: string;
   method: string;
-  siteMode: SiteMode;
   postDataEncoding: string;
   queryHash: string;
   bodyHash: string;
   bodyPath: string;
+  projectionPath?: string | null;
   requestPath: string;
   metaPath: string;
   manifestPath: string | null;
@@ -153,6 +159,7 @@ export interface StaticResourceManifestEntry {
   pathname: string;
   search: string;
   bodyPath: string;
+  projectionPath?: string | null;
   requestPath: string;
   metaPath: string;
   mimeType: string;
@@ -194,15 +201,13 @@ function joinParts(parts: Array<string | undefined>): string {
   return parts.filter(Boolean).join("/");
 }
 
-function stripTopOriginPrefix(topOriginKey: string, relativePath: string): string {
-  const prefix = `${topOriginKey}/`;
-  return relativePath.startsWith(prefix) ? relativePath.slice(prefix.length) : relativePath;
+function buildSimpleAssetSidecarPath(hiddenFixtureRoot: string, queryHash: string, search: string, suffix: string): string {
+  const queryVariantSuffix = search ? `.__q-${queryHash}` : "";
+  return `${hiddenFixtureRoot}${queryVariantSuffix}${suffix}`;
 }
 
-function toRootRelativePath(descriptor: AssetFixtureDescriptor, relativePath: string): string {
-  return descriptor.siteMode === "advanced"
-    ? stripTopOriginPrefix(descriptor.topOriginKey, relativePath)
-    : relativePath;
+function buildSimpleAssetBodyPath(hiddenFixtureRoot: string, queryHash: string, search: string): string {
+  return buildSimpleAssetSidecarPath(hiddenFixtureRoot, queryHash, search, ".__body");
 }
 
 export function normalizeSiteInput(value: string): string {
@@ -379,7 +384,6 @@ export async function createFixtureDescriptor({
   url,
   postData = "",
   postDataEncoding = "utf8",
-  siteMode = "advanced",
   resourceType = "",
   mimeType = ""
 }: {
@@ -388,7 +392,6 @@ export async function createFixtureDescriptor({
   url: string;
   postData?: string;
   postDataEncoding?: string;
-  siteMode?: SiteMode;
   resourceType?: string;
   mimeType?: string;
 }): Promise<FixtureDescriptor> {
@@ -402,23 +405,21 @@ export async function createFixtureDescriptor({
   const requestOriginKey = originToKey(requestOrigin);
   const assetLike = isAssetLikeRequest({ method: methodUpper, url, resourceType, mimeType });
   const hasTypeHints = resourceType.trim().length > 0 || mimeType.trim().length > 0;
-  const useSimpleVisibleAssetStorage = siteMode === "simple"
-    && methodUpper === "GET"
-    && (assetLike || !hasTypeHints);
+  const useVisibleAssetProjection = methodUpper === "GET" && (assetLike || !hasTypeHints);
 
-  if (useSimpleVisibleAssetStorage) {
+  if (useVisibleAssetProjection) {
     const pathSegments = splitSimpleModePath(requestUrl.pathname);
     const fileName = pathSegments[pathSegments.length - 1];
     const slug = sanitizeSegment(fileName);
     const requestHostKey = sanitizeSegment(getRequestHostKey(url));
     const visiblePathParts = [requestHostKey, ...pathSegments];
-    const bodyPath = joinParts(visiblePathParts);
+    const projectionPath = joinParts(visiblePathParts);
     const hiddenFixtureRoot = joinParts([
-      SIMPLE_MODE_METADATA_DIR,
-      SIMPLE_MODE_METADATA_TREE,
+      CAPTURE_ASSETS_DIR,
       topOriginKey,
       ...visiblePathParts
     ]);
+    const bodyPath = buildSimpleAssetBodyPath(hiddenFixtureRoot, queryHash, requestUrl.search);
 
     return {
       assetLike: true,
@@ -428,60 +429,25 @@ export async function createFixtureDescriptor({
       requestOriginKey,
       requestUrl: requestUrl.toString(),
       method: methodUpper,
-      siteMode,
       postDataEncoding,
       queryHash,
       bodyHash,
       bodyPath,
-      requestPath: `${hiddenFixtureRoot}.__request.json`,
-      metaPath: `${hiddenFixtureRoot}.__response.json`,
+      projectionPath,
+      requestPath: buildSimpleAssetSidecarPath(hiddenFixtureRoot, queryHash, requestUrl.search, ".__request.json"),
+      metaPath: buildSimpleAssetSidecarPath(hiddenFixtureRoot, queryHash, requestUrl.search, ".__response.json"),
       manifestPath: joinParts([
-        SIMPLE_MODE_METADATA_DIR,
-        SIMPLE_MODE_METADATA_TREE,
+        MANIFESTS_DIR,
         topOriginKey,
         STATIC_RESOURCE_MANIFEST_FILE
       ]),
-      metadataOptional: true,
+      metadataOptional: false,
       slug,
       storageMode: "asset"
     };
   }
 
-  const baseParts =
-    siteMode === "simple"
-      ? [SIMPLE_MODE_METADATA_DIR, SIMPLE_MODE_METADATA_TREE, topOriginKey, "origins", requestOriginKey]
-      : [topOriginKey, "origins", requestOriginKey];
-
-  if (assetLike) {
-    const pathSegments = splitPathSegments(requestUrl.pathname);
-    const originalFileName = pathSegments.pop() || "index";
-    const hashedFileName = requestUrl.search
-      ? appendHashToFileName(originalFileName, `__q-${queryHash}`)
-      : originalFileName;
-    const directory = joinParts([...baseParts, "assets", ...pathSegments]);
-    const bodyPath = joinParts([directory, hashedFileName]);
-
-    return {
-      assetLike,
-      topOrigin,
-      topOriginKey,
-      requestOrigin,
-      requestOriginKey,
-      requestUrl: requestUrl.toString(),
-      method: methodUpper,
-      siteMode,
-      postDataEncoding,
-      queryHash,
-      bodyHash,
-      bodyPath,
-      requestPath: `${bodyPath}.__request.json`,
-      metaPath: `${bodyPath}.__response.json`,
-      manifestPath: `${topOriginKey}/${STATIC_RESOURCE_MANIFEST_FILE}`,
-      metadataOptional: false,
-      slug: sanitizeSegment(originalFileName),
-      storageMode: "asset"
-    };
-  }
+  const baseParts = [CAPTURE_HTTP_DIR, topOriginKey, "origins", requestOriginKey];
 
   const pathSegments = splitPathSegments(requestUrl.pathname);
   const slug = sanitizeSegment(pathSegments.join("-") || "root");
@@ -499,7 +465,6 @@ export async function createFixtureDescriptor({
     requestOriginKey,
     requestUrl: requestUrl.toString(),
     method: methodUpper,
-    siteMode,
     postDataEncoding,
     queryHash,
     bodyHash,
@@ -507,6 +472,7 @@ export async function createFixtureDescriptor({
     requestPath: joinParts([directory, FIXTURE_FILE_NAMES.API_REQUEST]),
     metaPath: joinParts([directory, FIXTURE_FILE_NAMES.API_META]),
     bodyPath: joinParts([directory, "response.body"]),
+    projectionPath: null,
     manifestPath: null,
     metadataOptional: false,
     slug,
@@ -584,27 +550,38 @@ export function getStaticResourceManifestPath(
     return null;
   }
 
-  return descriptor.manifestPath || `${descriptor.topOriginKey}/${STATIC_RESOURCE_MANIFEST_FILE}`;
+  return descriptor.manifestPath || `${MANIFESTS_DIR}/${descriptor.topOriginKey}/${STATIC_RESOURCE_MANIFEST_FILE}`;
 }
 
 export function createStaticResourceManifestEntry(
   descriptor: AssetFixtureDescriptor,
-  responseMeta: ResponseMeta
+  responseMeta: ResponseMeta,
+  options: { projectionPath?: string | null } = {}
 ): StaticResourceManifestEntry {
   const requestUrl = new URL(descriptor.requestUrl);
+  const projectionPath = options.projectionPath !== undefined
+    ? options.projectionPath
+    : descriptor.projectionPath ?? null;
 
   return {
     requestUrl: descriptor.requestUrl,
     requestOrigin: descriptor.requestOrigin,
     pathname: requestUrl.pathname,
     search: requestUrl.search,
-    bodyPath: toRootRelativePath(descriptor, descriptor.bodyPath),
-    requestPath: toRootRelativePath(descriptor, descriptor.requestPath),
-    metaPath: toRootRelativePath(descriptor, descriptor.metaPath),
+    bodyPath: descriptor.bodyPath,
+    ...(projectionPath ? { projectionPath } : {}),
+    requestPath: descriptor.requestPath,
+    metaPath: descriptor.metaPath,
     mimeType: responseMeta.mimeType,
     resourceType: responseMeta.resourceType,
     capturedAt: responseMeta.capturedAt
   };
+}
+
+export function getFixtureDisplayPath(
+  fixture: Pick<FixtureDescriptorBase, "bodyPath" | "projectionPath"> | Pick<StaticResourceManifestEntry, "bodyPath" | "projectionPath">
+): string {
+  return fixture.projectionPath || fixture.bodyPath;
 }
 
 export function createStaticResourceManifest(descriptor: AssetFixtureDescriptor): StaticResourceManifest {

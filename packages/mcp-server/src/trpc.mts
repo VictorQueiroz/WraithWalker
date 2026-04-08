@@ -4,6 +4,7 @@ import {
   type RequestPayload,
   type ResponseMeta
 } from "@wraithwalker/core/fixture-layout";
+import type { SiteConfig } from "@wraithwalker/core/site-config";
 import type { SiteConfigLike } from "@wraithwalker/core/fixtures";
 import type { ScenarioTraceRecord } from "@wraithwalker/core/scenario-traces";
 import type { RootSentinel } from "@wraithwalker/core/root";
@@ -26,11 +27,11 @@ const fixtureDescriptorBaseSchema = z.object({
   requestOriginKey: z.string(),
   requestUrl: z.string(),
   method: z.string(),
-  siteMode: z.union([z.literal("simple"), z.literal("advanced")]),
   postDataEncoding: z.string(),
   queryHash: z.string(),
   bodyHash: z.string(),
   bodyPath: z.string(),
+  projectionPath: z.string().nullable().optional(),
   requestPath: z.string(),
   metaPath: z.string(),
   manifestPath: z.string().nullable(),
@@ -94,7 +95,6 @@ export const rootSentinelSchema = z.object({
 export const siteConfigSchema = z.object({
   origin: z.string(),
   createdAt: z.string(),
-  mode: z.union([z.literal("simple"), z.literal("advanced")]),
   dumpAllowlistPatterns: z.array(z.string())
 });
 
@@ -106,10 +106,16 @@ export interface TrpcSystemInfo {
   baseUrl: string;
   mcpUrl: string;
   trpcUrl: string;
+  siteConfigs: SiteConfig[];
 }
 
 export interface TrpcHeartbeatInfo extends TrpcSystemInfo {
   activeTrace: ScenarioTraceRecord | null;
+}
+
+export interface TrpcSiteConfigsInfo {
+  siteConfigs: SiteConfig[];
+  sentinel: RootSentinel;
 }
 
 export interface CreateWraithwalkerRouterDependencies {
@@ -131,6 +137,7 @@ export interface CreateWraithwalkerRouterDependencies {
     mcpUrl: string;
     trpcUrl: string;
   };
+  getSiteConfigs?: () => Promise<SiteConfig[]>;
 }
 
 const t = initTRPC.create();
@@ -142,15 +149,17 @@ export function createWraithwalkerRouter({
   serverVersion,
   runtime = createServerRootRuntime({ rootPath, sentinel }),
   extensionSessions,
-  getServerUrls
+  getServerUrls,
+  getSiteConfigs = () => runtime.readEffectiveSiteConfigs()
 }: CreateWraithwalkerRouterDependencies) {
   return t.router({
     system: t.router({
-      info: t.procedure.query((): TrpcSystemInfo => ({
+      info: t.procedure.query(async (): Promise<TrpcSystemInfo> => ({
         serverName,
         serverVersion,
         rootPath,
         sentinel,
+        siteConfigs: await getSiteConfigs(),
         ...getServerUrls()
       }))
     }),
@@ -169,8 +178,32 @@ export function createWraithwalkerRouter({
             serverVersion,
             rootPath,
             sentinel,
+            siteConfigs: status.siteConfigs,
             ...getServerUrls(),
             activeTrace: status.activeTrace
+          };
+        })
+    }),
+    config: t.router({
+      readConfiguredSiteConfigs: t.procedure
+        .query(async (): Promise<TrpcSiteConfigsInfo> => ({
+          siteConfigs: await runtime.readConfiguredSiteConfigs(),
+          sentinel
+        })),
+      readEffectiveSiteConfigs: t.procedure
+        .query(async (): Promise<TrpcSiteConfigsInfo> => ({
+          siteConfigs: await runtime.readEffectiveSiteConfigs(),
+          sentinel
+        })),
+      writeConfiguredSiteConfigs: t.procedure
+        .input(z.object({
+          siteConfigs: z.array(siteConfigSchema)
+        }))
+        .mutation(async ({ input }): Promise<TrpcSiteConfigsInfo> => {
+          await runtime.writeConfiguredSiteConfigs(input.siteConfigs as SiteConfig[]);
+          return {
+            siteConfigs: await runtime.readConfiguredSiteConfigs(),
+            sentinel
           };
         })
     }),

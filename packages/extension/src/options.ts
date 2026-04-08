@@ -3,12 +3,14 @@ import { createRoot } from "react-dom/client";
 
 import {
   getNativeHostConfig as defaultGetNativeHostConfig,
-  getSiteConfigs as defaultGetSiteConfigs,
   setNativeHostConfig as defaultSetNativeHostConfig,
-  setSiteConfigs as defaultSetSiteConfigs
 } from "./lib/chrome-storage.js";
 import { EDITOR_PRESETS, type EditorPreset } from "./lib/constants.js";
 import type { BackgroundMessage } from "./lib/messages.js";
+import {
+  getConfiguredSiteConfigs as defaultGetSiteConfigs,
+  setConfiguredSiteConfigs as defaultSetSiteConfigs
+} from "./lib/root-config.js";
 import {
   ensureRootSentinel as defaultEnsureRootSentinel,
   loadStoredRootHandle as defaultLoadStoredRootHandle,

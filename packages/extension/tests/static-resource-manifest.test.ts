@@ -32,7 +32,7 @@ describe("static resource manifest", () => {
     });
 
     expect(getStaticResourceManifestPath(assetDescriptor)).toBe(
-      `https__app.example.com/${STATIC_RESOURCE_MANIFEST_FILE}`
+      `.wraithwalker/manifests/https__app.example.com/${STATIC_RESOURCE_MANIFEST_FILE}`
     );
     expect(getStaticResourceManifestPath(apiDescriptor)).toBeNull();
   });
@@ -41,12 +41,11 @@ describe("static resource manifest", () => {
     const descriptor = await createAssetDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/static/app.js",
-      siteMode: "simple"
+      url: "https://cdn.example.com/static/app.js"
     });
 
     expect(getStaticResourceManifestPath(descriptor)).toBe(
-      ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
     );
   });
 
@@ -75,7 +74,9 @@ describe("static resource manifest", () => {
     });
 
     expect(firstEntry.pathname).toBe("/static/app.js");
-    expect(firstEntry.bodyPath).toMatch(/^origins\/https__cdn\.example\.com\/assets\/static\/app__q-/);
+    expect(firstEntry.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/static\/app\.js\.__q-/
+    );
 
     const updatedManifest = upsertStaticResourceManifest(manifest, firstEntry);
     expect(updatedManifest.resourcesByPathname["/static/app.js"]).toEqual([firstEntry]);
@@ -95,8 +96,7 @@ describe("static resource manifest", () => {
     const descriptor = await createAssetDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/static/app.js?v=1",
-      siteMode: "simple"
+      url: "https://cdn.example.com/static/app.js?v=1"
     });
 
     const entry = createStaticResourceManifestEntry(descriptor, {
@@ -112,9 +112,12 @@ describe("static resource manifest", () => {
       bodySuggestedExtension: "js"
     });
 
-    expect(entry.bodyPath).toBe("cdn.example.com/static/app.js");
-    expect(entry.requestPath).toBe(
-      ".wraithwalker/simple/https__app.example.com/cdn.example.com/static/app.js.__request.json"
+    expect(entry.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/static\/app\.js\.__q-[a-z0-9]+\.__body$/
+    );
+    expect(entry.projectionPath).toBe("cdn.example.com/static/app.js");
+    expect(entry.requestPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/static\/app\.js\.__q-[a-z0-9]+\.__request\.json$/
     );
   });
 

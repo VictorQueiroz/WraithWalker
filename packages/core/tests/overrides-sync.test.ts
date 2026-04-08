@@ -91,20 +91,27 @@ describe("syncOverridesDirectory", () => {
 
     const httpsManifest = await readJson<{
       topOrigin: string;
-      resourcesByPathname: Record<string, Array<{ bodyPath: string; mimeType: string; resourceType: string }>>;
-    }>(dir, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json");
+      resourcesByPathname: Record<string, Array<{
+        bodyPath: string;
+        projectionPath?: string | null;
+        mimeType: string;
+        resourceType: string;
+      }>>;
+    }>(dir, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
     expect(httpsManifest.topOrigin).toBe("https://app.example.com");
     expect(Object.values(httpsManifest.resourcesByPathname).flat()).toHaveLength(7);
     expect(httpsManifest.resourcesByPathname["/scripts/app.js"]).toEqual([
       expect.objectContaining({
-        bodyPath: "app.example.com/scripts/app.js",
+        bodyPath: ".wraithwalker/captures/assets/https__app.example.com/app.example.com/scripts/app.js.__body",
+        projectionPath: "app.example.com/scripts/app.js",
         mimeType: "application/javascript",
         resourceType: "Script"
       })
     ]);
     expect(httpsManifest.resourcesByPathname["/data/blob.json"]).toEqual([
       expect.objectContaining({
-        bodyPath: "app.example.com/data/blob.json?lang=en",
+        bodyPath: ".wraithwalker/captures/assets/https__app.example.com/app.example.com/data/blob.json?lang=en.__body",
+        projectionPath: "app.example.com/data/blob.json?lang=en",
         search: "?lang=en",
         mimeType: "application/json",
         resourceType: "Other"
@@ -115,21 +122,21 @@ describe("syncOverridesDirectory", () => {
       headers: Array<{ name: string; value: string }>;
       resourceType: string;
       bodyEncoding: string;
-    }>(dir, ".wraithwalker/simple/https__app.example.com/app.example.com/index.html.__response.json");
+    }>(dir, ".wraithwalker/captures/assets/https__app.example.com/app.example.com/index.html.__response.json");
     expect(htmlMeta.resourceType).toBe("Document");
     expect(htmlMeta.bodyEncoding).toBe("utf8");
     expect(htmlMeta.headers).toContainEqual({ name: "Cache-Control", value: "no-store" });
 
     const cssMeta = await readJson<{ resourceType: string }>(
       dir,
-      ".wraithwalker/simple/https__app.example.com/app.example.com/styles/app.css.__response.json"
+      ".wraithwalker/captures/assets/https__app.example.com/app.example.com/styles/app.css.__response.json"
     );
     expect(cssMeta.resourceType).toBe("Stylesheet");
 
     const jsMeta = await readJson<{
       headers: Array<{ name: string; value: string }>;
       resourceType: string;
-    }>(dir, ".wraithwalker/simple/https__app.example.com/app.example.com/scripts/app.js.__response.json");
+    }>(dir, ".wraithwalker/captures/assets/https__app.example.com/app.example.com/scripts/app.js.__response.json");
     expect(jsMeta.resourceType).toBe("Script");
     expect(jsMeta.headers).toEqual(expect.arrayContaining([
       { name: "Content-Type", value: "application/x-custom-js" },
@@ -139,33 +146,33 @@ describe("syncOverridesDirectory", () => {
 
     const fontMeta = await readJson<{ resourceType: string; bodyEncoding: string }>(
       dir,
-      ".wraithwalker/simple/https__app.example.com/app.example.com/fonts/site.woff2.__response.json"
+      ".wraithwalker/captures/assets/https__app.example.com/app.example.com/fonts/site.woff2.__response.json"
     );
     expect(fontMeta.resourceType).toBe("Font");
     expect(fontMeta.bodyEncoding).toBe("base64");
 
     const mediaMeta = await readJson<{ resourceType: string }>(
       dir,
-      ".wraithwalker/simple/https__app.example.com/app.example.com/media/clip.mp3.__response.json"
+      ".wraithwalker/captures/assets/https__app.example.com/app.example.com/media/clip.mp3.__response.json"
     );
     expect(mediaMeta.resourceType).toBe("Media");
 
     const imageMeta = await readJson<{ resourceType: string; bodyEncoding: string }>(
       dir,
-      ".wraithwalker/simple/https__app.example.com/app.example.com/images/logo.png.__response.json"
+      ".wraithwalker/captures/assets/https__app.example.com/app.example.com/images/logo.png.__response.json"
     );
     expect(imageMeta.resourceType).toBe("Image");
     expect(imageMeta.bodyEncoding).toBe("base64");
 
     const otherMeta = await readJson<{ resourceType: string }>(
       dir,
-      ".wraithwalker/simple/https__app.example.com/app.example.com/data/blob.json?lang=en.__response.json"
+      ".wraithwalker/captures/assets/https__app.example.com/app.example.com/data/blob.json?lang=en.__response.json"
     );
     expect(otherMeta.resourceType).toBe("Other");
 
     const requestPayload = await readJson<{ topOrigin: string; queryHash: string; bodyHash: string }>(
       dir,
-      ".wraithwalker/simple/https__app.example.com/app.example.com/index.html.__request.json"
+      ".wraithwalker/captures/assets/https__app.example.com/app.example.com/index.html.__request.json"
     );
     expect(requestPayload.topOrigin).toBe("https://app.example.com");
     expect(requestPayload.queryHash).toHaveLength(12);
@@ -177,7 +184,7 @@ describe("syncOverridesDirectory", () => {
 
     const rebuiltManifest = await readJson<{
       resourcesByPathname: Record<string, unknown[]>;
-    }>(dir, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json");
+    }>(dir, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
     expect(Object.values(rebuiltManifest.resourcesByPathname).flat()).toHaveLength(6);
     expect(rebuiltManifest.resourcesByPathname["/data/blob.json"]).toBeUndefined();
   });
@@ -301,15 +308,15 @@ describe("syncOverridesDirectory", () => {
     expect(result.skipped).toEqual([]);
 
     const manifest = await readJson<{
-      resourcesByPathname: Record<string, Array<{ bodyPath: string }>>;
-    }>(dir, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json");
-    expect(Object.values(manifest.resourcesByPathname).flat().map((entry) => entry.bodyPath)).toEqual([
+      resourcesByPathname: Record<string, Array<{ projectionPath?: string | null }>>;
+    }>(dir, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
+    expect(Object.values(manifest.resourcesByPathname).flat().map((entry) => entry.projectionPath)).toEqual([
       "app.example.com/index.html",
       "app.example.com/scripts/keep.skip.js",
       "app.example.com/styles/keep.css"
     ]);
 
-    await expect(fs.access(path.join(dir, ".wraithwalker/simple/https__ignored.example.com/RESOURCE_MANIFEST.json"))).rejects.toThrow();
+    await expect(fs.access(path.join(dir, ".wraithwalker/manifests/https__ignored.example.com/RESOURCE_MANIFEST.json"))).rejects.toThrow();
   });
 
   it("throws when the overrides path does not exist or is not a directory", async () => {

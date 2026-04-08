@@ -37,6 +37,9 @@ export type ScenarioResult = { ok: true; name: string } | ErrorResult;
 
 export type BackgroundMessage =
   | SessionMessage
+  | { type: "config.readConfiguredSiteConfigs" }
+  | { type: "config.readEffectiveSiteConfigs" }
+  | { type: "config.writeConfiguredSiteConfigs"; siteConfigs: SiteConfig[] }
   | { type: "root.verify" }
   | { type: "native.verify" }
   | { type: "native.open"; commandTemplate?: string; editorId?: string }
@@ -56,6 +59,23 @@ export type OffscreenMessage =
       target: "offscreen";
       type: "fs.ensureRoot";
       payload?: { requestPermission?: boolean };
+    }
+  | {
+      target: "offscreen";
+      type: "fs.readConfiguredSiteConfigs";
+      payload?: undefined;
+    }
+  | {
+      target: "offscreen";
+      type: "fs.readEffectiveSiteConfigs";
+      payload?: undefined;
+    }
+  | {
+      target: "offscreen";
+      type: "fs.writeConfiguredSiteConfigs";
+      payload: {
+        siteConfigs: SiteConfig[];
+      };
     }
   | {
       target: "offscreen";
@@ -88,6 +108,7 @@ export type OffscreenMessage =
 export type BackgroundMessageResult =
   | SessionSnapshot
   | RootReadyResult
+  | SiteConfigsResult
   | NativeVerifyResult
   | NativeOpenResult
   | ScenarioListResult
@@ -121,6 +142,14 @@ export type FixtureWriteResult =
   | {
       ok: true;
       descriptor: FixtureDescriptor;
+      sentinel: RootSentinel;
+    }
+  | ErrorResult;
+
+export type SiteConfigsResult =
+  | {
+      ok: true;
+      siteConfigs: SiteConfig[];
       sentinel: RootSentinel;
     }
   | ErrorResult;

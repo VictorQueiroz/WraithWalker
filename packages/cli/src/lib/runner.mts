@@ -6,6 +6,7 @@ import { supportsColor } from "./ansi.mjs";
 import { createPlainOutput } from "./plain-output.mjs";
 import { createThemedOutput } from "./themed-output.mjs";
 import { command as contextCommand } from "../commands/context.mjs";
+import { command as configCommand } from "../commands/config.mjs";
 import { command as importHarCommand } from "../commands/import-har.mjs";
 import { command as initCommand } from "../commands/init.mjs";
 import { command as scenariosCommand } from "../commands/scenarios.mjs";
@@ -15,6 +16,7 @@ import { command as syncCommand } from "../commands/sync.mjs";
 
 const COMMANDS: CommandSpec<unknown, unknown>[] = [
   initCommand,
+  configCommand,
   syncCommand,
   importHarCommand,
   statusCommand,
@@ -29,6 +31,7 @@ export const USAGE = `Usage: wraithwalker <command>
 
 Commands:
   init [dir]                     Create a fixture root (.wraithwalker/root.json)
+  config {list|get|set|add|unset} Manage nearest-root capture config
   sync [dir]                     Populate or refresh .wraithwalker metadata
   import-har <har-file> [dir]    Populate a fixture root from a HAR file
   status                         Show fixture root summary

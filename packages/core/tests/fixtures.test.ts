@@ -36,8 +36,8 @@ describe("fixture readers", () => {
           pathname: "/app.js",
           search: "",
           bodyPath: "cdn.example.com/app.js",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
           mimeType: "application/javascript",
           resourceType: "Script",
           capturedAt: "2026-04-03T00:00:00.000Z"
@@ -46,14 +46,12 @@ describe("fixture readers", () => {
     };
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest
     });
 
     const info = await readOriginInfo(root.rootPath, {
-      origin: "https://app.example.com",
-      mode: "simple"
+      origin: "https://app.example.com"
     });
 
     expect(info.origin).toBe("https://app.example.com");
@@ -65,7 +63,6 @@ describe("fixture readers", () => {
       prefix: "wraithwalker-core-fixtures-"
     });
     await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -81,8 +78,7 @@ describe("fixture readers", () => {
     });
 
     const info = await readOriginInfo(root.rootPath, {
-      origin: "https://app.example.com",
-      mode: "simple"
+      origin: "https://app.example.com"
     });
 
     expect(info.manifestPath).toBeNull();
@@ -92,7 +88,7 @@ describe("fixture readers", () => {
         method: "GET",
         pathname: "users",
         status: 204,
-        fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
+        fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
       })
     ]);
   });
@@ -102,7 +98,6 @@ describe("fixture readers", () => {
       prefix: "wraithwalker-core-fixtures-"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -118,7 +113,7 @@ describe("fixture readers", () => {
       }
     });
 
-    const config: SiteConfigLike = { origin: "https://app.example.com", mode: "advanced" };
+    const config: SiteConfigLike = { origin: "https://app.example.com" };
     const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.apiEndpoints).toHaveLength(1);
@@ -145,7 +140,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -159,8 +153,8 @@ describe("fixture readers", () => {
             pathname: "/assets/chunk.js",
             search: "",
             bodyPath: "cdn.example.com/assets/chunk.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -174,7 +168,6 @@ describe("fixture readers", () => {
     );
 
     const apiFixture = await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -234,7 +227,6 @@ describe("fixture readers", () => {
       prefix: "wraithwalker-core-fixtures-"
     });
     const fixture = await root.writeApiFixture({
-      mode: "advanced",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "POST",
@@ -271,7 +263,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -285,8 +276,8 @@ describe("fixture readers", () => {
             pathname: "/assets/app.css",
             search: "",
             bodyPath: "cdn.example.com/assets/app.css",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.css.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.css.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.css.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.css.__response.json",
             mimeType: "text/css",
             resourceType: "Stylesheet",
             capturedAt: "2026-04-05T00:00:00.000Z"
@@ -297,8 +288,8 @@ describe("fixture readers", () => {
             pathname: "/assets/app.js",
             search: "",
             bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-05T00:00:00.000Z"
@@ -309,8 +300,8 @@ describe("fixture readers", () => {
             pathname: "/images/logo.svg",
             search: "",
             bodyPath: "images.example.com/logo.svg",
-            requestPath: ".wraithwalker/simple/https__app.example.com/images.example.com/logo.svg.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/images.example.com/logo.svg.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/images.example.com/logo.svg.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/images.example.com/logo.svg.__response.json",
             mimeType: "image/svg+xml",
             resourceType: "Image",
             capturedAt: "2026-04-05T00:00:00.000Z"
@@ -320,7 +311,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "advanced",
       topOrigin: "https://admin.example.com",
       manifest: {
         schemaVersion: 1,
@@ -348,8 +338,7 @@ describe("fixture readers", () => {
     await root.writeText("cdn.example.com/panel.js", "export const panel = true;");
 
     const firstPage = await listAssets(root.rootPath, {
-      origin: "https://app.example.com",
-      mode: "simple"
+      origin: "https://app.example.com"
     }, {
       limit: 2
     });
@@ -362,8 +351,7 @@ describe("fixture readers", () => {
     expect(firstPage.nextCursor).not.toBeNull();
 
     const secondPage = await listAssets(root.rootPath, {
-      origin: "https://app.example.com",
-      mode: "simple"
+      origin: "https://app.example.com"
     }, {
       limit: 2,
       cursor: firstPage.nextCursor ?? undefined
@@ -375,8 +363,7 @@ describe("fixture readers", () => {
     expect(secondPage.nextCursor).toBeNull();
 
     const filtered = await listAssets(root.rootPath, {
-      origin: "https://app.example.com",
-      mode: "simple"
+      origin: "https://app.example.com"
     }, {
       resourceTypes: ["Script"],
       mimeTypes: ["application/javascript"],
@@ -394,8 +381,7 @@ describe("fixture readers", () => {
     ]);
 
     const advanced = await listAssets(root.rootPath, {
-      origin: "https://admin.example.com",
-      mode: "advanced"
+      origin: "https://admin.example.com"
     });
     expect(advanced.items).toEqual([
       expect.objectContaining({
@@ -433,7 +419,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -447,8 +432,8 @@ describe("fixture readers", () => {
             pathname: "/assets/app.js",
             search: "",
             bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-05T00:00:00.000Z"
@@ -459,7 +444,6 @@ describe("fixture readers", () => {
     await root.writeText("cdn.example.com/assets/app.js", "renderDropdown({ animated: true });");
 
     await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -489,7 +473,7 @@ describe("fixture readers", () => {
     expect(matches.items.map((item) => item.matchKind)).toEqual(["body", "body", "body"]);
     expect(matches.items.map((item) => item.matchCount)).toEqual([1, 1, 1]);
     expect(matches.items.map((item) => item.path)).toEqual([
-      ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/menu__q-abc__b-def/response.body",
+      ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/menu__q-abc__b-def/response.body",
       "cdn.example.com/assets/app.js",
       "notes/ui-guidelines.txt"
     ]);
@@ -558,7 +542,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -572,8 +555,8 @@ describe("fixture readers", () => {
             pathname: "/assets/hierarchy.chunk.js",
             search: "",
             bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -584,8 +567,8 @@ describe("fixture readers", () => {
             pathname: "/assets/hierarchy-shell.js",
             search: "",
             bodyPath: "cdn.example.com/assets/hierarchy-shell.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy-shell.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy-shell.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy-shell.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy-shell.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -596,8 +579,8 @@ describe("fixture readers", () => {
             pathname: "/assets/tree-view.js",
             search: "",
             bodyPath: "cdn.example.com/assets/tree-view.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/tree-view.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/tree-view.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/tree-view.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/tree-view.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -608,7 +591,6 @@ describe("fixture readers", () => {
     await root.writeText("cdn.example.com/assets/hierarchy-shell.js", "console.log('ready');");
     await root.writeText("cdn.example.com/assets/tree-view.js", "console.log('ready');");
     await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -630,7 +612,7 @@ describe("fixture readers", () => {
 
     expect(matches.items).toEqual([
       expect.objectContaining({
-        path: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/hierarchy__q-abc__b-def/response.body",
+        path: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/hierarchy__q-abc__b-def/response.body",
         sourceKind: "endpoint",
         matchKind: "path",
         matchCount: 1,
@@ -662,7 +644,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -676,8 +657,8 @@ describe("fixture readers", () => {
             pathname: "/assets/dropdown.js",
             search: "",
             bodyPath: "cdn.example.com/assets/dropdown.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -709,7 +690,6 @@ describe("fixture readers", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "http://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -723,8 +703,8 @@ describe("fixture readers", () => {
             pathname: "/assets/http.js",
             search: "",
             bodyPath: "cdn.example.com/assets/http.js",
-            requestPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http.js.__request.json",
-            metaPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -733,7 +713,6 @@ describe("fixture readers", () => {
       }
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -747,8 +726,8 @@ describe("fixture readers", () => {
             pathname: "/assets/https.js",
             search: "",
             bodyPath: "cdn.example.com/assets/https.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/https.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/https.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/https.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/https.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -757,7 +736,6 @@ describe("fixture readers", () => {
       }
     });
     await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "http://app.example.com",
       requestOrigin: "http://api.example.com",
       method: "GET",
@@ -772,7 +750,6 @@ describe("fixture readers", () => {
       body: "{\"scheme\":\"http\"}"
     });
     await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -881,7 +858,6 @@ describe("fixture readers", () => {
 
     await root.writeText("cdn.example.com/assets/huge.js", largeBody);
     const endpointFixture = await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -914,8 +890,8 @@ describe("fixture readers", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
     });
-    await root.ensureOrigin({ mode: "simple", topOrigin: "http://localhost:4173" });
-    await root.ensureOrigin({ mode: "advanced", topOrigin: "https://api.example.com:8443" });
+    await root.ensureOrigin({ topOrigin: "http://localhost:4173" });
+    await root.ensureOrigin({ topOrigin: "https://api.example.com:8443" });
 
     const configs = await readSiteConfigs(root.rootPath);
     const origins = configs.map((config) => config.origin).sort();

@@ -1,6 +1,12 @@
 import path from "node:path";
 
-import { SCENARIOS_DIR } from "./constants.mjs";
+import {
+  CAPTURES_DIR,
+  CAPTURE_HTTP_DIR,
+  MANIFESTS_DIR,
+  SCENARIOS_DIR,
+  WRAITHWALKER_DIR
+} from "./constants.mjs";
 import type { ResponseMeta } from "./fixture-layout.mjs";
 import { readSentinel } from "./root.mjs";
 import { createFixtureRootFs, type FixtureRootFs } from "./root-fs.mjs";
@@ -93,6 +99,14 @@ async function listFixtureEntries(rootFs: FixtureRootFs): Promise<string[]> {
     .map((entry) => entry.name);
 }
 
+async function listScenarioMetadataEntries(rootFs: FixtureRootFs): Promise<string[]> {
+  const entries = await rootFs.listOptionalDirectory(WRAITHWALKER_DIR);
+  return entries
+    .filter((entry) => entry.kind === "directory")
+    .filter((entry) => entry.name === "captures" || entry.name === "manifests")
+    .map((entry) => path.join(WRAITHWALKER_DIR, entry.name));
+}
+
 async function scanOriginsTree(
   rootFs: FixtureRootFs,
   originsDir: string,
@@ -136,16 +150,10 @@ async function collectEndpointsFromScenario(
 ): Promise<Map<string, EndpointWithBody>> {
   const endpoints = new Map<string, EndpointWithBody>();
 
-  const topEntries = await rootFs.listOptionalDirectories(scenarioPath);
-  for (const topDir of topEntries) {
-    if (topDir.startsWith(".")) continue;
-    await scanOriginsTree(rootFs, path.join(scenarioPath, topDir, "origins"), endpoints);
-  }
-
-  const simpleBase = path.join(scenarioPath, ".wraithwalker", "simple");
-  const simpleOrigins = await rootFs.listOptionalDirectories(simpleBase);
-  for (const originKey of simpleOrigins) {
-    await scanOriginsTree(rootFs, path.join(simpleBase, originKey, "origins"), endpoints);
+  const captureBase = path.join(scenarioPath, CAPTURE_HTTP_DIR);
+  const captureOrigins = await rootFs.listOptionalDirectories(captureBase);
+  for (const originKey of captureOrigins) {
+    await scanOriginsTree(rootFs, path.join(captureBase, originKey, "origins"), endpoints);
   }
 
   return endpoints;
@@ -173,6 +181,11 @@ export async function saveScenario({
     await rootFs.copyRecursive(entry, path.join(scenarioDir, entry));
   }
 
+  const metadataEntries = await listScenarioMetadataEntries(rootFs);
+  for (const entry of metadataEntries) {
+    await rootFs.copyRecursive(entry, path.join(scenarioDir, entry));
+  }
+
   return { ok: true, name: scenarioName };
 }
 
@@ -190,6 +203,9 @@ export async function switchScenario({
   for (const entry of currentEntries) {
     await rootFs.remove(entry, { recursive: true, force: true });
   }
+
+  await rootFs.remove(CAPTURES_DIR, { recursive: true, force: true });
+  await rootFs.remove(MANIFESTS_DIR, { recursive: true, force: true });
 
   const scenarioEntries = await rootFs.listDirectory(scenarioDir);
   for (const entry of scenarioEntries) {

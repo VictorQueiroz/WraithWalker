@@ -2,20 +2,24 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import {
+  CAPTURE_HTTP_DIR,
+  MANIFESTS_DIR,
   ROOT_SENTINEL_RELATIVE_PATH,
   SCENARIOS_DIR,
-  SIMPLE_METADATA_DIR,
-  SIMPLE_METADATA_TREE,
-  STATIC_RESOURCE_MANIFEST_FILE
+  STATIC_RESOURCE_MANIFEST_FILE,
+  WRAITHWALKER_DIR
 } from "./constants.mjs";
 import {
+  getFixtureDisplayPath,
   originToKey,
   type ResponseMeta,
   type StaticResourceManifest,
   type StaticResourceManifestEntry
 } from "./fixture-layout.mjs";
 import { prettifyFixtureText } from "./fixture-presentation.mjs";
+import { readEffectiveSiteConfigs } from "./project-config.mjs";
 import { createFixtureRootFs, resolveWithinRoot, type FixtureRootFs } from "./root-fs.mjs";
+import { mergeSiteConfigs, type SiteConfig } from "./site-config.mjs";
 
 export type { ResponseMeta, StaticResourceManifest, StaticResourceManifestEntry } from "./fixture-layout.mjs";
 
@@ -33,13 +37,11 @@ export interface ApiEndpoint {
 
 export interface SiteConfigLike {
   origin: string;
-  mode: "simple" | "advanced";
 }
 
 export interface OriginInfo {
   origin: string;
   originKey: string;
-  mode: "simple" | "advanced";
   manifestPath: string | null;
   manifest: StaticResourceManifest | null;
   apiEndpoints: ApiEndpoint[];
@@ -64,6 +66,7 @@ export interface AssetListOptions {
 
 export interface AssetInfo extends StaticResourceManifestEntry {
   origin: string;
+  path: string;
   hasBody: boolean;
   bodySize: number | null;
 }
@@ -155,7 +158,7 @@ const MAX_SNIPPET_MAX_BYTES = 64000;
 const MAX_FULL_READ_BYTES = 64 * 1024;
 const SEARCH_EXACT_EXCLUDE = new Set([
   ROOT_SENTINEL_RELATIVE_PATH,
-  path.join(SIMPLE_METADATA_DIR, "cli.json")
+  path.join(WRAITHWALKER_DIR, "cli.json")
 ]);
 const SEARCH_SUFFIX_EXCLUDE = [
   STATIC_RESOURCE_MANIFEST_FILE,
@@ -174,6 +177,7 @@ function keyToOrigin(key: string): string {
 function compareAssetEntries(a: StaticResourceManifestEntry, b: StaticResourceManifestEntry): number {
   return a.pathname.localeCompare(b.pathname)
     || a.requestUrl.localeCompare(b.requestUrl)
+    || getFixtureDisplayPath(a).localeCompare(getFixtureDisplayPath(b))
     || a.bodyPath.localeCompare(b.bodyPath);
 }
 
@@ -420,7 +424,7 @@ function normalizeSiteConfigs(siteConfigOrConfigs: SiteConfigLike | SiteConfigLi
     : [siteConfigOrConfigs];
 
   return [...normalized]
-    .sort((left, right) => left.origin.localeCompare(right.origin) || left.mode.localeCompare(right.mode));
+    .sort((left, right) => left.origin.localeCompare(right.origin));
 }
 
 function uniqueOrigins(origins: Array<string | null | undefined>): string[] {
@@ -476,7 +480,9 @@ async function findAssetPresentationContext(
     const info = await readOriginInfo(rootPath, config);
     for (const asset of flattenStaticResourceManifest(info.manifest)) {
       if (asset.bodyPath !== relativePath) {
-        continue;
+        if (getFixtureDisplayPath(asset) !== relativePath) {
+          continue;
+        }
       }
 
       return {
@@ -560,9 +566,10 @@ async function buildSearchableFixtureEntries(rootPath: string): Promise<Searchab
     const info = await readOriginInfo(rootPath, config);
 
     for (const asset of flattenStaticResourceManifest(info.manifest)) {
-      if (!entries.has(asset.bodyPath)) {
-        entries.set(asset.bodyPath, {
-          path: asset.bodyPath,
+      const displayPath = getFixtureDisplayPath(asset);
+      if (!entries.has(displayPath)) {
+        entries.set(displayPath, {
+          path: displayPath,
           sourceKind: "asset",
           origin: info.origin,
           pathname: asset.pathname,
@@ -640,23 +647,15 @@ async function collectApiEndpoints(rootPath: string, baseRelativePath: string): 
 export async function readOriginInfo(rootPath: string, siteConfig: SiteConfigLike): Promise<OriginInfo> {
   const rootFs = createFixtureRootFs(rootPath);
   const originKey = originToKey(siteConfig.origin);
-  const isSimple = siteConfig.mode === "simple";
-
-  const manifestRelative = isSimple
-    ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, STATIC_RESOURCE_MANIFEST_FILE)
-    : path.join(originKey, STATIC_RESOURCE_MANIFEST_FILE);
+  const manifestRelative = path.join(MANIFESTS_DIR, originKey, STATIC_RESOURCE_MANIFEST_FILE);
   const manifest = await rootFs.readOptionalJson<StaticResourceManifest>(manifestRelative);
 
-  const originsBaseRelative = isSimple
-    ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, "origins")
-    : path.join(originKey, "origins");
+  const originsBaseRelative = path.join(CAPTURE_HTTP_DIR, originKey, "origins");
 
   const apiEndpoints: ApiEndpoint[] = [];
   const originDirs = await rootFs.listOptionalDirectories(originsBaseRelative);
   for (const dir of originDirs) {
-    const relativeBasePath = isSimple
-      ? path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, originKey, "origins", dir)
-      : path.join(originKey, "origins", dir);
+    const relativeBasePath = path.join(CAPTURE_HTTP_DIR, originKey, "origins", dir);
     const endpoints = await collectApiEndpoints(rootPath, relativeBasePath);
     apiEndpoints.push(...endpoints.map((endpoint) => ({
       ...endpoint,
@@ -667,7 +666,6 @@ export async function readOriginInfo(rootPath: string, siteConfig: SiteConfigLik
   return {
     origin: siteConfig.origin,
     originKey,
-    mode: siteConfig.mode,
     manifestPath: (await rootFs.exists(manifestRelative)) ? manifestRelative : null,
     manifest,
     apiEndpoints
@@ -700,7 +698,8 @@ export async function listAssets(
   const filteredItems = infos
     .flatMap((info) => flattenStaticResourceManifest(info.manifest).map((entry) => ({
       ...entry,
-      origin: info.origin
+      origin: info.origin,
+      path: getFixtureDisplayPath(entry)
     })))
     .filter((entry) => {
     if (options.resourceTypes?.length && !options.resourceTypes.includes(entry.resourceType)) {
@@ -953,25 +952,6 @@ export async function searchFixtureContent(
   };
 }
 
-export async function readSiteConfigs(rootPath: string): Promise<SiteConfigLike[]> {
-  const rootFs = createFixtureRootFs(rootPath);
-  const simpleOrigins = await rootFs.listOptionalDirectories(path.join(SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE));
-
-  const configs: SiteConfigLike[] = [];
-  for (const originKey of simpleOrigins) {
-    configs.push({ origin: keyToOrigin(originKey), mode: "simple" });
-  }
-
-  const topEntries = await rootFs.listOptionalDirectory("");
-  for (const entry of topEntries) {
-    if (entry.kind !== "directory") continue;
-    if (entry.name === path.dirname(SCENARIOS_DIR)) continue;
-    if (!entry.name.startsWith("http")) continue;
-    const origin = keyToOrigin(entry.name);
-    if (!configs.some((config) => config.origin === origin)) {
-      configs.push({ origin, mode: "advanced" });
-    }
-  }
-
-  return configs;
+export async function readSiteConfigs(rootPath: string): Promise<SiteConfig[]> {
+  return readEffectiveSiteConfigs(rootPath);
 }

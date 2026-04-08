@@ -29,8 +29,8 @@ describe("fixture reader", () => {
           pathname: "/app.js",
           search: "",
           bodyPath: "cdn.example.com/app.js",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
           mimeType: "application/javascript",
           resourceType: "Script",
           capturedAt: "2026-04-03T00:00:00.000Z"
@@ -39,12 +39,11 @@ describe("fixture reader", () => {
     };
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest
     });
 
-    const config: SiteConfigLike = { origin: "https://app.example.com", mode: "simple" };
+    const config: SiteConfigLike = { origin: "https://app.example.com" };
     const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.origin).toBe("https://app.example.com");
@@ -57,7 +56,6 @@ describe("fixture reader", () => {
       prefix: "wraithwalker-mcp-"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -73,7 +71,7 @@ describe("fixture reader", () => {
       }
     });
 
-    const config: SiteConfigLike = { origin: "https://app.example.com", mode: "advanced" };
+    const config: SiteConfigLike = { origin: "https://app.example.com" };
     const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.apiEndpoints).toHaveLength(1);
@@ -106,7 +104,6 @@ describe("fixture reader", () => {
       prefix: "wraithwalker-mcp-"
     });
     const fixture = await root.writeApiFixture({
-      mode: "advanced",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "PUT",
@@ -152,13 +149,15 @@ describe("fixture reader", () => {
       prefix: "wraithwalker-mcp-"
     });
 
-    await root.ensureOrigin({ mode: "simple", topOrigin: "https://app.example.com" });
-    await root.ensureOrigin({ mode: "advanced", topOrigin: "https://api.example.com" });
+    await root.ensureOrigin({ topOrigin: "https://app.example.com" });
+    await root.ensureOrigin({ topOrigin: "https://api.example.com" });
 
     const configs = await readSiteConfigs(root.rootPath);
     expect(configs).toHaveLength(2);
-    expect(configs.find((c) => c.mode === "simple")).toBeDefined();
-    expect(configs.find((c) => c.mode === "advanced")).toBeDefined();
+    expect(configs.map((config) => config.origin).sort()).toEqual([
+      "https://api.example.com",
+      "https://app.example.com"
+    ]);
   });
 
   it("discovers origins with non-standard ports", async () => {
@@ -166,8 +165,8 @@ describe("fixture reader", () => {
       prefix: "wraithwalker-mcp-"
     });
 
-    await root.ensureOrigin({ mode: "simple", topOrigin: "http://localhost:4173" });
-    await root.ensureOrigin({ mode: "advanced", topOrigin: "https://api.example.com:8443" });
+    await root.ensureOrigin({ topOrigin: "http://localhost:4173" });
+    await root.ensureOrigin({ topOrigin: "https://api.example.com:8443" });
 
     const configs = await readSiteConfigs(root.rootPath);
     const origins = configs.map((c) => c.origin).sort();
@@ -179,7 +178,7 @@ describe("fixture reader", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-"
     });
-    const config: SiteConfigLike = { origin: "https://empty.example.com", mode: "advanced" };
+    const config: SiteConfigLike = { origin: "https://empty.example.com" };
     const info = await readOriginInfo(root.rootPath, config);
 
     expect(info.manifest).toBeNull();

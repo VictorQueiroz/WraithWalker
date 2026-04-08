@@ -28,6 +28,8 @@
   "exports": {
     "./fixture-layout": "./out/fixture-layout.mjs",
     "./fixture-repository": "./out/fixture-repository.mjs",
+    "./site-config": "./out/site-config.mjs",
+    "./project-config": "./out/project-config.mjs",
     "./scenario-traces": "./out/scenario-traces.mjs",
     "./root-runtime": "./out/root-runtime.mjs",
     "./root": "./out/root.mjs",

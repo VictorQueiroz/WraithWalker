@@ -1,4 +1,5 @@
 import type { ScenarioTraceRecord } from "@wraithwalker/core/scenario-traces";
+import type { SiteConfig } from "@wraithwalker/core/site-config";
 
 export const EXTENSION_HEARTBEAT_TTL_MS = 15_000;
 
@@ -19,6 +20,7 @@ export interface ExtensionStatus {
   clientId: string;
   captureDestination: "none" | "server";
   enabledOrigins: string[];
+  siteConfigs: SiteConfig[];
   activeTrace: ScenarioTraceRecord | null;
 }
 
@@ -31,12 +33,14 @@ export interface ExtensionHeartbeatInput {
 
 interface CreateExtensionSessionTrackerDependencies {
   getActiveTrace: () => Promise<ScenarioTraceRecord | null>;
+  getEffectiveSiteConfigs: () => Promise<SiteConfig[]>;
   now?: () => number;
   ttlMs?: number;
 }
 
 export function createExtensionSessionTracker({
   getActiveTrace,
+  getEffectiveSiteConfigs,
   now = Date.now,
   ttlMs = EXTENSION_HEARTBEAT_TTL_MS
 }: CreateExtensionSessionTrackerDependencies) {
@@ -66,6 +70,10 @@ export function createExtensionSessionTracker({
   async function getStatus(): Promise<ExtensionStatus> {
     const trace = await getActiveTrace();
     const connected = isConnected(activeClient);
+    const siteConfigs = connected
+      ? await getEffectiveSiteConfigs()
+      : [];
+    const enabledOrigins = siteConfigs.map((siteConfig) => siteConfig.origin);
 
     if (!activeClient) {
       return {
@@ -77,19 +85,21 @@ export function createExtensionSessionTracker({
         clientId: "",
         captureDestination: "none",
         enabledOrigins: [],
+        siteConfigs: [],
         activeTrace: trace
       };
     }
 
     return {
       connected,
-      captureReady: connected && activeClient.sessionActive && activeClient.enabledOrigins.length > 0,
+      captureReady: connected && activeClient.sessionActive && enabledOrigins.length > 0,
       sessionActive: connected ? activeClient.sessionActive : false,
       lastHeartbeatAt: activeClient.lastHeartbeatAt,
       extensionVersion: activeClient.extensionVersion,
       clientId: activeClient.clientId,
       captureDestination: connected ? "server" : "none",
-      enabledOrigins: connected ? [...activeClient.enabledOrigins] : [],
+      enabledOrigins,
+      siteConfigs,
       activeTrace: trace
     };
   }

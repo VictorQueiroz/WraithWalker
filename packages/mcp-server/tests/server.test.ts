@@ -161,7 +161,6 @@ async function createFixtureRootWithData() {
   });
 
   await root.writeManifest({
-    mode: "simple",
     topOrigin: "https://app.example.com",
     manifest: {
       schemaVersion: 1,
@@ -175,8 +174,8 @@ async function createFixtureRootWithData() {
           pathname: "/app.js",
           search: "",
           bodyPath: "cdn.example.com/assets/app.js",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
           mimeType: "application/javascript",
           resourceType: "Script",
           capturedAt: "2026-04-05T00:00:00.000Z"
@@ -187,8 +186,8 @@ async function createFixtureRootWithData() {
           pathname: "/assets/chunk.js",
           search: "",
           bodyPath: "cdn.example.com/assets/chunk.js",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/chunk.js.__response.json",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__response.json",
           mimeType: "application/javascript",
           resourceType: "Script",
           capturedAt: "2026-04-05T00:00:00.000Z"
@@ -199,8 +198,8 @@ async function createFixtureRootWithData() {
           pathname: "/styles/dropdown.css",
           search: "",
           bodyPath: "cdn.example.com/styles/dropdown.css",
-          requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.css.__request.json",
-          metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/dropdown.css.__response.json",
+          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.css.__request.json",
+          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.css.__response.json",
           mimeType: "text/css",
           resourceType: "Stylesheet",
           capturedAt: "2026-04-05T00:00:00.000Z"
@@ -210,7 +209,6 @@ async function createFixtureRootWithData() {
   });
 
   await root.writeApiFixture({
-    mode: "simple",
     topOrigin: "https://app.example.com",
     requestOrigin: "https://api.example.com",
     method: "GET",
@@ -240,7 +238,6 @@ async function createFixtureRootWithData() {
   await root.ensureScenario("baseline");
   await root.ensureScenario("candidate");
   await root.writeApiFixture({
-    mode: "simple",
     scenario: "candidate",
     topOrigin: "https://app.example.com",
     requestOrigin: "https://api.example.com",
@@ -255,7 +252,6 @@ async function createFixtureRootWithData() {
     body: "{\"error\":true}"
   });
   await root.writeApiFixture({
-    mode: "simple",
     scenario: "baseline",
     topOrigin: "https://app.example.com",
     requestOrigin: "https://api.example.com",
@@ -330,7 +326,7 @@ describe("mcp server", () => {
       expect(origins).toEqual([
         expect.objectContaining({
           origin: "https://app.example.com",
-          manifestPath: ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json",
+          manifestPath: ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json",
           apiEndpoints: 1,
           staticAssets: 3
         })
@@ -398,9 +394,9 @@ describe("mcp server", () => {
             method: "GET",
             pathname: "/users",
             status: 200,
-            fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
-            metaPath: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
-            bodyPath: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
+            fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+            metaPath: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
+            bodyPath: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
           })
         ]
       });
@@ -637,7 +633,7 @@ describe("mcp server", () => {
       expect(searchResult.isError).toBe(true);
       expect(readTextContent(searchResult)).toContain("Origin \"https://missing.example.com\" not found.");
 
-      await root.ensureOrigin({ mode: "advanced", topOrigin: "https://empty.example.com" });
+      await root.ensureOrigin({ topOrigin: "https://empty.example.com" });
       const emptyManifestResult = await client.callTool({
         name: "read-manifest",
         arguments: { origin: "https://empty.example.com" }
@@ -691,7 +687,6 @@ describe("mcp server", () => {
       rootId: "root-mcp-server"
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -705,8 +700,8 @@ describe("mcp server", () => {
             pathname: "/assets/hierarchy.chunk.js",
             search: "",
             bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -714,7 +709,7 @@ describe("mcp server", () => {
         }
       }
     });
-    await root.ensureOrigin({ mode: "simple", topOrigin: "https://admin.example.com" });
+    await root.ensureOrigin({ topOrigin: "https://admin.example.com" });
 
     const { client, server } = await connectClient(root.rootPath);
 
@@ -789,9 +784,9 @@ describe("mcp server", () => {
       prefix: "wraithwalker-mcp-server-",
       rootId: "root-mcp-server"
     });
-    await root.ensureOrigin({ mode: "simple", topOrigin: "https://admin.example.com" });
-    await root.ensureOrigin({ mode: "simple", topOrigin: "http://admin.example.com" });
-    await root.ensureOrigin({ mode: "simple", topOrigin: "https://app.example.com" });
+    await root.ensureOrigin({ topOrigin: "https://admin.example.com" });
+    await root.ensureOrigin({ topOrigin: "http://admin.example.com" });
+    await root.ensureOrigin({ topOrigin: "https://app.example.com" });
 
     const { client, server } = await connectClient(root.rootPath);
 
@@ -823,7 +818,6 @@ describe("mcp server", () => {
       rootId: "root-mcp-server"
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "http://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -837,8 +831,8 @@ describe("mcp server", () => {
             pathname: "/assets/http-only.js",
             search: "",
             bodyPath: "cdn.example.com/assets/http-only.js",
-            requestPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http-only.js.__request.json",
-            metaPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http-only.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http-only.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http-only.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -847,7 +841,6 @@ describe("mcp server", () => {
       }
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -861,8 +854,8 @@ describe("mcp server", () => {
             pathname: "/assets/repeat.js",
             search: "",
             bodyPath: "cdn.example.com/assets/repeat.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/repeat.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/repeat.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/repeat.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/repeat.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -938,7 +931,6 @@ describe("mcp server", () => {
       rootId: "root-mcp-server"
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "http://app.example.com:8443",
       manifest: {
         schemaVersion: 1,
@@ -952,8 +944,8 @@ describe("mcp server", () => {
             pathname: "/assets/http-port.js",
             search: "",
             bodyPath: "cdn.example.com/assets/http-port.js",
-            requestPath: ".wraithwalker/simple/http__app.example.com__8443/cdn.example.com/http-port.js.__request.json",
-            metaPath: ".wraithwalker/simple/http__app.example.com__8443/cdn.example.com/http-port.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/http__app.example.com__8443/cdn.example.com/http-port.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/http__app.example.com__8443/cdn.example.com/http-port.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -962,7 +954,6 @@ describe("mcp server", () => {
       }
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com:8443",
       manifest: {
         schemaVersion: 1,
@@ -976,8 +967,8 @@ describe("mcp server", () => {
             pathname: "/assets/https-port.js",
             search: "",
             bodyPath: "cdn.example.com/assets/https-port.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com__8443/cdn.example.com/https-port.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com__8443/cdn.example.com/https-port.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com__8443/cdn.example.com/https-port.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com__8443/cdn.example.com/https-port.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -986,7 +977,6 @@ describe("mcp server", () => {
       }
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com:9443",
       manifest: {
         schemaVersion: 1,
@@ -1000,8 +990,8 @@ describe("mcp server", () => {
             pathname: "/assets/other-port.js",
             search: "",
             bodyPath: "cdn.example.com/assets/other-port.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com__9443/cdn.example.com/other-port.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com__9443/cdn.example.com/other-port.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com__9443/cdn.example.com/other-port.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com__9443/cdn.example.com/other-port.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -1050,7 +1040,6 @@ describe("mcp server", () => {
     const largeBody = "x".repeat(70_000);
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "http://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -1064,8 +1053,8 @@ describe("mcp server", () => {
             pathname: "/assets/http.js",
             search: "",
             bodyPath: "cdn.example.com/assets/http.js",
-            requestPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http.js.__request.json",
-            metaPath: ".wraithwalker/simple/http__app.example.com/cdn.example.com/http.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -1074,7 +1063,6 @@ describe("mcp server", () => {
       }
     });
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -1088,8 +1076,8 @@ describe("mcp server", () => {
             pathname: "/assets/huge.js",
             search: "",
             bodyPath: "cdn.example.com/assets/huge.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/huge.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/huge.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/huge.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/huge.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -1098,7 +1086,6 @@ describe("mcp server", () => {
       }
     });
     await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "http://app.example.com",
       requestOrigin: "http://api.example.com",
       method: "GET",
@@ -1113,7 +1100,6 @@ describe("mcp server", () => {
       body: "{\"scheme\":\"http\"}"
     });
     const largeEndpoint = await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -1221,7 +1207,6 @@ describe("mcp server", () => {
     const overLimitBody = "y".repeat(65_537);
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -1235,8 +1220,8 @@ describe("mcp server", () => {
             pathname: "/assets/exact.js",
             search: "",
             bodyPath: "cdn.example.com/assets/exact.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/exact.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/exact.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/exact.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/exact.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -1247,8 +1232,8 @@ describe("mcp server", () => {
             pathname: "/assets/over.js",
             search: "",
             bodyPath: "cdn.example.com/assets/over.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/over.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/over.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/over.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/over.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-06T00:00:00.000Z"
@@ -1257,7 +1242,6 @@ describe("mcp server", () => {
       }
     });
     const exactEndpoint = await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -1272,7 +1256,6 @@ describe("mcp server", () => {
       body: exactBody
     });
     const overLimitEndpoint = await root.writeApiFixture({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -1391,6 +1374,14 @@ describe("mcp server", () => {
     });
     const { client, server, transport } = await connectHttpClient(root.rootPath);
     const trpcClient = createTrpcClient(server.trpcUrl);
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }]
+    });
 
     try {
       const heartbeat = await trpcClient.extension.heartbeat.mutate({
@@ -1407,7 +1398,8 @@ describe("mcp server", () => {
           connected: true,
           captureReady: true,
           clientId: "client-1",
-          enabledOrigins: ["https://app.example.com"]
+          enabledOrigins: ["https://app.example.com"],
+          siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })]
         })
       );
 
@@ -1524,7 +1516,7 @@ describe("mcp server", () => {
       const endpointResult = await client.callTool({
         name: "read-endpoint-fixture",
         arguments: {
-          fixtureDir: ".wraithwalker/simple/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+          fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
           pretty: true
         }
       });

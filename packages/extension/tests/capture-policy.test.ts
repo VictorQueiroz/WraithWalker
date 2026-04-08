@@ -4,11 +4,10 @@ import { createCapturePolicy } from "../src/lib/capture-policy.js";
 import type { SiteConfig } from "../src/lib/types.js";
 
 describe("capture policy", () => {
-  it("returns the configured site and mode for a top origin", () => {
+  it("returns the configured site for a top origin", () => {
     const siteConfig: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.m?(js|ts)x?$"]
     };
     const policy = createCapturePolicy({
@@ -16,15 +15,13 @@ describe("capture policy", () => {
     });
 
     expect(policy.getSiteConfig("https://app.example.com")).toEqual(siteConfig);
-    expect(policy.getSiteMode("https://app.example.com")).toBe("simple");
-    expect(policy.getSiteMode("https://missing.example.com")).toBeUndefined();
+    expect(policy.getSiteConfig("https://missing.example.com")).toBeUndefined();
   });
 
   it("uses the site allowlist to decide whether a live response should persist", () => {
     const siteConfig: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "advanced",
       dumpAllowlistPatterns: ["\\.css$"]
     };
     const policy = createCapturePolicy({
@@ -47,7 +44,6 @@ describe("capture policy", () => {
     const siteConfig: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.css$", "\\.js$", "\\.wasm$"]
     };
     const policy = createCapturePolicy({
@@ -80,7 +76,6 @@ describe("capture policy", () => {
     const siteConfig: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.css$"]
     };
     const policy = createCapturePolicy({

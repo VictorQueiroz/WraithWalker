@@ -29,7 +29,6 @@ describe("context generation", () => {
   it("writes context files and inferred types", async () => {
     const root = await createFixtureRoot();
     await root.writeApiFixture({
-      mode: "advanced",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -58,7 +57,6 @@ describe("context generation", () => {
     const root = await createFixtureRoot();
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -72,8 +70,8 @@ describe("context generation", () => {
             pathname: "/app.js",
             search: "",
             bodyPath: "cdn.example.com/app.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/app.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-03T00:00:00.000Z"
@@ -81,7 +79,7 @@ describe("context generation", () => {
         }
       }
     });
-    await root.ensureOrigin({ mode: "simple", topOrigin: "http://localhost:4173" });
+    await root.ensureOrigin({ topOrigin: "http://localhost:4173" });
 
     const markdown = await generateContext(root.rootPath, createFsGateway());
 

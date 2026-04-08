@@ -11,11 +11,12 @@ import {
 } from "@wraithwalker/core/root";
 
 import {
+  CAPTURE_ASSETS_DIR,
+  CAPTURE_HTTP_DIR,
   DEFAULT_CONTEXT_FILES,
   EDITOR_CONTEXT_FILES,
   FIXTURE_FILE_NAMES,
-  SIMPLE_MODE_METADATA_DIR,
-  SIMPLE_MODE_METADATA_TREE,
+  MANIFESTS_DIR,
   STATIC_RESOURCE_MANIFEST_FILE
 } from "../src/lib/constants.mts";
 import { generateContext } from "../src/lib/context-generator.mts";
@@ -93,8 +94,9 @@ describe("cli entrypoints and re-exports", () => {
   });
 
   it("exports the expected CLI constants", () => {
-    expect(SIMPLE_MODE_METADATA_DIR).toBe(".wraithwalker");
-    expect(SIMPLE_MODE_METADATA_TREE).toBe("simple");
+    expect(CAPTURE_ASSETS_DIR).toBe(".wraithwalker/captures/assets");
+    expect(CAPTURE_HTTP_DIR).toBe(".wraithwalker/captures/http");
+    expect(MANIFESTS_DIR).toBe(".wraithwalker/manifests");
     expect(STATIC_RESOURCE_MANIFEST_FILE).toBe("RESOURCE_MANIFEST.json");
     expect(FIXTURE_FILE_NAMES).toEqual({
       API_REQUEST: "request.json",

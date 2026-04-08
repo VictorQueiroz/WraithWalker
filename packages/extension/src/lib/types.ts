@@ -7,7 +7,6 @@ import type {
   HeaderEntry,
   RequestPayload,
   ResponseMeta,
-  SiteMode,
   StaticResourceManifest,
   StaticResourceManifestEntry,
   StoredFixture
@@ -22,7 +21,6 @@ export type {
   HeaderEntry,
   RequestPayload,
   ResponseMeta,
-  SiteMode,
   StaticResourceManifest,
   StaticResourceManifestEntry,
   StoredFixture
@@ -31,7 +29,6 @@ export type {
 export interface SiteConfig {
   origin: string;
   createdAt: string;
-  mode: SiteMode;
   dumpAllowlistPatterns: string[];
 }
 
@@ -70,6 +67,7 @@ export interface AttachedTabState {
 
 export interface StorageState {
   siteConfigs?: SiteConfig[];
+  legacySiteConfigsMigrated?: boolean;
   nativeHostConfig?: Partial<NativeHostConfig>;
   lastSessionSnapshot?: SessionSnapshot;
   preferredEditorId?: string;

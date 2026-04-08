@@ -14,6 +14,74 @@ interface LifecycleHarnessOptions {
   createFixtureDescriptor?: typeof realCreateFixtureDescriptor;
 }
 
+function createServerBackedRepository(serverClient: ReturnType<typeof createWraithWalkerServerClient>) {
+  return {
+    exists: async (descriptor: Awaited<ReturnType<typeof realCreateFixtureDescriptor>>) => (
+      await serverClient.hasFixture(descriptor)
+    ).exists,
+    read: async (descriptor: Awaited<ReturnType<typeof realCreateFixtureDescriptor>>) => {
+      const fixture = await serverClient.readFixture(descriptor);
+      if (!fixture.exists) {
+        return null;
+      }
+
+      return {
+        request: fixture.request,
+        meta: fixture.meta,
+        bodyBase64: fixture.bodyBase64,
+        size: fixture.size
+      };
+    },
+    writeIfAbsent: (payload: Parameters<NonNullable<Parameters<typeof createRequestLifecycle>[0]["repository"]>["writeIfAbsent"]>[0]) => (
+      serverClient.writeFixtureIfAbsent(payload)
+    )
+  };
+}
+
+function createServerBackedLifecycleHarness({
+  serverClient,
+  siteConfig,
+  responseBodies = {}
+}: {
+  serverClient: ReturnType<typeof createWraithWalkerServerClient>;
+  siteConfig: SiteConfig;
+  responseBodies?: Record<string, { body: string; base64Encoded: boolean }>;
+}) {
+  const state = {
+    sessionActive: true,
+    attachedTabs: new Map([[1, { topOrigin: siteConfig.origin }]]),
+    requests: new Map<string, any>()
+  };
+  const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
+    if (method === "Network.getResponseBody") {
+      const requestId = String(params?.requestId ?? "");
+      return responseBodies[requestId] ?? { body: "", base64Encoded: false };
+    }
+    return { method, params };
+  });
+  const sendDebuggerCommand: Parameters<typeof createRequestLifecycle>[0]["sendDebuggerCommand"] =
+    ((tabId, method, params) => sendDebuggerCommandMock(tabId, method, params) as Promise<any>);
+  const lifecycle = createRequestLifecycle({
+    state,
+    sendDebuggerCommand,
+    sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+    setLastError: vi.fn(),
+    repository: createServerBackedRepository(serverClient),
+    createFixtureDescriptor: realCreateFixtureDescriptor,
+    getSiteConfigForOrigin: vi.fn((topOrigin) => (
+      topOrigin === siteConfig.origin
+        ? siteConfig
+        : undefined
+    ))
+  });
+
+  return {
+    state,
+    lifecycle,
+    sendDebuggerCommand: sendDebuggerCommandMock
+  };
+}
+
 function createLifecycleHarness({ siteConfig, createFixtureDescriptor }: LifecycleHarnessOptions = {}) {
   const state = {
     sessionActive: true,
@@ -73,7 +141,6 @@ function createLifecycleHarness({ siteConfig, createFixtureDescriptor }: Lifecyc
     bodyPath: "body",
     requestPath: "request.json",
     metaPath: "response.meta.json",
-    siteMode: siteConfig?.mode || "advanced",
     topOrigin: "https://app.example.com",
     topOriginKey: "https__app.example.com",
     requestOrigin: "https://cdn.example.com",
@@ -330,7 +397,6 @@ describe("request lifecycle", () => {
       siteConfig: {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
-        mode: "simple",
         dumpAllowlistPatterns: ["\\.m?(js|ts)x?$"]
       }
     });
@@ -358,7 +424,6 @@ describe("request lifecycle", () => {
       siteConfig: {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
-        mode: "simple",
         dumpAllowlistPatterns: ["\\.css$"]
       },
       createFixtureDescriptor: realCreateFixtureDescriptor
@@ -580,7 +645,6 @@ describe("request lifecycle", () => {
     const siteConfig: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-07T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.js$"]
     };
     const state = {
@@ -631,7 +695,6 @@ describe("request lifecycle", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/app.js",
-      siteMode: "simple",
       resourceType: "Script",
       mimeType: "application/javascript"
     });
@@ -702,12 +765,704 @@ describe("request lifecycle", () => {
     }
   });
 
+  it("captures using server-provided site config from .wraithwalker/config.json before any fixtures exist", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-server-config-"
+    });
+    await serverRoot.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const state = {
+      sessionActive: true,
+      attachedTabs: new Map([[1, { topOrigin: "https://app.example.com" }]]),
+      requests: new Map<string, any>()
+    };
+    const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
+      if (method === "Network.getResponseBody") {
+        return {
+          body: "<svg viewBox=\"0 0 10 10\"></svg>",
+          base64Encoded: false
+        };
+      }
+      return { method, params };
+    });
+    const systemInfo = await serverClient.getSystemInfo();
+    const serverSiteConfig = systemInfo.siteConfigs.find((siteConfig) => siteConfig.origin === "https://app.example.com");
+
+    expect(systemInfo.siteConfigs).toEqual([
+      expect.objectContaining({
+        origin: "https://app.example.com",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      })
+    ]);
+    expect(serverSiteConfig).toBeTruthy();
+
+    const lifecycle = createRequestLifecycle({
+      state,
+      sendDebuggerCommand: ((tabId, method, params) => sendDebuggerCommandMock(tabId, method, params) as Promise<any>),
+      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+      setLastError: vi.fn(),
+      repository: {
+        exists: async (descriptor) => (await serverClient.hasFixture(descriptor)).exists,
+        read: async (descriptor) => {
+          const fixture = await serverClient.readFixture(descriptor);
+          if (!fixture.exists) {
+            return null;
+          }
+
+          return {
+            request: fixture.request,
+            meta: fixture.meta,
+            bodyBase64: fixture.bodyBase64,
+            size: fixture.size
+          };
+        },
+        writeIfAbsent: (payload) => serverClient.writeFixtureIfAbsent(payload)
+      },
+      createFixtureDescriptor: realCreateFixtureDescriptor,
+      getSiteConfigForOrigin: vi.fn((topOrigin) => (
+        topOrigin === "https://app.example.com"
+          ? serverSiteConfig
+          : undefined
+      ))
+    });
+    const descriptor = await realCreateFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/logo.svg",
+      resourceType: "Image",
+      mimeType: "image/svg+xml"
+    });
+
+    try {
+      lifecycle.handleNetworkRequestWillBeSent(
+        { tabId: 1 },
+        {
+          requestId: "req-server-config",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {}
+          },
+          type: "Image"
+        }
+      );
+      lifecycle.handleNetworkResponseReceived(
+        { tabId: 1 },
+        {
+          requestId: "req-server-config",
+          response: {
+            status: 200,
+            statusText: "OK",
+            headers: { "Content-Type": "image/svg+xml" },
+            mimeType: "image/svg+xml"
+          },
+          type: "Image"
+        }
+      );
+
+      await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-server-config" });
+
+      expect(await fs.readFile(serverRoot.resolve(descriptor.bodyPath), "utf8")).toBe("<svg viewBox=\"0 0 10 10\"></svg>");
+      expect(await serverRoot.readJson(descriptor.requestPath)).toEqual(expect.objectContaining({
+        topOrigin: "https://app.example.com",
+        url: descriptor.requestUrl
+      }));
+      expect(await serverRoot.readJson(descriptor.metaPath)).toEqual(expect.objectContaining({
+        mimeType: "image/svg+xml",
+        resourceType: "Image"
+      }));
+      expect(await serverRoot.readJson(descriptor.manifestPath || "")).toEqual(expect.objectContaining({
+        resourcesByPathname: expect.objectContaining({
+          "/assets/logo.svg": [
+            expect.objectContaining({
+              bodyPath: descriptor.bodyPath,
+              requestPath: descriptor.requestPath,
+              metaPath: descriptor.metaPath
+            })
+          ]
+        })
+      }));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("replays the human-facing projection for a live tRPC-backed asset fixture through Fetch.fulfillRequest with sanitized headers", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-live-replay-asset-"
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.js$"]
+    };
+    const descriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://cdn.example.com/assets/app.js",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const body = "console.log('server replay');";
+
+    try {
+      await serverClient.writeFixtureIfAbsent({
+        descriptor,
+        request: {
+          topOrigin: descriptor.topOrigin,
+          url: descriptor.requestUrl,
+          method: descriptor.method,
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: descriptor.bodyHash,
+          queryHash: descriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:00.000Z"
+        },
+        response: {
+          body,
+          bodyEncoding: "utf8",
+          meta: {
+            status: 203,
+            statusText: "Non-Authoritative Information",
+            headers: [
+              { name: "Content-Type", value: "application/javascript" },
+              { name: "Content-Length", value: String(body.length) },
+              { name: "Connection", value: "keep-alive" },
+              { name: "Set-Cookie", value: "a=b" }
+            ],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: descriptor.requestUrl,
+            method: descriptor.method,
+            capturedAt: "2026-04-08T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      });
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-live-server-asset",
+          networkId: "network-live-server-asset",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {}
+          },
+          resourceType: "Script"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        {
+          requestId: "fetch-live-server-asset",
+          responseCode: 203,
+          responsePhrase: "Non-Authoritative Information",
+          responseHeaders: [
+            { name: "Content-Type", value: "application/javascript" },
+            { name: "Set-Cookie", value: "a=b" }
+          ],
+          body: Buffer.from("console.log(\"server replay\");", "utf8").toString("base64")
+        }
+      );
+      expect(harness.state.requests.get("1:network-live-server-asset")).toMatchObject({
+        replayed: true,
+        topOrigin: siteConfig.origin,
+        url: descriptor.requestUrl
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("serves an edited human-facing projection body for a live tRPC-backed asset fixture", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-live-replay-edited-projection-"
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.js$"]
+    };
+    const descriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://cdn.example.com/assets/app.js",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+
+    try {
+      await serverClient.writeFixtureIfAbsent({
+        descriptor,
+        request: {
+          topOrigin: descriptor.topOrigin,
+          url: descriptor.requestUrl,
+          method: descriptor.method,
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: descriptor.bodyHash,
+          queryHash: descriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:00.000Z"
+        },
+        response: {
+          body: "console.log('canonical');",
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: descriptor.requestUrl,
+            method: descriptor.method,
+            capturedAt: "2026-04-08T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      });
+      await fs.writeFile(serverRoot.resolve(descriptor.projectionPath!), "window.__FROM_PROJECTION__ = true;\n");
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-live-server-edited-projection",
+          networkId: "network-live-server-edited-projection",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {}
+          },
+          resourceType: "Script"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        expect.objectContaining({
+          requestId: "fetch-live-server-edited-projection",
+          responseCode: 200,
+          responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+          body: Buffer.from("window.__FROM_PROJECTION__ = true;\n", "utf8").toString("base64")
+        })
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("replays the query-specific CORS headers for live simple-mode asset variants", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-live-replay-query-cors-"
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://domain-b.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.js$"]
+    };
+    const firstDescriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://domain-a.example.com/a.js?prop1=&prop2=B",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const secondDescriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://domain-a.example.com/a.js?cache-bust=true&retry-attempt=2",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const body = "console.log('shared variant body');";
+
+    expect(firstDescriptor.bodyPath).not.toBe(secondDescriptor.bodyPath);
+    expect(firstDescriptor.projectionPath).toBe(secondDescriptor.projectionPath);
+    expect(firstDescriptor.metaPath).not.toBe(secondDescriptor.metaPath);
+
+    try {
+      await serverClient.writeFixtureIfAbsent({
+        descriptor: firstDescriptor,
+        request: {
+          topOrigin: firstDescriptor.topOrigin,
+          url: firstDescriptor.requestUrl,
+          method: firstDescriptor.method,
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: firstDescriptor.bodyHash,
+          queryHash: firstDescriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:00.000Z"
+        },
+        response: {
+          body,
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: firstDescriptor.requestUrl,
+            method: firstDescriptor.method,
+            capturedAt: "2026-04-08T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      });
+      await serverClient.writeFixtureIfAbsent({
+        descriptor: secondDescriptor,
+        request: {
+          topOrigin: secondDescriptor.topOrigin,
+          url: secondDescriptor.requestUrl,
+          method: secondDescriptor.method,
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: secondDescriptor.bodyHash,
+          queryHash: secondDescriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:01.000Z"
+        },
+        response: {
+          body,
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [
+              { name: "Content-Type", value: "application/javascript" },
+              { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" },
+              { name: "Vary", value: "Origin" }
+            ],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: secondDescriptor.requestUrl,
+            method: secondDescriptor.method,
+            capturedAt: "2026-04-08T00:00:01.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      });
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-live-server-query-cors",
+          networkId: "network-live-server-query-cors",
+          request: {
+            method: "GET",
+            url: secondDescriptor.requestUrl,
+            headers: {}
+          },
+          resourceType: "Script"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        expect.objectContaining({
+          requestId: "fetch-live-server-query-cors",
+          responseCode: 200,
+          responseHeaders: [
+            { name: "Content-Type", value: "application/javascript" },
+            { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" },
+            { name: "Vary", value: "Origin" }
+          ],
+          body: Buffer.from("console.log(\"shared variant body\");", "utf8").toString("base64")
+        })
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("replays an edited shared human-facing projection while keeping query-variant CORS headers", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-live-replay-query-edited-projection-"
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://domain-b.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.js$"]
+    };
+    const firstDescriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://domain-a.example.com/a.js?prop1=&prop2=B",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const secondDescriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://domain-a.example.com/a.js?cache-bust=true&retry-attempt=2",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+
+    try {
+      await serverClient.writeFixtureIfAbsent({
+        descriptor: firstDescriptor,
+        request: {
+          topOrigin: firstDescriptor.topOrigin,
+          url: firstDescriptor.requestUrl,
+          method: firstDescriptor.method,
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: firstDescriptor.bodyHash,
+          queryHash: firstDescriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:00.000Z"
+        },
+        response: {
+          body: "console.log('canonical first');",
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: firstDescriptor.requestUrl,
+            method: firstDescriptor.method,
+            capturedAt: "2026-04-08T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      });
+      await serverClient.writeFixtureIfAbsent({
+        descriptor: secondDescriptor,
+        request: {
+          topOrigin: secondDescriptor.topOrigin,
+          url: secondDescriptor.requestUrl,
+          method: secondDescriptor.method,
+          headers: [],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: secondDescriptor.bodyHash,
+          queryHash: secondDescriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:01.000Z"
+        },
+        response: {
+          body: "console.log('canonical second');",
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [
+              { name: "Content-Type", value: "application/javascript" },
+              { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" },
+              { name: "Vary", value: "Origin" }
+            ],
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            url: secondDescriptor.requestUrl,
+            method: secondDescriptor.method,
+            capturedAt: "2026-04-08T00:00:01.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "js"
+          }
+        }
+      });
+      await fs.writeFile(serverRoot.resolve(firstDescriptor.projectionPath!), "window.__QUERY_EDIT__ = true;\n");
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-live-server-query-edited-projection",
+          networkId: "network-live-server-query-edited-projection",
+          request: {
+            method: "GET",
+            url: secondDescriptor.requestUrl,
+            headers: {}
+          },
+          resourceType: "Script"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        expect.objectContaining({
+          requestId: "fetch-live-server-query-edited-projection",
+          responseCode: 200,
+          responseHeaders: [
+            { name: "Content-Type", value: "application/javascript" },
+            { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" },
+            { name: "Vary", value: "Origin" }
+          ],
+          body: Buffer.from("window.__QUERY_EDIT__ = true;\n", "utf8").toString("base64")
+        })
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("replays a live tRPC-backed simple-mode GET API fixture through Fetch.fulfillRequest", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-live-replay-api-"
+    });
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.json$"]
+    };
+    const descriptor = await realCreateFixtureDescriptor({
+      topOrigin: siteConfig.origin,
+      method: "GET",
+      url: "https://api.example.com/state",
+      resourceType: "XHR"
+    });
+    const body = JSON.stringify({ ready: true });
+
+    expect(descriptor.storageMode).toBe("api");
+
+    try {
+      await serverClient.writeFixtureIfAbsent({
+        descriptor,
+        request: {
+          topOrigin: descriptor.topOrigin,
+          url: descriptor.requestUrl,
+          method: descriptor.method,
+          headers: [{ name: "Accept", value: "application/json" }],
+          body: "",
+          bodyEncoding: "utf8",
+          bodyHash: descriptor.bodyHash,
+          queryHash: descriptor.queryHash,
+          capturedAt: "2026-04-08T00:00:00.000Z"
+        },
+        response: {
+          body,
+          bodyEncoding: "utf8",
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [
+              { name: "Content-Type", value: "application/json" },
+              { name: "X-Trace", value: "server" }
+            ],
+            mimeType: "application/json",
+            resourceType: "XHR",
+            url: descriptor.requestUrl,
+            method: descriptor.method,
+            capturedAt: "2026-04-08T00:00:00.000Z",
+            bodyEncoding: "utf8",
+            bodySuggestedExtension: "json"
+          }
+        }
+      });
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-live-server-api",
+          networkId: "network-live-server-api",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {
+              Accept: "application/json"
+            }
+          },
+          resourceType: "XHR"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        {
+          requestId: "fetch-live-server-api",
+          responseCode: 200,
+          responsePhrase: "OK",
+          responseHeaders: [
+            { name: "Content-Type", value: "application/json" },
+            { name: "X-Trace", value: "server" }
+          ],
+          body: Buffer.from(body, "utf8").toString("base64")
+        }
+      );
+      expect(harness.state.requests.get("1:network-live-server-api")).toMatchObject({
+        replayed: true,
+        resourceType: "XHR",
+        url: descriptor.requestUrl
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
   it("skips fixture writing when the site allowlist does not match the request pathname", async () => {
     const harness = createLifecycleHarness({
       siteConfig: {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
-        mode: "simple",
         dumpAllowlistPatterns: ["\\.css$"]
       },
       createFixtureDescriptor: realCreateFixtureDescriptor
@@ -801,6 +1556,36 @@ describe("request lifecycle", () => {
     });
   });
 
+  it("preserves existing topOrigin and resourceType when requestWillBeSent omits them", () => {
+    const harness = createLifecycleHarness();
+    harness.state.attachedTabs.set(1, { topOrigin: "" });
+    const entry = harness.lifecycle.ensureRequestEntry(1, "req-preserve-request-fields");
+    entry.topOrigin = "https://app.example.com";
+    entry.resourceType = "XHR";
+
+    harness.lifecycle.handleNetworkRequestWillBeSent(
+      { tabId: 1 },
+      {
+        requestId: "req-preserve-request-fields",
+        request: {
+          method: "post",
+          url: "https://api.example.com/graphql",
+          headers: {
+            "X-Trace": "1"
+          }
+        }
+      } as any
+    );
+
+    expect(harness.state.requests.get("1:req-preserve-request-fields")).toMatchObject({
+      topOrigin: "https://app.example.com",
+      method: "POST",
+      url: "https://api.example.com/graphql",
+      requestHeaders: [{ name: "X-Trace", value: "1" }],
+      resourceType: "XHR"
+    });
+  });
+
   it("returns early for responseReceived when the tab is missing or unattached", () => {
     const harness = createLifecycleHarness();
 
@@ -833,6 +1618,36 @@ describe("request lifecycle", () => {
     );
 
     expect(harness.state.requests.size).toBe(0);
+  });
+
+  it("preserves existing mimeType and resourceType when responseReceived omits them", () => {
+    const harness = createLifecycleHarness();
+    const entry = harness.lifecycle.ensureRequestEntry(1, "req-preserve-response-fields");
+    entry.mimeType = "application/javascript";
+    entry.resourceType = "Script";
+
+    harness.lifecycle.handleNetworkResponseReceived(
+      { tabId: 1 },
+      {
+        requestId: "req-preserve-response-fields",
+        response: {
+          status: 204,
+          statusText: "No Content",
+          headers: {
+            ETag: "\"abc123\""
+          },
+          mimeType: ""
+        }
+      } as any
+    );
+
+    expect(harness.state.requests.get("1:req-preserve-response-fields")).toMatchObject({
+      responseStatus: 204,
+      responseStatusText: "No Content",
+      responseHeaders: [{ name: "ETag", value: "\"abc123\"" }],
+      mimeType: "application/javascript",
+      resourceType: "Script"
+    });
   });
 
   it("returns early for loadingFinished when the request entry does not exist", async () => {
@@ -899,6 +1714,74 @@ describe("request lifecycle", () => {
 
     expect(harness.setLastError).toHaveBeenCalledWith("response body unavailable");
     expect(harness.state.requests.size).toBe(0);
+  });
+
+  it("records non-Error loadingFinished failures as strings", async () => {
+    const state = {
+      sessionActive: true,
+      attachedTabs: new Map([[1, { topOrigin: "https://app.example.com" }]]),
+      requests: new Map<string, any>()
+    };
+    const setLastError = vi.fn();
+    const lifecycle = createRequestLifecycle({
+      state,
+      sendDebuggerCommand: vi.fn(async (_tabId, method) => {
+        if (method === "Network.getResponseBody") {
+          return { body: '{"ok":true}', base64Encoded: false };
+        }
+        if (method === "Network.getRequestPostData") {
+          return { postData: "", base64Encoded: false };
+        }
+        return undefined;
+      }) as Parameters<typeof createRequestLifecycle>[0]["sendDebuggerCommand"],
+      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+      setLastError,
+      repository: {
+        exists: vi.fn().mockResolvedValue(false),
+        read: vi.fn().mockResolvedValue(null),
+        writeIfAbsent: vi.fn().mockRejectedValue("persist failed")
+      },
+      createFixtureDescriptor: realCreateFixtureDescriptor,
+      getSiteConfigForOrigin: vi.fn((topOrigin) => (
+        topOrigin === "https://app.example.com"
+          ? {
+              origin: "https://app.example.com",
+              createdAt: "2026-04-08T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.json$"]
+            }
+          : undefined
+      ))
+    });
+
+    lifecycle.handleNetworkRequestWillBeSent(
+      { tabId: 1 },
+      {
+        requestId: "req-string-error",
+        request: {
+          method: "GET",
+          url: "https://api.example.com/error.json",
+          headers: {}
+        },
+        type: "XHR"
+      }
+    );
+    lifecycle.handleNetworkResponseReceived(
+      { tabId: 1 },
+      {
+        requestId: "req-string-error",
+        response: {
+          status: 500,
+          statusText: "Server Error",
+          headers: {},
+          mimeType: "application/json"
+        },
+        type: "XHR"
+      }
+    );
+    await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-string-error" });
+
+    expect(setLastError).toHaveBeenCalledWith("persist failed");
+    expect(state.requests.size).toBe(0);
   });
 
   it("records fixture lookup errors and falls back to continueRequest", async () => {

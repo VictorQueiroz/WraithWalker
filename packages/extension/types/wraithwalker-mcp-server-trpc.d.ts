@@ -11,6 +11,12 @@ declare module "@wraithwalker/mcp-server/trpc" {
     baseUrl: string;
     mcpUrl: string;
     trpcUrl: string;
+    siteConfigs: Array<{
+      origin: string;
+      createdAt: string;
+      mode: "simple" | "advanced";
+      dumpAllowlistPatterns: string[];
+    }>;
   }
 
   export interface TrpcHeartbeatInfo extends TrpcSystemInfo {

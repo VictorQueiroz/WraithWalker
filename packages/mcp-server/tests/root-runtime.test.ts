@@ -22,7 +22,6 @@ describe("server root runtime adapter", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/users",
-      siteMode: "simple",
       resourceType: "Fetch",
       mimeType: "application/json"
     });
@@ -67,8 +66,7 @@ describe("server root runtime adapter", () => {
     await runtime.generateContext({
       editorId: "cursor",
       siteConfigs: [{
-        origin: "https://app.example.com",
-        mode: "simple"
+        origin: "https://app.example.com"
       }]
     });
 
@@ -125,7 +123,7 @@ describe("server root runtime adapter", () => {
     );
   });
 
-  it("creates a sentinel on demand and throws a clear error when a body disappears mid-read", async () => {
+  it("creates a sentinel on demand and returns null when simple-mode canonical metadata is missing", async () => {
     const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-mcp-root-runtime-"));
     const runtime = createServerRootRuntime({ rootPath });
 
@@ -136,7 +134,6 @@ describe("server root runtime adapter", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/app.js",
-      siteMode: "simple",
       resourceType: "Script",
       mimeType: "application/javascript"
     });
@@ -166,8 +163,6 @@ describe("server root runtime adapter", () => {
       } as never
     });
 
-    await expect(brokenRuntime.read(descriptor)).rejects.toThrow(
-      `Fixture body not found at ${descriptor.bodyPath}`
-    );
+    await expect(brokenRuntime.read(descriptor)).resolves.toBeNull();
   });
 });

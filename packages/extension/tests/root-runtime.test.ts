@@ -108,14 +108,12 @@ describe("extension root runtime adapter", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/users",
-      siteMode: "simple",
       resourceType: "Fetch",
       mimeType: "application/json"
     });
     const siteConfigs: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-07T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$"]
     }];
 

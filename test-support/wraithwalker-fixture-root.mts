@@ -3,11 +3,13 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 
 import {
+  CAPTURE_HTTP_DIR,
+  MANIFESTS_DIR,
+  PROJECT_CONFIG_RELATIVE_PATH,
   ROOT_SENTINEL_RELATIVE_PATH,
   SCENARIOS_DIR,
-  SIMPLE_METADATA_DIR,
-  SIMPLE_METADATA_TREE,
-  STATIC_RESOURCE_MANIFEST_FILE
+  STATIC_RESOURCE_MANIFEST_FILE,
+  WRAITHWALKER_DIR
 } from "../packages/core/src/constants.mts";
 import { createRoot, readSentinel, type RootSentinel } from "../packages/core/src/root.mts";
 
@@ -19,7 +21,7 @@ export interface CreateFixtureRootOptions {
 }
 
 export interface ApiFixtureLocationOptions {
-  mode: FixtureMode;
+  mode?: FixtureMode;
   topOrigin: string;
   requestOrigin?: string;
   scenario?: string;
@@ -33,7 +35,7 @@ export interface WriteApiFixtureOptions extends ApiFixtureLocationOptions {
 }
 
 export interface ManifestLocationOptions {
-  mode: FixtureMode;
+  mode?: FixtureMode;
   topOrigin: string;
   scenario?: string;
 }
@@ -87,24 +89,23 @@ export class WraithwalkerFixtureRoot {
   }
 
   cliConfigRelativePath(): string {
-    return path.join(SIMPLE_METADATA_DIR, "cli.json");
+    return path.join(WRAITHWALKER_DIR, "cli.json");
   }
 
-  manifestRelativePath({ mode, topOrigin, scenario }: ManifestLocationOptions): string {
+  projectConfigRelativePath(): string {
+    return PROJECT_CONFIG_RELATIVE_PATH;
+  }
+
+  manifestRelativePath({ topOrigin, scenario }: ManifestLocationOptions): string {
     const topOriginKey = originToKey(topOrigin);
     const base = scenario
       ? this.scenarioRelativePath(scenario)
       : "";
 
-    if (mode === "simple") {
-      return path.join(base, SIMPLE_METADATA_DIR, SIMPLE_METADATA_TREE, topOriginKey, STATIC_RESOURCE_MANIFEST_FILE);
-    }
-
-    return path.join(base, topOriginKey, STATIC_RESOURCE_MANIFEST_FILE);
+    return path.join(base, MANIFESTS_DIR, topOriginKey, STATIC_RESOURCE_MANIFEST_FILE);
   }
 
   apiFixturePaths({
-    mode,
     topOrigin,
     requestOrigin = topOrigin,
     scenario,
@@ -121,27 +122,16 @@ export class WraithwalkerFixtureRoot {
       ? this.scenarioRelativePath(scenario)
       : "";
 
-    const fixtureDir = mode === "simple"
-      ? path.join(
-        base,
-        SIMPLE_METADATA_DIR,
-        SIMPLE_METADATA_TREE,
-        topOriginKey,
-        "origins",
-        requestOriginKey,
-        "http",
-        method,
-        fixtureName
-      )
-      : path.join(
-        base,
-        topOriginKey,
-        "origins",
-        requestOriginKey,
-        "http",
-        method,
-        fixtureName
-      );
+    const fixtureDir = path.join(
+      base,
+      CAPTURE_HTTP_DIR,
+      topOriginKey,
+      "origins",
+      requestOriginKey,
+      "http",
+      method,
+      fixtureName
+    );
 
     return {
       fixtureDir,
@@ -172,6 +162,12 @@ export class WraithwalkerFixtureRoot {
     return relativePath;
   }
 
+  async writeProjectConfig(config: unknown): Promise<string> {
+    const relativePath = this.projectConfigRelativePath();
+    await this.writeJson(relativePath, config);
+    return relativePath;
+  }
+
   async ensureScenario(name: string): Promise<string> {
     const relativePath = this.scenarioRelativePath(name);
     await fs.mkdir(this.resolve(relativePath), { recursive: true });
@@ -179,26 +175,17 @@ export class WraithwalkerFixtureRoot {
   }
 
   async ensureOrigin({
-    mode,
     topOrigin,
     scenario
   }: ManifestLocationOptions): Promise<string> {
     const topOriginKey = originToKey(topOrigin);
-    const relativePath = mode === "simple"
-      ? path.join(
-        scenario ? this.scenarioRelativePath(scenario) : "",
-        SIMPLE_METADATA_DIR,
-        SIMPLE_METADATA_TREE,
-        topOriginKey
-      )
-      : path.join(
-        scenario ? this.scenarioRelativePath(scenario) : "",
-        topOriginKey,
-        "origins"
-      );
+    const base = scenario ? this.scenarioRelativePath(scenario) : "";
+    const manifestDir = path.join(base, MANIFESTS_DIR, topOriginKey);
+    const captureDir = path.join(base, CAPTURE_HTTP_DIR, topOriginKey, "origins");
 
-    await fs.mkdir(this.resolve(relativePath), { recursive: true });
-    return relativePath;
+    await fs.mkdir(this.resolve(manifestDir), { recursive: true });
+    await fs.mkdir(this.resolve(captureDir), { recursive: true });
+    return captureDir;
   }
 
   async writeManifest(options: ManifestLocationOptions & { manifest: unknown }): Promise<string> {

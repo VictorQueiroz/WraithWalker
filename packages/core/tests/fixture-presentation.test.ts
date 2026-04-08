@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createProjectedFixturePayload,
+  decodeFixtureBodyText,
   inferPrettyFilepath,
   prettifyFixtureText
 } from "../src/fixture-presentation.mts";
@@ -136,5 +138,66 @@ describe("fixture presentation", () => {
       relativePath: "cdn.example.com/assets/broken.js",
       text: invalidScript
     })).resolves.toBe(invalidScript);
+  });
+
+  it("decodes fixture body payloads across utf8, atob, and buffer fallbacks", async () => {
+    expect(decodeFixtureBodyText({
+      body: "plain text",
+      bodyEncoding: "utf8"
+    })).toBe("plain text");
+
+    const originalAtob = globalThis.atob;
+    const originalBuffer = globalThis.Buffer;
+    const capturedInputs: string[] = [];
+
+    try {
+      globalThis.atob = ((value: string) => {
+        capturedInputs.push(value);
+        return "{\"ok\":true}";
+      }) as typeof atob;
+
+      expect(decodeFixtureBodyText({
+        body: "ignored-base64",
+        bodyEncoding: "base64"
+      })).toBe("{\"ok\":true}");
+      expect(capturedInputs).toEqual(["ignored-base64"]);
+
+      // Force the non-atob fallback branch.
+      // @ts-ignore test override
+      globalThis.atob = undefined;
+      // @ts-ignore test override
+      globalThis.Buffer = Buffer;
+
+      expect(decodeFixtureBodyText({
+        body: Buffer.from("{\"buffer\":true}", "utf8").toString("base64"),
+        bodyEncoding: "base64"
+      })).toBe("{\"buffer\":true}");
+    } finally {
+      globalThis.atob = originalAtob;
+      // @ts-ignore restoring test override
+      globalThis.Buffer = originalBuffer;
+    }
+  });
+
+  it("falls back to the raw payload when projected fixture bytes are not valid utf8", async () => {
+    const binaryPayload = Buffer.from([0xff, 0xfe, 0xfd, 0x00]).toString("base64");
+
+    expect(decodeFixtureBodyText({
+      body: binaryPayload,
+      bodyEncoding: "base64"
+    })).toBeNull();
+
+    await expect(createProjectedFixturePayload({
+      relativePath: "cdn.example.com/assets/app.wasm",
+      payload: {
+        body: binaryPayload,
+        bodyEncoding: "base64"
+      },
+      mimeType: "application/wasm",
+      resourceType: "Other"
+    })).resolves.toEqual({
+      body: binaryPayload,
+      bodyEncoding: "base64"
+    });
   });
 });

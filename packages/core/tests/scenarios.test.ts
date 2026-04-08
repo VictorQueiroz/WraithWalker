@@ -57,7 +57,6 @@ describe("scenario diffing", () => {
     const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
 
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "a",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -66,7 +65,6 @@ describe("scenario diffing", () => {
       body: "{\"users\":[]}"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "b",
       topOrigin: "https://app.example.com",
       method: "GET",
@@ -75,7 +73,6 @@ describe("scenario diffing", () => {
       body: "{\"error\":true}"
     });
     await root.writeApiFixture({
-      mode: "advanced",
       scenario: "b",
       topOrigin: "https://app.example.com",
       method: "POST",
@@ -105,7 +102,6 @@ describe("scenario diffing", () => {
       prefix: "wraithwalker-core-scenarios-"
     });
     await root.writeApiFixture({
-      mode: "simple",
       scenario: "simple-a",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",

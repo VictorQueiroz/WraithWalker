@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
+import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "../src/lib/constants.js";
 
 function createEvent() {
   const listeners = [];
@@ -69,7 +69,12 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
     sentinel: { rootId: "server-root" },
     baseUrl: "http://127.0.0.1:4319",
     mcpUrl: "http://127.0.0.1:4319/mcp",
-    trpcUrl: "http://127.0.0.1:4319/trpc"
+    trpcUrl: "http://127.0.0.1:4319/trpc",
+    siteConfigs: [{
+      origin: "https://app.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.js$"]
+    }]
   };
   const getSystemInfo = overrides.getSystemInfo ?? vi.fn().mockResolvedValue(fallbackInfo);
   const heartbeat = overrides.heartbeat ?? vi.fn(async () => ({
@@ -84,6 +89,18 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
       exists: false,
       sentinel: fallbackInfo.sentinel
     }),
+    readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
+      siteConfigs: fallbackInfo.siteConfigs,
+      sentinel: fallbackInfo.sentinel
+    }),
+    readEffectiveSiteConfigs: vi.fn().mockResolvedValue({
+      siteConfigs: fallbackInfo.siteConfigs,
+      sentinel: fallbackInfo.sentinel
+    }),
+    writeConfiguredSiteConfigs: vi.fn().mockImplementation(async (siteConfigs) => ({
+      siteConfigs,
+      sentinel: fallbackInfo.sentinel
+    })),
     readFixture: vi.fn().mockResolvedValue({
       exists: false,
       sentinel: fallbackInfo.sentinel
@@ -344,7 +361,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue({
         ...DEFAULT_NATIVE_HOST_CONFIG,
@@ -387,6 +404,7 @@ describe("background entrypoint", () => {
       rootReady: true
     });
     expect(runtime.state.rootSentinel).toEqual(serverSentinel);
+    expect(runtime.state.enabledOrigins).toEqual(["https://app.example.com"]);
 
     expect(requestLifecycleDependencies).toBeTruthy();
     const fixtureExists = await requestLifecycleDependencies!.repository.exists({} as never);
@@ -427,7 +445,6 @@ describe("background entrypoint", () => {
       siteConfigs: [{
         origin: "https://app.example.com",
         createdAt: "2026-04-07T00:00:00.000Z",
-        mode: "simple",
         dumpAllowlistPatterns: ["\\.js$"]
       }],
       editorId: "cursor"
@@ -443,6 +460,552 @@ describe("background entrypoint", () => {
     expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(2, {
       url: expect.stringContaining("cursor://anysphere.cursor-deeplink/prompt?text=")
     });
+  });
+
+  it("replaces local fallback site configs with server-backed site configs when connected", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://local.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
+        heartbeat: vi.fn().mockResolvedValue({
+          version: "0.6.1",
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc",
+          siteConfigs: [{
+            origin: "https://server.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.svg$"]
+          }],
+          activeTrace: null
+        })
+      })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+    expect(runtime.state.siteConfigsByOrigin.get("https://server.example.com")).toEqual(
+      expect.objectContaining({
+        dumpAllowlistPatterns: ["\\.svg$"]
+      })
+    );
+    expect(runtime.state.localSiteConfigsByOrigin.get("https://local.example.com")).toEqual(
+      expect.objectContaining({
+        dumpAllowlistPatterns: ["\\.json$"]
+      })
+    );
+  });
+
+  it("reads configured site configs from the server when connected", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const serverClient = createMockServerClient({
+      readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
+        siteConfigs: [{
+          origin: "https://server.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }],
+        sentinel: { rootId: "server-root" }
+      })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" });
+
+    expect(serverClient.readConfiguredSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: true,
+      sentinel: { rootId: "server-root" },
+      siteConfigs: [{
+        origin: "https://server.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]
+    });
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      target: "offscreen"
+    }));
+  });
+
+  it("reads effective site configs from the server when connected", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const serverClient = createMockServerClient({
+      readEffectiveSiteConfigs: vi.fn().mockResolvedValue({
+        siteConfigs: [{
+          origin: "https://effective.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }],
+        sentinel: { rootId: "server-root" }
+      })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" });
+
+    expect(serverClient.readEffectiveSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: true,
+      sentinel: { rootId: "server-root" },
+      siteConfigs: [{
+        origin: "https://effective.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }]
+    });
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      target: "offscreen"
+    }));
+  });
+
+  it("writes configured site configs to the server when connected without dual-writing locally", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    let serverConfiguredSites = [{
+      origin: "https://server.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.svg$"]
+    }];
+    const serverClient = createMockServerClient({
+      heartbeat: vi.fn().mockImplementation(async () => ({
+        version: "0.6.1",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: serverConfiguredSites,
+        activeTrace: null
+      })),
+      writeConfiguredSiteConfigs: vi.fn().mockImplementation(async (siteConfigs) => {
+        serverConfiguredSites = siteConfigs;
+        return {
+          siteConfigs,
+          sentinel: { rootId: "server-root" }
+        };
+      })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://local.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.writeConfiguredSiteConfigs",
+      siteConfigs: [{
+        origin: "https://server-only.example.com",
+        createdAt: "2026-04-08T12:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }]
+    });
+
+    expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledWith([{
+      origin: "https://server-only.example.com",
+      createdAt: "2026-04-08T12:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.css$"]
+    }]);
+    expect(result).toEqual({
+      ok: true,
+      sentinel: { rootId: "server-root" },
+      siteConfigs: [{
+        origin: "https://server-only.example.com",
+        createdAt: "2026-04-08T12:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }]
+    });
+    expect(runtime.state.enabledOrigins).toEqual(["https://server-only.example.com"]);
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      target: "offscreen",
+      type: "fs.writeConfiguredSiteConfigs"
+    }));
+  });
+
+  it("falls back to the local root when a server-backed config write fails", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    let localConfiguredSites = [{
+      origin: "https://local.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.json$"]
+    }];
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+      payload?: { siteConfigs?: typeof localConfiguredSites };
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      switch (message.type) {
+        case "fs.ensureRoot":
+          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+        case "fs.readConfiguredSiteConfigs":
+        case "fs.readEffectiveSiteConfigs":
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: localConfiguredSites };
+        case "fs.writeConfiguredSiteConfigs":
+          localConfiguredSites = message.payload?.siteConfigs ?? [];
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: localConfiguredSites };
+        default:
+          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+      }
+    });
+    const serverClient = createMockServerClient({
+      writeConfiguredSiteConfigs: vi.fn().mockRejectedValue(new Error("server write failed"))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.writeConfiguredSiteConfigs",
+      siteConfigs: [{
+        origin: "https://fallback.example.com",
+        createdAt: "2026-04-08T12:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }]
+    });
+
+    expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: true,
+      sentinel: { rootId: "local-root" },
+      siteConfigs: [{
+        origin: "https://fallback.example.com",
+        createdAt: "2026-04-08T12:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }]
+    });
+    expect(runtime.state.serverInfo).toBeNull();
+    expect(runtime.state.enabledOrigins).toEqual(["https://fallback.example.com"]);
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith({
+      target: "offscreen",
+      type: "fs.writeConfiguredSiteConfigs",
+      payload: {
+        siteConfigs: [{
+          origin: "https://fallback.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }]
+      }
+    });
+  });
+
+  it("surfaces a combined error when a server-backed config write fails and no fallback root is ready", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      if (message.type === "fs.ensureRoot") {
+        return { ok: false, error: "No root directory selected." };
+      }
+
+      return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+    });
+    const serverClient = createMockServerClient({
+      writeConfiguredSiteConfigs: vi.fn().mockRejectedValue(new Error("server write failed"))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.writeConfiguredSiteConfigs",
+      siteConfigs: [{
+        origin: "https://no-fallback.example.com",
+        createdAt: "2026-04-08T12:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }]
+    });
+
+    expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: false,
+      error: "Local WraithWalker server is unavailable and no fallback root is ready. server write failed"
+    });
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      target: "offscreen",
+      type: "fs.writeConfiguredSiteConfigs"
+    }));
+  });
+
+  it("falls back to the local root when a server-backed effective config read fails", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    let localEffectiveSites = [{
+      origin: "https://local-effective.example.com",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.css$"]
+    }];
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      switch (message.type) {
+        case "fs.ensureRoot":
+          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+        case "fs.readEffectiveSiteConfigs":
+          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: localEffectiveSites };
+        default:
+          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+      }
+    });
+    const serverClient = createMockServerClient({
+      readEffectiveSiteConfigs: vi.fn().mockRejectedValue(new Error("server read failed"))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" });
+
+    expect(serverClient.readEffectiveSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: true,
+      sentinel: { rootId: "local-root" },
+      siteConfigs: [{
+        origin: "https://local-effective.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }]
+    });
+    expect(runtime.state.serverInfo).toBeNull();
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      target: "offscreen",
+      type: "fs.readEffectiveSiteConfigs"
+    }));
+  });
+
+  it("surfaces a combined error when a server-backed effective config read fails and no fallback root is ready", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      if (message.type === "fs.ensureRoot") {
+        return { ok: false, error: "No root directory selected." };
+      }
+
+      return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+    });
+    const serverClient = createMockServerClient({
+      readEffectiveSiteConfigs: vi.fn().mockRejectedValue(new Error("server read failed"))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" });
+
+    expect(serverClient.readEffectiveSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      ok: false,
+      error: "Local WraithWalker server is unavailable and no fallback root is ready. server read failed"
+    });
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      target: "offscreen",
+      type: "fs.readEffectiveSiteConfigs"
+    }));
   });
 
   it("heartbeats with a persisted client id and arms debugger-based tracing when the server reports an active trace", async () => {
@@ -463,7 +1026,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
@@ -499,6 +1062,116 @@ describe("background entrypoint", () => {
     expect(chromeApi.alarms.create).toHaveBeenCalledWith("wraithwalker-server-heartbeat", expect.any(Object));
   });
 
+  it("does not re-arm trace bindings for tabs that are already armed for the active trace", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const activeTrace = createActiveTrace();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn()
+    });
+
+    await runtime.start();
+    runtime.state.sessionActive = true;
+    runtime.state.enabledOrigins = ["https://app.example.com"];
+    runtime.state.activeTrace = activeTrace;
+    runtime.state.serverInfo = {
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc"
+    };
+    runtime.state.attachedTabs.set(7, {
+      topOrigin: "https://app.example.com",
+      traceScriptIdentifier: "trace-script-1",
+      traceArmedForTraceId: "trace-1"
+    });
+
+    chromeApi.debugger.sendCommand.mockClear();
+    chromeApi.tabs.onUpdated.listeners[0](7, {}, { id: 7, url: "https://app.example.com/profile" });
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.get(7)).toMatchObject({
+      topOrigin: "https://app.example.com",
+      traceArmedForTraceId: "trace-1"
+    });
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.addBinding",
+      expect.anything()
+    );
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.addScriptToEvaluateOnNewDocument",
+      expect.anything()
+    );
+  });
+
+  it("continues arming trace bindings when Runtime.addBinding is already registered", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
+      if (method === "Runtime.addBinding") {
+        throw new Error("binding already registered");
+      }
+
+      if (method === "Page.addScriptToEvaluateOnNewDocument") {
+        return { identifier: "trace-script-1" };
+      }
+
+      return undefined;
+    });
+    const activeTrace = createActiveTrace();
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
+        heartbeat: vi.fn().mockResolvedValue({
+          version: "1.0.0",
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc",
+          activeTrace
+        }),
+        activeTrace
+      }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    expect(runtime.state.attachedTabs.get(7)).toMatchObject({
+      traceScriptIdentifier: "trace-script-1",
+      traceArmedForTraceId: "trace-1"
+    });
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.addBinding", {
+      name: "__wraithwalkerTraceBinding"
+    });
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.addScriptToEvaluateOnNewDocument",
+      expect.objectContaining({
+        source: expect.stringContaining("__wraithwalkerTraceBinding")
+      })
+    );
+  });
+
   it("re-arms traced tabs when the active trace changes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
@@ -528,7 +1201,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
@@ -588,7 +1261,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
@@ -632,7 +1305,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
@@ -704,7 +1377,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
@@ -770,7 +1443,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
@@ -1690,7 +2363,7 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", mode: "simple", dumpAllowlistPatterns: ["\\.js$"] }
+        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue({
         ...DEFAULT_NATIVE_HOST_CONFIG,
@@ -2675,7 +3348,112 @@ describe("background entrypoint", () => {
     expect(runtime.state.requests.has("99:req-1")).toBe(true);
   });
 
-  it("refreshes configuration and reconciles tabs on relevant storage changes", async () => {
+  it("migrates legacy chrome-local site config into the selected root once", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    let configuredSites = [{
+      origin: "https://app.example.com",
+      createdAt: "2026-04-07T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.svg$"]
+    }];
+
+    chromeApi.storage.local.get.mockImplementation(async (keys: string[]) => {
+      if (keys.includes(STORAGE_KEYS.SITES)) {
+        return {
+          [STORAGE_KEYS.SITES]: [{
+            origin: "admin.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$"]
+          }, {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-06T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          }]
+        };
+      }
+
+      if (keys.includes(STORAGE_KEYS.LEGACY_SITES_MIGRATED)) {
+        return {};
+      }
+
+      if (keys.includes(STORAGE_KEYS.EXTENSION_CLIENT_ID)) {
+        return { [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-1" };
+      }
+
+      if (keys.includes(STORAGE_KEYS.NATIVE_HOST) || keys.includes(STORAGE_KEYS.PREFERRED_EDITOR)) {
+        return {};
+      }
+
+      return {};
+    });
+    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
+      target?: string;
+      type?: string;
+      payload?: { siteConfigs?: typeof configuredSites };
+    }) => {
+      if (message.target !== "offscreen") {
+        return undefined;
+      }
+
+      switch (message.type) {
+        case "fs.ensureRoot":
+          return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+        case "fs.readConfiguredSiteConfigs":
+        case "fs.readEffectiveSiteConfigs":
+          return { ok: true, sentinel: { rootId: "root-1" }, siteConfigs: configuredSites };
+        case "fs.writeConfiguredSiteConfigs":
+          configuredSites = message.payload?.siteConfigs ?? [];
+          return { ok: true, sentinel: { rootId: "root-1" }, siteConfigs: configuredSites };
+        default:
+          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+      }
+    });
+    const sessionController = {
+      startSession: vi.fn(),
+      stopSession: vi.fn(),
+      reconcileTabs: vi.fn().mockResolvedValue(undefined),
+      handleTabStateChange: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createSessionController: vi.fn(() => sessionController),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+
+    expect(configuredSites).toEqual([
+      {
+        origin: "https://admin.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$"]
+      },
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-07T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }
+    ]);
+    expect(runtime.state.enabledOrigins).toEqual(["https://admin.example.com", "https://app.example.com"]);
+    expect(chromeApi.storage.local.set).toHaveBeenCalledWith({
+      [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true
+    });
+
+    chromeApi.storage.local.set.mockClear();
+    await runtime.refreshStoredConfig();
+    expect(chromeApi.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  it("ignores legacy site config storage changes after root-backed config becomes authoritative", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     const getSiteConfigs = vi
@@ -2708,8 +3486,66 @@ describe("background entrypoint", () => {
     chromeApi.storage.onChanged.listeners[0]({ siteConfigs: { newValue: [] } }, "local");
     await flushPromises();
 
-    expect(getSiteConfigs).toHaveBeenCalledTimes(2);
-    expect(sessionController.reconcileTabs).toHaveBeenCalled();
+    expect(getSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(sessionController.reconcileTabs).not.toHaveBeenCalled();
+  });
+
+  it("refreshes local fallback config without reconciling tabs while the server is connected", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const getSiteConfigs = vi
+      .fn()
+      .mockResolvedValueOnce([{ origin: "https://local.example.com", createdAt: "2026-04-03T00:00:00.000Z" }])
+      .mockResolvedValueOnce([{ origin: "https://next-local.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]);
+    const sessionController = {
+      startSession: vi.fn(),
+      stopSession: vi.fn(),
+      reconcileTabs: vi.fn().mockResolvedValue(undefined),
+      handleTabStateChange: vi.fn()
+    };
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs,
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
+        heartbeat: vi.fn().mockResolvedValue({
+          version: "0.6.1",
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc",
+          siteConfigs: [{
+            origin: "https://server.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.svg$"]
+          }],
+          activeTrace: null
+        })
+      })),
+      createSessionController: vi.fn(() => sessionController),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+    runtime.state.sessionActive = true;
+    sessionController.reconcileTabs.mockClear();
+
+    chromeApi.storage.onChanged.listeners[0]({ nativeHostConfig: { newValue: {} } }, "local");
+    await flushPromises();
+
+    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+    expect(runtime.state.localEnabledOrigins).toEqual(["https://next-local.example.com"]);
+    expect(sessionController.reconcileTabs).not.toHaveBeenCalled();
   });
 
   it("refreshes config for preferred editor changes without reconciling tabs", async () => {
@@ -2888,6 +3724,57 @@ describe("background entrypoint", () => {
     chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
     await flushPromises();
     expect(heartbeat).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps heartbeats running without chrome alarms support", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    delete (chromeApi as { alarms?: unknown }).alarms;
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi: chromeApi as any,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn().mockResolvedValue({
+          sessionActive: true,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        }),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    expect(heartbeat).toHaveBeenCalled();
   });
 
   it("routes Network.requestWillBeSent and Network.responseReceived events", async () => {
@@ -3361,5 +4248,7 @@ describe("background entrypoint", () => {
 
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
     expect(chromeApi.storage.local.get).toHaveBeenCalledTimes(3);
+    expect(chromeApi.storage.local.get).toHaveBeenNthCalledWith(2, [STORAGE_KEYS.EXTENSION_CLIENT_ID]);
+    expect(chromeApi.storage.local.get).toHaveBeenNthCalledWith(3, [STORAGE_KEYS.LEGACY_SITES_MIGRATED]);
   });
 });

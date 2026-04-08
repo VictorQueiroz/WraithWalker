@@ -45,7 +45,7 @@ interface InterceptionMiddlewareDependencies {
         resourceType: string;
         mimeType: string;
       },
-      siteConfig?: Pick<SiteConfig, "mode">
+      siteConfig?: SiteConfig
     ) => Promise<FixtureDescriptor>;
   };
   repository: {

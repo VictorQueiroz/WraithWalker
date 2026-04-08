@@ -18,6 +18,7 @@ import {
   type ResponseMeta,
   type StaticResourceManifest
 } from "./fixture-layout.mjs";
+import { createProjectedFixturePayload } from "./fixture-presentation.mjs";
 import { createRoot, type RootSentinel } from "./root.mjs";
 import { createFixtureRootFs } from "./root-fs.mjs";
 
@@ -464,7 +465,7 @@ interface PlannedWrite {
   relativePath: string;
   content: Buffer;
   topOrigin: string;
-  kind: "request" | "meta" | "body";
+  kind: "request" | "meta" | "body" | "projection";
 }
 
 function isMetadataWritePath(relativePath: string): boolean {
@@ -475,15 +476,31 @@ function isMetadataWritePath(relativePath: string): boolean {
     || fileName.endsWith(".__response.json");
 }
 
-function createPlannedWrites(preparedEntries: PreparedHarEntry[]): PlannedWrite[] {
-  return preparedEntries.flatMap((prepared) => {
+async function createPlannedWrites(preparedEntries: PreparedHarEntry[]): Promise<PlannedWrite[]> {
+  const plannedWrites = await Promise.all(preparedEntries.map(async (prepared) => {
     const requestBuffer = Buffer.from(JSON.stringify(prepared.request, null, 2), "utf8");
     const metaBuffer = Buffer.from(JSON.stringify(prepared.response.meta, null, 2), "utf8");
     const bodyBuffer = prepared.response.bodyEncoding === "base64"
       ? Buffer.from(prepared.response.body, "base64")
       : Buffer.from(prepared.response.body, "utf8");
+    const projectionPayload = prepared.descriptor.projectionPath
+      ? await createProjectedFixturePayload({
+        relativePath: prepared.descriptor.projectionPath,
+        payload: {
+          body: prepared.response.body,
+          bodyEncoding: prepared.response.bodyEncoding
+        },
+        mimeType: prepared.response.meta.mimeType,
+        resourceType: prepared.response.meta.resourceType
+      })
+      : null;
+    const projectionBuffer = projectionPayload
+      ? projectionPayload.bodyEncoding === "base64"
+        ? Buffer.from(projectionPayload.body, "base64")
+        : Buffer.from(projectionPayload.body, "utf8")
+      : null;
 
-    return [
+    const writes: PlannedWrite[] = [
       {
         relativePath: prepared.descriptor.requestPath,
         content: requestBuffer,
@@ -501,9 +518,21 @@ function createPlannedWrites(preparedEntries: PreparedHarEntry[]): PlannedWrite[
         content: bodyBuffer,
         topOrigin: prepared.topOrigin,
         kind: "body"
-      }
+      },
+      ...(prepared.descriptor.projectionPath && projectionBuffer
+        ? [{
+          relativePath: prepared.descriptor.projectionPath,
+          content: projectionBuffer,
+          topOrigin: prepared.topOrigin,
+          kind: "projection" as const
+        }]
+        : [])
     ];
-  });
+
+    return writes;
+  }));
+
+  return plannedWrites.flat();
 }
 
 async function assertPlannedWritesAreCompatible(
@@ -513,15 +542,17 @@ async function assertPlannedWritesAreCompatible(
   const rootFs = createFixtureRootFs(dir);
   const plannedByPath = new Map<string, PlannedWrite>();
 
-  for (const write of createPlannedWrites(preparedEntries)) {
+  for (const write of await createPlannedWrites(preparedEntries)) {
     const existingPlanned = plannedByPath.get(write.relativePath);
     if (existingPlanned) {
-      if (write.kind !== "body") {
+      if (write.kind !== "body" && write.kind !== "projection") {
         continue;
       }
 
       if (existingPlanned.topOrigin === write.topOrigin) {
-        plannedByPath.set(write.relativePath, write);
+        if (write.kind === "body") {
+          plannedByPath.set(write.relativePath, write);
+        }
         continue;
       }
 
@@ -676,7 +707,6 @@ async function prepareHarEntries(
       url: entry.request.url,
       postData: requestBody.body,
       postDataEncoding: requestBody.bodyEncoding,
-      siteMode: "simple",
       resourceType,
       mimeType
     });
@@ -716,6 +746,7 @@ async function writePreparedEntries(
 
   for (const [index, prepared] of preparedEntries.entries()) {
     const { descriptor, request, response, entry } = prepared;
+    const displayPath = descriptor.projectionPath ?? descriptor.bodyPath;
     const completedEntries = index;
     const totalEntries = preparedEntries.length;
     const bodyBufferSize = response.bodyEncoding === "base64"
@@ -727,7 +758,7 @@ async function writePreparedEntries(
         type: "entry-start",
         topOrigin: prepared.topOrigin,
         requestUrl: entry.request.url,
-        bodyPath: descriptor.bodyPath,
+        bodyPath: displayPath,
         completedEntries,
         totalEntries,
         writtenBytes: 0,
@@ -743,7 +774,7 @@ async function writePreparedEntries(
             type: "entry-progress",
             topOrigin: prepared.topOrigin,
             requestUrl: entry.request.url,
-            bodyPath: descriptor.bodyPath,
+            bodyPath: displayPath,
             completedEntries,
             totalEntries,
             writtenBytes,
@@ -751,6 +782,23 @@ async function writePreparedEntries(
           })
         : undefined
     });
+
+    let projectionPath: string | null = null;
+    if (descriptor.projectionPath && !(await rootFs.exists(descriptor.projectionPath))) {
+      projectionPath = descriptor.projectionPath;
+      await rootFs.writeBody(
+        descriptor.projectionPath,
+        await createProjectedFixturePayload({
+          relativePath: descriptor.projectionPath,
+          payload: {
+            body: response.body,
+            bodyEncoding: response.bodyEncoding
+          },
+          mimeType: response.meta.mimeType,
+          resourceType: response.meta.resourceType
+        })
+      );
+    }
 
     if (descriptor.assetLike) {
       const manifestPath = getStaticResourceManifestPath(descriptor as AssetFixtureDescriptor);
@@ -760,7 +808,9 @@ async function writePreparedEntries(
           || createStaticResourceManifest(descriptor as AssetFixtureDescriptor);
         const nextManifest = upsertStaticResourceManifest(
           cachedManifest,
-          createStaticResourceManifestEntry(descriptor as AssetFixtureDescriptor, response.meta)
+          createStaticResourceManifestEntry(descriptor as AssetFixtureDescriptor, response.meta, {
+            projectionPath
+          })
         );
         manifestCache.set(manifestPath, nextManifest);
       }
@@ -768,7 +818,7 @@ async function writePreparedEntries(
 
     imported.push({
       requestUrl: entry.request.url,
-      bodyPath: descriptor.bodyPath,
+      bodyPath: displayPath,
       method: descriptor.method,
       topOrigin: prepared.topOrigin
     });
@@ -778,7 +828,7 @@ async function writePreparedEntries(
         type: "entry-complete",
         topOrigin: prepared.topOrigin,
         requestUrl: entry.request.url,
-        bodyPath: descriptor.bodyPath,
+        bodyPath: displayPath,
         completedEntries: index + 1,
         totalEntries
       });

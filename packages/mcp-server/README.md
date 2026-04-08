@@ -45,6 +45,25 @@ Platform default content roots:
 
 If the resolved root does not exist yet, the server bootstraps it with the normal `.wraithwalker/root.json` sentinel before listening.
 
+The same root can also contain an explicit project capture config at:
+
+```text
+.wraithwalker/config.json
+```
+
+Use the CLI to manage it:
+
+```bash
+wraithwalker config add site."https://app.example.com"
+wraithwalker config add site."https://app.example.com".dumpAllowlistPatterns "\\.svg$"
+```
+
+If you are not inside an existing fixture root, `wraithwalker config` falls back to the same default root that `wraithwalker serve` uses and creates it automatically. That means you can stand up the local server and configure capture domains without touching the extension at all.
+
+The server treats that file as the explicit source of truth for capture origins and dump patterns, then merges it with any origins discovered from captured fixtures under the same root.
+
+Shared defaults remain JavaScript/TypeScript, CSS, and WebAssembly patterns. If the extension UI adds `\.json$` for a domain, that is written into the root config as an extension convenience, not as a server-wide default policy.
+
 Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and intended for local use.
 
 For existing process-spawned stdio integrations, keep using the package bin directly:
@@ -110,6 +129,12 @@ Current procedures:
 - `scenarioTraces.linkFixture`
 
 When the extension detects the default loopback server at `http://127.0.0.1:4319/trpc`, it prefers the server root for capture, fixture reads, context generation, and Cursor open flows. If the server is unavailable, the extension falls back to its remembered local root flow.
+
+While the extension is connected to the local server, the server root's effective site config is authoritative. Chrome-local extension settings become fallback-only until the server disappears again.
+
+The extension Settings page follows that same authority switch: while connected, origin/mode/dump-pattern edits are written through tRPC into the server root's `.wraithwalker/config.json`. Without the server, the extension writes those settings to its selected local root instead.
+
+If older extension-local site config exists, the extension imports it into the selected root once and then continues from the root-backed config.
 
 Guided traces are server-root-only in v1 and live under `.wraithwalker/scenario-traces/`.
 

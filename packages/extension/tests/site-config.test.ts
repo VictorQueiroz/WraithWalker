@@ -44,7 +44,6 @@ describe("site config", () => {
     it("migrates dumpAllowlistPattern string to dumpAllowlistPatterns array", () => {
       const config = normalizeSiteConfig({
         origin: "https://app.example.com",
-        mode: "simple",
         dumpAllowlistPattern: "\\.css$"
       } as any);
 
@@ -54,7 +53,6 @@ describe("site config", () => {
     it("prefers dumpAllowlistPatterns over legacy dumpAllowlistPattern", () => {
       const config = normalizeSiteConfig({
         origin: "https://app.example.com",
-        mode: "simple",
         dumpAllowlistPatterns: ["\\.js$"],
         dumpAllowlistPattern: "\\.css$"
       } as any);
@@ -94,7 +92,6 @@ describe("site config", () => {
     const baseSite: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: ["\\.js$", "\\.css$", "\\.json$"]
     };
 

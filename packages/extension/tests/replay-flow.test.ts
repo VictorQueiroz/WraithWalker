@@ -130,7 +130,6 @@ describe("capture and replay flow", () => {
     const siteConfig: SiteConfig = {
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
     };
     const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
@@ -195,13 +194,13 @@ describe("capture and replay flow", () => {
       topOrigin: siteConfig.origin,
       method: "GET",
       url: "https://cdn.example.com/assets/app.js",
-      resourceType: "Script",
-      siteMode: "simple"
+      resourceType: "Script"
     });
 
     expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe("console.log('captured');");
+    expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe("console.log(\"captured\");");
 
-    await writeMemoryFile(rootHandle, descriptor.bodyPath, "console.log('edited');");
+    await writeMemoryFile(rootHandle, descriptor.projectionPath!, "console.log('edited');");
     await offscreen.handleMessage({
       target: "offscreen",
       type: "fs.writeFixture",
@@ -237,7 +236,8 @@ describe("capture and replay flow", () => {
       }
     });
 
-    expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe("console.log('edited');");
+    expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe("console.log('captured');");
+    expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe("console.log('edited');");
 
     await lifecycle.handleFetchRequestPaused(
       { tabId: 1 },

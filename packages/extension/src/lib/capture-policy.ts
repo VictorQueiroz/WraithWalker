@@ -1,5 +1,5 @@
 import { shouldDumpRequest as defaultShouldDumpRequest } from "./site-config.js";
-import type { RequestContext, SiteConfig, SiteMode } from "./types.js";
+import type { RequestContext, SiteConfig } from "./types.js";
 
 interface CapturePolicyDependencies {
   getSiteConfigForOrigin?: (topOrigin: string) => SiteConfig | undefined;
@@ -14,10 +14,6 @@ export function createCapturePolicy({
     return getSiteConfigForOrigin?.(topOrigin);
   }
 
-  function getSiteMode(topOrigin: string): SiteMode | undefined {
-    return getSiteConfig(topOrigin)?.mode;
-  }
-
   function shouldPersist(context: Pick<RequestContext, "topOrigin" | "method" | "url">): boolean {
     const siteConfig = getSiteConfig(context.topOrigin);
     return siteConfig
@@ -27,7 +23,6 @@ export function createCapturePolicy({
 
   return {
     getSiteConfig,
-    getSiteMode,
     shouldPersist
   };
 }

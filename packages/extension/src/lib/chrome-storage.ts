@@ -20,6 +20,15 @@ export async function setSiteConfigs(siteConfigs: SiteConfig[]): Promise<void> {
   await storageSet({ [STORAGE_KEYS.SITES]: siteConfigs });
 }
 
+export async function getLegacySiteConfigsMigrated(): Promise<boolean> {
+  const { [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: migrated } = await storageGet([STORAGE_KEYS.LEGACY_SITES_MIGRATED]);
+  return migrated === true;
+}
+
+export async function setLegacySiteConfigsMigrated(migrated: boolean): Promise<void> {
+  await storageSet({ [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: migrated });
+}
+
 export async function getNativeHostConfig(): Promise<NativeHostConfig> {
   const result = await storageGet([STORAGE_KEYS.NATIVE_HOST, STORAGE_KEYS.PREFERRED_EDITOR]);
   const stored = result[STORAGE_KEYS.NATIVE_HOST];

@@ -1,9 +1,9 @@
 import {
+  CAPTURE_HTTP_DIR,
   DEFAULT_CONTEXT_FILES,
   EDITOR_CONTEXT_FILES,
   FIXTURE_FILE_NAMES,
-  SIMPLE_METADATA_DIR,
-  SIMPLE_METADATA_TREE,
+  MANIFESTS_DIR,
   STATIC_RESOURCE_MANIFEST_FILE
 } from "./constants.mjs";
 import {
@@ -19,6 +19,12 @@ import {
   type FixtureRepositoryStorage,
   type FixtureResponsePayload
 } from "./fixture-repository.mjs";
+import {
+  createProjectConfigStore,
+  type ProjectConfigFile,
+  type ProjectConfigStorage
+} from "./project-config-store.mjs";
+import type { SiteConfig } from "./site-config.mjs";
 import {
   createScenarioTraceStore,
   type ScenarioTraceRecord,
@@ -203,18 +209,15 @@ async function collectOriginSummary<TRoot>(
   siteConfig: SiteConfigLike
 ): Promise<OriginSummary> {
   const originKey = originToKey(siteConfig.origin);
-  const basePath = siteConfig.mode === "simple"
-    ? `${SIMPLE_METADATA_DIR}/${SIMPLE_METADATA_TREE}/${originKey}`
-    : originKey;
   const manifest = await storage.readOptionalJson<StaticResourceManifest>(
     root,
-    `${basePath}/${STATIC_RESOURCE_MANIFEST_FILE}`
+    `${MANIFESTS_DIR}/${originKey}/${STATIC_RESOURCE_MANIFEST_FILE}`
   );
   const { byType, total } = manifest
     ? collectStaticAssetSummary(manifest)
     : { byType: {}, total: 0 };
 
-  const originsPath = `${basePath}/origins`;
+  const originsPath = `${CAPTURE_HTTP_DIR}/${originKey}/origins`;
   const apiEndpoints = await collectApiEndpoints(
     storage,
     root,
@@ -392,6 +395,10 @@ export function createWraithwalkerRootRuntime<TRoot>({
     storage: storage as ScenarioTraceStorage<TRoot>,
     ensureReady
   });
+  const projectConfigStore = createProjectConfigStore({
+    root,
+    storage: storage as ProjectConfigStorage<TRoot>
+  });
 
   async function has(descriptor: FixtureDescriptor): Promise<boolean> {
     return (await createRepository()).exists(descriptor);
@@ -443,6 +450,12 @@ export function createWraithwalkerRootRuntime<TRoot>({
     has,
     read,
     writeIfAbsent,
+    readProjectConfig: projectConfigStore.readProjectConfig as () => Promise<ProjectConfigFile>,
+    writeProjectConfig: projectConfigStore.writeProjectConfig as (config: ProjectConfigFile) => Promise<ProjectConfigFile>,
+    readConfiguredSiteConfigs: projectConfigStore.readConfiguredSiteConfigs as () => Promise<SiteConfig[]>,
+    writeConfiguredSiteConfigs: projectConfigStore.writeConfiguredSiteConfigs as (siteConfigs: SiteConfig[]) => Promise<ProjectConfigFile>,
+    resolveConfiguredSite: projectConfigStore.resolveConfiguredSite as (origin: string) => Promise<SiteConfig | null>,
+    readEffectiveSiteConfigs: projectConfigStore.readEffectiveSiteConfigs as () => Promise<SiteConfig[]>,
     generateContext,
     getActiveTrace: scenarioTraceStore.getActiveTrace,
     listTraces: scenarioTraceStore.listTraces,

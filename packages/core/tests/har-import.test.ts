@@ -423,7 +423,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://app.example.com/",
-      siteMode: "simple",
       mimeType: "text/html",
       resourceType: "Document"
     });
@@ -431,7 +430,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/app.js?v=1",
-      siteMode: "simple",
       mimeType: "application/javascript",
       resourceType: "Script"
     });
@@ -441,7 +439,6 @@ describe("har import", () => {
       url: "https://api.example.com/graphql",
       postData: "query=%7Bviewer%7Bid%7D%7D&draft=true",
       postDataEncoding: "utf8",
-      siteMode: "simple",
       mimeType: "application/json",
       resourceType: "Fetch"
     });
@@ -450,7 +447,7 @@ describe("har import", () => {
     expect(await fs.readFile(path.join(dir, scriptDescriptor.bodyPath), "utf8")).toBe("console.log('asset');");
     expect(await fs.readFile(path.join(dir, apiDescriptor.bodyPath), "utf8")).toBe('{"data":{"viewer":{"id":1}}}');
 
-    const manifest = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8"));
+    const manifest = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8"));
     expect(manifest.resourcesByPathname["/"]).toHaveLength(1);
     expect(manifest.resourcesByPathname["/assets/app.js"]).toHaveLength(1);
 
@@ -591,7 +588,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/live.js",
-      siteMode: "simple",
       mimeType: "application/javascript",
       resourceType: "Script"
     });
@@ -642,7 +638,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/agents",
-      siteMode: "simple",
       mimeType: "application/json",
       resourceType: "Other"
     });
@@ -650,7 +645,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/agents/all",
-      siteMode: "simple",
       mimeType: "application/json",
       resourceType: "Other"
     });
@@ -662,7 +656,7 @@ describe("har import", () => {
   });
 
   it("accepts an explicit top origin, imports binary bodies, and supports har files without pages", async () => {
-    const binaryPayload = Buffer.from([1, 2, 3, 4]);
+    const binaryPayload = Buffer.from([0xff, 0xfe, 0xfd, 0x00]);
     const harPath = await writeHarFile({
       log: {
         entries: [
@@ -705,12 +699,12 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://assets.example.com/fonts/app.woff2",
-      siteMode: "simple",
       mimeType: "font/woff2",
       resourceType: "Font"
     });
 
     expect(await fs.readFile(path.join(dir, fontDescriptor.bodyPath))).toEqual(binaryPayload);
+    expect(await fs.readFile(path.join(dir, fontDescriptor.projectionPath!))).toEqual(binaryPayload);
   });
 
   it("falls back to a single request origin when there is no unique document origin", async () => {
@@ -835,7 +829,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/styles/theme",
-      siteMode: "simple",
       mimeType: "text/css",
       resourceType: "Stylesheet"
     });
@@ -843,7 +836,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/logo",
-      siteMode: "simple",
       mimeType: "image/png",
       resourceType: "Image"
     });
@@ -851,7 +843,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/font",
-      siteMode: "simple",
       mimeType: "font/woff2",
       resourceType: "Font"
     });
@@ -859,7 +850,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/video",
-      siteMode: "simple",
       mimeType: "video/mp4",
       resourceType: "Media"
     });
@@ -867,7 +857,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/blob",
-      siteMode: "simple",
       mimeType: "application/octet-stream",
       resourceType: "Other"
     });
@@ -875,7 +864,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/no-headers",
-      siteMode: "simple",
       mimeType: "",
       resourceType: "Other"
     });
@@ -884,7 +872,6 @@ describe("har import", () => {
       method: "POST",
       url: "https://api.example.com/orders",
       postData: '{"sku":"A1"}',
-      siteMode: "simple",
       mimeType: "application/json",
       resourceType: "Fetch"
     });
@@ -975,7 +962,6 @@ describe("har import", () => {
       method: "POST",
       url: "https://api.example.com/search",
       postData: "query=",
-      siteMode: "simple",
       mimeType: "application/json",
       resourceType: "Fetch"
     });
@@ -1096,7 +1082,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://app.example.com/",
-      siteMode: "simple",
       mimeType: "text/html",
       resourceType: "Document"
     });
@@ -1104,7 +1089,6 @@ describe("har import", () => {
       topOrigin: "https://admin.example.com",
       method: "GET",
       url: "https://admin.example.com/",
-      siteMode: "simple",
       mimeType: "text/html",
       resourceType: "Document"
     });
@@ -1112,7 +1096,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/shared.js",
-      siteMode: "simple",
       mimeType: "application/javascript",
       resourceType: "Script"
     });
@@ -1120,17 +1103,19 @@ describe("har import", () => {
       topOrigin: "https://admin.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/shared.js",
-      siteMode: "simple",
       mimeType: "application/javascript",
       resourceType: "Script"
     });
 
-    expect(sharedAppDescriptor.bodyPath).toBe(sharedAdminDescriptor.bodyPath);
+    expect(sharedAppDescriptor.bodyPath).not.toBe(sharedAdminDescriptor.bodyPath);
+    expect(sharedAppDescriptor.projectionPath).toBe(sharedAdminDescriptor.projectionPath);
     expect(await fs.readFile(path.join(root.rootPath, appHtmlDescriptor.bodyPath), "utf8")).toBe("<html>app</html>");
     expect(await fs.readFile(path.join(root.rootPath, adminHtmlDescriptor.bodyPath), "utf8")).toBe("<html>admin</html>");
     expect(await fs.readFile(path.join(root.rootPath, sharedAppDescriptor.bodyPath), "utf8")).toBe("console.log('shared');");
-    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://app.example.com"');
-    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/simple/https__admin.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://admin.example.com"');
+    expect(await fs.readFile(path.join(root.rootPath, sharedAdminDescriptor.bodyPath), "utf8")).toBe("console.log('shared');");
+    expect(await fs.readFile(path.join(root.rootPath, sharedAppDescriptor.projectionPath!), "utf8")).toBe("console.log(\"shared\");");
+    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://app.example.com"');
+    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/manifests/https__admin.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://admin.example.com"');
   });
 
   it("allows additive imports for different top origins in the same root", async () => {
@@ -1185,10 +1170,10 @@ describe("har import", () => {
     });
 
     expect(result.topOrigins).toEqual(["https://admin.example.com"]);
-    expect(await root.readJson(".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json")).toEqual(
+    expect(await root.readJson(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json")).toEqual(
       expect.objectContaining({ topOrigin: "https://app.example.com" })
     );
-    expect(await root.readJson(".wraithwalker/simple/https__admin.example.com/RESOURCE_MANIFEST.json")).toEqual(
+    expect(await root.readJson(".wraithwalker/manifests/https__admin.example.com/RESOURCE_MANIFEST.json")).toEqual(
       expect.objectContaining({ topOrigin: "https://admin.example.com" })
     );
   });
@@ -1311,7 +1296,6 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/app.js",
-      siteMode: "simple",
       mimeType: "application/javascript",
       resourceType: "Script"
     });

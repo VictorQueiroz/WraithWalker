@@ -104,7 +104,6 @@ describe("root runtime", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/app.css",
-      siteMode: "simple",
       resourceType: "Stylesheet",
       mimeType: "text/css"
     });
@@ -141,7 +140,7 @@ describe("root runtime", () => {
     expect(Buffer.from(fixture!.bodyBase64, "base64").toString("utf8")).toContain("color: red");
 
     const manifest = await root.readJson<{ resourcesByPathname: Record<string, unknown[]> }>(
-      ".wraithwalker/simple/https__app.example.com/RESOURCE_MANIFEST.json"
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
     );
     expect(manifest.resourcesByPathname["/assets/app.css"]).toHaveLength(1);
     expect(ensureSentinel).toHaveBeenCalledTimes(1);
@@ -221,7 +220,6 @@ describe("root runtime", () => {
     });
 
     await root.writeManifest({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       manifest: {
         schemaVersion: 1,
@@ -235,8 +233,8 @@ describe("root runtime", () => {
             pathname: "/assets/app.js",
             search: "",
             bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
             mimeType: "application/javascript",
             resourceType: "Script",
             capturedAt: "2026-04-07T00:00:00.000Z"
@@ -247,8 +245,8 @@ describe("root runtime", () => {
             pathname: "/assets/style.css",
             search: "",
             bodyPath: "cdn.example.com/assets/style.css",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/style.css.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/style.css.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__response.json",
             mimeType: "text/css",
             resourceType: "Stylesheet",
             capturedAt: "2026-04-07T00:00:00.000Z"
@@ -259,8 +257,8 @@ describe("root runtime", () => {
             pathname: "/assets/runtime.wasm",
             search: "",
             bodyPath: "cdn.example.com/assets/runtime.wasm",
-            requestPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/runtime.wasm.__request.json",
-            metaPath: ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/runtime.wasm.__response.json",
+            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/runtime.wasm.__request.json",
+            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/runtime.wasm.__response.json",
             mimeType: "application/wasm",
             resourceType: "",
             capturedAt: "2026-04-07T00:00:00.000Z"
@@ -273,7 +271,6 @@ describe("root runtime", () => {
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://app.example.com/status",
-      siteMode: "simple",
       resourceType: "Fetch",
       mimeType: "text/plain"
     });
@@ -295,7 +292,6 @@ describe("root runtime", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/users",
-      siteMode: "simple",
       resourceType: "Fetch",
       mimeType: "application/json"
     });
@@ -317,7 +313,6 @@ describe("root runtime", () => {
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/users?page=2",
-      siteMode: "simple",
       resourceType: "Fetch",
       mimeType: "application/json"
     });
@@ -337,7 +332,6 @@ describe("root runtime", () => {
     });
 
     const invalidJsonDir = root.apiFixturePaths({
-      mode: "simple",
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
       method: "GET",
@@ -358,7 +352,6 @@ describe("root runtime", () => {
     await root.writeText(invalidJsonDir.bodyPath, "{not-json");
 
     await root.ensureOrigin({
-      mode: "simple",
       topOrigin: "http://localhost:4173"
     });
 
@@ -366,12 +359,10 @@ describe("root runtime", () => {
       editorId: "cursor",
       siteConfigs: [
         {
-          origin: "https://app.example.com",
-          mode: "simple"
+          origin: "https://app.example.com"
         },
         {
-          origin: "http://localhost:4173",
-          mode: "simple"
+          origin: "http://localhost:4173"
         }
       ]
     });
@@ -415,7 +406,6 @@ describe("root runtime", () => {
     });
 
     const brokenDir = root.apiFixturePaths({
-      mode: "advanced",
       topOrigin: "https://broken.example.com",
       method: "GET",
       fixtureName: "users__q-a__b-b"
@@ -437,8 +427,7 @@ describe("root runtime", () => {
     const markdown = await runtime.generateContext({
       siteConfigs: [
         {
-          origin: "https://broken.example.com",
-          mode: "advanced"
+          origin: "https://broken.example.com"
         }
       ]
     });
@@ -501,14 +490,14 @@ describe("root runtime", () => {
         readBody: async () => ({ bodyBase64: "", size: 0 }),
         readText: async () => "ignored",
         listDirectory: async (_root, relativePath) => {
-          if (relativePath === "https__stub.example.com/origins/https__stub.example.com/http") {
+          if (relativePath === ".wraithwalker/captures/http/https__stub.example.com/origins/https__stub.example.com/http") {
             return [
               { name: "README.md", kind: "file" },
               { name: "GET", kind: "directory" }
             ];
           }
 
-          if (relativePath === "https__stub.example.com/origins/https__stub.example.com/http/GET") {
+          if (relativePath === ".wraithwalker/captures/http/https__stub.example.com/origins/https__stub.example.com/http/GET") {
             return [
               { name: "preview.txt", kind: "file" },
               { name: "plain-text", kind: "directory" },
@@ -517,7 +506,7 @@ describe("root runtime", () => {
             ];
           }
 
-          if (relativePath === "https__stub.example.com/origins") {
+          if (relativePath === ".wraithwalker/captures/http/https__stub.example.com/origins") {
             return [{ name: "notes.txt", kind: "file" }];
           }
 
@@ -528,8 +517,7 @@ describe("root runtime", () => {
 
     const markdown = await runtime.generateContext({
       siteConfigs: [{
-        origin: "https://stub.example.com",
-        mode: "advanced"
+        origin: "https://stub.example.com"
       }]
     });
 

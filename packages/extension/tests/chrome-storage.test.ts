@@ -7,10 +7,12 @@ import {
   STORAGE_KEYS
 } from "../src/lib/constants.js";
 import {
+  getLegacySiteConfigsMigrated,
   getOrCreateExtensionClientId,
   getNativeHostConfig,
   getPreferredEditorId,
   getSiteConfigs,
+  setLegacySiteConfigsMigrated,
   setLastSessionSnapshot,
   setNativeHostConfig,
   setPreferredEditorId,
@@ -57,10 +59,20 @@ describe("chrome storage helpers", () => {
       {
         origin: "https://app.example.com",
         createdAt: "2026-04-03T00:00:00.000Z",
-        mode: "advanced",
         dumpAllowlistPatterns: DEFAULT_DUMP_ALLOWLIST_PATTERNS
       }
     ]);
+  });
+
+  it("tracks whether legacy site config has already been migrated into a root", async () => {
+    storageGet.mockResolvedValueOnce({});
+    await expect(getLegacySiteConfigsMigrated()).resolves.toBe(false);
+
+    storageGet.mockResolvedValueOnce({ [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true });
+    await expect(getLegacySiteConfigsMigrated()).resolves.toBe(true);
+
+    await setLegacySiteConfigsMigrated(true);
+    expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true });
   });
 
   it("merges native host defaults with stored values", async () => {
@@ -107,7 +119,6 @@ describe("chrome storage helpers", () => {
     const sites: SiteConfig[] = [{
       origin: "https://app.example.com",
       createdAt: "2026-04-03T00:00:00.000Z",
-      mode: "simple",
       dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
     }];
     const nativeHostConfig = {

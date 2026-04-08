@@ -4,6 +4,8 @@ import {
   appendHashToFileName,
   buildRequestPayload,
   buildResponseMeta,
+  CAPTURE_ASSETS_DIR,
+  CAPTURE_HTTP_DIR,
   createFixtureDescriptor,
   createStaticResourceManifest,
   createStaticResourceManifestEntry,
@@ -14,6 +16,7 @@ import {
   getRequestHostKey,
   getStaticResourceManifestPath,
   isAssetLikeRequest,
+  MANIFESTS_DIR,
   normalizeSiteInput,
   originToKey,
   originToPermissionPattern,
@@ -22,8 +25,6 @@ import {
   sanitizeResponseHeaders,
   sha256Hex,
   shortHash,
-  SIMPLE_MODE_METADATA_DIR,
-  SIMPLE_MODE_METADATA_TREE,
   splitPathSegments,
   splitSimpleModePath,
   STATIC_RESOURCE_MANIFEST_FILE,
@@ -31,9 +32,10 @@ import {
 } from "../src/fixture-layout.mts";
 
 describe("fixture layout", () => {
-  it("exports the expected simple-mode constants", () => {
-    expect(SIMPLE_MODE_METADATA_DIR).toBe(".wraithwalker");
-    expect(SIMPLE_MODE_METADATA_TREE).toBe("simple");
+  it("exports the expected canonical capture constants", () => {
+    expect(CAPTURE_ASSETS_DIR).toBe(".wraithwalker/captures/assets");
+    expect(CAPTURE_HTTP_DIR).toBe(".wraithwalker/captures/http");
+    expect(MANIFESTS_DIR).toBe(".wraithwalker/manifests");
     expect(STATIC_RESOURCE_MANIFEST_FILE).toBe("RESOURCE_MANIFEST.json");
     expect(FIXTURE_FILE_NAMES).toEqual({
       API_REQUEST: "request.json",
@@ -104,100 +106,102 @@ describe("fixture layout", () => {
     expect(deriveMimeTypeFromPathname("/assets/unknown.bin")).toBe("application/octet-stream");
   });
 
-  it("creates descriptors for advanced assets, simple GET fixtures, and simple API fixtures", async () => {
-    const advancedAsset = await createFixtureDescriptor({
+  it("creates canonical descriptors for assets and API fixtures", async () => {
+    const assetWithQuery = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/static/app.js?v=1",
       resourceType: "Script"
     });
-    const advancedAssetWithoutQuery = await createFixtureDescriptor({
+    const assetWithoutQuery = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/static/logo",
       resourceType: "Image",
       mimeType: "image/png"
     });
-    const advancedAssetRootPath = await createFixtureDescriptor({
+    const assetRootPath = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/",
       resourceType: "Script"
     });
-    const simpleGet = await createFixtureDescriptor({
+    const visibleGet = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/assets/chunk.js?v=2",
-      siteMode: "simple"
+      url: "https://cdn.example.com/assets/chunk.js?v=2"
     });
-    const simpleUntypedTrailingSlash = await createFixtureDescriptor({
+    const untypedTrailingSlash = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/assets/",
-      siteMode: "simple"
+      url: "https://cdn.example.com/assets/"
     });
-    const simpleGetApi = await createFixtureDescriptor({
+    const getApi = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://api.example.com/agents",
-      siteMode: "simple",
       mimeType: "application/json"
     });
-    const simpleApi = await createFixtureDescriptor({
+    const postApi = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com/graphql",
-      postData: '{"query":"{viewer{id}}"}',
-      siteMode: "simple"
+      postData: '{"query":"{viewer{id}}"}'
     });
-    const simpleApiRoot = await createFixtureDescriptor({
+    const postApiRoot = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com/",
-      postData: "{}",
-      siteMode: "simple"
+      postData: "{}"
     });
 
-    expect(advancedAsset.bodyPath).toMatch(
-      /^https__app\.example\.com\/origins\/https__cdn\.example\.com\/assets\/static\/app__q-/
+    expect(assetWithQuery.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/static\/app\.js\.__q-/
     );
-    expect(getStaticResourceManifestPath(advancedAsset)).toBe("https__app.example.com/RESOURCE_MANIFEST.json");
-    expect(advancedAssetWithoutQuery.bodyPath).toBe(
-      "https__app.example.com/origins/https__cdn.example.com/assets/static/logo"
+    expect(getStaticResourceManifestPath(assetWithQuery)).toBe(
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
     );
-    expect(advancedAssetRootPath.bodyPath).toBe(
-      "https__app.example.com/origins/https__cdn.example.com/assets/index"
+    expect(assetWithoutQuery.bodyPath).toBe(
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/static/logo.__body"
     );
-
-    expect(simpleGet.bodyPath).toBe("cdn.example.com/assets/chunk.js");
-    expect(simpleGet.requestPath).toBe(
-      ".wraithwalker/simple/https__app.example.com/cdn.example.com/assets/chunk.js.__request.json"
-    );
-    expect(simpleGet.metadataOptional).toBe(true);
-    expect(simpleUntypedTrailingSlash.storageMode).toBe("asset");
-    expect(simpleUntypedTrailingSlash.bodyPath).toBe("cdn.example.com/assets/index");
-    expect(simpleGetApi.storageMode).toBe("api");
-    expect(simpleGetApi.bodyPath).toMatch(
-      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/GET\/agents__q-/
+    expect(assetRootPath.bodyPath).toBe(
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/index.__body"
     );
 
-    expect(simpleApi.storageMode).toBe("api");
-    expect(simpleApi.bodyPath).toMatch(
-      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/POST\/graphql__q-/
+    expect(visibleGet.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/assets\/chunk\.js\.__q-[a-z0-9]+\.__body$/
     );
-    expect(simpleApi.bodyPath.endsWith("/response.body")).toBe(true);
-    expect(simpleApiRoot.bodyPath).toMatch(
-      /^\.wraithwalker\/simple\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/POST\/root__q-/
+    expect(visibleGet.projectionPath).toBe("cdn.example.com/assets/chunk.js");
+    expect(visibleGet.requestPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/assets\/chunk\.js\.__q-[a-z0-9]+\.__request\.json$/
     );
-    expect(getStaticResourceManifestPath(simpleApi)).toBeNull();
+    expect(visibleGet.metadataOptional).toBe(false);
+    expect(untypedTrailingSlash.storageMode).toBe("asset");
+    expect(untypedTrailingSlash.bodyPath).toBe(
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/index.__body"
+    );
+    expect(untypedTrailingSlash.projectionPath).toBe("cdn.example.com/assets/index");
+    expect(getApi.storageMode).toBe("api");
+    expect(getApi.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/http\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/GET\/agents__q-/
+    );
+
+    expect(postApi.storageMode).toBe("api");
+    expect(postApi.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/http\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/POST\/graphql__q-/
+    );
+    expect(postApi.bodyPath.endsWith("/response.body")).toBe(true);
+    expect(postApiRoot.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/http\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/POST\/root__q-/
+    );
+    expect(getStaticResourceManifestPath(postApi)).toBeNull();
   });
 
   it("builds stored request/response metadata and manifest entries", async () => {
     const descriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/static/app.js?v=1",
-      siteMode: "simple"
+      url: "https://cdn.example.com/static/app.js?v=1"
     });
 
     const request = buildRequestPayload({
@@ -305,16 +309,37 @@ describe("fixture layout", () => {
       bodyEncoding: "utf8",
       bodySuggestedExtension: "js"
     });
+    const hiddenOnlyManifestEntry = createStaticResourceManifestEntry({
+      ...advancedDescriptor,
+      projectionPath: null
+    } as any, {
+      status: 200,
+      statusText: "OK",
+      headers: [],
+      mimeType: "application/javascript",
+      resourceType: "Script",
+      url: advancedDescriptor.requestUrl,
+      method: "GET",
+      capturedAt: "2026-04-06T00:00:00.000Z",
+      bodyEncoding: "utf8",
+      bodySuggestedExtension: "js"
+    });
     const updatedManifest = upsertStaticResourceManifest(manifest, manifestEntry);
 
     expect(manifestEntry.pathname).toBe("/static/app.js");
-    expect(manifestEntry.bodyPath).toBe("cdn.example.com/static/app.js");
-    expect(advancedManifestEntry.bodyPath).toBe("origins/https__cdn.example.com/assets/static/app.js");
+    expect(manifestEntry.bodyPath).toMatch(
+      /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/static\/app\.js\.__q-[a-z0-9]+\.__body$/
+    );
+    expect(manifestEntry.projectionPath).toBe("cdn.example.com/static/app.js");
+    expect(advancedManifestEntry.bodyPath).toBe(
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/static/app.js.__body"
+    );
     expect(customAdvancedManifestEntry.bodyPath).toBe("assets/static/app.js");
+    expect(hiddenOnlyManifestEntry).not.toHaveProperty("projectionPath");
     expect(getStaticResourceManifestPath({
       assetLike: true,
       topOriginKey: "https__app.example.com"
-    })).toBe("https__app.example.com/RESOURCE_MANIFEST.json");
+    })).toBe(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
     expect(updatedManifest.resourcesByPathname["/static/app.js"]).toEqual([manifestEntry]);
   });
 

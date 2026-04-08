@@ -5,12 +5,11 @@ import { createFixtureDescriptor } from "@wraithwalker/core/fixture-layout";
 import { createFixtureRepository } from "../src/fixture-repository.mts";
 
 describe("fixture repository adapter", () => {
-  it("throws a clear error when a body path disappears before read", async () => {
+  it("returns null when canonical metadata is missing for a simple-mode fixture", async () => {
     const descriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
       url: "https://cdn.example.com/assets/app.js",
-      siteMode: "simple",
       resourceType: "Script",
       mimeType: "application/javascript"
     });
@@ -28,8 +27,6 @@ describe("fixture repository adapter", () => {
       } as never
     });
 
-    await expect(repository.read(descriptor)).rejects.toThrow(
-      `Fixture body not found at ${descriptor.bodyPath}`
-    );
+    await expect(repository.read(descriptor)).resolves.toBeNull();
   });
 });

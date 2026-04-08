@@ -103,8 +103,7 @@ describe("fixture repository", () => {
     const descriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/assets/app.js",
-      siteMode: "simple"
+      url: "https://cdn.example.com/assets/app.js"
     });
 
     const firstWrite = await repository.writeIfAbsent({
@@ -173,10 +172,66 @@ describe("fixture repository", () => {
     expect(secondWrite.written).toBe(false);
 
     const storedFixture = await repository.read(descriptor);
-    expect(Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")).toBe("console.log('first');");
+    expect(Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")).toBe("console.log(\"first\");");
   });
 
-  it("reads fallback metadata from a visible simple-mode file without sidecars", async () => {
+  it("serves the edited visible projection over the canonical body when reading fixtures", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const gateway = createFileSystemGateway({
+      base64ToBytes: (value) => Uint8Array.from(Buffer.from(value, "base64")),
+      arrayBufferToBase64: (buffer) => Buffer.from(buffer).toString("base64")
+    });
+    const repository = createFixtureRepository({
+      rootHandle: asFileSystemDirectoryHandle(rootHandle),
+      sentinel: { rootId: "root-1b", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      gateway
+    });
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/app.js"
+    });
+
+    await repository.writeIfAbsent({
+      descriptor,
+      request: {
+        topOrigin: "https://app.example.com",
+        url: descriptor.requestUrl,
+        method: "GET",
+        headers: [],
+        body: "",
+        bodyEncoding: "utf8",
+        bodyHash: descriptor.bodyHash,
+        queryHash: descriptor.queryHash,
+        capturedAt: "2026-04-03T00:00:00.000Z"
+      },
+      response: {
+        body: "console.log('canonical');",
+        bodyEncoding: "utf8",
+        meta: {
+          status: 200,
+          statusText: "OK",
+          headers: [{ name: "Content-Type", value: "application/javascript" }],
+          mimeType: "application/javascript",
+          resourceType: "Script",
+          url: descriptor.requestUrl,
+          method: "GET",
+          capturedAt: "2026-04-03T00:00:00.000Z",
+          bodyEncoding: "utf8",
+          bodySuggestedExtension: "js"
+        }
+      }
+    });
+    await gateway.writeBody(asFileSystemDirectoryHandle(rootHandle), descriptor.projectionPath!, {
+      body: "console.log('edited projection');",
+      bodyEncoding: "utf8"
+    });
+
+    const storedFixture = await repository.read(descriptor);
+    expect(Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")).toBe("console.log('edited projection');");
+  });
+
+  it("requires canonical metadata for simple-mode assets", async () => {
     const rootHandle = new MemoryDirectoryHandle();
     const gateway = createFileSystemGateway({
       base64ToBytes: (value) => Uint8Array.from(Buffer.from(value, "base64")),
@@ -190,8 +245,7 @@ describe("fixture repository", () => {
     const descriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "GET",
-      url: "https://cdn.example.com/assets/app.js?v=1",
-      siteMode: "simple"
+      url: "https://cdn.example.com/assets/app.js"
     });
 
     await gateway.writeBody(asFileSystemDirectoryHandle(rootHandle), descriptor.bodyPath, {
@@ -200,17 +254,33 @@ describe("fixture repository", () => {
     });
 
     const fixture = await repository.read(descriptor);
+    expect(fixture).toBeNull();
+  });
 
-    expect(fixture).toMatchObject({
-      request: {
-        url: descriptor.requestUrl,
-        method: "GET"
-      },
-      meta: {
-        status: 200,
-        mimeType: "application/javascript"
-      }
+  it("does not replay a query-bearing simple-mode asset from a visible file without matching sidecars", async () => {
+    const rootHandle = new MemoryDirectoryHandle();
+    const gateway = createFileSystemGateway({
+      base64ToBytes: (value) => Uint8Array.from(Buffer.from(value, "base64")),
+      arrayBufferToBase64: (buffer) => Buffer.from(buffer).toString("base64")
     });
+    const repository = createFixtureRepository({
+      rootHandle: asFileSystemDirectoryHandle(rootHandle),
+      sentinel: { rootId: "root-2b", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      gateway
+    });
+    const descriptor = await createFixtureDescriptor({
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/assets/app.js?v=1"
+    });
+
+    await gateway.writeBody(asFileSystemDirectoryHandle(rootHandle), descriptor.projectionPath!, {
+      body: "console.log('manual');",
+      bodyEncoding: "utf8"
+    });
+
+    await expect(repository.exists(descriptor)).resolves.toBe(false);
+    await expect(repository.read(descriptor)).resolves.toBeNull();
   });
 
   it("writes manifests for asset-like fixtures", async () => {
@@ -262,7 +332,9 @@ describe("fixture repository", () => {
       }
     });
 
-    const topOriginDir = await rootHandle.getDirectoryHandle(descriptor.topOriginKey);
+    const metadataDir = await rootHandle.getDirectoryHandle(".wraithwalker");
+    const manifestsDir = await metadataDir.getDirectoryHandle("manifests");
+    const topOriginDir = await manifestsDir.getDirectoryHandle(descriptor.topOriginKey);
     const manifestHandle = await topOriginDir.getFileHandle(STATIC_RESOURCE_MANIFEST_FILE);
     const manifest = JSON.parse(await (await manifestHandle.getFile()).text());
 

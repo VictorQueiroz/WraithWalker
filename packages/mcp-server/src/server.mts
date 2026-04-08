@@ -25,7 +25,6 @@ import {
   searchFixtureContent,
   flattenStaticResourceManifest,
   readOriginInfo,
-  readSiteConfigs,
   resolveFixturePath
 } from "./fixture-reader.mjs";
 import { appendVaryHeader, buildLocalServerCorsHeaders } from "./local-server-cors.mjs";
@@ -157,7 +156,7 @@ function registerTools(
   }
 ): void {
   async function resolveSiteConfig(origin: string) {
-    const configs = await readSiteConfigs(rootPath);
+    const configs = await runtime.readEffectiveSiteConfigs();
     return {
       configs,
       config: configs.find((candidate) => candidate.origin === origin)
@@ -165,7 +164,7 @@ function registerTools(
   }
 
   async function resolveDiscoverySiteConfigs(origin: string) {
-    const configs = await readSiteConfigs(rootPath);
+    const configs = await runtime.readEffectiveSiteConfigs();
     return {
       configs,
       matchedConfigs: matchSiteConfigsByOrigin(configs, origin)
@@ -281,7 +280,7 @@ function registerTools(
       search: z.string().trim().min(1).optional().describe("Optional case-insensitive origin substring filter")
     },
     async ({ search }) => {
-      const configs = await readSiteConfigs(rootPath);
+      const configs = await runtime.readEffectiveSiteConfigs();
       const normalizedSearch = search?.toLowerCase();
       const origins = [];
 
@@ -293,7 +292,6 @@ function registerTools(
         const info = await readOriginInfo(rootPath, config);
         origins.push({
           origin: info.origin,
-          mode: info.mode,
           manifestPath: info.manifestPath,
           apiEndpoints: info.apiEndpoints.length,
           staticAssets: flattenStaticResourceManifest(info.manifest).length
@@ -630,7 +628,8 @@ export async function startServer(
   const sentinel = await createRoot(rootPath);
   const runtime = createServerRootRuntime({ rootPath, sentinel });
   const extensionSessions = createExtensionSessionTracker({
-    getActiveTrace: () => runtime.getActiveTrace()
+    getActiveTrace: () => runtime.getActiveTrace(),
+    getEffectiveSiteConfigs: () => runtime.readEffectiveSiteConfigs()
   });
   const server = createConnectedServer(rootPath, { runtime, extensionSessions });
   const transport = options.transport ?? new StdioServerTransport();
@@ -658,7 +657,8 @@ export async function startHttpServer(
   };
   const runtime = createServerRootRuntime({ rootPath, sentinel });
   const extensionSessions = createExtensionSessionTracker({
-    getActiveTrace: () => runtime.getActiveTrace()
+    getActiveTrace: () => runtime.getActiveTrace(),
+    getEffectiveSiteConfigs: () => runtime.readEffectiveSiteConfigs()
   });
 
   const trpcRouter = createWraithwalkerRouter({
@@ -668,6 +668,7 @@ export async function startHttpServer(
     serverVersion: SERVER_VERSION,
     runtime,
     extensionSessions,
+    getSiteConfigs: () => runtime.readEffectiveSiteConfigs(),
     getServerUrls: () => ({
       baseUrl: urls.baseUrl,
       mcpUrl: urls.mcpUrl,

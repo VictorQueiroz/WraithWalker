@@ -4,7 +4,7 @@
 
 The Chrome extension captures matching network responses from selected origins and writes them into a local WraithWalker root directory.
 
-In simple mode, readable asset files stay visible in the root, while replay metadata lives under `.wraithwalker/`.
+Readable asset files stay visible in the root as a projection, while canonical replay data and metadata live under `.wraithwalker/`.
 
 Typical captured content includes:
 
@@ -15,7 +15,7 @@ Typical captured content includes:
 - fonts and images
 - API fixtures and response metadata
 
-By default, newly created origin configs dump matching JavaScript/TypeScript, CSS, and WebAssembly files.
+Shared defaults match JavaScript/TypeScript, CSS, and WebAssembly files. When you add an origin in the extension UI, WraithWalker also appends `\.json$` as a convenience so API-shaped static JSON is captured without extra setup.
 
 ## Capture Flow
 
@@ -28,6 +28,31 @@ By default, newly created origin configs dump matching JavaScript/TypeScript, CS
 Nothing is captured unless the session is running.
 
 The extension remembers the previously granted directory handle. Chrome does not expose the absolute local path for that picked directory back to the extension, so the remembered WraithWalker root is permission-based, not path-based.
+
+## Project Config
+
+Every WraithWalker root can also carry an explicit capture config at:
+
+```text
+.wraithwalker/config.json
+```
+
+You manage that file through the CLI:
+
+```bash
+wraithwalker config add site."https://app.example.com"
+wraithwalker config add site."https://app.example.com".dumpAllowlistPatterns "\\.svg$"
+```
+
+That explicit root config is merged with origins discovered from captured fixtures:
+
+- configured origins appear before anything has been captured
+- discovered origins still show up automatically
+- explicit config wins when both describe the same origin
+
+If you already had domains saved in the extension before this root-backed config flow, WraithWalker imports that legacy browser-local config into the selected root once the first usable root is available. After that, the root-backed config is authoritative.
+
+If there is no local `.wraithwalker` root in the current project, `wraithwalker config` falls back to the same default root that `wraithwalker serve` would use and creates it automatically. That makes the server-backed workflow usable even before the extension has ever been configured.
 
 ## Local Server Preference
 
@@ -43,10 +68,14 @@ When the extension detects the local server at `http://127.0.0.1:4319/trpc`, it 
 
 - capture writes go through the local WraithWalker server
 - context generation goes through the local WraithWalker server
+- capture origins and dump patterns come from the server root's effective config
+- the Settings page reads and writes explicit site config through the server root, even if no browser-local root is configured
 - **Open in Cursor** uses the server root path
 - guided scenario traces are stored in the server root under `.wraithwalker/scenario-traces`
 
 If the server is not running, the extension falls back to the remembered local root exactly as before.
+
+That also means the options page stays useful as the local fallback editor, but it does not override the server root config while the local server is connected. The server/root config is the authority in that mode.
 
 ## How To Think About The Root Folder
 
@@ -101,6 +130,8 @@ WraithWalker writes the supporting workspace context into:
 - `.wraithwalker/types/*.d.ts`
 
 The goal is simple: let the agent make sense of the dumped CSS, JS, and other accessed files that were captured during the session.
+
+The same root is also where `wraithwalker config` writes `.wraithwalker/config.json`, so the capture rules and the captured files live together.
 
 ## Guided Scenario Traces
 
