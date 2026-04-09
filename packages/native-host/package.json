@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/native-host",
-  "version": "1.1.2",
+  "version": "2.0.0",
   "description": "Native messaging host for WraithWalker editor integration and scenario management.",
   "license": "MIT",
   "repository": {
@@ -43,7 +43,7 @@
     "check": "node --check out/host.mjs"
   },
   "dependencies": {
-    "@wraithwalker/core": "1.1.2"
+    "@wraithwalker/core": "2.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
