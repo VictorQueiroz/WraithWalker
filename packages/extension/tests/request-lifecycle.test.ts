@@ -392,6 +392,32 @@ describe("request lifecycle", () => {
     });
   });
 
+  it("falls back to the paused request id when networkId is missing", async () => {
+    const harness = createLifecycleHarness();
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-post-no-network",
+        networkId: undefined,
+        request: {
+          method: "POST",
+          url: "https://api.example.com/graphql"
+        },
+        resourceType: "XHR"
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Network.getRequestPostData", {
+      requestId: "fetch-post-no-network"
+    });
+    expect(harness.state.requests.get("1:fetch-post-no-network")).toMatchObject({
+      requestId: "fetch-post-no-network",
+      requestBody: '{"seed":"one"}',
+      requestBodyEncoding: "utf8"
+    });
+  });
+
   it("uses the shared fixture pipeline for non-GET simple-mode requests", async () => {
     const harness = createLifecycleHarness({
       siteConfig: {
@@ -505,6 +531,29 @@ describe("request lifecycle", () => {
     expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-read-fail" });
   });
 
+  it("falls back to continueRequest when fixture existence lookup fails", async () => {
+    const harness = createLifecycleHarness();
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: false, error: "fixture existence lookup failed" };
+      }
+      return { ok: true };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-exists-fail",
+        networkId: "network-exists-fail"
+      })
+    );
+
+    expect(harness.setLastError).toHaveBeenCalledWith("fixture existence lookup failed");
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
+      requestId: "fetch-exists-fail"
+    });
+  });
+
   it("falls back to continueRequest when fixture read returns no payload", async () => {
     const harness = createLifecycleHarness();
     harness.sendOffscreenMessage.mockImplementation(async (type) => {
@@ -527,6 +576,51 @@ describe("request lifecycle", () => {
 
     expect(harness.setLastError).toHaveBeenCalledWith("Fixture lookup failed.");
     expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-read-empty" });
+  });
+
+  it("falls back to continueRequest when fixture read is missing required payload fields", async () => {
+    const harness = createLifecycleHarness();
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: true };
+      }
+      if (type === "fs.readFixture") {
+        return {
+          ok: true,
+          exists: true,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/app.js",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-03T00:00:00.000Z"
+          },
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }]
+          }
+        } as any;
+      }
+      return { ok: true };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-read-partial",
+        networkId: "network-read-partial"
+      })
+    );
+
+    expect(harness.setLastError).toHaveBeenCalledWith("Fixture lookup failed.");
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
+      requestId: "fetch-read-partial"
+    });
   });
 
   it("captures a finished live response and writes a fixture", async () => {
@@ -572,6 +666,70 @@ describe("request lifecycle", () => {
       })
     );
     expect(harness.state.requests.size).toBe(0);
+  });
+
+  it("preserves base64 request and response bodies when persisting fixtures", async () => {
+    const harness = createLifecycleHarness();
+    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
+      if (method === "Network.getRequestPostData") {
+        return {
+          postData: Buffer.from('{"seed":"base64"}', "utf8").toString("base64"),
+          base64Encoded: true
+        };
+      }
+      if (method === "Network.getResponseBody") {
+        return {
+          body: Buffer.from('{"ok":true}', "utf8").toString("base64"),
+          base64Encoded: true
+        };
+      }
+      return { method, params };
+    });
+
+    harness.lifecycle.handleNetworkRequestWillBeSent(
+      { tabId: 1 },
+      {
+        requestId: "req-base64",
+        request: {
+          method: "POST",
+          url: "https://api.example.com/graphql",
+          headers: { "Content-Type": "application/json" }
+        },
+        type: "XHR"
+      }
+    );
+    harness.lifecycle.handleNetworkResponseReceived(
+      { tabId: 1 },
+      {
+        requestId: "req-base64",
+        response: {
+          status: 200,
+          statusText: "OK",
+          headers: { "Content-Type": "application/json" },
+          mimeType: "application/json"
+        },
+        type: "XHR"
+      }
+    );
+
+    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-base64" });
+
+    expect(harness.sendOffscreenMessage).toHaveBeenCalledWith(
+      "fs.writeFixture",
+      expect.objectContaining({
+        request: expect.objectContaining({
+          body: Buffer.from('{"seed":"base64"}', "utf8").toString("base64"),
+          bodyEncoding: "base64"
+        }),
+        response: expect.objectContaining({
+          body: Buffer.from('{"ok":true}', "utf8").toString("base64"),
+          bodyEncoding: "base64",
+          meta: expect.objectContaining({
+            bodyEncoding: "base64"
+          })
+        })
+      })
+    );
   });
 
   it("records fixture write failures through lastError and still clears the request entry", async () => {
@@ -1656,6 +1814,28 @@ describe("request lifecycle", () => {
     await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "missing-entry" });
 
     expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Network.getResponseBody", expect.anything());
+  });
+
+  it("clears tracked requests on loadingFailed when a tab id is present", () => {
+    const harness = createLifecycleHarness();
+    harness.state.requests.set("1:req-loading-failed", {
+      requestId: "req-loading-failed"
+    } as any);
+
+    harness.lifecycle.handleNetworkLoadingFailed({ tabId: 1 }, { requestId: "req-loading-failed" });
+
+    expect(harness.state.requests.has("1:req-loading-failed")).toBe(false);
+  });
+
+  it("ignores loadingFailed events when the tab id is missing", () => {
+    const harness = createLifecycleHarness();
+    harness.state.requests.set("1:req-loading-failed-missing-tab", {
+      requestId: "req-loading-failed-missing-tab"
+    } as any);
+
+    harness.lifecycle.handleNetworkLoadingFailed({}, { requestId: "req-loading-failed-missing-tab" });
+
+    expect(harness.state.requests.has("1:req-loading-failed-missing-tab")).toBe(true);
   });
 
   it("skips fixture writing for replayed requests but still clears the entry", async () => {

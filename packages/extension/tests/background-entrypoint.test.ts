@@ -2959,6 +2959,60 @@ describe("background entrypoint", () => {
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
   });
 
+  it("prefers the connected server root when revealing the active folder", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: true });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "com.example.host",
+        launchPath: "/tmp/local-launch"
+      }),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
+        heartbeat: vi.fn().mockResolvedValue({
+          version: "1.0.0",
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc",
+          siteConfigs: [],
+          activeTrace: null
+        })
+      })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    const result = await runtime.handleRuntimeMessage({ type: "native.revealRoot" });
+
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.example.host", {
+      type: "revealDirectory",
+      path: "/tmp/server-root",
+      expectedRootId: "server-root"
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
   it("surfaces reveal-root target resolution failures before calling the native host", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();

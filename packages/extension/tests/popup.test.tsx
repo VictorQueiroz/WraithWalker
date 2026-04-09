@@ -7,9 +7,69 @@ import { userEvent } from "@testing-library/user-event";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
 import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
+import { createWraithWalkerServerClient } from "../src/lib/wraithwalker-server.js";
+import { startExternalHttpServer } from "../../../test-support/external-http-server.mts";
+import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 function renderRoot() {
   document.body.innerHTML = "<div id=\"root\"></div>";
+}
+
+function createEvent() {
+  const listeners: Array<(...args: any[]) => void> = [];
+  return {
+    listeners,
+    addListener: vi.fn((listener: (...args: any[]) => void) => {
+      listeners.push(listener);
+    })
+  };
+}
+
+function createBackgroundChromeApi() {
+  return {
+    runtime: {
+      getURL: vi.fn((path) => path),
+      getManifest: vi.fn(() => ({ version: "0.1.0" })),
+      sendMessage: vi.fn(),
+      sendNativeMessage: vi.fn(),
+      onMessage: createEvent(),
+      onStartup: createEvent(),
+      onInstalled: createEvent(),
+      getContexts: vi.fn().mockResolvedValue([])
+    },
+    debugger: {
+      attach: vi.fn(),
+      sendCommand: vi.fn(),
+      detach: vi.fn(),
+      onEvent: createEvent(),
+      onDetach: createEvent()
+    },
+    tabs: {
+      query: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 99 }),
+      onUpdated: createEvent(),
+      onRemoved: createEvent()
+    },
+    storage: {
+      onChanged: createEvent(),
+      local: {
+        get: vi.fn().mockResolvedValue({}),
+        set: vi.fn().mockResolvedValue(undefined)
+      }
+    },
+    offscreen: {
+      createDocument: vi.fn(),
+      closeDocument: vi.fn(),
+      Reason: {
+        BLOBS: "BLOBS"
+      }
+    },
+    alarms: {
+      create: vi.fn(),
+      clear: vi.fn().mockResolvedValue(true),
+      onAlarm: createEvent()
+    }
+  };
 }
 
 function createNativeHostConfig(overrides: Partial<NativeHostConfig> = {}): NativeHostConfig {
@@ -80,6 +140,7 @@ afterEach(() => {
   delete globalThis.chrome;
   vi.doUnmock("../src/lib/chrome-storage.js");
   vi.doUnmock("../src/lib/root-handle.js");
+  vi.doUnmock("node:child_process");
   document.body.innerHTML = "";
   vi.restoreAllMocks();
 });
@@ -456,6 +517,132 @@ describe("popup entrypoint", () => {
       expect(await screen.findByText("Opened the server root in the OS file manager.")).toBeTruthy();
     } finally {
       popup.unmount();
+    }
+  });
+
+  it("reveals the live server root through the native OS handler when the popup is server-connected", async () => {
+    renderRoot();
+    const user = userEvent.setup();
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-popup-reveal-",
+      rootId: "server-root"
+    });
+    const server = await startExternalHttpServer(serverRoot.rootPath);
+    const spawnChild = { unref: vi.fn() };
+    const spawnMock = vi.fn().mockReturnValue(spawnChild as any);
+
+    vi.resetModules();
+    globalThis.__WRAITHWALKER_TEST__ = true;
+    vi.doMock("node:child_process", () => ({
+      spawn: spawnMock
+    }));
+
+    const { initPopup } = await import("../src/popup.ts");
+    const { createBackgroundRuntime } = await import("../src/background.ts");
+    const { getRevealDirectoryLaunch, revealDirectory } = await import("../../native-host/src/lib.mts");
+
+    const chromeApi = createBackgroundChromeApi();
+    chromeApi.runtime.sendNativeMessage.mockImplementation(async (hostName: string, message: {
+      type?: string;
+      path?: string;
+      expectedRootId?: string;
+    }) => {
+      expect(hostName).toBe("com.example.host");
+
+      if (message.type === "revealDirectory") {
+        return revealDirectory(message);
+      }
+
+      return { ok: false, error: `Unexpected native message: ${String(message.type)}` };
+    });
+
+    const background = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+        hostName: "com.example.host",
+        launchPath: "/tmp/local-launch"
+      })),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-popup"),
+      getLegacySiteConfigsMigrated: vi.fn().mockResolvedValue(true),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createWraithWalkerServerClient: vi.fn(() => createWraithWalkerServerClient(server.trpcUrl, {
+        timeoutMs: 2_000,
+        fetchImpl: (input, init) => fetch(input, {
+          ...init,
+          signal: undefined
+        })
+      })),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const popupRuntime = {
+      sendMessage: vi.fn((message) => background.handleRuntimeMessage(message as any)),
+      openOptionsPage: vi.fn()
+    };
+
+    let popup: Awaited<ReturnType<typeof initPopup>> | undefined;
+
+    try {
+      await background.start();
+
+      let connectedSnapshot: SessionSnapshot | null = null;
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const snapshot = await background.handleRuntimeMessage({ type: "session.getState" });
+        if (snapshot && "captureDestination" in snapshot && snapshot.captureDestination === "server") {
+          connectedSnapshot = snapshot;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      expect(connectedSnapshot).toEqual(expect.objectContaining({
+        captureDestination: "server",
+        captureRootPath: server.rootPath
+      }));
+
+      popup = await initPopup({
+        document,
+        runtime: popupRuntime,
+        setIntervalFn: fakeSetInterval,
+        getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/local-launch"
+        })),
+        getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+        ...createRootDeps({ hasHandle: false })
+      });
+
+      await user.click(await screen.findByRole("button", { name: "Open in folder" }));
+      expect(await screen.findByText("Opened the server root in the OS file manager.")).toBeTruthy();
+
+      expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.example.host", {
+        type: "revealDirectory",
+        path: server.rootPath,
+        expectedRootId: serverRoot.rootId
+      });
+
+      const launch = getRevealDirectoryLaunch(server.rootPath);
+      expect(spawnMock).toHaveBeenCalledWith(launch.program, launch.args, {
+        detached: true,
+        stdio: "ignore"
+      });
+      expect(spawnChild.unref).toHaveBeenCalled();
+    } finally {
+      popup?.unmount();
+      await server.close();
     }
   });
 

@@ -181,6 +181,60 @@ describe("session controller", () => {
     expect(harness.setLastError).toHaveBeenCalledWith("attach failed");
   });
 
+  it("ignores tabs without ids or matching origins during reconciliation", async () => {
+    const state = createBaseState();
+    state.enabledOrigins = ["https://app.example.com"];
+    state.attachedTabs.set(12, { topOrigin: "https://app.example.com" });
+    const harness = createControllerHarness({
+      state,
+      tabs: [
+        { url: "https://app.example.com/missing-id" },
+        { id: 8, url: "https://other.example.com/" },
+        { id: 9, url: "notaurl" },
+        { id: 10, url: "https://app.example.com/dashboard" }
+      ]
+    });
+
+    await harness.controller.reconcileTabs();
+
+    expect(harness.attachTab).toHaveBeenCalledTimes(1);
+    expect(harness.attachTab).toHaveBeenCalledWith(10, "https://app.example.com");
+    expect(harness.detachTab).toHaveBeenCalledTimes(1);
+    expect(harness.detachTab).toHaveBeenCalledWith(12);
+  });
+
+  it("records non-Error attach failures during tab reconciliation", async () => {
+    const state = createBaseState();
+    state.enabledOrigins = ["https://app.example.com"];
+    const harness = createControllerHarness({
+      state,
+      tabs: [{ id: 13, url: "https://app.example.com/dashboard" }]
+    });
+    harness.attachTab.mockRejectedValueOnce("attach string failed");
+
+    await harness.controller.reconcileTabs();
+
+    expect(harness.setLastError).toHaveBeenCalledWith("attach string failed");
+  });
+
+  it("keeps the session active even when one matching tab fails to attach during start", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"],
+      tabs: [
+        { id: 14, url: "https://app.example.com/first" },
+        { id: 15, url: "https://app.example.com/second" }
+      ]
+    });
+    harness.attachTab.mockRejectedValueOnce(new Error("attach during start failed"));
+
+    const snapshot = await harness.controller.startSession();
+
+    expect(harness.attachTab).toHaveBeenCalledTimes(2);
+    expect(harness.setLastError).toHaveBeenCalledWith("attach during start failed");
+    expect(harness.persistSnapshot).toHaveBeenCalled();
+    expect(snapshot.sessionActive).toBe(true);
+  });
+
   it("handles tab updates by attaching or detaching based on origin match", async () => {
     const state = createBaseState();
     state.sessionActive = true;
