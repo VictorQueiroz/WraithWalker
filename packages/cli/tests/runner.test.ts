@@ -108,6 +108,7 @@ describe("cli runner", () => {
     expect(exitCode).toBe(0);
     expect(capture.errors.join("\n")).toContain("Usage: wraithwalker <command>");
     expect(capture.errors.join("\n")).toContain("import-har <har-file> [dir]");
+    expect(capture.errors.join("\n")).toContain("doctor [dir] [--json]");
   });
 
   it("initializes a fixture root using only global config", async () => {
@@ -198,6 +199,58 @@ describe("cli runner", () => {
 
     expect(exitCode).toBe(1);
     expect(capture.errors.join("\n")).toContain(projectConfigPath);
+  });
+
+  it("runs doctor against an existing fixture root", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createFixtureRoot();
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }]
+    });
+    await root.writeText("CLAUDE.md", "# WraithWalker Fixture Context");
+    const capture = consoleCapture();
+
+    const exitCode = await runCli(["doctor"], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    });
+
+    expect(exitCode).toBe(0);
+    const output = capture.logs.join("\n");
+    expect(output).toContain("WraithWalker Doctor");
+    expect(output).toContain(root.rootPath);
+    expect(output).toContain("Root Found");
+    expect(output).toContain("yes");
+    expect(output).toContain("Configured Origins");
+    expect(output).toContain("No captured fixtures were found.");
+  });
+
+  it("emits json diagnostics from doctor and reports missing roots without failing", async () => {
+    const { runCli } = await loadRunner();
+    const cwd = await tmpdir();
+    const homeDir = await tmpdir();
+    const capture = consoleCapture();
+
+    const exitCode = await runCli(["doctor", "--json"], {
+      cwd,
+      env: {},
+      homeDir,
+      platform: "linux",
+      isTTY: false
+    });
+
+    expect(exitCode).toBe(0);
+    expect(capture.logs.join("\n")).toContain('"rootFound": false');
+    expect(capture.logs.join("\n")).toContain('"issues": [');
+    expect(capture.logs.join("\n")).toContain('No .wraithwalker/root.json was found at the resolved root path.');
   });
 
   it("runs context and scenario commands with existing behavior", async () => {

@@ -16,6 +16,7 @@ wraithwalker config unset <key>      # Remove or reset one explicit nearest-root
 wraithwalker sync [dir]              # Populate or refresh .wraithwalker from Chrome Overrides
 wraithwalker import-har <har-file> [dir] [--top-origin <origin>] # Populate a fresh fixture root from a HAR
 wraithwalker status                  # Show root path, origins, endpoints, scenarios
+wraithwalker doctor [dir] [--json]  # Inspect root health and support diagnostics
 wraithwalker context [--editor <id>] # Regenerate CLAUDE.md and .d.ts types
 wraithwalker scenarios list          # List saved scenarios
 wraithwalker scenarios save <name>   # Save current fixtures as a named scenario
@@ -78,6 +79,26 @@ Behavior:
 
 When `wraithwalker serve` is running and the extension is connected, this nearest-root config becomes the authoritative capture config for the server-backed flow.
 The extension Settings page also writes through that same server-backed root in connected mode, so Settings edits and CLI `wraithwalker config` edits stay in the same `.wraithwalker/config.json`.
+
+## Diagnostics
+
+`wraithwalker doctor` inspects the resolved root and prints a support-friendly report:
+
+```bash
+wraithwalker doctor
+wraithwalker doctor /path/to/root --json
+```
+
+It checks:
+
+- whether `.wraithwalker/root.json` exists at the resolved root
+- whether `.wraithwalker/config.json` exists
+- whether hidden capture folders and manifests are present
+- which configured and effective origins are currently visible
+- how many endpoints and static assets have been captured
+- whether editor context files such as `CLAUDE.md` are present
+
+The command exits successfully even when the root is missing, so it is safe to use as a first-line support check. `--json` prints the same report as machine-readable JSON for issue reports or tooling.
 
 ## Overrides Sync
 

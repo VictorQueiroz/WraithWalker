@@ -47,6 +47,7 @@ export interface OptionsDependencies {
   queryRootPermission?: typeof defaultQueryRootPermission;
   requestRootPermission?: typeof defaultRequestRootPermission;
   storeRootHandleWithSentinel?: typeof defaultStoreRootHandleWithSentinel;
+  writeClipboardText?: (text: string) => Promise<void>;
   getPreferredEditorId?: () => Promise<string>;
   setPreferredEditorId?: (editorId: string) => Promise<void>;
   editorPresets?: EditorPreset[];
@@ -69,6 +70,7 @@ export async function initOptions({
   queryRootPermission = defaultQueryRootPermission,
   requestRootPermission = defaultRequestRootPermission,
   storeRootHandleWithSentinel = defaultStoreRootHandleWithSentinel,
+  writeClipboardText,
   editorPresets = EDITOR_PRESETS
 }: OptionsDependencies = {}) {
   const container = documentRef.getElementById("root");
@@ -90,6 +92,7 @@ export async function initOptions({
       queryRootPermission,
       requestRootPermission,
       storeRootHandleWithSentinel,
+      writeClipboardText,
       editorPresets
     })
   );

@@ -1,3 +1,5 @@
+export const ROOT_SENTINEL_RELATIVE_PATH = ".wraithwalker/root.json";
+export const PROJECT_CONFIG_RELATIVE_PATH = ".wraithwalker/config.json";
 export const WRAITHWALKER_DIR = ".wraithwalker";
 export const CAPTURES_DIR = `${WRAITHWALKER_DIR}/captures`;
 export const CAPTURE_ASSETS_DIR = `${CAPTURES_DIR}/assets`;

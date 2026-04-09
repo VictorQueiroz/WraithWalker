@@ -111,6 +111,7 @@ afterEach(() => {
   delete globalThis.__WRAITHWALKER_TEST__;
   delete globalThis.chrome;
   vi.doUnmock("../src/lib/context-generator.js");
+  vi.doUnmock("../src/lib/root-runtime.js");
   vi.restoreAllMocks();
 });
 
@@ -189,6 +190,38 @@ describe("offscreen entrypoint", () => {
       sentinel: { rootId: "root-ensure" },
       permission: "granted"
     });
+  });
+
+  it("returns the denied permission state when ensure-root requests access and the user declines", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const queryRootPermission = vi.fn().mockResolvedValue("prompt");
+    const requestRootPermission = vi.fn().mockResolvedValue("denied");
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn(),
+      queryRootPermission,
+      requestRootPermission
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.ensureRoot",
+        payload: { requestPermission: true }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "Root directory access is not granted.",
+      permission: "denied"
+    });
+    expect(queryRootPermission).toHaveBeenCalledWith(rootHandle);
+    expect(requestRootPermission).toHaveBeenCalledWith(rootHandle);
   });
 
   it("reads and writes configured site configs through the selected root", async () => {
@@ -340,6 +373,77 @@ describe("offscreen entrypoint", () => {
       ok: false,
       error: "No root directory selected.",
       permission: undefined
+    });
+  });
+
+  it("reports denied-permission root errors through fixture handlers", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi.fn(),
+      queryRootPermission: vi.fn().mockResolvedValue("denied"),
+      requestRootPermission: vi.fn().mockResolvedValue("denied")
+    });
+    const descriptor = {
+      bodyPath: "fixtures/blocked.bin",
+      requestPath: "fixtures/blocked.request.json",
+      metaPath: "fixtures/blocked.meta.json"
+    };
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.readFixture",
+        payload: { descriptor }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "Root directory access is not granted.",
+      permission: "denied"
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.writeFixture",
+        payload: {
+          descriptor,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/blocked.bin",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-03T00:00:00.000Z"
+          },
+          response: {
+            body: "",
+            bodyEncoding: "utf8",
+            meta: {
+              status: 200,
+              statusText: "OK",
+              headers: [],
+              url: "https://cdn.example.com/blocked.bin",
+              method: "GET",
+              capturedAt: "2026-04-03T00:00:00.000Z",
+              bodyEncoding: "utf8"
+            }
+          }
+        }
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "Root directory access is not granted.",
+      permission: "denied"
     });
   });
 
@@ -1061,6 +1165,46 @@ describe("offscreen entrypoint", () => {
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       error: "Storage failed."
+    });
+  });
+
+  it("registers listener branches for runtime failures after root resolution succeeds", async () => {
+    vi.doMock("../src/lib/root-runtime.js", () => ({
+      createExtensionRootRuntime: vi.fn(() => ({
+        ensureReady: vi.fn().mockResolvedValue({ rootId: "root-register-error" }),
+        generateContext: vi.fn().mockRejectedValue(new Error("Context generation failed."))
+      }))
+    }));
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const listeners = [];
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((listener) => listeners.push(listener))
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(new MemoryDirectoryHandle()),
+      ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-register-error" }),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    runtime.register();
+    const sendResponse = vi.fn();
+    const handled = listeners[0]({
+      target: "offscreen",
+      type: "fs.generateContext",
+      payload: {
+        editorId: "cursor",
+        siteConfigs: []
+      }
+    }, {}, sendResponse);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(handled).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: "Context generation failed."
     });
   });
 

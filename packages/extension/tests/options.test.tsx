@@ -463,6 +463,89 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("blocks further origin editing if the server disconnects after a save and no local root is available", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    let sites = [createStoredSite()];
+    let sessionSnapshot: SessionSnapshot = {
+      sessionActive: false,
+      attachedTabIds: [],
+      enabledOrigins: ["https://app.example.com"],
+      rootReady: true,
+      captureDestination: "server",
+      captureRootPath: "/tmp/server-root",
+      lastError: ""
+    };
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn().mockResolvedValue(true),
+          remove: vi.fn().mockResolvedValue(true)
+        },
+        runtime: {
+          sendMessage: vi.fn(async (message: { type: string; name?: string }) => {
+            switch (message.type) {
+              case "session.getState":
+                return sessionSnapshot;
+              case "scenario.list":
+                return { ok: true, scenarios: ["baseline"] };
+              case "scenario.switch":
+                return { ok: true, name: message.name ?? "" };
+              case "scenario.save":
+                return { ok: true, name: message.name ?? "" };
+              case "native.verify":
+                return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+              default:
+                return { ok: true };
+            }
+          })
+        }
+      },
+      getSiteConfigs: vi.fn(async () => [...sites]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(async (nextSites: SiteConfig[]) => {
+        sites = nextSites;
+        sessionSnapshot = {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        };
+      }),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await screen.findByText(/Editing \/tmp\/server-root\./);
+      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      await user.clear(patterns);
+      await user.type(patterns, "\\.css$");
+      await user.click(screen.getByRole("button", { name: "Save" }));
+
+      expect(await screen.findByText("Updated https://app.example.com.")).toBeTruthy();
+      expect(await screen.findByText(/No WraithWalker root directory is connected yet/i)).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Add Origin" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText(/Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i)).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("shows the generic server-root indicator when the capture path is unavailable", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
@@ -1492,6 +1575,183 @@ describe("options entrypoint", () => {
       await user.click(await screen.findByRole("button", { name: "Open Launch Folder" }));
       expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.revealRoot" });
       expect(await screen.findByText("Opened the launch folder in the OS file manager.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("copies a structured diagnostics report to the clipboard", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined);
+    const diagnosticsReport = {
+      generatedAt: "2026-04-09T00:00:00.000Z",
+      extensionVersion: "0.1.0",
+      extensionClientId: "client-1",
+      sessionSnapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: true,
+        captureDestination: "server",
+        captureRootPath: "/tmp/server-root",
+        lastError: ""
+      },
+      localRoot: {
+        ready: false,
+        permission: null,
+        sentinel: null,
+        error: "No root directory selected.",
+        legacySiteConfigsMigrated: true
+      },
+      server: {
+        connected: true,
+        checkedAt: "2026-04-09T00:00:00.000Z",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "root-server" },
+        baseUrl: "http://127.0.0.1:4319",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        activeTraceId: null
+      },
+      config: {
+        configuredSiteConfigs: [createStoredSite()],
+        effectiveSiteConfigs: [createStoredSite()]
+      },
+      nativeHost: {
+        configured: true,
+        hostName: "com.wraithwalker.host",
+        launchPath: "/tmp/fixtures",
+        preferredEditorId: "cursor"
+      },
+      runtime: {
+        attachedTabs: [],
+        pendingRequests: [],
+        lastError: ""
+      },
+      issues: []
+    };
+    const runtimeSendMessage = vi.fn(async (message: { type: string; name?: string }) => {
+      switch (message.type) {
+        case "session.getState":
+          return {
+            sessionActive: false,
+            attachedTabIds: [],
+            enabledOrigins: ["https://app.example.com"],
+            rootReady: true,
+            captureDestination: "server",
+            captureRootPath: "/tmp/server-root",
+            lastError: ""
+          };
+        case "scenario.list":
+          return { ok: true, scenarios: ["baseline"] };
+        case "scenario.switch":
+          return { ok: true, name: message.name ?? "" };
+        case "scenario.save":
+          return { ok: true, name: message.name ?? "" };
+        case "diagnostics.getReport":
+          return { ok: true, report: diagnosticsReport };
+        case "native.verify":
+          return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+        default:
+          return { ok: true };
+      }
+    });
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn().mockResolvedValue(true),
+          remove: vi.fn().mockResolvedValue(true)
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([createStoredSite()]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      writeClipboardText,
+      ...createReadyRootDeps(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await screen.findByText("Enabled Origins");
+      await user.click(screen.getByRole("button", { name: "Copy Diagnostics" }));
+
+      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "diagnostics.getReport" });
+      expect(writeClipboardText).toHaveBeenCalledWith(JSON.stringify(diagnosticsReport, null, 2));
+      expect(await screen.findByText("Diagnostics copied to clipboard.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("surfaces diagnostics copy failures in settings", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn().mockResolvedValue(true),
+          remove: vi.fn().mockResolvedValue(true)
+        },
+        runtime: {
+          sendMessage: vi.fn(async (message: { type: string; name?: string }) => {
+            switch (message.type) {
+              case "session.getState":
+                return {
+                  sessionActive: false,
+                  attachedTabIds: [],
+                  enabledOrigins: ["https://app.example.com"],
+                  rootReady: true,
+                  captureDestination: "local",
+                  captureRootPath: "/tmp/fixtures",
+                  lastError: ""
+                };
+              case "scenario.list":
+                return { ok: true, scenarios: ["baseline"] };
+              case "scenario.switch":
+                return { ok: true, name: message.name ?? "" };
+              case "scenario.save":
+                return { ok: true, name: message.name ?? "" };
+              case "diagnostics.getReport":
+                return { ok: false, error: "Diagnostics unavailable." };
+              case "native.verify":
+                return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+              default:
+                return { ok: true };
+            }
+          })
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([createStoredSite()]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      writeClipboardText: vi.fn(),
+      ...createReadyRootDeps(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await screen.findByText("Enabled Origins");
+      await user.click(screen.getByRole("button", { name: "Copy Diagnostics" }));
+
+      expect(await screen.findByText("Diagnostics unavailable.")).toBeTruthy();
     } finally {
       options.unmount();
     }

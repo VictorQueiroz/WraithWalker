@@ -27,6 +27,70 @@ export interface NativeOpenSuccess {
 
 export type NativeOpenResult = NativeOpenSuccess | ErrorResult;
 
+export interface DiagnosticsAttachedTab {
+  tabId: number;
+  topOrigin: string;
+  traceArmedForTraceId: string | null;
+  hasTraceScriptIdentifier: boolean;
+}
+
+export interface DiagnosticsPendingRequest {
+  tabId: number;
+  requestId: string;
+  method: string;
+  url: string;
+  replayed: boolean;
+}
+
+export interface DiagnosticsReport {
+  generatedAt: string;
+  extensionVersion: string;
+  extensionClientId: string;
+  sessionSnapshot: SessionSnapshot;
+  localRoot: {
+    ready: boolean;
+    permission: PermissionState | null;
+    sentinel: RootSentinel | null;
+    error?: string;
+    legacySiteConfigsMigrated: boolean;
+  };
+  server: {
+    connected: boolean;
+    checkedAt: string | null;
+    rootPath: string;
+    sentinel: RootSentinel | null;
+    baseUrl: string;
+    trpcUrl: string;
+    mcpUrl: string;
+    activeTraceId: string | null;
+  };
+  config: {
+    configuredSiteConfigs: SiteConfig[];
+    effectiveSiteConfigs: SiteConfig[];
+    configuredSiteError?: string;
+    effectiveSiteError?: string;
+  };
+  nativeHost: {
+    configured: boolean;
+    hostName: string;
+    launchPath: string;
+    preferredEditorId: string;
+  };
+  runtime: {
+    attachedTabs: DiagnosticsAttachedTab[];
+    pendingRequests: DiagnosticsPendingRequest[];
+    lastError: string;
+  };
+  issues: string[];
+}
+
+export type DiagnosticsResult =
+  | {
+      ok: true;
+      report: DiagnosticsReport;
+    }
+  | ErrorResult;
+
 export type SessionMessage =
   | { type: "session.getState" }
   | { type: "session.start" }
@@ -37,6 +101,7 @@ export type ScenarioResult = { ok: true; name: string } | ErrorResult;
 
 export type BackgroundMessage =
   | SessionMessage
+  | { type: "diagnostics.getReport" }
   | { type: "config.readConfiguredSiteConfigs" }
   | { type: "config.readEffectiveSiteConfigs" }
   | { type: "config.writeConfiguredSiteConfigs"; siteConfigs: SiteConfig[] }
@@ -107,6 +172,7 @@ export type OffscreenMessage =
 
 export type BackgroundMessageResult =
   | SessionSnapshot
+  | DiagnosticsResult
   | RootReadyResult
   | SiteConfigsResult
   | NativeVerifyResult

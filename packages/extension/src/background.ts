@@ -22,7 +22,19 @@ import {
   buildEditorLaunchUrl,
   resolveEditorLaunch
 } from "./lib/editor-launch.js";
-import type { BackgroundMessage, BackgroundMessageResult, ErrorResult, NativeOpenResult, NativeVerifyResult, OffscreenMessage, RootReadyResult, RootReadySuccess, SiteConfigsResult } from "./lib/messages.js";
+import type {
+  BackgroundMessage,
+  BackgroundMessageResult,
+  DiagnosticsReport,
+  DiagnosticsResult,
+  ErrorResult,
+  NativeOpenResult,
+  NativeVerifyResult,
+  OffscreenMessage,
+  RootReadyResult,
+  RootReadySuccess,
+  SiteConfigsResult
+} from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
 import { normalizeSiteConfigs as defaultNormalizeSiteConfigs } from "./lib/site-config.js";
@@ -333,6 +345,7 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
     "session.getState",
     "session.start",
     "session.stop",
+    "diagnostics.getReport",
     "config.readConfiguredSiteConfigs",
     "config.readEffectiveSiteConfigs",
     "config.writeConfiguredSiteConfigs",
@@ -346,8 +359,18 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
   ].includes(type || "");
 }
 
-function getErrorMessage(result: { error?: string }): string {
-  return result.error || "Unknown error.";
+function getErrorMessage(result: unknown): string {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "error" in result &&
+    typeof (result as { error?: unknown }).error === "string" &&
+    (result as { error: string }).error.trim()
+  ) {
+    return (result as { error: string }).error;
+  }
+
+  return "Unknown error.";
 }
 
 function isTestMode(): boolean {
@@ -1021,6 +1044,103 @@ export function createBackgroundRuntime({
     }
   }
 
+  async function getDiagnosticsReport(): Promise<DiagnosticsReport> {
+    await refreshStoredConfig();
+    const serverInfo = await refreshServerInfo({ force: true });
+    const localRootResult = await ensureLocalRootReady({ silent: true });
+    const [configuredResult, effectiveResult, sessionSnapshot] = await Promise.all([
+      readConfiguredSiteConfigsForAuthority(),
+      readEffectiveSiteConfigsForAuthority(),
+      snapshotState()
+    ]);
+
+    const configuredSiteConfigs = configuredResult.ok ? configuredResult.siteConfigs : [];
+    const effectiveSiteConfigs = effectiveResult.ok ? effectiveResult.siteConfigs : [];
+    const localRootError = "error" in localRootResult ? localRootResult.error : undefined;
+    const issues = new Set<string>();
+
+    if (!sessionSnapshot.rootReady) {
+      issues.add("No active capture root is ready.");
+    }
+    if (!effectiveSiteConfigs.length) {
+      issues.add("No enabled origins are configured.");
+    }
+    if (!state.nativeHostConfig.hostName.trim()) {
+      issues.add("Native host name is not configured.");
+    }
+    if (!state.nativeHostConfig.launchPath.trim() && !serverInfo) {
+      issues.add("Shared editor launch path is not configured for local-root actions.");
+    }
+    if (state.lastError) {
+      issues.add(`Last runtime error: ${state.lastError}`);
+    }
+    if (!configuredResult.ok) {
+      issues.add(`Configured-site read failed: ${getErrorMessage(configuredResult)}`);
+    }
+    if (!effectiveResult.ok) {
+      issues.add(`Effective-site read failed: ${getErrorMessage(effectiveResult)}`);
+    }
+    if (!serverInfo) {
+      issues.add("Local WraithWalker server is not connected.");
+    }
+    if (!localRootResult.ok && localRootError !== "No root directory selected.") {
+      issues.add(`Local root check failed: ${getErrorMessage(localRootResult)}`);
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      extensionVersion: state.extensionVersion,
+      extensionClientId: state.extensionClientId,
+      sessionSnapshot,
+      localRoot: {
+        ready: localRootResult.ok,
+        permission: localRootResult.ok ? localRootResult.permission : (localRootResult.permission ?? null),
+        sentinel: localRootResult.ok ? localRootResult.sentinel : null,
+        ...(localRootResult.ok ? {} : { error: localRootError }),
+        legacySiteConfigsMigrated: state.legacySiteConfigsMigrated
+      },
+      server: {
+        connected: Boolean(serverInfo),
+        checkedAt: state.serverCheckedAt ? new Date(state.serverCheckedAt).toISOString() : null,
+        rootPath: serverInfo?.rootPath || "",
+        sentinel: serverInfo?.sentinel || null,
+        baseUrl: serverInfo?.baseUrl || "",
+        trpcUrl: serverInfo?.trpcUrl || "",
+        mcpUrl: serverInfo?.mcpUrl || "",
+        activeTraceId: state.activeTrace?.traceId || null
+      },
+      config: {
+        configuredSiteConfigs,
+        effectiveSiteConfigs,
+        ...(!configuredResult.ok ? { configuredSiteError: getErrorMessage(configuredResult) } : {}),
+        ...(!effectiveResult.ok ? { effectiveSiteError: getErrorMessage(effectiveResult) } : {})
+      },
+      nativeHost: {
+        configured: Boolean(state.nativeHostConfig.hostName.trim()),
+        hostName: state.nativeHostConfig.hostName,
+        launchPath: state.nativeHostConfig.launchPath,
+        preferredEditorId: state.preferredEditorId
+      },
+      runtime: {
+        attachedTabs: [...state.attachedTabs.entries()].map(([tabId, tabState]) => ({
+          tabId,
+          topOrigin: tabState.topOrigin,
+          traceArmedForTraceId: tabState.traceArmedForTraceId || null,
+          hasTraceScriptIdentifier: Boolean(tabState.traceScriptIdentifier)
+        })),
+        pendingRequests: [...state.requests.values()].map((entry) => ({
+          tabId: entry.tabId,
+          requestId: entry.requestId,
+          method: entry.method,
+          url: entry.url,
+          replayed: entry.replayed
+        })),
+        lastError: state.lastError
+      },
+      issues: [...issues]
+    };
+  }
+
   async function resolveActiveLaunchTarget({
     requestPermission = false
   }: {
@@ -1624,6 +1744,13 @@ export function createBackgroundRuntime({
     switch (message.type) {
       case "session.getState":
         return snapshotState();
+      case "diagnostics.getReport": {
+        const report = await getDiagnosticsReport();
+        return {
+          ok: true,
+          report
+        } satisfies DiagnosticsResult;
+      }
       case "config.readConfiguredSiteConfigs":
         return readConfiguredSiteConfigsForAuthority();
       case "config.readEffectiveSiteConfigs":

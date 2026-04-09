@@ -71,6 +71,7 @@ When the extension detects the local server at `http://127.0.0.1:4319/trpc`, it 
 - capture origins and dump patterns come from the server root's effective config
 - the Settings page reads and writes explicit site config through the server root, even if no browser-local root is configured
 - **Open in Cursor** uses the server root path
+- **Open in folder** reveals the server root through the OS file manager
 - guided scenario traces are stored in the server root under `.wraithwalker/scenario-traces`
 
 If the server is not running, the extension falls back to the remembered local root exactly as before.
@@ -105,6 +106,7 @@ The popup is intentionally minimal:
 
 - `Start Session` / `Stop Session`
 - `Open in Cursor`
+- `Open in folder` when the local server is connected
 - `Settings`
 
 When you click **Open in Cursor**, WraithWalker:
@@ -174,6 +176,29 @@ Use it when you want:
 - command-based editor or shell integrations
 
 The default Cursor flow is URL-first. Native messaging is not required just to launch Cursor and send the workspace brief.
+
+## Diagnostics And Support
+
+The Settings page includes **Copy Diagnostics**, which asks the background runtime for a structured support report and copies it to the clipboard as JSON.
+
+That report includes:
+
+- current session snapshot and enabled origins
+- local-root readiness and remembered permission state
+- server connection details such as the active root path, tRPC URL, and active trace
+- explicit and effective site config
+- native-host config
+- attached tabs, pending requests, and the last runtime error
+- a short list of detected issues
+
+For CLI-side support, run:
+
+```bash
+wraithwalker doctor
+wraithwalker doctor --json
+```
+
+That gives you a root-level health report that pairs well with the extension diagnostics bundle when you need to debug local setup issues.
 
 ## Related Commands
 

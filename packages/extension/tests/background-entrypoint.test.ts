@@ -4571,6 +4571,115 @@ describe("background entrypoint", () => {
     expect(setLastSessionSnapshot).toHaveBeenCalled();
   });
 
+  it("returns a structured diagnostics report from the background runtime", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: false,
+      error: "No root directory selected."
+    });
+    const serverClient = createMockServerClient({
+      activeTrace: createActiveTrace({ traceId: "trace-diagnostics" })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        launchPath: "/tmp/fixtures"
+      }),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    runtime.state.sessionActive = true;
+    runtime.state.attachedTabs.set(7, {
+      topOrigin: "https://app.example.com",
+      traceArmedForTraceId: "trace-diagnostics",
+      traceScriptIdentifier: "script-1"
+    });
+    runtime.state.requests.set("7:req-1", {
+      tabId: 7,
+      requestId: "req-1",
+      requestedAt: "2026-04-09T00:00:00.000Z",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      url: "https://cdn.example.com/app.js",
+      requestHeaders: [],
+      requestBody: "",
+      requestBodyEncoding: "utf8",
+      descriptor: null,
+      resourceType: "Script",
+      mimeType: "application/javascript",
+      replayed: false,
+      responseStatus: 0,
+      responseStatusText: "",
+      responseHeaders: []
+    });
+    runtime.state.lastError = "Something went wrong.";
+
+    const result = await runtime.handleRuntimeMessage({ type: "diagnostics.getReport" });
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      report: expect.objectContaining({
+        extensionVersion: "0.1.0",
+        sessionSnapshot: expect.objectContaining({
+          sessionActive: true,
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root"
+        }),
+        server: expect.objectContaining({
+          connected: true,
+          rootPath: "/tmp/server-root",
+          activeTraceId: "trace-diagnostics"
+        }),
+        config: expect.objectContaining({
+          configuredSiteConfigs: [
+            expect.objectContaining({ origin: "https://app.example.com" })
+          ],
+          effectiveSiteConfigs: [
+            expect.objectContaining({ origin: "https://app.example.com" })
+          ]
+        }),
+        runtime: expect.objectContaining({
+          attachedTabs: [
+            expect.objectContaining({
+              tabId: 7,
+              topOrigin: "https://app.example.com",
+              hasTraceScriptIdentifier: true
+            })
+          ],
+          pendingRequests: [
+            expect.objectContaining({
+              tabId: 7,
+              requestId: "req-1",
+              url: "https://cdn.example.com/app.js"
+            })
+          ],
+          lastError: "Something went wrong."
+        }),
+        issues: expect.arrayContaining([
+          "Last runtime error: Something went wrong."
+        ])
+      })
+    }));
+  });
+
   it("falls back when getContexts is not available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();

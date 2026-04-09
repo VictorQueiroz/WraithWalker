@@ -2,7 +2,15 @@ import * as React from "react";
 
 import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_EDITOR_ID, EDITOR_PRESETS, type EditorPreset } from "../lib/constants.js";
 import { getEditorLaunchOverride, updateEditorLaunchOverride } from "../lib/editor-launch.js";
-import type { BackgroundMessage, ErrorResult, NativeOpenResult, NativeVerifyResult, ScenarioListResult, ScenarioResult } from "../lib/messages.js";
+import type {
+  BackgroundMessage,
+  DiagnosticsResult,
+  ErrorResult,
+  NativeOpenResult,
+  NativeVerifyResult,
+  ScenarioListResult,
+  ScenarioResult
+} from "../lib/messages.js";
 import { normalizeSiteInput, originToPermissionPattern } from "../lib/path-utils.js";
 import {
   createRootDirectoryPickerOptions,
@@ -66,6 +74,7 @@ export interface OptionsAppProps {
   queryRootPermission?: typeof defaultQueryRootPermission;
   requestRootPermission?: typeof defaultRequestRootPermission;
   storeRootHandleWithSentinel?: typeof defaultStoreRootHandleWithSentinel;
+  writeClipboardText?: (text: string) => Promise<void>;
   getPreferredEditorId?: () => Promise<string>;
   setPreferredEditorId?: (editorId: string) => Promise<void>;
   editorPresets?: EditorPreset[];
@@ -258,6 +267,12 @@ export function OptionsApp({
   queryRootPermission = defaultQueryRootPermission,
   requestRootPermission = defaultRequestRootPermission,
   storeRootHandleWithSentinel = defaultStoreRootHandleWithSentinel,
+  writeClipboardText = async (text: string) => {
+    if (!windowRef.navigator?.clipboard?.writeText) {
+      throw new Error("Clipboard access is unavailable in this browser context.");
+    }
+    await windowRef.navigator.clipboard.writeText(text);
+  },
   editorPresets = EDITOR_PRESETS
 }: OptionsAppProps) {
   const [sites, setSites] = React.useState<SiteConfig[]>([]);
@@ -554,6 +569,27 @@ export function OptionsApp({
     }
   }
 
+  async function handleCopyDiagnostics() {
+    setFlash(null);
+    try {
+      const result = await sendMessage<DiagnosticsResult>(chromeApi.runtime, { type: "diagnostics.getReport" });
+      if (!result.ok) {
+        throw new Error(getErrorMessage(result as ErrorResult));
+      }
+
+      await writeClipboardText(JSON.stringify(result.report, null, 2));
+      setFlash({
+        variant: "success",
+        text: "Diagnostics copied to clipboard."
+      });
+    } catch (error) {
+      setFlash({
+        variant: "destructive",
+        text: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
   async function handleSaveScenario() {
     if (!scenarioName.trim()) {
       return;
@@ -654,6 +690,9 @@ export function OptionsApp({
                 </Button>
                 <Button className="sm:w-fit" type="button" variant="secondary" onClick={() => void handleOpenLaunchFolder()}>
                   Open Launch Folder
+                </Button>
+                <Button className="sm:w-fit" type="button" variant="secondary" onClick={() => void handleCopyDiagnostics()}>
+                  Copy Diagnostics
                 </Button>
                 <p className="text-xs text-muted-foreground">
                   Chrome can remember the selected directory handle, but opening that folder in Finder or Explorer still requires the native host plus the shared launch path below.
