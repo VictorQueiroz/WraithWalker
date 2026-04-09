@@ -33,6 +33,8 @@ import type {
   OffscreenMessage,
   RootReadyResult,
   RootReadySuccess,
+  ScenarioListResult,
+  ScenarioResult,
   SiteConfigsResult
 } from "./lib/messages.js";
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
@@ -211,6 +213,9 @@ function createUnavailableServerClient(): WraithWalkerServerClient {
   return {
     getSystemInfo: unavailable,
     revealRoot: unavailable,
+    listScenarios: unavailable,
+    saveScenario: unavailable,
+    switchScenario: unavailable,
     heartbeat: unavailable,
     hasFixture: unavailable,
     readConfiguredSiteConfigs: unavailable,
@@ -1438,6 +1443,90 @@ export function createBackgroundRuntime({
     }
   }
 
+  async function listScenariosForActiveTarget(): Promise<ScenarioListResult> {
+    await refreshStoredConfig();
+    const target = await resolveActiveLaunchTarget({ requestPermission: false });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
+    }
+
+    if (target.source === "server") {
+      try {
+        const result = await serverClient.listScenarios();
+        return { ok: true, scenarios: result.scenarios };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    if (!state.nativeHostConfig.hostName.trim()) {
+      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+    }
+
+    const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+      type: "listScenarios",
+      path: target.launchPath,
+      expectedRootId: target.rootId
+    });
+    return result as ScenarioListResult;
+  }
+
+  async function saveScenarioForActiveTarget(name: string): Promise<ScenarioResult> {
+    await refreshStoredConfig();
+    const target = await resolveActiveLaunchTarget({ requestPermission: false });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
+    }
+
+    if (target.source === "server") {
+      try {
+        return await serverClient.saveScenario(name);
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    if (!state.nativeHostConfig.hostName.trim()) {
+      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+    }
+
+    const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+      type: "saveScenario",
+      path: target.launchPath,
+      expectedRootId: target.rootId,
+      name
+    });
+    return result as ScenarioResult;
+  }
+
+  async function switchScenarioForActiveTarget(name: string): Promise<ScenarioResult> {
+    await refreshStoredConfig();
+    const target = await resolveActiveLaunchTarget({ requestPermission: false });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
+    }
+
+    if (target.source === "server") {
+      try {
+        return await serverClient.switchScenario(name);
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    if (!state.nativeHostConfig.hostName.trim()) {
+      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+    }
+
+    const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
+      type: "switchScenario",
+      path: target.launchPath,
+      expectedRootId: target.rootId,
+      name
+    });
+    return result as ScenarioResult;
+  }
+
   async function recordTraceClick(tabId: number, payload: TraceBindingPayload): Promise<void> {
     if (!state.serverInfo || !state.activeTrace) {
       return;
@@ -1825,45 +1914,13 @@ export function createBackgroundRuntime({
         return result;
       }
       case "scenario.list": {
-        await refreshStoredConfig();
-        const target = await resolveActiveLaunchTarget({ requestPermission: false });
-        if (target.ok === false) {
-          return { ok: false, error: target.error };
-        }
-        const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-          type: "listScenarios",
-          path: target.launchPath,
-          expectedRootId: target.rootId
-        });
-        return result as { ok: true; scenarios: string[] };
+        return listScenariosForActiveTarget();
       }
       case "scenario.save": {
-        await refreshStoredConfig();
-        const target = await resolveActiveLaunchTarget({ requestPermission: false });
-        if (target.ok === false) {
-          return { ok: false, error: target.error };
-        }
-        const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-          type: "saveScenario",
-          path: target.launchPath,
-          expectedRootId: target.rootId,
-          name: message.name
-        });
-        return result as { ok: true; name: string };
+        return saveScenarioForActiveTarget(message.name);
       }
       case "scenario.switch": {
-        await refreshStoredConfig();
-        const target = await resolveActiveLaunchTarget({ requestPermission: false });
-        if (target.ok === false) {
-          return { ok: false, error: target.error };
-        }
-        const result = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-          type: "switchScenario",
-          path: target.launchPath,
-          expectedRootId: target.rootId,
-          name: message.name
-        });
-        return result as { ok: true; name: string };
+        return switchScenarioForActiveTarget(message.name);
       }
     }
   }

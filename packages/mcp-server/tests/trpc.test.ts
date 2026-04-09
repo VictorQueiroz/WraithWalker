@@ -1063,6 +1063,52 @@ describe("tRPC capture backend", () => {
     expect(revealRoot).toHaveBeenCalledTimes(1);
   });
 
+  it("lists, saves, and switches scenarios through the typed tRPC router", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    const sentinel = await readSentinel(root.rootPath);
+
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      extensionSessions: {
+        heartbeat: async ({ clientId, extensionVersion, sessionActive, enabledOrigins }) => ({
+          connected: true,
+          captureReady: sessionActive && enabledOrigins.length > 0,
+          sessionActive,
+          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+          extensionVersion,
+          clientId,
+          captureDestination: "server" as const,
+          enabledOrigins,
+          siteConfigs: [],
+          activeTrace: null
+        })
+      },
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+
+    await expect(caller.scenarios.list()).resolves.toEqual({ scenarios: [] });
+    await expect(caller.scenarios.save({ name: "baseline" })).resolves.toEqual({
+      ok: true,
+      name: "baseline"
+    });
+    await expect(caller.scenarios.list()).resolves.toEqual({ scenarios: ["baseline"] });
+    await expect(caller.scenarios.switch({ name: "baseline" })).resolves.toEqual({
+      ok: true,
+      name: "baseline"
+    });
+  });
+
   it("serves extension heartbeats and guided trace record/link operations", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-trpc-",

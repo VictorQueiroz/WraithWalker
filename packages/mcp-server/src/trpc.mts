@@ -8,6 +8,7 @@ import type { SiteConfig } from "@wraithwalker/core/site-config";
 import type { SiteConfigLike } from "@wraithwalker/core/fixtures";
 import type { ScenarioTraceRecord } from "@wraithwalker/core/scenario-traces";
 import type { RootSentinel } from "@wraithwalker/core/root";
+import { listScenarios, saveScenario, switchScenario } from "@wraithwalker/core/scenarios";
 import { z } from "zod";
 
 import type { ExtensionStatus } from "./extension-session.mjs";
@@ -119,6 +120,15 @@ export interface TrpcSiteConfigsInfo {
   sentinel: RootSentinel;
 }
 
+export interface TrpcScenarioListInfo {
+  scenarios: string[];
+}
+
+export interface TrpcScenarioResult {
+  ok: true;
+  name: string;
+}
+
 export interface CreateWraithwalkerRouterDependencies {
   rootPath: string;
   sentinel: RootSentinel;
@@ -210,6 +220,29 @@ export function createWraithwalkerRouter({
             sentinel
           };
         })
+    }),
+    scenarios: t.router({
+      list: t.procedure.query(async (): Promise<TrpcScenarioListInfo> => ({
+        scenarios: await listScenarios(rootPath)
+      })),
+      save: t.procedure
+        .input(z.object({
+          name: z.string()
+        }))
+        .mutation(async ({ input }): Promise<TrpcScenarioResult> => saveScenario({
+          path: rootPath,
+          expectedRootId: sentinel.rootId,
+          name: input.name
+        })),
+      switch: t.procedure
+        .input(z.object({
+          name: z.string()
+        }))
+        .mutation(async ({ input }): Promise<TrpcScenarioResult> => switchScenario({
+          path: rootPath,
+          expectedRootId: sentinel.rootId,
+          name: input.name
+        }))
     }),
     fixtures: t.router({
       has: t.procedure

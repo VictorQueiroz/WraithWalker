@@ -85,6 +85,9 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
   return {
     getSystemInfo,
     revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
+    listScenarios: vi.fn().mockResolvedValue({ scenarios: [] }),
+    saveScenario: vi.fn().mockImplementation(async (name) => ({ ok: true, name })),
+    switchScenario: vi.fn().mockImplementation(async (name) => ({ ok: true, name })),
     heartbeat,
     hasFixture: vi.fn().mockResolvedValue({
       exists: false,
@@ -3373,6 +3376,73 @@ describe("background entrypoint", () => {
       expectedRootId: "root-scenarios",
       name: "baseline"
     });
+  });
+
+  it("routes scenario list, save, and switch actions through the connected server root", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const serverClient = createMockServerClient({
+      heartbeat: vi.fn().mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: [],
+        activeTrace: null
+      }),
+      listScenarios: vi.fn().mockResolvedValue({ scenarios: ["baseline"] }),
+      saveScenario: vi.fn().mockResolvedValue({ ok: true, name: "release" }),
+      switchScenario: vi.fn().mockResolvedValue({ ok: true, name: "baseline" })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue({
+        ...DEFAULT_NATIVE_HOST_CONFIG,
+        hostName: "",
+        launchPath: "/tmp/local-launch"
+      }),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+
+    await expect(runtime.handleRuntimeMessage({ type: "scenario.list" })).resolves.toEqual({
+      ok: true,
+      scenarios: ["baseline"]
+    });
+    await expect(runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })).resolves.toEqual({
+      ok: true,
+      name: "release"
+    });
+    await expect(runtime.handleRuntimeMessage({ type: "scenario.switch", name: "baseline" })).resolves.toEqual({
+      ok: true,
+      name: "baseline"
+    });
+
+    expect(serverClient.listScenarios).toHaveBeenCalledTimes(1);
+    expect(serverClient.saveScenario).toHaveBeenCalledWith("release");
+    expect(serverClient.switchScenario).toHaveBeenCalledWith("baseline");
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
   });
 
   it("records refresh failures triggered by startup and install listeners", async () => {

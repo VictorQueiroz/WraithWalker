@@ -1,5 +1,9 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import type { AppRouter, TrpcHeartbeatInfo, TrpcSystemInfo } from "@wraithwalker/mcp-server/trpc";
+import type {
+  AppRouter,
+  TrpcHeartbeatInfo,
+  TrpcSystemInfo
+} from "@wraithwalker/mcp-server/trpc";
 
 import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SiteConfig } from "./types.js";
 
@@ -65,9 +69,21 @@ export interface TrpcSiteConfigsInfo {
   sentinel: RootSentinel;
 }
 
+export interface TrpcScenarioListInfo {
+  scenarios: string[];
+}
+
+export interface TrpcScenarioResult {
+  ok: true;
+  name: string;
+}
+
 export interface WraithWalkerServerClient {
   getSystemInfo(): Promise<TrpcSystemInfo>;
   revealRoot(): Promise<{ ok: true; command: string }>;
+  listScenarios(): Promise<TrpcScenarioListInfo>;
+  saveScenario(name: string): Promise<TrpcScenarioResult>;
+  switchScenario(name: string): Promise<TrpcScenarioResult>;
   heartbeat(payload: {
     clientId: string;
     extensionVersion: string;
@@ -167,6 +183,15 @@ export function createWraithWalkerServerClient(
     },
     revealRoot() {
       return trpc.system.revealRoot.mutate() as Promise<{ ok: true; command: string }>;
+    },
+    listScenarios() {
+      return trpc.scenarios.list.query() as Promise<TrpcScenarioListInfo>;
+    },
+    saveScenario(name) {
+      return trpc.scenarios.save.mutate({ name }) as Promise<TrpcScenarioResult>;
+    },
+    switchScenario(name) {
+      return trpc.scenarios.switch.mutate({ name }) as Promise<TrpcScenarioResult>;
     },
     heartbeat(payload) {
       return trpc.extension.heartbeat.mutate(payload) as Promise<TrpcHeartbeatInfo>;
