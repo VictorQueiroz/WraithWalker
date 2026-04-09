@@ -1,30 +1,20 @@
 import { defineConfig } from "vitest/config";
+import { createCoverageConfig } from "../../test-support/coverage-config.ts";
 import { preferMtsSourcePlugin } from "../../test-support/vitest-utils.ts";
 
 export default defineConfig({
   plugins: [preferMtsSourcePlugin()],
   test: {
     environment: "node",
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "lcov"],
-      include: [
-        "src/fixture-presentation.mts",
-        "src/fixture-layout.mts",
-        "src/fixture-repository.mts",
-        "src/har-import.mts",
-        "src/overrides-sync.mts",
-        "src/scenario-traces.mts",
-        "src/root-runtime.mts",
-        "src/root-fs.mts"
-      ],
+    coverage: createCoverageConfig({
+      include: ["src/**/*.mts"],
+      exclude: ["src/**/*.d.mts"],
       thresholds: {
-        perFile: true,
-        statements: 100,
-        lines: 100,
-        functions: 100,
-        branches: 100
+        statements: 96,
+        lines: 96,
+        functions: 96,
+        branches: 91
       }
-    }
+    })
   }
 });

@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { generateContext, type FsGateway } from "../src/context.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
@@ -90,5 +90,36 @@ describe("context generation", () => {
     expect(await fs.readFile(path.join(root.rootPath, "CLAUDE.md"), "utf8")).toContain("Static Assets");
     await expect(fs.access(path.join(root.rootPath, ".cursorrules"))).rejects.toThrow();
     await expect(fs.access(path.join(root.rootPath, ".wraithwalker", "types", "index.d.ts"))).rejects.toThrow();
+  });
+
+  it("surfaces missing canonical bodies through the root runtime storage adapter", async () => {
+    const rootRuntimeModuleId = "../src/root-runtime.mjs";
+
+    vi.resetModules();
+    vi.doMock(rootRuntimeModuleId, () => ({
+      createWraithwalkerRootRuntime({ root, storage }: {
+        root: unknown;
+        storage: { readBody(targetRoot: unknown, relativePath: string): Promise<unknown> };
+      }) {
+        return {
+          async generateContext() {
+            await storage.readBody(root, "captures/missing/response.body");
+            return "unreachable";
+          }
+        };
+      }
+    }));
+
+    try {
+      const { generateContext: generateContextWithMock } = await import("../src/context.mts?storage-adapter");
+      const root = await createFixtureRoot();
+
+      await expect(generateContextWithMock(root.rootPath, createFsGateway())).rejects.toThrow(
+        "Fixture body not found at captures/missing/response.body"
+      );
+    } finally {
+      vi.doUnmock(rootRuntimeModuleId);
+      vi.resetModules();
+    }
   });
 });

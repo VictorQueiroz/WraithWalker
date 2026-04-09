@@ -11,7 +11,10 @@ Turn a running website into local files, open that fixture root in Cursor, and o
 ```bash
 npm install
 npm run build
+npm test
 ```
+
+`npm test` now writes a repo-wide coverage report to `coverage/lcov-report/index.html` plus a merged `coverage/lcov.info`, and it fails if merged repo coverage drops below the enforced root thresholds.
 
 ## Basic Capture
 

@@ -165,6 +165,96 @@ describe("config command", () => {
     });
   });
 
+  it("manages whole-site objects and full site collections", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-cli-project-config-"
+    });
+
+    expect(await runCli(["config", "set", "sites", JSON.stringify([{
+      origin: "https://alpha.example.com",
+      dumpAllowlistPatterns: ["\\.json$"]
+    }])], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    })).toBe(0);
+
+    await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
+      schemaVersion: 1,
+      sites: [expect.objectContaining({
+        origin: "https://alpha.example.com",
+        dumpAllowlistPatterns: ["\\.json$"]
+      })]
+    });
+
+    let capture = consoleCapture();
+    expect(await runCli(["config", "get", "sites"], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    })).toBe(0);
+    expect(capture.logs.join("\n")).toContain("https://alpha.example.com");
+
+    vi.restoreAllMocks();
+    expect(await runCli([
+      "config",
+      "set",
+      'site."https://beta.example.com"',
+      JSON.stringify({ dumpAllowlistPatterns: ["\\.svg$"] })
+    ], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    })).toBe(0);
+
+    capture = consoleCapture();
+    expect(await runCli(["config", "get", 'site."https://beta.example.com"'], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    })).toBe(0);
+    expect(capture.logs.join("\n")).toContain("https://beta.example.com");
+    expect(capture.logs.join("\n")).toContain("\\.svg$");
+
+    expect(await runCli(["config", "unset", 'site."https://beta.example.com"'], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    })).toBe(0);
+
+    await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
+      schemaVersion: 1,
+      sites: [expect.objectContaining({
+        origin: "https://alpha.example.com",
+        dumpAllowlistPatterns: ["\\.json$"]
+      })]
+    });
+
+    expect(await runCli(["config", "unset", "sites"], {
+      cwd: root.rootPath,
+      env: {},
+      homeDir: await tmpdir(),
+      platform: "linux",
+      isTTY: false
+    })).toBe(0);
+
+    await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
+      schemaVersion: 1,
+      sites: []
+    });
+  });
+
   it("reports missing keys and invalid values as command errors", async () => {
     const { runCli } = await loadRunner();
     const root = await createWraithwalkerFixtureRoot({
@@ -191,5 +281,72 @@ describe("config command", () => {
       isTTY: false
     })).toBe(1);
     expect(invalidCapture.errors.join("\n")).toContain("Invalid regular expression");
+  });
+
+  it("covers usage and parsing failures across config branches", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-cli-project-config-"
+    });
+    const cases: Array<{ argv: string[]; message: string; cwd?: string }> = [
+      {
+        argv: ["config", "get"],
+        message: "Usage: wraithwalker config get <key>"
+      },
+      {
+        argv: ["config", "set"],
+        message: "Usage: wraithwalker config set <key> <value>"
+      },
+      {
+        argv: ["config", "add"],
+        message: "Usage: wraithwalker config add <key> [value]"
+      },
+      {
+        argv: ["config", "unset"],
+        message: "Usage: wraithwalker config unset <key>"
+      },
+      {
+        argv: ["config", "mystery"],
+        message: "Usage: wraithwalker config {list|get|set|add|unset}"
+      },
+      {
+        argv: ["config", "add", "sites"],
+        message: "Use `wraithwalker config set sites '<json-array>'` to replace all sites.",
+        cwd: root.rootPath
+      },
+      {
+        argv: ["config", "get", "unsupported"],
+        message: "Unsupported config key: unsupported",
+        cwd: root.rootPath
+      },
+      {
+        argv: ["config", "set", "sites", "{"],
+        message: "sites must be a JSON array",
+        cwd: root.rootPath
+      },
+      {
+        argv: ["config", "set", 'site."https://app.example.com"', "["],
+        message: 'site "https://app.example.com" must be a JSON object',
+        cwd: root.rootPath
+      },
+      {
+        argv: ["config", "unset", 'site."https://missing.example.com"'],
+        message: "No config entry found for https://missing.example.com",
+        cwd: root.rootPath
+      }
+    ];
+
+    for (const { argv, message, cwd } of cases) {
+      const capture = consoleCapture();
+      expect(await runCli(argv, {
+        cwd: cwd ?? await tmpdir(),
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })).toBe(1);
+      expect(capture.errors.join("\n")).toContain(message);
+      vi.restoreAllMocks();
+    }
   });
 });

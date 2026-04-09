@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { createCoverageConfig } from "../../test-support/coverage-config.ts";
 
 export default defineConfig({
   resolve: {
@@ -19,22 +20,15 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "lcov"],
-      include: [
-        "src/commands/sync.mts",
-        "src/commands/import-har.mts",
-        "src/lib/plain-output.mts",
-        "src/lib/themed-output.mts"
-      ],
+    coverage: createCoverageConfig({
+      include: ["src/**/*.mts"],
+      exclude: ["src/**/*.d.mts"],
       thresholds: {
-        perFile: true,
-        statements: 100,
-        lines: 100,
-        functions: 100,
-        branches: 100
+        statements: 92,
+        lines: 92,
+        functions: 94,
+        branches: 89
       }
-    }
+    })
   }
 });

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { listScenarios, openDirectory, revealDirectory, saveScenario, switchScenario, verifyRoot } from "./lib.mjs";
 
 interface NativeHostMessage {
@@ -46,9 +48,17 @@ export async function handleMessage(message: NativeHostMessage): Promise<unknown
   throw new Error(`Unknown message type: ${message.type}`);
 }
 
-export async function main(): Promise<void> {
+export async function main({
+  stdin = process.stdin,
+  handleMessageImpl = handleMessage,
+  writeMessageImpl = writeMessage
+}: {
+  stdin?: AsyncIterable<Uint8Array | string> | Iterable<Uint8Array | string>;
+  handleMessageImpl?: typeof handleMessage;
+  writeMessageImpl?: typeof writeMessage;
+} = {}): Promise<void> {
   const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
+  for await (const chunk of stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
 
@@ -58,15 +68,36 @@ export async function main(): Promise<void> {
   }
 
   const messageLength = input.readUInt32LE(0);
+  if (input.length < 4 + messageLength) {
+    throw new Error("Native host received a truncated length-prefixed message.");
+  }
+
   const body = input.subarray(4, 4 + messageLength).toString("utf8");
   const message = JSON.parse(body) as NativeHostMessage;
-  const response = await handleMessage(message);
-  writeMessage(response);
+  const response = await handleMessageImpl(message);
+  writeMessageImpl(response);
 }
 
-main().catch((error: unknown) => {
-  writeMessage({
-    ok: false,
-    error: error instanceof Error ? error.message : String(error)
-  });
-});
+export async function runEntrypoint(options?: Parameters<typeof main>[0]): Promise<void> {
+  try {
+    await main(options);
+  } catch (error) {
+    (options?.writeMessageImpl ?? writeMessage)({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+function isDirectExecution(argv = process.argv): boolean {
+  const entrypointPath = argv[1];
+  if (!entrypointPath) {
+    return false;
+  }
+
+  return pathToFileURL(path.resolve(entrypointPath)).href === import.meta.url;
+}
+
+if (isDirectExecution()) {
+  await runEntrypoint();
+}
