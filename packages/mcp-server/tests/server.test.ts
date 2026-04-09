@@ -384,6 +384,7 @@ describe("mcp server", () => {
         "search-files",
         "start-trace",
         "stop-trace",
+        "trace-status",
         "write-file"
       ]);
     } finally {
@@ -1549,7 +1550,19 @@ describe("mcp server", () => {
       expect(JSON.parse(readTextContent(statusResult))).toEqual(
         expect.objectContaining({
           connected: false,
-          captureReady: false
+          captureReady: false,
+          tracePhase: "disconnected",
+          blockingReason: "extension_disconnected",
+          activeTraceSummary: null
+        })
+      );
+      const traceStatusResult = await client.callTool({ name: "trace-status", arguments: {} });
+      expect(JSON.parse(readTextContent(traceStatusResult))).toEqual(
+        expect.objectContaining({
+          phase: "disconnected",
+          blockingReason: "extension_disconnected",
+          connected: false,
+          activeTrace: null
         })
       );
 
@@ -1595,59 +1608,262 @@ describe("mcp server", () => {
         expect.objectContaining({
           connected: true,
           captureReady: true,
+          tracePhase: "idle",
           clientId: "client-1",
           enabledOrigins: ["https://app.example.com"],
-          siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })]
+          siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })],
+          activeTraceSummary: null
+        })
+      );
+      const idleTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      expect(JSON.parse(readTextContent(idleTraceStatus))).toEqual(
+        expect.objectContaining({
+          phase: "idle",
+          connected: true,
+          captureReady: true,
+          activeTrace: null
         })
       );
 
       const startResult = await client.callTool({
         name: "start-trace",
-        arguments: { name: "Settings trace" }
+        arguments: {
+          name: "Settings trace",
+          goal: "Capture the save flow so the agent can inspect the linked assets."
+        }
       });
       expect(startResult.isError).toBeFalsy();
       const startedTrace = JSON.parse(readTextContent(startResult));
       expect(startedTrace).toEqual(
         expect.objectContaining({
-          name: "Settings trace",
-          status: "armed",
-          extensionClientId: "client-1"
+          trace: expect.objectContaining({
+            name: "Settings trace",
+            goal: "Capture the save flow so the agent can inspect the linked assets.",
+            status: "armed",
+            extensionClientId: "client-1"
+          }),
+          summary: expect.objectContaining({
+            traceId: expect.any(String),
+            goal: "Capture the save flow so the agent can inspect the linked assets.",
+            stepCount: 0,
+            linkedFixtureCount: 0
+          }),
+          guidance: expect.any(String)
+        })
+      );
+
+      const armedTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      expect(JSON.parse(readTextContent(armedTraceStatus))).toEqual(
+        expect.objectContaining({
+          phase: "armed",
+          activeTrace: expect.objectContaining({
+            traceId: startedTrace.trace.traceId,
+            goal: "Capture the save flow so the agent can inspect the linked assets.",
+            stepCount: 0,
+            recentSteps: []
+          })
+        })
+      );
+
+      const recorded = await trpcClient.scenarioTraces.recordClick.mutate({
+        traceId: startedTrace.trace.traceId,
+        step: {
+          stepId: "step-1",
+          tabId: 7,
+          recordedAt: "2026-04-08T00:00:01.000Z",
+          pageUrl: "https://app.example.com/settings",
+          topOrigin: "https://app.example.com",
+          selector: "#save-button",
+          tagName: "button",
+          textSnippet: "Save"
+        }
+      });
+      expect(recorded.recorded).toBe(true);
+
+      const recordingTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      expect(JSON.parse(readTextContent(recordingTraceStatus))).toEqual(
+        expect.objectContaining({
+          phase: "recording",
+          activeTrace: expect.objectContaining({
+            traceId: startedTrace.trace.traceId,
+            stepCount: 1,
+            linkedFixtureCount: 0,
+            lastRecordedAt: "2026-04-08T00:00:01.000Z",
+            lastPageUrl: "https://app.example.com/settings",
+            lastSelector: "#save-button",
+            lastTextSnippet: "Save",
+            recentSteps: [
+              expect.objectContaining({
+                stepId: "step-1",
+                linkedFixtureCount: 0
+              })
+            ]
+          })
         })
       );
 
       const listResult = await client.callTool({ name: "list-traces", arguments: {} });
       expect(JSON.parse(readTextContent(listResult))).toEqual([
         expect.objectContaining({
-          traceId: startedTrace.traceId,
-          status: "armed"
+          traceId: startedTrace.trace.traceId,
+          goal: "Capture the save flow so the agent can inspect the linked assets.",
+          status: "recording",
+          linkedFixtureCount: 0,
+          lastRecordedAt: "2026-04-08T00:00:01.000Z",
+          lastPageUrl: "https://app.example.com/settings"
         })
       ]);
 
       const readResult = await client.callTool({
         name: "read-trace",
-        arguments: { traceId: startedTrace.traceId }
+        arguments: { traceId: startedTrace.trace.traceId }
       });
       expect(JSON.parse(readTextContent(readResult))).toEqual(
         expect.objectContaining({
-          traceId: startedTrace.traceId,
-          status: "armed"
+          trace: expect.objectContaining({
+            traceId: startedTrace.trace.traceId,
+            goal: "Capture the save flow so the agent can inspect the linked assets.",
+            status: "recording"
+          }),
+          summary: expect.objectContaining({
+            traceId: startedTrace.trace.traceId,
+            linkedFixtureCountsByResourceType: {}
+          })
         })
       );
 
       const stopResult = await client.callTool({
         name: "stop-trace",
-        arguments: { traceId: startedTrace.traceId }
+        arguments: { traceId: startedTrace.trace.traceId }
       });
       expect(JSON.parse(readTextContent(stopResult))).toEqual(
         expect.objectContaining({
-          traceId: startedTrace.traceId,
-          status: "completed"
+          trace: expect.objectContaining({
+            traceId: startedTrace.trace.traceId,
+            status: "completed"
+          }),
+          summary: expect.objectContaining({
+            traceId: startedTrace.trace.traceId,
+            stepCount: 1
+          })
         })
       );
 
       await expect(
-        fs.readFile(path.join(root.rootPath, ".wraithwalker", "scenario-traces", startedTrace.traceId, "trace.json"), "utf8")
-      ).resolves.toContain(`"traceId": "${startedTrace.traceId}"`);
+        fs.readFile(path.join(root.rootPath, ".wraithwalker", "scenario-traces", startedTrace.trace.traceId, "trace.json"), "utf8")
+      ).resolves.toContain(`"traceId": "${startedTrace.trace.traceId}"`);
+    } finally {
+      await transport.close();
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("reports connected-but-not-ready trace status when the extension session is inactive", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const trpcClient = createTrpcClient(server.trpcUrl);
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }]
+    });
+
+    try {
+      await trpcClient.extension.heartbeat.mutate({
+        clientId: "client-1",
+        extensionVersion: "1.0.0",
+        sessionActive: false,
+        enabledOrigins: ["https://app.example.com"]
+      });
+
+      const traceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      expect(JSON.parse(readTextContent(traceStatus))).toEqual(
+        expect.objectContaining({
+          phase: "not_ready",
+          blockingReason: "session_inactive",
+          connected: true,
+          captureReady: false,
+          sessionActive: false
+        })
+      );
+    } finally {
+      await transport.close();
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("summarizes legacy traces through MCP without migrating the stored file", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server, transport } = await connectHttpClient(root.rootPath);
+
+    await root.writeJson(".wraithwalker/scenario-traces/legacy-trace/trace.json", {
+      schemaVersion: 1,
+      traceId: "legacy-trace",
+      name: "Legacy trace",
+      status: "completed",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      startedAt: "2026-04-08T00:00:01.000Z",
+      endedAt: "2026-04-08T00:00:02.000Z",
+      rootId: "root-mcp-server",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      steps: [{
+        stepId: "legacy-step-1",
+        tabId: 3,
+        recordedAt: "2026-04-08T00:00:01.000Z",
+        pageUrl: "https://app.example.com/settings",
+        topOrigin: "https://app.example.com",
+        selector: "#legacy",
+        tagName: "button",
+        textSnippet: "Legacy",
+        linkedFixtures: [{
+          bodyPath: "cdn.example.com/assets/legacy.js",
+          requestUrl: "https://cdn.example.com/assets/legacy.js",
+          resourceType: "Script",
+          capturedAt: "2026-04-08T00:00:01.500Z"
+        }]
+      }]
+    });
+
+    try {
+      const listResult = await client.callTool({ name: "list-traces", arguments: {} });
+      expect(JSON.parse(readTextContent(listResult))).toEqual([
+        expect.objectContaining({
+          traceId: "legacy-trace",
+          linkedFixtureCount: 1,
+          lastPageUrl: "https://app.example.com/settings"
+        })
+      ]);
+
+      const readResult = await client.callTool({
+        name: "read-trace",
+        arguments: { traceId: "legacy-trace" }
+      });
+      expect(JSON.parse(readTextContent(readResult))).toEqual(
+        expect.objectContaining({
+          trace: expect.objectContaining({
+            schemaVersion: 1,
+            traceId: "legacy-trace"
+          }),
+          summary: expect.objectContaining({
+            traceId: "legacy-trace",
+            linkedFixtureCountsByResourceType: {
+              Script: 1
+            }
+          })
+        })
+      );
     } finally {
       await transport.close();
       await client.close();
@@ -1664,6 +1880,7 @@ describe("mcp server", () => {
       expect(server.url).toContain(`:${server.port}/mcp`);
       expect(server.tools).toEqual([
         "browser-status",
+        "trace-status",
         "start-trace",
         "stop-trace",
         "list-traces",
@@ -1702,6 +1919,7 @@ describe("mcp server", () => {
         "search-files",
         "start-trace",
         "stop-trace",
+        "trace-status",
         "write-file"
       ]);
 

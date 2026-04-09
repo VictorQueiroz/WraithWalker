@@ -85,6 +85,7 @@ describe("server root runtime adapter", () => {
 
     await runtime.startTrace({
       traceId: "trace-server",
+      goal: "Capture the server-backed settings save path.",
       selectedOrigins: ["https://app.example.com"],
       extensionClientId: "client-1",
       createdAt: "2026-04-08T00:00:00.000Z"
@@ -118,6 +119,7 @@ describe("server root runtime adapter", () => {
     expect(await runtime.readTrace("trace-server")).toEqual(
       expect.objectContaining({
         traceId: "trace-server",
+        goal: "Capture the server-backed settings save path.",
         status: "recording"
       })
     );

@@ -10,7 +10,7 @@ export const MANIFESTS_DIR = `${WRAITHWALKER_DIR}/manifests`;
 export const SCENARIOS_DIR = ".wraithwalker/scenarios";
 export const SCENARIO_TRACES_DIR = ".wraithwalker/scenario-traces";
 export const SCENARIO_TRACE_ACTIVE_FILE = `${SCENARIO_TRACES_DIR}/active.json`;
-export const SCENARIO_TRACE_SCHEMA_VERSION = 1;
+export const SCENARIO_TRACE_SCHEMA_VERSION = 2;
 export const STATIC_RESOURCE_MANIFEST_FILE = "RESOURCE_MANIFEST.json";
 
 export const FIXTURE_FILE_NAMES = {

@@ -144,10 +144,10 @@ That makes it possible to run guided scenario traces without changing the extens
 
 1. Start `wraithwalker serve`
 2. Start an extension session
-3. Ask `browser-status` from MCP
+3. Ask `trace-status` from MCP
 4. Start a scenario trace from MCP
-5. Ask the user to click the relevant parts of the app
-6. Stop the trace and inspect `.wraithwalker/scenario-traces/<traceId>/trace.json`
+5. Ask the user to click the relevant parts of the app while polling `trace-status`
+6. Stop the trace and inspect `.wraithwalker/scenario-traces/<traceId>/trace.json` only when you need the full stored record
 
 The extension uses the Chrome Debugger API for this flow, not a general content-script messaging layer. It installs a page-side click collector through DevTools Protocol `Runtime` and `Page`, then links captured fixtures back to those click steps.
 

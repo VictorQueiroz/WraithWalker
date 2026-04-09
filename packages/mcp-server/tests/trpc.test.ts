@@ -947,7 +947,9 @@ describe("tRPC capture backend", () => {
             createdAt: "2026-04-08T00:00:00.000Z",
             dumpAllowlistPatterns: ["\\.js$"]
           })),
-          activeTrace: null
+          activeTrace: null,
+          tracePhase: sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready",
+          activeTraceSummary: null
         })
       },
       getServerUrls: () => ({
@@ -1045,7 +1047,9 @@ describe("tRPC capture backend", () => {
           captureDestination: "server" as const,
           enabledOrigins,
           siteConfigs: [],
-          activeTrace: null
+          activeTrace: null,
+          tracePhase: sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready",
+          activeTraceSummary: null
         })
       },
       getServerUrls: () => ({
@@ -1086,7 +1090,9 @@ describe("tRPC capture backend", () => {
           captureDestination: "server" as const,
           enabledOrigins,
           siteConfigs: [],
-          activeTrace: null
+          activeTrace: null,
+          tracePhase: sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready",
+          activeTraceSummary: null
         })
       },
       getServerUrls: () => ({
@@ -1123,6 +1129,7 @@ describe("tRPC capture backend", () => {
     await rootRuntime.startTrace({
       traceId: "trace-http",
       name: "HTTP trace",
+      goal: "Capture the settings click path for agent debugging.",
       selectedOrigins: ["https://app.example.com"],
       extensionClientId: "client-1",
       createdAt: "2026-04-08T00:00:00.000Z"
@@ -1135,22 +1142,44 @@ describe("tRPC capture backend", () => {
       serverVersion: "0.6.1",
       runtime: rootRuntime,
       extensionSessions: {
-        heartbeat: async ({ clientId, extensionVersion, sessionActive, enabledOrigins }) => ({
-          connected: true,
-          captureReady: sessionActive && enabledOrigins.length > 0,
-          sessionActive,
-          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
-          extensionVersion,
-          clientId,
-          captureDestination: "server" as const,
-          enabledOrigins,
-          siteConfigs: enabledOrigins.map((origin) => ({
-            origin,
-            createdAt: "2026-04-08T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.js$"]
-          })),
-          activeTrace: await rootRuntime.getActiveTrace()
-        })
+        heartbeat: async ({ clientId, extensionVersion, sessionActive, enabledOrigins }) => {
+          const activeTrace = await rootRuntime.getActiveTrace();
+
+          return {
+            connected: true,
+            captureReady: sessionActive && enabledOrigins.length > 0,
+            sessionActive,
+            lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+            extensionVersion,
+            clientId,
+            captureDestination: "server" as const,
+            enabledOrigins,
+            siteConfigs: enabledOrigins.map((origin) => ({
+              origin,
+              createdAt: "2026-04-08T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            })),
+            activeTrace,
+            tracePhase: activeTrace
+              ? (activeTrace.status === "recording" ? "recording" : "armed")
+              : (sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready"),
+            activeTraceSummary: activeTrace
+              ? {
+                  traceId: activeTrace.traceId,
+                  name: activeTrace.name,
+                  goal: activeTrace.goal,
+                  status: activeTrace.status,
+                  createdAt: activeTrace.createdAt,
+                  startedAt: activeTrace.startedAt,
+                  endedAt: activeTrace.endedAt,
+                  selectedOrigins: [...activeTrace.selectedOrigins],
+                  stepCount: activeTrace.steps.length,
+                  linkedFixtureCount: activeTrace.steps.reduce((count, step) => count + step.linkedFixtures.length, 0),
+                  recentSteps: []
+                }
+              : null
+          };
+        }
       },
       getServerUrls: () => ({
         baseUrl: "http://127.0.0.1:4319",
@@ -1173,7 +1202,8 @@ describe("tRPC capture backend", () => {
     });
     expect(heartbeat.activeTrace).toEqual(
       expect.objectContaining({
-        traceId: "trace-http"
+        traceId: "trace-http",
+        goal: "Capture the settings click path for agent debugging."
       })
     );
     expect(heartbeat.siteConfigs).toEqual([

@@ -6,8 +6,9 @@ describe("extension session tracker", () => {
   it("reports disconnected by default and exposes the active trace", async () => {
     const tracker = createExtensionSessionTracker({
       getActiveTrace: async () => ({
-        schemaVersion: 1,
+        schemaVersion: 2,
         traceId: "trace-1",
+        goal: "Map the disconnected state for agents.",
         status: "armed",
         createdAt: "2026-04-08T00:00:00.000Z",
         rootId: "root-1",
@@ -23,7 +24,15 @@ describe("extension session tracker", () => {
       expect.objectContaining({
         connected: false,
         captureReady: false,
-        activeTrace: expect.objectContaining({ traceId: "trace-1" })
+        tracePhase: "disconnected",
+        blockingReason: "extension_disconnected",
+        activeTrace: expect.objectContaining({ traceId: "trace-1" }),
+        activeTraceSummary: expect.objectContaining({
+          traceId: "trace-1",
+          goal: "Map the disconnected state for agents.",
+          stepCount: 0,
+          linkedFixtureCount: 0
+        })
       })
     );
   });
@@ -50,10 +59,12 @@ describe("extension session tracker", () => {
       expect.objectContaining({
         connected: true,
         captureReady: true,
+        tracePhase: "idle",
         captureDestination: "server",
         clientId: "client-1",
         enabledOrigins: ["https://app.example.com"],
-        siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })]
+        siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })],
+        activeTraceSummary: null
       })
     );
 
@@ -64,6 +75,8 @@ describe("extension session tracker", () => {
         connected: false,
         captureReady: false,
         sessionActive: false,
+        tracePhase: "disconnected",
+        blockingReason: "extension_disconnected",
         captureDestination: "none",
         enabledOrigins: [],
         siteConfigs: []

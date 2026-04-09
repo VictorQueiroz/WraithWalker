@@ -24,6 +24,7 @@ declare module "@wraithwalker/mcp-server/trpc" {
       schemaVersion: number;
       traceId: string;
       name?: string;
+      goal?: string;
       status: "armed" | "recording" | "completed";
       createdAt: string;
       startedAt?: string;

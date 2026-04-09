@@ -159,11 +159,13 @@ describe("root runtime", () => {
     const armed = await runtime.startTrace({
       traceId: "trace-guided",
       name: "Guided trace",
+      goal: "Capture the login button flow for the dashboard.",
       selectedOrigins: ["https://app.example.com"],
       extensionClientId: "client-1",
       createdAt: "2026-04-08T00:00:00.000Z"
     });
     expect(armed.status).toBe("armed");
+    expect(armed.goal).toBe("Capture the login button flow for the dashboard.");
     expect((await runtime.getActiveTrace())?.traceId).toBe("trace-guided");
 
     const recording = await runtime.recordClick({
@@ -204,7 +206,9 @@ describe("root runtime", () => {
     expect(await runtime.listTraces()).toEqual([
       expect.objectContaining({
         traceId: "trace-guided",
-        status: "completed"
+        status: "completed",
+        goal: "Capture the login button flow for the dashboard.",
+        linkedFixtureCount: 1
       })
     ]);
   });

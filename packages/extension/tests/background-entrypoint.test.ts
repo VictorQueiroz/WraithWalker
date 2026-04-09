@@ -129,7 +129,7 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
 
 function createActiveTrace(overrides: Record<string, any> = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     traceId: "trace-1",
     status: "armed" as const,
     createdAt: "2026-04-08T00:00:00.000Z",
@@ -1205,7 +1205,9 @@ describe("background entrypoint", () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
-    const activeTrace = createActiveTrace();
+    const activeTrace = createActiveTrace({
+      goal: "Capture the active trace details without breaking debugger arming."
+    });
     const heartbeat = vi.fn().mockResolvedValue({
       version: "1.0.0",
       rootPath: "/tmp/server-root",
@@ -1239,7 +1241,10 @@ describe("background entrypoint", () => {
       sessionActive: true,
       enabledOrigins: ["https://app.example.com"]
     }));
-    expect(runtime.state.activeTrace).toEqual(expect.objectContaining({ traceId: "trace-1" }));
+    expect(runtime.state.activeTrace).toEqual(expect.objectContaining({
+      traceId: "trace-1",
+      goal: "Capture the active trace details without breaking debugger arming."
+    }));
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.enable");
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Page.enable");
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.addBinding", {

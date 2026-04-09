@@ -54,6 +54,7 @@ export interface ServerScenarioTraceRecord {
   schemaVersion: number;
   traceId: string;
   name?: string;
+  goal?: string;
   status: "armed" | "recording" | "completed";
   createdAt: string;
   startedAt?: string;

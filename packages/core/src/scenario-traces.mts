@@ -32,6 +32,7 @@ export interface ScenarioTraceRecord {
   schemaVersion: number;
   traceId: string;
   name?: string;
+  goal?: string;
   status: "armed" | "recording" | "completed";
   createdAt: string;
   startedAt?: string;
@@ -45,6 +46,7 @@ export interface ScenarioTraceRecord {
 export interface ScenarioTraceSummary {
   traceId: string;
   name?: string;
+  goal?: string;
   status: ScenarioTraceRecord["status"];
   createdAt: string;
   startedAt?: string;
@@ -53,6 +55,41 @@ export interface ScenarioTraceSummary {
   selectedOrigins: string[];
   extensionClientId: string;
   stepCount: number;
+  linkedFixtureCount: number;
+  lastRecordedAt?: string;
+  lastPageUrl?: string;
+}
+
+export interface ScenarioTraceRecentStepSummary {
+  stepId: string;
+  recordedAt: string;
+  pageUrl: string;
+  selector: string;
+  tagName: string;
+  textSnippet: string;
+  linkedFixtureCount: number;
+}
+
+export interface ScenarioTraceAgentSummary {
+  traceId: string;
+  name?: string;
+  goal?: string;
+  status: ScenarioTraceRecord["status"];
+  createdAt: string;
+  startedAt?: string;
+  endedAt?: string;
+  selectedOrigins: string[];
+  stepCount: number;
+  linkedFixtureCount: number;
+  lastRecordedAt?: string;
+  lastPageUrl?: string;
+  lastSelector?: string;
+  lastTextSnippet?: string;
+  recentSteps: ScenarioTraceRecentStepSummary[];
+}
+
+export interface ScenarioTraceReadSummary extends ScenarioTraceAgentSummary {
+  linkedFixtureCountsByResourceType: Record<string, number>;
 }
 
 export interface ActiveScenarioTraceRef {
@@ -71,6 +108,15 @@ interface CreateScenarioTraceStoreDependencies<TRoot> {
   ensureReady: () => Promise<RootSentinel>;
 }
 
+interface StoredScenarioTraceStep extends Omit<ScenarioTraceStep, "linkedFixtures"> {
+  linkedFixtures?: ScenarioTraceLinkedFixture[];
+}
+
+interface StoredScenarioTraceRecord extends Omit<ScenarioTraceRecord, "schemaVersion" | "steps"> {
+  schemaVersion?: number;
+  steps?: StoredScenarioTraceStep[];
+}
+
 function validateTraceId(traceId: string): string {
   const trimmed = traceId.trim();
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(trimmed)) {
@@ -83,10 +129,63 @@ function tracePath(traceId: string): string {
   return `${SCENARIO_TRACES_DIR}/${traceId}/trace.json`;
 }
 
+function normalizeTraceGoal(goal: unknown): string | undefined {
+  return typeof goal === "string" && goal.trim()
+    ? goal.trim()
+    : undefined;
+}
+
+function getLinkedFixtureCount(trace: Pick<ScenarioTraceRecord, "steps">): number {
+  return trace.steps.reduce((count, step) => count + step.linkedFixtures.length, 0);
+}
+
+function getLastRecordedStep(trace: Pick<ScenarioTraceRecord, "steps">): ScenarioTraceStep | undefined {
+  return trace.steps[trace.steps.length - 1];
+}
+
+function buildRecentSteps(
+  trace: Pick<ScenarioTraceRecord, "steps">,
+  recentStepLimit: number
+): ScenarioTraceRecentStepSummary[] {
+  return trace.steps.slice(-Math.max(0, recentStepLimit)).map((step) => ({
+    stepId: step.stepId,
+    recordedAt: step.recordedAt,
+    pageUrl: step.pageUrl,
+    selector: step.selector,
+    tagName: step.tagName,
+    textSnippet: step.textSnippet,
+    linkedFixtureCount: step.linkedFixtures.length
+  }));
+}
+
+export function normalizeScenarioTraceRecord(trace: StoredScenarioTraceRecord): ScenarioTraceRecord {
+  return {
+    schemaVersion: typeof trace.schemaVersion === "number"
+      ? trace.schemaVersion
+      : 1,
+    traceId: trace.traceId,
+    ...(trace.name ? { name: trace.name } : {}),
+    ...(normalizeTraceGoal(trace.goal) ? { goal: normalizeTraceGoal(trace.goal) } : {}),
+    status: trace.status,
+    createdAt: trace.createdAt,
+    ...(trace.startedAt ? { startedAt: trace.startedAt } : {}),
+    ...(trace.endedAt ? { endedAt: trace.endedAt } : {}),
+    rootId: trace.rootId,
+    selectedOrigins: [...trace.selectedOrigins],
+    extensionClientId: trace.extensionClientId,
+    steps: (trace.steps || []).map((step) => ({
+      ...step,
+      linkedFixtures: [...(step.linkedFixtures || [])]
+    }))
+  };
+}
+
 function toSummary(trace: ScenarioTraceRecord): ScenarioTraceSummary {
+  const lastStep = getLastRecordedStep(trace);
   return {
     traceId: trace.traceId,
     name: trace.name,
+    ...(trace.goal ? { goal: trace.goal } : {}),
     status: trace.status,
     createdAt: trace.createdAt,
     startedAt: trace.startedAt,
@@ -94,7 +193,54 @@ function toSummary(trace: ScenarioTraceRecord): ScenarioTraceSummary {
     rootId: trace.rootId,
     selectedOrigins: [...trace.selectedOrigins],
     extensionClientId: trace.extensionClientId,
-    stepCount: trace.steps.length
+    stepCount: trace.steps.length,
+    linkedFixtureCount: getLinkedFixtureCount(trace),
+    ...(lastStep?.recordedAt ? { lastRecordedAt: lastStep.recordedAt } : {}),
+    ...(lastStep?.pageUrl ? { lastPageUrl: lastStep.pageUrl } : {})
+  };
+}
+
+export function summarizeScenarioTrace(
+  trace: ScenarioTraceRecord,
+  recentStepLimit = 5
+): ScenarioTraceAgentSummary {
+  const lastStep = getLastRecordedStep(trace);
+
+  return {
+    traceId: trace.traceId,
+    ...(trace.name ? { name: trace.name } : {}),
+    ...(trace.goal ? { goal: trace.goal } : {}),
+    status: trace.status,
+    createdAt: trace.createdAt,
+    ...(trace.startedAt ? { startedAt: trace.startedAt } : {}),
+    ...(trace.endedAt ? { endedAt: trace.endedAt } : {}),
+    selectedOrigins: [...trace.selectedOrigins],
+    stepCount: trace.steps.length,
+    linkedFixtureCount: getLinkedFixtureCount(trace),
+    ...(lastStep?.recordedAt ? { lastRecordedAt: lastStep.recordedAt } : {}),
+    ...(lastStep?.pageUrl ? { lastPageUrl: lastStep.pageUrl } : {}),
+    ...(lastStep?.selector ? { lastSelector: lastStep.selector } : {}),
+    ...(lastStep?.textSnippet ? { lastTextSnippet: lastStep.textSnippet } : {}),
+    recentSteps: buildRecentSteps(trace, recentStepLimit)
+  };
+}
+
+export function summarizeScenarioTraceForRead(
+  trace: ScenarioTraceRecord,
+  recentStepLimit = 5
+): ScenarioTraceReadSummary {
+  const linkedFixtureCountsByResourceType = trace.steps.reduce<Record<string, number>>((counts, step) => {
+    for (const fixture of step.linkedFixtures) {
+      const resourceType = fixture.resourceType || "Other";
+      counts[resourceType] = (counts[resourceType] || 0) + 1;
+    }
+
+    return counts;
+  }, {});
+
+  return {
+    ...summarizeScenarioTrace(trace, recentStepLimit),
+    linkedFixtureCountsByResourceType
   };
 }
 
@@ -153,7 +299,10 @@ export function createScenarioTraceStore<TRoot>({
 }: CreateScenarioTraceStoreDependencies<TRoot>) {
   async function readTrace(traceId: string): Promise<ScenarioTraceRecord | null> {
     await ensureReady();
-    return storage.readOptionalJson<ScenarioTraceRecord>(root, tracePath(validateTraceId(traceId)));
+    const trace = await storage.readOptionalJson<StoredScenarioTraceRecord>(root, tracePath(validateTraceId(traceId)));
+    return trace
+      ? normalizeScenarioTraceRecord(trace)
+      : null;
   }
 
   async function writeTrace(trace: ScenarioTraceRecord): Promise<void> {
@@ -202,12 +351,14 @@ export function createScenarioTraceStore<TRoot>({
   async function startTrace({
     traceId,
     name,
+    goal,
     selectedOrigins,
     extensionClientId,
     createdAt = new Date().toISOString()
   }: {
     traceId: string;
     name?: string;
+    goal?: string;
     selectedOrigins: string[];
     extensionClientId: string;
     createdAt?: string;
@@ -223,6 +374,7 @@ export function createScenarioTraceStore<TRoot>({
       schemaVersion: SCENARIO_TRACE_SCHEMA_VERSION,
       traceId: normalizedTraceId,
       ...(name?.trim() ? { name: name.trim() } : {}),
+      ...(goal?.trim() ? { goal: goal.trim() } : {}),
       status: "armed",
       createdAt,
       rootId: sentinel.rootId,

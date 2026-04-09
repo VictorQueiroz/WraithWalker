@@ -33,10 +33,13 @@ WraithWalker's MCP tools are projection-first: agents inspect the human-facing f
 When the browser extension is connected to the local server, MCP can also inspect extension readiness and guided scenario traces through:
 
 - `browser-status`
+- `trace-status`
 - `start-trace`
 - `stop-trace`
 - `list-traces`
 - `read-trace`
+
+For guided traces, agents should prefer `trace-status` as the main readiness and progress surface, then use `read-trace` only when they need the full stored record.
 
 More: [Guided scenario traces](./guided-scenario-traces.md)
 

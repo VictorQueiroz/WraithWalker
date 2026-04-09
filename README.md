@@ -40,10 +40,10 @@ More: [Serve command and local server flow](packages/cli/README.md)
 When `wraithwalker serve` is running, MCP tools can see whether the extension is connected and ready to capture.
 
 1. Start the local server with `wraithwalker serve`.
-2. Check `browser-status` from your MCP client.
+2. Check `trace-status` from your MCP client.
 3. Start a guided trace with `start-trace`.
-4. Ask the user to click through the app while the session is running.
-5. Stop the trace and read it back from `.wraithwalker/scenario-traces`.
+4. Ask the user to click through the app while the session is running and poll `trace-status` while it progresses.
+5. Stop the trace and read it back from `.wraithwalker/scenario-traces` only when the compact summaries are not enough.
 
 This lets an agent connect user clicks to captured fixtures and explain how a specific part of the app works.
 

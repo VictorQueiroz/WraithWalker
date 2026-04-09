@@ -115,7 +115,8 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `browser-status` | — | Report whether the browser extension is connected, capture-ready, and currently using the server root |
-| `start-trace` | optional `name` | Start a guided click trace for the connected extension |
+| `trace-status` | — | Report guided trace readiness plus a compact agent summary of the active trace |
+| `start-trace` | optional `name`, optional `goal` | Start a guided click trace for the connected extension |
 | `stop-trace` | `traceId` | Stop a guided click trace and keep it on disk |
 | `list-traces` | — | List stored guided traces from `.wraithwalker/scenario-traces` |
 | `read-trace` | `traceId` | Read one stored guided trace with its steps and linked fixtures |
@@ -188,6 +189,14 @@ When `list-files` or `search-files` marks a result as `editable: true`, agents c
 `read-file` and `read-api-response` reject oversized full reads above 64 KB and direct agents to `read-file-snippet` with `startLine` and `lineCount`.
 
 `read-site-manifest` intentionally stays available for full-fidelity debugging, but it should not be the main discovery path for agents.
+
+For guided traces, the recommended agent flow is:
+
+1. `trace-status`
+2. `start-trace(name?, goal?)`
+3. poll `trace-status` while the user clicks
+4. `stop-trace`
+5. `read-trace` only when the compact summaries are not enough
 
 ### UI Imitation Example
 

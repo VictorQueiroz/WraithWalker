@@ -14,12 +14,13 @@ Use guided traces when the user can point at the exact part of the UI they mean 
 
 Typical flow:
 
-1. Ask `browser-status`.
-2. Wait until `captureReady` is `true`.
-3. Call `start-trace`.
+1. Ask `trace-status`.
+2. Wait until the phase is `idle`.
+3. Call `start-trace`, optionally with a `name` and `goal`.
 4. Ask the user to click the parts of the app they are talking about.
-5. Call `stop-trace`.
-6. Read the stored trace with `read-trace`.
+5. Poll `trace-status` while the trace is active.
+6. Call `stop-trace`.
+7. Call `read-trace` only when you need the full stored record.
 
 That gives the agent:
 
@@ -27,12 +28,14 @@ That gives the agent:
 - the page URL
 - a small text snippet from the clicked element
 - linked captured fixtures written right after that click
+- a small summary of recent steps, linked fixture counts, and trace progress without forcing a full raw trace read
 
 ## MCP Tools
 
 The local MCP server exposes:
 
 - `browser-status`
+- `trace-status`
 - `start-trace`
 - `stop-trace`
 - `list-traces`
@@ -50,6 +53,9 @@ Important fields:
 - `captureDestination`
 - `enabledOrigins`
 - `activeTrace`
+- `tracePhase`
+- `blockingReason`
+- `activeTraceSummary`
 
 `captureReady` means:
 
@@ -57,6 +63,38 @@ Important fields:
 - the extension session is active
 - capture is using the server root
 - at least one origin is enabled
+
+### `trace-status`
+
+This is the agent-first guided trace surface.
+
+Important fields:
+
+- `phase`
+- `blockingReason`
+- `connected`
+- `captureReady`
+- `sessionActive`
+- `captureDestination`
+- `enabledOrigins`
+- `activeTrace`
+- `guidance`
+
+`phase` is one of:
+
+- `disconnected`
+- `not_ready`
+- `idle`
+- `armed`
+- `recording`
+
+`activeTrace` is a compact agent summary, not the full stored trace. It includes:
+
+- the trace id, name, and optional goal
+- the current status
+- total step and linked-fixture counts
+- the most recent click metadata
+- up to 5 recent steps
 
 ## What Gets Stored
 
@@ -68,6 +106,7 @@ Guided traces live under:
 `trace.json` stores:
 
 - trace identity and lifecycle state
+- optional trace goal
 - selected origins
 - extension client id
 - recorded click steps
@@ -116,11 +155,12 @@ wraithwalker serve
 ```
 
 2. Start the extension session and browse normally.
-3. In your MCP client, call `browser-status`.
-4. When `captureReady` is `true`, call `start-trace`.
+3. In your MCP client, call `trace-status`.
+4. When the phase is `idle`, call `start-trace`.
 5. Ask the user to click through the relevant UI.
-6. Call `stop-trace`.
-7. Inspect the result with `read-trace`.
+6. Poll `trace-status` while the trace is running.
+7. Call `stop-trace`.
+8. Inspect the stored result with `read-trace` only if the compact summaries are not enough.
 
 ## Related Docs
 

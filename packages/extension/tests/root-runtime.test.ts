@@ -180,6 +180,7 @@ describe("extension root runtime adapter", () => {
 
     await runtime.startTrace({
       traceId: "trace-browser",
+      goal: "Capture the browser-backed primary action trace.",
       selectedOrigins: ["https://app.example.com"],
       extensionClientId: "client-1",
       createdAt: "2026-04-08T00:00:00.000Z"
@@ -213,6 +214,7 @@ describe("extension root runtime adapter", () => {
     expect(await runtime.getActiveTrace()).toEqual(
       expect.objectContaining({
         traceId: "trace-browser",
+        goal: "Capture the browser-backed primary action trace.",
         status: "recording"
       })
     );

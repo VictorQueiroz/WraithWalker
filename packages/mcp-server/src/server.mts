@@ -5,13 +5,20 @@ import type { Server as HttpServer } from "node:http";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import express from "express";
 import { createRoot } from "@wraithwalker/core/root";
+import {
+  summarizeScenarioTrace,
+  summarizeScenarioTraceForRead
+} from "@wraithwalker/core/scenario-traces";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { createExtensionSessionTracker } from "./extension-session.mjs";
+import {
+  buildTraceStatusView,
+  createExtensionSessionTracker
+} from "./extension-session.mjs";
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import {
@@ -44,6 +51,7 @@ export const DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES = 25 * 1024 * 1024;
 
 export const MCP_TOOL_NAMES = [
   "browser-status",
+  "trace-status",
   "start-trace",
   "stop-trace",
   "list-traces",
@@ -196,12 +204,20 @@ function registerTools(
   );
 
   server.tool(
+    "trace-status",
+    "Report guided trace readiness plus an agent-friendly summary of the active trace, if one exists",
+    {},
+    async () => renderJson(buildTraceStatusView(await extensionSessions.getStatus()))
+  );
+
+  server.tool(
     "start-trace",
     "Start a guided click-trace that the extension will record into the current WraithWalker root",
     {
-      name: z.string().trim().min(1).optional().describe("Optional human-friendly name for the trace")
+      name: z.string().trim().min(1).optional().describe("Optional human-friendly name for the trace"),
+      goal: z.string().trim().min(1).optional().describe("Optional agent-facing goal for what the trace should capture")
     },
-    async ({ name }) => {
+    async ({ name, goal }) => {
       const status = await extensionSessions.getStatus();
       if (!status.connected) {
         return {
@@ -227,11 +243,18 @@ function registerTools(
       const trace = await runtime.startTrace({
         traceId: crypto.randomUUID(),
         name,
+        goal,
         selectedOrigins: status.enabledOrigins,
         extensionClientId: status.clientId
       });
 
-      return renderJson(trace);
+      const nextStatus = await extensionSessions.getStatus();
+
+      return renderJson({
+        trace,
+        summary: summarizeScenarioTrace(trace),
+        guidance: buildTraceStatusView(nextStatus).guidance
+      });
     }
   );
 
@@ -243,7 +266,11 @@ function registerTools(
     },
     async ({ traceId }) => {
       try {
-        return renderJson(await runtime.stopTrace(traceId));
+        const trace = await runtime.stopTrace(traceId);
+        return renderJson({
+          trace,
+          summary: summarizeScenarioTrace(trace)
+        });
       } catch (error) {
         return {
           content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
@@ -275,7 +302,10 @@ function registerTools(
         };
       }
 
-      return renderJson(trace);
+      return renderJson({
+        trace,
+        summary: summarizeScenarioTraceForRead(trace)
+      });
     }
   );
 

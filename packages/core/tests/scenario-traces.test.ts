@@ -4,6 +4,9 @@ import { createRoot } from "../src/root.mts";
 import { createFixtureRootFs, type FixtureRootFs } from "../src/root-fs.mts";
 import {
   createScenarioTraceStore,
+  normalizeScenarioTraceRecord,
+  summarizeScenarioTrace,
+  summarizeScenarioTraceForRead,
   type ScenarioTraceStorage
 } from "../src/scenario-traces.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
@@ -35,6 +38,7 @@ describe("scenario trace store", () => {
     const trace = await store.startTrace({
       traceId: "trace_1",
       name: "Dropdown Walkthrough",
+      goal: "Capture the dropdown interactions that reveal the settings menu.",
       selectedOrigins: ["https://app.example.com"],
       extensionClientId: "client-1",
       createdAt: "2026-04-08T00:00:00.000Z"
@@ -43,6 +47,7 @@ describe("scenario trace store", () => {
     expect(trace).toMatchObject({
       traceId: "trace_1",
       status: "armed",
+      goal: "Capture the dropdown interactions that reveal the settings menu.",
       selectedOrigins: ["https://app.example.com"],
       extensionClientId: "client-1",
       steps: []
@@ -54,7 +59,9 @@ describe("scenario trace store", () => {
     expect(await store.listTraces()).toEqual([
       expect.objectContaining({
         traceId: "trace_1",
-        stepCount: 0
+        goal: "Capture the dropdown interactions that reveal the settings menu.",
+        stepCount: 0,
+        linkedFixtureCount: 0
       })
     ]);
 
@@ -107,6 +114,31 @@ describe("scenario trace store", () => {
         capturedAt: "2026-04-08T00:00:04.000Z"
       }
     ]);
+    expect(summarizeScenarioTrace(linkedResult.trace!)).toEqual(
+      expect.objectContaining({
+        traceId: "trace_1",
+        goal: "Capture the dropdown interactions that reveal the settings menu.",
+        stepCount: 1,
+        linkedFixtureCount: 1,
+        lastRecordedAt: "2026-04-08T00:00:01.000Z",
+        lastPageUrl: "https://app.example.com/dashboard",
+        lastSelector: "#dropdown-trigger",
+        lastTextSnippet: "Open menu",
+        recentSteps: [
+          expect.objectContaining({
+            stepId: "step-1",
+            linkedFixtureCount: 1
+          })
+        ]
+      })
+    );
+    expect(summarizeScenarioTraceForRead(linkedResult.trace!)).toEqual(
+      expect.objectContaining({
+        linkedFixtureCountsByResourceType: {
+          Script: 1
+        }
+      })
+    );
 
     const duplicateLink = await store.linkFixture({
       traceId: "trace_1",
@@ -145,6 +177,15 @@ describe("scenario trace store", () => {
         status: "completed",
         startedAt: "2026-04-08T00:01:00.000Z",
         endedAt: "2026-04-08T00:01:05.000Z"
+      })
+    );
+    expect(summarizeScenarioTrace(stoppedArmedOnly)).toEqual(
+      expect.objectContaining({
+        traceId: "trace_armed_only",
+        status: "completed",
+        stepCount: 0,
+        linkedFixtureCount: 0,
+        recentSteps: []
       })
     );
   });
@@ -312,5 +353,98 @@ describe("scenario trace store", () => {
     });
 
     await expect(store.stopTrace("trace_missing")).rejects.toThrow('Trace "trace_missing" does not exist.');
+  });
+
+  it("normalizes legacy traces and keeps agent summaries stable across schema versions", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-traces-"
+    });
+    const rootFs = createFixtureRootFs(root.rootPath);
+    const store = createScenarioTraceStore({
+      root: rootFs,
+      storage: createStorage(rootFs),
+      ensureReady: () => createRoot(root.rootPath)
+    });
+
+    await root.writeJson(".wraithwalker/scenario-traces/legacy_trace/trace.json", {
+      schemaVersion: 1,
+      traceId: "legacy_trace",
+      name: "Legacy walkthrough",
+      status: "recording",
+      createdAt: "2026-04-07T00:00:00.000Z",
+      startedAt: "2026-04-07T00:00:02.000Z",
+      rootId: "root-legacy",
+      selectedOrigins: ["https://legacy.example.com"],
+      extensionClientId: "client-legacy",
+      steps: [{
+        stepId: "legacy-step-1",
+        tabId: 4,
+        recordedAt: "2026-04-07T00:00:02.000Z",
+        pageUrl: "https://legacy.example.com/dashboard",
+        topOrigin: "https://legacy.example.com",
+        selector: "#legacy",
+        tagName: "button",
+        textSnippet: "Legacy",
+        linkedFixtures: [{
+          bodyPath: "cdn.example.com/assets/legacy.css",
+          requestUrl: "https://cdn.example.com/assets/legacy.css",
+          resourceType: "Stylesheet",
+          capturedAt: "2026-04-07T00:00:02.500Z"
+        }]
+      }]
+    });
+
+    const legacy = await store.readTrace("legacy_trace");
+
+    expect(legacy).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        traceId: "legacy_trace"
+      })
+    );
+    expect(legacy).not.toHaveProperty("goal");
+    expect(await store.listTraces()).toEqual([
+      expect.objectContaining({
+        traceId: "legacy_trace",
+        linkedFixtureCount: 1,
+        lastRecordedAt: "2026-04-07T00:00:02.000Z",
+        lastPageUrl: "https://legacy.example.com/dashboard"
+      })
+    ]);
+    expect(summarizeScenarioTrace(legacy!)).toEqual(
+      expect.objectContaining({
+        traceId: "legacy_trace",
+        linkedFixtureCount: 1,
+        recentSteps: [
+          expect.objectContaining({
+            stepId: "legacy-step-1",
+            linkedFixtureCount: 1
+          })
+        ]
+      })
+    );
+    expect(summarizeScenarioTraceForRead(legacy!)).toEqual(
+      expect.objectContaining({
+        linkedFixtureCountsByResourceType: {
+          Stylesheet: 1
+        }
+      })
+    );
+    expect(normalizeScenarioTraceRecord({
+      schemaVersion: 1,
+      traceId: "legacy_direct",
+      status: "armed",
+      createdAt: "2026-04-07T00:00:00.000Z",
+      rootId: "root-legacy",
+      selectedOrigins: [],
+      extensionClientId: "client-legacy",
+      steps: []
+    })).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        traceId: "legacy_direct",
+        steps: []
+      })
+    );
   });
 });
