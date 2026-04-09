@@ -507,6 +507,73 @@ describe("request lifecycle", () => {
     );
   });
 
+  it("synthesizes minimal CORS headers for replayed stylesheet overrides in browser cors mode", async () => {
+    const harness = createLifecycleHarness({
+      createFixtureDescriptor: realCreateFixtureDescriptor
+    });
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: true };
+      }
+      if (type === "fs.readFixture") {
+        return {
+          ok: true,
+          exists: true,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/assets/app.chunk.css",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          },
+          bodyBase64: Buffer.from("body{color:red}", "utf8").toString("base64"),
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "text/css" }]
+          }
+        };
+      }
+      return { ok: true };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-style-cors",
+        networkId: "network-style-cors",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.chunk.css",
+          headers: {
+            Origin: "https://app.example.com",
+            "Sec-Fetch-Mode": "cors"
+          }
+        },
+        resourceType: "Stylesheet"
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({
+        requestId: "fetch-style-cors",
+        responseCode: 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "text/css" },
+          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          { name: "Vary", value: "Origin" }
+        ],
+        body: Buffer.from("body{color:red}", "utf8").toString("base64")
+      })
+    );
+  });
+
   it("falls back to continueRequest when fixture read fails after a positive existence check", async () => {
     const harness = createLifecycleHarness();
     harness.sendOffscreenMessage.mockImplementation(async (type) => {

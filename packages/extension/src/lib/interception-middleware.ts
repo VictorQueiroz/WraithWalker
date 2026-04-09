@@ -169,7 +169,11 @@ export function createInterceptionMiddleware({
       await fulfillRequest(tabId, {
         requestId: pausedRequestId,
         responseCode,
-        responseHeaders: replayResponseHeaders(fixture.meta.headers),
+        responseHeaders: replayResponseHeaders(fixture.meta.headers, {
+          assetLike: descriptor.assetLike,
+          requestHeaders: entry.requestHeaders,
+          topOrigin: entry.topOrigin
+        }),
         body: fixture.bodyBase64,
         ...(responsePhrase ? { responsePhrase } : {})
       });

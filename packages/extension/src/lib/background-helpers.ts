@@ -6,6 +6,42 @@ import {
 import type { HeaderEntry, RequestEntry, RequestPayload, ResponseMeta, SessionSnapshot } from "./types.js";
 
 type HeaderCollection = HeaderEntry[] | Record<string, unknown>;
+interface ReplayResponseHeaderOptions {
+  assetLike?: boolean;
+  requestHeaders?: HeaderEntry[];
+  topOrigin?: string;
+}
+
+function findHeader(headers: HeaderEntry[], targetName: string): HeaderEntry | undefined {
+  const normalizedTarget = targetName.toLowerCase();
+  return headers.find((header) => header.name.toLowerCase() === normalizedTarget);
+}
+
+function hasVaryToken(headerValue: string, token: string): boolean {
+  const normalizedToken = token.toLowerCase();
+  return headerValue
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalizedToken);
+}
+
+function withOriginVary(headers: HeaderEntry[]): HeaderEntry[] {
+  const varyHeader = findHeader(headers, "Vary");
+  if (!varyHeader) {
+    return [...headers, { name: "Vary", value: "Origin" }];
+  }
+
+  if (hasVaryToken(varyHeader.value, "Origin")) {
+    return headers;
+  }
+
+  return headers.map((header) => (
+    header === varyHeader
+      ? { ...header, value: `${header.value}, Origin` }
+      : header
+  ));
+}
 
 export function isHttpUrl(url: string): boolean {
   try {
@@ -36,8 +72,30 @@ export function arrayifyHeaders(headers: HeaderCollection = {}): HeaderEntry[] {
   }));
 }
 
-export function replayResponseHeaders(headers: HeaderEntry[] = []): HeaderEntry[] {
-  return defaultReplayResponseHeaders(headers);
+export function replayResponseHeaders(
+  headers: HeaderEntry[] = [],
+  options: ReplayResponseHeaderOptions = {}
+): HeaderEntry[] {
+  const replayedHeaders = defaultReplayResponseHeaders(headers);
+  if (!options.assetLike || findHeader(replayedHeaders, "Access-Control-Allow-Origin")) {
+    return replayedHeaders;
+  }
+
+  const requestOrigin = findHeader(options.requestHeaders || [], "Origin")?.value.trim();
+  const fetchMode = findHeader(options.requestHeaders || [], "Sec-Fetch-Mode")?.value.trim().toLowerCase();
+  if (!requestOrigin && fetchMode !== "cors") {
+    return replayedHeaders;
+  }
+
+  const allowOrigin = requestOrigin || options.topOrigin?.trim();
+  if (!allowOrigin) {
+    return replayedHeaders;
+  }
+
+  return withOriginVary([
+    ...replayedHeaders,
+    { name: "Access-Control-Allow-Origin", value: allowOrigin }
+  ]);
 }
 
 export function buildSessionSnapshot({

@@ -47,6 +47,46 @@ describe("background helpers", () => {
     ]);
   });
 
+  it("adds minimal CORS replay headers for asset requests in browser cors mode", () => {
+    const headers = replayResponseHeaders(
+      [{ name: "Content-Type", value: "text/css" }],
+      {
+        assetLike: true,
+        topOrigin: "https://app.example.com",
+        requestHeaders: [
+          { name: "Origin", value: "https://app.example.com" },
+          { name: "Sec-Fetch-Mode", value: "cors" }
+        ]
+      }
+    );
+
+    expect(headers).toEqual([
+      { name: "Content-Type", value: "text/css" },
+      { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+      { name: "Vary", value: "Origin" }
+    ]);
+  });
+
+  it("appends Origin to an existing Vary header when synthesizing CORS replay headers", () => {
+    const headers = replayResponseHeaders(
+      [
+        { name: "Content-Type", value: "text/css" },
+        { name: "Vary", value: "Accept-Encoding" }
+      ],
+      {
+        assetLike: true,
+        topOrigin: "https://app.example.com",
+        requestHeaders: [{ name: "Sec-Fetch-Mode", value: "cors" }]
+      }
+    );
+
+    expect(headers).toEqual([
+      { name: "Content-Type", value: "text/css" },
+      { name: "Vary", value: "Accept-Encoding, Origin" },
+      { name: "Access-Control-Allow-Origin", value: "https://app.example.com" }
+    ]);
+  });
+
   it("builds a session snapshot without editor-launch state", () => {
     const snapshot = buildSessionSnapshot({
       sessionActive: true,
