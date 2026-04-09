@@ -632,6 +632,141 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("opens Cursor at the live server root through the shared background flow", async () => {
+    renderRoot();
+    const user = userEvent.setup();
+    vi.resetModules();
+    globalThis.__WRAITHWALKER_TEST__ = true;
+
+    const { initPopup } = await import("../src/popup.ts");
+    const { createBackgroundRuntime } = await import("../src/background.ts");
+
+    const chromeApi = createBackgroundChromeApi();
+    const serverClient = {
+      getSystemInfo: vi.fn().mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: [{
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }]
+      }),
+      revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
+      heartbeat: vi.fn().mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: [{
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }],
+        activeTrace: null
+      }),
+      hasFixture: vi.fn(),
+      readConfiguredSiteConfigs: vi.fn(),
+      readEffectiveSiteConfigs: vi.fn(),
+      writeConfiguredSiteConfigs: vi.fn(),
+      readFixture: vi.fn(),
+      writeFixtureIfAbsent: vi.fn(),
+      generateContext: vi.fn().mockResolvedValue({ ok: true }),
+      recordTraceClick: vi.fn(),
+      linkTraceFixture: vi.fn()
+    };
+
+    const background = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+        hostName: "",
+        launchPath: ""
+      })),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-popup"),
+      getLegacySiteConfigsMigrated: vi.fn().mockResolvedValue(true),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createWraithWalkerServerClient: vi.fn(() => serverClient as any),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const popupRuntime = {
+      sendMessage: vi.fn((message) => background.handleRuntimeMessage(message as any)),
+      openOptionsPage: vi.fn()
+    };
+
+    let popup: Awaited<ReturnType<typeof initPopup>> | undefined;
+
+    try {
+      await background.start();
+
+      let connectedSnapshot: SessionSnapshot | null = null;
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const snapshot = await background.handleRuntimeMessage({ type: "session.getState" });
+        if (snapshot && "captureDestination" in snapshot && snapshot.captureDestination === "server") {
+          connectedSnapshot = snapshot;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      expect(connectedSnapshot).toEqual(expect.objectContaining({
+        captureDestination: "server",
+        captureRootPath: "/tmp/server-root"
+      }));
+
+      popup = await initPopup({
+        document,
+        runtime: popupRuntime,
+        setIntervalFn: fakeSetInterval,
+        getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
+          hostName: "",
+          launchPath: ""
+        })),
+        getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+        ...createRootDeps({ hasHandle: false })
+      });
+
+      await user.click(await screen.findByRole("button", { name: "Open in Cursor" }));
+
+      expect(serverClient.generateContext).toHaveBeenCalledWith({
+        siteConfigs: [{
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }],
+        editorId: "cursor"
+      });
+      expect(chromeApi.tabs.create).toHaveBeenCalledWith({
+        url: "cursor://file//tmp/server-root/"
+      });
+      expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
+      expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
+      expect(await screen.findByText("Opened Cursor at the server root.")).toBeTruthy();
+    } finally {
+      popup?.unmount();
+    }
+  });
+
   it("surfaces shared background reveal errors through the single status area", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();

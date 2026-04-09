@@ -458,12 +458,10 @@ describe("background entrypoint", () => {
       type: "fs.generateContext",
       payload: expect.anything()
     });
-    expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(1, {
+    expect(chromeApi.tabs.create).toHaveBeenCalledWith({
       url: "cursor://file//tmp/server-root/"
     });
-    expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(2, {
-      url: expect.stringContaining("cursor://anysphere.cursor-deeplink/prompt?text=")
-    });
+    expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
   });
 
   it("replaces local fallback site configs with server-backed site configs when connected", async () => {

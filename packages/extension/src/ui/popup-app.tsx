@@ -157,11 +157,15 @@ export function PopupApp({
         type: "native.open",
         editorId: DEFAULT_EDITOR_ID
       });
-      await refreshState(false);
+      const nextSnapshot = await refreshState(false);
+      const openedServerRoot = nextSnapshot?.captureDestination === "server"
+        || snapshot?.captureDestination === "server";
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? `Opened ${preferredEditor.label} and sent the fixture brief to Cursor Chat.`
+          ? openedServerRoot
+            ? `Opened ${preferredEditor.label} at the server root.`
+            : `Opened ${preferredEditor.label} and sent the fixture brief to Cursor Chat.`
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {

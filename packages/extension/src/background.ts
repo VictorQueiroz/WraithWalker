@@ -1331,7 +1331,8 @@ export function createBackgroundRuntime({
     const canLaunchEditorApp = Boolean(appUrl && !launch.hasCustomUrlOverride);
     const launchPath = serverInfo?.rootPath || state.nativeHostConfig.launchPath.trim();
     const isCursorLaunch = launch.editorId === DEFAULT_EDITOR_ID;
-    const cursorPromptUrl = isCursorLaunch
+    const shouldOpenCursorPrompt = isCursorLaunch && !serverInfo;
+    const cursorPromptUrl = shouldOpenCursorPrompt
       ? buildCursorPromptUrl(buildCursorPromptText(state.enabledOrigins))
       : "";
 
@@ -1348,7 +1349,9 @@ export function createBackgroundRuntime({
         urls.push(buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId));
       }
 
-      urls.push(cursorPromptUrl);
+      if (cursorPromptUrl) {
+        urls.push(cursorPromptUrl);
+      }
       return openEditorViaUrls(urls);
     }
 
