@@ -67,6 +67,7 @@ export interface TrpcSiteConfigsInfo {
 
 export interface WraithWalkerServerClient {
   getSystemInfo(): Promise<TrpcSystemInfo>;
+  revealRoot(): Promise<{ ok: true; command: string }>;
   heartbeat(payload: {
     clientId: string;
     extensionVersion: string;
@@ -163,6 +164,9 @@ export function createWraithWalkerServerClient(
   return {
     getSystemInfo() {
       return trpc.system.info.query() as Promise<TrpcSystemInfo>;
+    },
+    revealRoot() {
+      return trpc.system.revealRoot.mutate() as Promise<{ ok: true; command: string }>;
     },
     heartbeat(payload) {
       return trpc.extension.heartbeat.mutate(payload) as Promise<TrpcHeartbeatInfo>;

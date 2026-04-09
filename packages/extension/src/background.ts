@@ -210,6 +210,7 @@ function createUnavailableServerClient(): WraithWalkerServerClient {
 
   return {
     getSystemInfo: unavailable,
+    revealRoot: unavailable,
     heartbeat: unavailable,
     hasFixture: unavailable,
     readConfiguredSiteConfigs: unavailable,
@@ -421,6 +422,7 @@ export function createBackgroundRuntime({
 
   const serverClient = resolvedCreateWraithWalkerServerClient();
   let serverRefreshPromise: Promise<typeof state.serverInfo> | null = null;
+  let offscreenDocumentPromise: Promise<void> | null = null;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 
   let listenersRegistered = false;
@@ -650,6 +652,10 @@ export function createBackgroundRuntime({
   }
 
   async function ensureOffscreenDocument(): Promise<void> {
+    if (offscreenDocumentPromise) {
+      return offscreenDocumentPromise;
+    }
+
     const documentUrl = chromeApi.runtime.getURL(OFFSCREEN_URL);
     const contexts = chromeApi.runtime.getContexts
       ? await chromeApi.runtime.getContexts({
@@ -662,14 +668,33 @@ export function createBackgroundRuntime({
       return;
     }
 
-    await chromeApi.offscreen.createDocument({
-      url: OFFSCREEN_URL,
-      reasons: OFFSCREEN_REASONS.map((reason) => chromeApi.offscreen.Reason?.[reason] ?? reason),
-      justification: "File System Access requires a DOM document to persist and read local fixtures."
-    });
+    offscreenDocumentPromise = (async () => {
+      try {
+        await chromeApi.offscreen.createDocument({
+          url: OFFSCREEN_URL,
+          reasons: OFFSCREEN_REASONS.map((reason) => chromeApi.offscreen.Reason?.[reason] ?? reason),
+          justification: "File System Access requires a DOM document to persist and read local fixtures."
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("Only a single offscreen document may be created.")) {
+          throw error;
+        }
+      }
+    })();
+
+    try {
+      await offscreenDocumentPromise;
+    } finally {
+      offscreenDocumentPromise = null;
+    }
   }
 
   async function closeOffscreenDocument(): Promise<void> {
+    if (offscreenDocumentPromise) {
+      await offscreenDocumentPromise;
+    }
+
     const contexts = chromeApi.runtime.getContexts
       ? await chromeApi.runtime.getContexts({
           contextTypes: ["OFFSCREEN_DOCUMENT"],
@@ -1381,6 +1406,15 @@ export function createBackgroundRuntime({
     const target = await resolveActiveLaunchTarget({ requestPermission: true });
     if (target.ok === false) {
       return { ok: false, error: target.error };
+    }
+
+    if (target.source === "server") {
+      try {
+        await serverClient.revealRoot();
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
     }
 
     if (!state.nativeHostConfig.hostName.trim()) {

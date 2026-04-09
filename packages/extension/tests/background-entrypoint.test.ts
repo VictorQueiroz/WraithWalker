@@ -84,6 +84,7 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
 
   return {
     getSystemInfo,
+    revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
     heartbeat,
     hasFixture: vi.fn().mockResolvedValue({
       exists: false,
@@ -2962,29 +2963,30 @@ describe("background entrypoint", () => {
   it("prefers the connected server root when revealing the active folder", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: true });
+    const serverClient = createMockServerClient({
+      heartbeat: vi.fn().mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: [],
+        activeTrace: null
+      }),
+      revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" })
+    });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
       getNativeHostConfig: vi.fn().mockResolvedValue({
         ...DEFAULT_NATIVE_HOST_CONFIG,
-        hostName: "com.example.host",
+        hostName: "",
         launchPath: "/tmp/local-launch"
       }),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "1.0.0",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
-          siteConfigs: [],
-          activeTrace: null
-        })
-      })),
+      createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -3005,11 +3007,8 @@ describe("background entrypoint", () => {
 
     const result = await runtime.handleRuntimeMessage({ type: "native.revealRoot" });
 
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.example.host", {
-      type: "revealDirectory",
-      path: "/tmp/server-root",
-      expectedRootId: "server-root"
-    });
+    expect(serverClient.revealRoot).toHaveBeenCalledTimes(1);
+    expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
 
@@ -4713,6 +4712,44 @@ describe("background entrypoint", () => {
     const result = await runtime.ensureRootReady();
     expect(chromeApi.offscreen.createDocument).toHaveBeenCalled();
     expect(result).toHaveProperty("ok", true);
+  });
+
+  it("ignores duplicate offscreen document creation errors while checking root readiness", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
+    chromeApi.offscreen.createDocument.mockRejectedValue(
+      new Error("Only a single offscreen document may be created.")
+    );
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await expect(runtime.ensureRootReady()).resolves.toMatchObject({
+      ok: true,
+      sentinel: { rootId: "root-1" }
+    });
   });
 
   it("bootstraps with the default chrome dependencies", async () => {

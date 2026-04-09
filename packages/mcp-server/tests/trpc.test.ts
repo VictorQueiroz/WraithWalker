@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import {
@@ -1015,6 +1015,52 @@ describe("tRPC capture backend", () => {
       editorId: "cursor"
     });
     expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain("WraithWalker Fixture Context");
+  });
+
+  it("reveals the active root through the server-side OS handler", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    const sentinel = await readSentinel(root.rootPath);
+    const revealRoot = vi.fn().mockResolvedValue({
+      ok: true,
+      command: `xdg-open ${root.rootPath}`
+    });
+
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      revealRoot,
+      extensionSessions: {
+        heartbeat: async ({ clientId, extensionVersion, sessionActive, enabledOrigins }) => ({
+          connected: true,
+          captureReady: sessionActive && enabledOrigins.length > 0,
+          sessionActive,
+          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+          extensionVersion,
+          clientId,
+          captureDestination: "server" as const,
+          enabledOrigins,
+          siteConfigs: [],
+          activeTrace: null
+        })
+      },
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+
+    await expect(caller.system.revealRoot()).resolves.toEqual({
+      ok: true,
+      command: `xdg-open ${root.rootPath}`
+    });
+    expect(revealRoot).toHaveBeenCalledTimes(1);
   });
 
   it("serves extension heartbeats and guided trace record/link operations", async () => {

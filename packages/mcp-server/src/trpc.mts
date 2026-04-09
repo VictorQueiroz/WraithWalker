@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import type { ExtensionStatus } from "./extension-session.mjs";
 import { createServerRootRuntime } from "./root-runtime.mjs";
+import { revealRootDirectory } from "./root-reveal.mjs";
 
 export const HTTP_TRPC_PATH = "/trpc";
 
@@ -138,6 +139,7 @@ export interface CreateWraithwalkerRouterDependencies {
     trpcUrl: string;
   };
   getSiteConfigs?: () => Promise<SiteConfig[]>;
+  revealRoot?: () => Promise<{ ok: true; command: string }>;
 }
 
 const t = initTRPC.create();
@@ -150,7 +152,8 @@ export function createWraithwalkerRouter({
   runtime = createServerRootRuntime({ rootPath, sentinel }),
   extensionSessions,
   getServerUrls,
-  getSiteConfigs = () => runtime.readEffectiveSiteConfigs()
+  getSiteConfigs = () => runtime.readEffectiveSiteConfigs(),
+  revealRoot = () => revealRootDirectory({ rootPath, expectedRootId: sentinel.rootId })
 }: CreateWraithwalkerRouterDependencies) {
   return t.router({
     system: t.router({
@@ -161,7 +164,8 @@ export function createWraithwalkerRouter({
         sentinel,
         siteConfigs: await getSiteConfigs(),
         ...getServerUrls()
-      }))
+      })),
+      revealRoot: t.procedure.mutation(async () => revealRoot())
     }),
     extension: t.router({
       heartbeat: t.procedure
