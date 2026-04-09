@@ -1,6 +1,6 @@
 # CLI
 
-The `wraithwalker` command-line tool for managing fixture roots, generating AI context files, and handling scenario snapshots.
+The `wraithwalker` command-line tool for managing fixture roots, project capture config, AI context files, HAR and overrides imports, and scenario snapshots.
 
 The CLI is a thin shell over shared domain logic in `@wraithwalker/core`, with `serve` delegating directly to `@wraithwalker/mcp-server/server`.
 
@@ -13,11 +13,11 @@ wraithwalker config get <key>        # Read one explicit nearest-root capture co
 wraithwalker config set <key> <value># Replace one explicit nearest-root capture config key
 wraithwalker config add <key> [value]# Add a site entry or append a dump pattern
 wraithwalker config unset <key>      # Remove or reset one explicit nearest-root capture config key
-wraithwalker sync [dir]              # Populate or refresh .wraithwalker from Chrome Overrides
+wraithwalker sync [dir]              # Populate or refresh .wraithwalker from Chrome Overrides or a HAR
 wraithwalker import-har <har-file> [dir] [--top-origin <origin>] # Populate a fresh fixture root from a HAR
 wraithwalker status                  # Show root path, origins, endpoints, scenarios
 wraithwalker doctor [dir] [--json]  # Inspect root health and support diagnostics
-wraithwalker context [--editor <id>] # Regenerate CLAUDE.md and .d.ts types
+wraithwalker context [--editor <id>] # Regenerate CLAUDE.md, editor rules, and .d.ts types
 wraithwalker scenarios list          # List saved scenarios
 wraithwalker scenarios save <name>   # Save current fixtures as a named scenario
 wraithwalker scenarios switch <name> # Switch to a saved scenario
@@ -183,8 +183,8 @@ Project config overrides global config for commands that operate on a fixture ro
 
 `wraithwalker context` reads all captured fixtures and generates:
 
-- **`CLAUDE.md`** — API endpoint inventory, inferred response shapes, static asset summary, and suggested agent tasks
-- **`.cursorrules`** / **`.windsurfrules`** — editor-specific context files (use `--editor cursor` or `--editor windsurf`)
+- **`CLAUDE.md`** — always generated, with API endpoint inventory, inferred response shapes, static asset summary, and suggested agent tasks
+- **`.cursorrules`** / **`.windsurfrules`** — editor-specific context files when you pass `--editor cursor` or `--editor windsurf`
 - **`.wraithwalker/types/*.d.ts`** — TypeScript interfaces inferred from captured JSON responses
 
 Supported editor IDs: `cursor`, `antigravity`, `vscode`, `windsurf`.

@@ -66,15 +66,32 @@ Shared defaults remain JavaScript/TypeScript, CSS, and WebAssembly patterns. If 
 
 Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and intended for local use.
 
-For existing process-spawned stdio integrations, keep using the package bin directly:
+If you install this package directly, it also ships the `wraithwalker-mcp` bin.
+
+Use it for stdio MCP:
 
 ```bash
-node packages/mcp-server/out/bin.mjs /path/to/fixture-root
+wraithwalker-mcp /path/to/fixture-root
 ```
+
+Or for the standalone HTTP transport:
+
+```bash
+wraithwalker-mcp /path/to/fixture-root --http --host 127.0.0.1 --port 4319
+```
+
+`--host` and `--port` only apply in `--http` mode. Without `--http`, the package bin starts the stdio MCP transport.
 
 ## Programmatic API
 
-The package also exports a supported server entrypoint:
+The package exports supported entry points for the combined server, the typed tRPC router, and the lower-level fixture helpers:
+
+- `@wraithwalker/mcp-server/server`
+- `@wraithwalker/mcp-server/trpc`
+- `@wraithwalker/mcp-server/fixture-reader`
+- `@wraithwalker/mcp-server/fixture-diff`
+
+For example:
 
 ```ts
 import { startHttpServer, startServer } from "@wraithwalker/mcp-server/server";
@@ -123,7 +140,14 @@ The same HTTP server also exposes a small typed tRPC backend used by the browser
 Current procedures:
 
 - `system.info`
+- `system.revealRoot`
 - `extension.heartbeat`
+- `config.readConfiguredSiteConfigs`
+- `config.readEffectiveSiteConfigs`
+- `config.writeConfiguredSiteConfigs`
+- `scenarios.list`
+- `scenarios.save`
+- `scenarios.switch`
 - `fixtures.has`
 - `fixtures.read`
 - `fixtures.writeIfAbsent`
@@ -140,6 +164,8 @@ The extension Settings page follows that same authority switch: while connected,
 If older extension-local site config exists, the extension imports it into the selected root once and then continues from the root-backed config.
 
 Guided traces are server-root-only in v1 and live under `.wraithwalker/scenario-traces/`.
+
+These procedures are the extension's local implementation API. The public agent-facing surface remains the MCP tool set documented above.
 
 ## Recommended Workflow
 

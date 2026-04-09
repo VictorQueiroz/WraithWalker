@@ -12,10 +12,11 @@ Typical captured content includes:
 - JavaScript bundles and chunks
 - CSS
 - WebAssembly binaries
-- fonts and images
 - API fixtures and response metadata
 
 Shared defaults match JavaScript/TypeScript, CSS, and WebAssembly files. When you add an origin in the extension UI, WraithWalker also appends `\.json$` as a convenience so API-shaped static JSON is captured without extra setup.
+
+Fonts, images, SVGs, and other asset types are available too, but only when your allowlist patterns include them or they arrive through an import flow such as HAR sync.
 
 ## Capture Flow
 

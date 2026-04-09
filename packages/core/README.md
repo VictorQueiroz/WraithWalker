@@ -2,4 +2,31 @@
 
 Shared Node-side domain logic for WraithWalker.
 
-This package contains fixture-root discovery, fixture readers, scenario management, and context-generation logic used by the CLI, MCP server, and native host.
+This package is the shared foundation behind the published WraithWalker packages.
+
+It contains:
+
+- fixture root creation and discovery
+- root filesystem helpers and projection helpers
+- explicit and effective site config loading
+- fixture reading and write-if-absent storage
+- scenario snapshots and guided trace storage
+- context generation plus HAR and Chrome Overrides import flows
+
+The CLI and MCP server use most of this surface directly. The native host reuses the root and scenario helpers so its behavior stays aligned with the rest of the toolchain.
+
+## Exported Entry Points
+
+- `@wraithwalker/core/context`
+- `@wraithwalker/core/fixture-layout`
+- `@wraithwalker/core/fixture-repository`
+- `@wraithwalker/core/fixtures`
+- `@wraithwalker/core/har-import`
+- `@wraithwalker/core/overrides-sync`
+- `@wraithwalker/core/project-config`
+- `@wraithwalker/core/root`
+- `@wraithwalker/core/root-fs`
+- `@wraithwalker/core/root-runtime`
+- `@wraithwalker/core/scenario-traces`
+- `@wraithwalker/core/scenarios`
+- `@wraithwalker/core/site-config`
