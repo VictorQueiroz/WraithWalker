@@ -159,6 +159,46 @@ async function createFixtureRootWithData() {
     prefix: "wraithwalker-mcp-server-",
     rootId: "root-mcp-server"
   });
+  const topOriginKey = "https__app.example.com";
+  const appAsset = {
+    requestUrl: "https://cdn.example.com/app.js",
+    requestOrigin: "https://cdn.example.com",
+    pathname: "/app.js",
+    search: "",
+    bodyPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/app.js.__body`,
+    projectionPath: "cdn.example.com/assets/app.js",
+    requestPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/app.js.__request.json`,
+    metaPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/app.js.__response.json`,
+    mimeType: "application/javascript",
+    resourceType: "Script",
+    capturedAt: "2026-04-05T00:00:00.000Z"
+  };
+  const chunkAsset = {
+    requestUrl: "https://cdn.example.com/assets/chunk.js",
+    requestOrigin: "https://cdn.example.com",
+    pathname: "/assets/chunk.js",
+    search: "",
+    bodyPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/chunk.js.__body`,
+    projectionPath: "cdn.example.com/assets/chunk.js",
+    requestPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/chunk.js.__request.json`,
+    metaPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/chunk.js.__response.json`,
+    mimeType: "application/javascript",
+    resourceType: "Script",
+    capturedAt: "2026-04-05T00:00:00.000Z"
+  };
+  const stylesheetAsset = {
+    requestUrl: "https://cdn.example.com/styles/dropdown.css",
+    requestOrigin: "https://cdn.example.com",
+    pathname: "/styles/dropdown.css",
+    search: "",
+    bodyPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/styles/dropdown.css.__body`,
+    projectionPath: "cdn.example.com/styles/dropdown.css",
+    requestPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/styles/dropdown.css.__request.json`,
+    metaPath: `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/styles/dropdown.css.__response.json`,
+    mimeType: "text/css",
+    resourceType: "Stylesheet",
+    capturedAt: "2026-04-05T00:00:00.000Z"
+  };
 
   await root.writeManifest({
     topOrigin: "https://app.example.com",
@@ -168,42 +208,9 @@ async function createFixtureRootWithData() {
       topOriginKey: "https__app.example.com",
       generatedAt: "2026-04-05T00:00:00.000Z",
       resourcesByPathname: {
-        "/app.js": [{
-          requestUrl: "https://cdn.example.com/app.js",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/app.js",
-          search: "",
-          bodyPath: "cdn.example.com/assets/app.js",
-          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
-          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
-          mimeType: "application/javascript",
-          resourceType: "Script",
-          capturedAt: "2026-04-05T00:00:00.000Z"
-        }],
-        "/assets/chunk.js": [{
-          requestUrl: "https://cdn.example.com/assets/chunk.js",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/assets/chunk.js",
-          search: "",
-          bodyPath: "cdn.example.com/assets/chunk.js",
-          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__request.json",
-          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__response.json",
-          mimeType: "application/javascript",
-          resourceType: "Script",
-          capturedAt: "2026-04-05T00:00:00.000Z"
-        }],
-        "/styles/dropdown.css": [{
-          requestUrl: "https://cdn.example.com/styles/dropdown.css",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/styles/dropdown.css",
-          search: "",
-          bodyPath: "cdn.example.com/styles/dropdown.css",
-          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.css.__request.json",
-          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.css.__response.json",
-          mimeType: "text/css",
-          resourceType: "Stylesheet",
-          capturedAt: "2026-04-05T00:00:00.000Z"
-        }]
+        "/app.js": [appAsset],
+        "/assets/chunk.js": [chunkAsset],
+        "/styles/dropdown.css": [stylesheetAsset]
       }
     }
   });
@@ -225,12 +232,87 @@ async function createFixtureRootWithData() {
     body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
   });
 
-  await root.writeText("cdn.example.com/assets/app.js", "renderDropdown({ animated: true });");
+  await root.writeText(appAsset.bodyPath, "renderDropdown({ animated: true });");
+  await root.writeJson(appAsset.requestPath, {
+    topOrigin: "https://app.example.com",
+    url: appAsset.requestUrl,
+    method: "GET",
+    headers: [],
+    body: "",
+    bodyEncoding: "utf8",
+    bodyHash: "b-body",
+    queryHash: "q-empty",
+    capturedAt: appAsset.capturedAt
+  });
+  await root.writeJson(appAsset.metaPath, {
+    status: 200,
+    statusText: "OK",
+    headers: [{ name: "Content-Type", value: appAsset.mimeType }],
+    mimeType: appAsset.mimeType,
+    resourceType: appAsset.resourceType,
+    url: appAsset.requestUrl,
+    method: "GET",
+    capturedAt: appAsset.capturedAt,
+    bodyEncoding: "utf8",
+    bodySuggestedExtension: "js"
+  });
+  await root.writeText(appAsset.projectionPath, "renderDropdown({ animated: true });");
   await root.writeText(
-    "cdn.example.com/assets/chunk.js",
+    chunkAsset.bodyPath,
     "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
   );
-  await root.writeText("cdn.example.com/styles/dropdown.css", ".dropdown { color: #111; }");
+  await root.writeJson(chunkAsset.requestPath, {
+    topOrigin: "https://app.example.com",
+    url: chunkAsset.requestUrl,
+    method: "GET",
+    headers: [],
+    body: "",
+    bodyEncoding: "utf8",
+    bodyHash: "b-body",
+    queryHash: "q-empty",
+    capturedAt: chunkAsset.capturedAt
+  });
+  await root.writeJson(chunkAsset.metaPath, {
+    status: 200,
+    statusText: "OK",
+    headers: [{ name: "Content-Type", value: chunkAsset.mimeType }],
+    mimeType: chunkAsset.mimeType,
+    resourceType: chunkAsset.resourceType,
+    url: chunkAsset.requestUrl,
+    method: "GET",
+    capturedAt: chunkAsset.capturedAt,
+    bodyEncoding: "utf8",
+    bodySuggestedExtension: "js"
+  });
+  await root.writeText(
+    chunkAsset.projectionPath,
+    "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+  );
+  await root.writeText(stylesheetAsset.bodyPath, ".dropdown { color: #111; }");
+  await root.writeJson(stylesheetAsset.requestPath, {
+    topOrigin: "https://app.example.com",
+    url: stylesheetAsset.requestUrl,
+    method: "GET",
+    headers: [],
+    body: "",
+    bodyEncoding: "utf8",
+    bodyHash: "b-body",
+    queryHash: "q-empty",
+    capturedAt: stylesheetAsset.capturedAt
+  });
+  await root.writeJson(stylesheetAsset.metaPath, {
+    status: 200,
+    statusText: "OK",
+    headers: [{ name: "Content-Type", value: stylesheetAsset.mimeType }],
+    mimeType: stylesheetAsset.mimeType,
+    resourceType: stylesheetAsset.resourceType,
+    url: stylesheetAsset.requestUrl,
+    method: "GET",
+    capturedAt: stylesheetAsset.capturedAt,
+    bodyEncoding: "utf8",
+    bodySuggestedExtension: "css"
+  });
+  await root.writeText(stylesheetAsset.projectionPath, ".dropdown { color: #111; }");
   await root.writeText("notes/ui-guidelines.txt", "Dropdown styling reference for agents.");
   await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
   await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
@@ -285,21 +367,24 @@ describe("mcp server", () => {
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
-        "diff-scenarios",
-        "extension-status",
-        "list-assets",
-        "list-endpoints",
-        "list-origins",
-        "list-scenario-traces",
-        "list-scenarios",
-        "read-endpoint-fixture",
-        "read-fixture",
-        "read-fixture-snippet",
-        "read-manifest",
-        "read-scenario-trace",
-        "search-content",
-        "start-scenario-trace",
-        "stop-scenario-trace"
+        "browser-status",
+        "diff-snapshots",
+        "list-api-routes",
+        "list-files",
+        "list-sites",
+        "list-snapshots",
+        "list-traces",
+        "patch-file",
+        "read-api-response",
+        "read-file",
+        "read-file-snippet",
+        "read-site-manifest",
+        "read-trace",
+        "restore-file",
+        "search-files",
+        "start-trace",
+        "stop-trace",
+        "write-file"
       ]);
     } finally {
       await client.close();
@@ -314,7 +399,7 @@ describe("mcp server", () => {
 
     try {
       const listOriginsResult = await client.callTool({
-        name: "list-origins",
+        name: "list-sites",
         arguments: {}
       });
       const origins = JSON.parse(readTextContent(listOriginsResult)) as Array<{
@@ -333,7 +418,7 @@ describe("mcp server", () => {
       ]);
 
       const listAssetsResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: {
           origin: "https://app.example.com",
           resourceTypes: ["Script"],
@@ -345,11 +430,14 @@ describe("mcp server", () => {
         matchedOrigins: string[];
         items: Array<{
           origin: string;
+          path: string;
           pathname: string;
           mimeType: string;
           bodyPath: string;
           hasBody: boolean;
           bodySize: number | null;
+          editable: boolean;
+          canonicalPath: string | null;
         }>;
         totalMatched: number;
         nextCursor: string | null;
@@ -359,11 +447,14 @@ describe("mcp server", () => {
         items: [
           expect.objectContaining({
             origin: "https://app.example.com",
+            path: "cdn.example.com/assets/app.js",
             pathname: "/app.js",
             mimeType: "application/javascript",
-            bodyPath: "cdn.example.com/assets/app.js",
+            bodyPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
             hasBody: true,
-            bodySize: Buffer.byteLength("renderDropdown({ animated: true });", "utf8")
+            bodySize: Buffer.byteLength("renderDropdown({ animated: true });", "utf8"),
+            editable: true,
+            canonicalPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body"
           })
         ],
         totalMatched: 1,
@@ -371,7 +462,7 @@ describe("mcp server", () => {
       });
 
       const listEndpointsResult = await client.callTool({
-        name: "list-endpoints",
+        name: "list-api-routes",
         arguments: { origin: "https://app.example.com" }
       });
       const endpoints = JSON.parse(readTextContent(listEndpointsResult)) as {
@@ -402,7 +493,7 @@ describe("mcp server", () => {
       });
 
       const endpointFixtureResult = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: { fixtureDir: endpoints.items[0].fixtureDir }
       });
       const endpointFixture = JSON.parse(readTextContent(endpointFixtureResult)) as {
@@ -420,7 +511,7 @@ describe("mcp server", () => {
       }));
 
       const prettyEndpointFixtureResult = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: {
           fixtureDir: endpoints.items[0].fixtureDir,
           pretty: true
@@ -432,7 +523,7 @@ describe("mcp server", () => {
       expect(prettyEndpointFixture.body).toBe('{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }');
 
       const searchResult = await client.callTool({
-        name: "search-content",
+        name: "search-files",
         arguments: {
           query: "dropdown"
         }
@@ -444,6 +535,8 @@ describe("mcp server", () => {
           sourceKind: string;
           matchKind: string;
           matchCount: number;
+          editable: boolean;
+          canonicalPath: string | null;
         }>;
         totalMatched: number;
       };
@@ -462,9 +555,15 @@ describe("mcp server", () => {
         "body"
       ]);
       expect(searchMatches.items.map((item) => item.matchCount)).toEqual([1, 1, 1, 1]);
+      expect(searchMatches.items.find((item) => item.path === "cdn.example.com/assets/app.js")).toEqual(
+        expect.objectContaining({
+          editable: true,
+          canonicalPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body"
+        })
+      );
 
       const snippetResult = await client.callTool({
-        name: "read-fixture-snippet",
+        name: "read-file-snippet",
         arguments: {
           path: "cdn.example.com/assets/app.js",
           startLine: 1,
@@ -487,13 +586,13 @@ describe("mcp server", () => {
       });
 
       const fixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
       expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
 
       const prettyFixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: {
           path: "cdn.example.com/assets/chunk.js",
           pretty: true
@@ -504,7 +603,7 @@ describe("mcp server", () => {
       );
 
       const prettySnippetResult = await client.callTool({
-        name: "read-fixture-snippet",
+        name: "read-file-snippet",
         arguments: {
           path: "cdn.example.com/assets/chunk.js",
           pretty: true,
@@ -528,7 +627,7 @@ describe("mcp server", () => {
       });
 
       const manifestResult = await client.callTool({
-        name: "read-manifest",
+        name: "read-site-manifest",
         arguments: { origin: "https://app.example.com" }
       });
       const manifest = JSON.parse(readTextContent(manifestResult)) as {
@@ -538,20 +637,119 @@ describe("mcp server", () => {
       expect(manifest.resourcesByPathname["/styles/dropdown.css"]).toHaveLength(1);
 
       const scenariosResult = await client.callTool({
-        name: "list-scenarios",
+        name: "list-snapshots",
         arguments: {}
       });
       const scenarios = JSON.parse(readTextContent(scenariosResult)) as { scenarios: string[] };
       expect(scenarios.scenarios.sort()).toEqual(["baseline", "candidate"]);
 
       const diffResult = await client.callTool({
-        name: "diff-scenarios",
+        name: "diff-snapshots",
         arguments: { scenarioA: "baseline", scenarioB: "candidate" }
       });
       const diffText = readTextContent(diffResult);
       expect(diffText).toContain("# Fixture Diff: baseline vs candidate");
       expect(diffText).toContain("## Changed Endpoints");
       expect(diffText).toContain("200 → 500");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("writes, patches, and restores editable projection files without mutating canonical bodies", async () => {
+    const root = await createFixtureRootWithData();
+    const { client, server } = await connectClient(root.rootPath);
+    const canonicalPath = ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/chunk.js.__body";
+    const projectionPath = "cdn.example.com/assets/chunk.js";
+
+    try {
+      const writeResult = await client.callTool({
+        name: "write-file",
+        arguments: {
+          path: projectionPath,
+          content: "const seededUsers = [{ id: 1 }];\nconst theme = \"dark\";\n"
+        }
+      });
+      expect(writeResult.isError).not.toBe(true);
+      expect(JSON.parse(readTextContent(writeResult))).toEqual(expect.objectContaining({
+        path: projectionPath,
+        canonicalPath,
+        editable: true,
+        currentText: "const seededUsers = [{ id: 1 }];\nconst theme = \"dark\";\n"
+      }));
+      await expect(fs.readFile(root.resolve(projectionPath), "utf8")).resolves.toBe(
+        "const seededUsers = [{ id: 1 }];\nconst theme = \"dark\";\n"
+      );
+      await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
+        "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+      );
+
+      const patchResult = await client.callTool({
+        name: "patch-file",
+        arguments: {
+          path: projectionPath,
+          startLine: 1,
+          endLine: 1,
+          expectedText: "const seededUsers = [{ id: 1 }];",
+          replacement: "const seededUsers = [{ id: 1 }, { id: 2 }];"
+        }
+      });
+      expect(patchResult.isError).not.toBe(true);
+      expect(JSON.parse(readTextContent(patchResult))).toEqual(expect.objectContaining({
+        currentText: "const seededUsers = [{ id: 1 }, { id: 2 }];\nconst theme = \"dark\";\n"
+      }));
+
+      const conflictResult = await client.callTool({
+        name: "patch-file",
+        arguments: {
+          path: projectionPath,
+          startLine: 1,
+          endLine: 1,
+          expectedText: "const seededUsers = [{ id: 1 }];",
+          replacement: "const seededUsers = [];"
+        }
+      });
+      expect(conflictResult.isError).toBe(true);
+      expect(readTextContent(conflictResult)).toContain("Patch conflict");
+
+      const restoreResult = await client.callTool({
+        name: "restore-file",
+        arguments: { path: projectionPath }
+      });
+      expect(restoreResult.isError).not.toBe(true);
+      expect(JSON.parse(readTextContent(restoreResult))).toEqual(expect.objectContaining({
+        path: projectionPath,
+        canonicalPath,
+        editable: true,
+        currentText: "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
+      }));
+      await expect(fs.readFile(root.resolve(projectionPath), "utf8")).resolves.toBe(
+        "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
+      );
+      await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
+        "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+      );
+
+      const hiddenPathResult = await client.callTool({
+        name: "write-file",
+        arguments: {
+          path: canonicalPath,
+          content: "oops"
+        }
+      });
+      expect(hiddenPathResult.isError).toBe(true);
+      expect(readTextContent(hiddenPathResult)).toContain("Hidden canonical files under .wraithwalker cannot be edited");
+
+      const apiResult = await client.callTool({
+        name: "write-file",
+        arguments: {
+          path: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body",
+          content: "{\"users\":[]}"
+        }
+      });
+      expect(apiResult.isError).toBe(true);
+      expect(readTextContent(apiResult)).toContain("API response fixtures are read-only in this pass");
     } finally {
       await client.close();
       await server.close();
@@ -568,63 +766,63 @@ describe("mcp server", () => {
 
     try {
       const assetResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: { origin: "https://missing.example.com" }
       });
       expect(assetResult.isError).toBe(true);
       expect(readTextContent(assetResult)).toContain("Origin \"https://missing.example.com\" not found.");
 
       const endpointResult = await client.callTool({
-        name: "list-endpoints",
+        name: "list-api-routes",
         arguments: { origin: "https://missing.example.com" }
       });
       expect(endpointResult.isError).toBe(true);
       expect(readTextContent(endpointResult)).toContain("Origin \"https://missing.example.com\" not found.");
 
       const fixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "missing.txt" }
       });
       expect(fixtureResult.isError).toBe(true);
       expect(readTextContent(fixtureResult)).toBe("File not found: missing.txt");
 
       const invalidFixturePathResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "../package.json" }
       });
       expect(invalidFixturePathResult.isError).toBe(true);
       expect(readTextContent(invalidFixturePathResult)).toContain("Invalid fixture path: ../package.json");
 
       const snippetMissingResult = await client.callTool({
-        name: "read-fixture-snippet",
+        name: "read-file-snippet",
         arguments: { path: "missing.txt" }
       });
       expect(snippetMissingResult.isError).toBe(true);
       expect(readTextContent(snippetMissingResult)).toContain("File not found: missing.txt");
 
       const snippetInvalidPathResult = await client.callTool({
-        name: "read-fixture-snippet",
+        name: "read-file-snippet",
         arguments: { path: "../package.json" }
       });
       expect(snippetInvalidPathResult.isError).toBe(true);
       expect(readTextContent(snippetInvalidPathResult)).toContain("Invalid fixture path: ../package.json");
 
       const invalidEndpointFixtureResult = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: { fixtureDir: "../escape" }
       });
       expect(invalidEndpointFixtureResult.isError).toBe(true);
       expect(readTextContent(invalidEndpointFixtureResult)).toContain("Invalid fixture directory: ../escape");
 
       const manifestResult = await client.callTool({
-        name: "read-manifest",
+        name: "read-site-manifest",
         arguments: { origin: "https://missing.example.com" }
       });
       expect(manifestResult.isError).toBe(true);
       expect(readTextContent(manifestResult)).toContain("Origin \"https://missing.example.com\" not found.");
 
       const searchResult = await client.callTool({
-        name: "search-content",
+        name: "search-files",
         arguments: {
           query: "dropdown",
           origin: "https://missing.example.com"
@@ -635,14 +833,14 @@ describe("mcp server", () => {
 
       await root.ensureOrigin({ topOrigin: "https://empty.example.com" });
       const emptyManifestResult = await client.callTool({
-        name: "read-manifest",
+        name: "read-site-manifest",
         arguments: { origin: "https://empty.example.com" }
       });
       expect(emptyManifestResult.isError).toBe(true);
       expect(readTextContent(emptyManifestResult)).toContain("No manifest found for \"https://empty.example.com\".");
 
       const invalidCursorResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: {
           origin: "https://empty.example.com",
           cursor: "not-a-cursor"
@@ -654,14 +852,14 @@ describe("mcp server", () => {
       await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
       await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
       const binarySnippetResult = await client.callTool({
-        name: "read-fixture-snippet",
+        name: "read-file-snippet",
         arguments: { path: "bin/blob.bin" }
       });
       expect(binarySnippetResult.isError).toBe(true);
       expect(readTextContent(binarySnippetResult)).toContain("Fixture is not a text file");
 
       const diffResult = await client.callTool({
-        name: "diff-scenarios",
+        name: "diff-snapshots",
         arguments: { scenarioA: "missing-a", scenarioB: "missing-b" }
       });
       expect(diffResult.isError).toBe(true);
@@ -669,7 +867,7 @@ describe("mcp server", () => {
       expect(readTextContent(diffResult)).toContain("Available scenarios: baseline");
 
       const invalidScenarioResult = await client.callTool({
-        name: "diff-scenarios",
+        name: "diff-snapshots",
         arguments: { scenarioA: "../escape", scenarioB: "baseline" }
       });
       expect(invalidScenarioResult.isError).toBe(true);
@@ -715,7 +913,7 @@ describe("mcp server", () => {
 
     try {
       const filteredOriginsResult = await client.callTool({
-        name: "list-origins",
+        name: "list-sites",
         arguments: { search: "ADMIN" }
       });
       const filteredOrigins = JSON.parse(readTextContent(filteredOriginsResult)) as Array<{ origin: string }>;
@@ -726,7 +924,7 @@ describe("mcp server", () => {
       ]);
 
       const assetsResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: { origin: "https://app.example.com" }
       });
       const assets = JSON.parse(readTextContent(assetsResult)) as {
@@ -749,7 +947,7 @@ describe("mcp server", () => {
       ]);
 
       const searchResult = await client.callTool({
-        name: "search-content",
+        name: "search-files",
         arguments: {
           query: "hierarchy",
           resourceTypes: ["Script"]
@@ -792,7 +990,7 @@ describe("mcp server", () => {
 
     try {
       const adminOriginsResult = await client.callTool({
-        name: "list-origins",
+        name: "list-sites",
         arguments: { search: "ADMIN" }
       });
       const adminOrigins = JSON.parse(readTextContent(adminOriginsResult)) as Array<{ origin: string }>;
@@ -802,7 +1000,7 @@ describe("mcp server", () => {
       ]);
 
       const missingOriginsResult = await client.callTool({
-        name: "list-origins",
+        name: "list-sites",
         arguments: { search: "missing" }
       });
       expect(JSON.parse(readTextContent(missingOriginsResult))).toEqual([]);
@@ -870,7 +1068,7 @@ describe("mcp server", () => {
 
     try {
       const searchResult = await client.callTool({
-        name: "search-content",
+        name: "search-files",
         arguments: {
           origin: "https://app.example.com",
           query: "dropdown"
@@ -899,7 +1097,7 @@ describe("mcp server", () => {
       ]);
 
       const httpsManifestResult = await client.callTool({
-        name: "read-manifest",
+        name: "read-site-manifest",
         arguments: { origin: "https://app.example.com" }
       });
       const httpsManifest = JSON.parse(readTextContent(httpsManifestResult)) as {
@@ -910,7 +1108,7 @@ describe("mcp server", () => {
       expect(Object.keys(httpsManifest.resourcesByPathname)).toEqual(["/assets/repeat.js"]);
 
       const httpManifestResult = await client.callTool({
-        name: "read-manifest",
+        name: "read-site-manifest",
         arguments: { origin: "http://app.example.com" }
       });
       const httpManifest = JSON.parse(readTextContent(httpManifestResult)) as {
@@ -1007,7 +1205,7 @@ describe("mcp server", () => {
 
     try {
       const assetsResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: { origin: "https://app.example.com:8443" }
       });
       const assets = JSON.parse(readTextContent(assetsResult)) as {
@@ -1120,7 +1318,7 @@ describe("mcp server", () => {
 
     try {
       const assetsResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: { origin: "https://app.example.com" }
       });
       const assets = JSON.parse(readTextContent(assetsResult)) as {
@@ -1137,7 +1335,7 @@ describe("mcp server", () => {
       ]);
 
       const endpointsResult = await client.callTool({
-        name: "list-endpoints",
+        name: "list-api-routes",
         arguments: { origin: "https://app.example.com" }
       });
       const endpoints = JSON.parse(readTextContent(endpointsResult)) as {
@@ -1154,7 +1352,7 @@ describe("mcp server", () => {
       ]);
 
       const searchResult = await client.callTool({
-        name: "search-content",
+        name: "search-files",
         arguments: {
           origin: "https://app.example.com",
           query: "scheme"
@@ -1176,21 +1374,21 @@ describe("mcp server", () => {
       ]);
 
       const largeFixtureRead = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "cdn.example.com/assets/huge.js" }
       });
       expect(largeFixtureRead.isError).toBe(true);
       expect(readTextContent(largeFixtureRead)).toContain("File is too large to read in full: cdn.example.com/assets/huge.js");
-      expect(readTextContent(largeFixtureRead)).toContain("Use read-fixture-snippet with this path and specify startLine and lineCount.");
+      expect(readTextContent(largeFixtureRead)).toContain("Use read-file-snippet with this path and specify startLine and lineCount.");
 
       const largeEndpointRead = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: { fixtureDir: largeEndpoint.fixtureDir }
       });
       expect(largeEndpointRead.isError).toBe(true);
       expect(readTextContent(largeEndpointRead)).toContain(`Endpoint fixture body is too large to read in full: ${largeEndpoint.bodyPath}`);
       expect(readTextContent(largeEndpointRead)).toContain(
-        `Use read-fixture-snippet with path "${largeEndpoint.bodyPath}" and specify startLine and lineCount.`
+        `Use read-file-snippet with path "${largeEndpoint.bodyPath}" and specify startLine and lineCount.`
       );
     } finally {
       await client.close();
@@ -1276,14 +1474,14 @@ describe("mcp server", () => {
 
     try {
       const exactFixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "cdn.example.com/assets/exact.js" }
       });
       expect(exactFixtureResult.isError).not.toBe(true);
       expect(readTextContent(exactFixtureResult)).toHaveLength(65_536);
 
       const overLimitFixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: {
           path: "cdn.example.com/assets/over.js",
           pretty: true
@@ -1293,7 +1491,7 @@ describe("mcp server", () => {
       expect(readTextContent(overLimitFixtureResult)).toContain("File is too large to read in full: cdn.example.com/assets/over.js");
 
       const exactEndpointResult = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: { fixtureDir: exactEndpoint.fixtureDir }
       });
       const exactEndpointFixture = JSON.parse(readTextContent(exactEndpointResult)) as {
@@ -1302,7 +1500,7 @@ describe("mcp server", () => {
       expect(exactEndpointFixture.body).toHaveLength(65_536);
 
       const overLimitEndpointResult = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: {
           fixtureDir: overLimitEndpoint.fixtureDir,
           pretty: true
@@ -1327,7 +1525,7 @@ describe("mcp server", () => {
 
     try {
       const diffResult = await client.callTool({
-        name: "diff-scenarios",
+        name: "diff-snapshots",
         arguments: { scenarioA: "missing-a", scenarioB: "missing-b" }
       });
       expect(diffResult.isError).toBe(true);
@@ -1347,7 +1545,7 @@ describe("mcp server", () => {
     const { client, server } = await connectClient(root.rootPath);
 
     try {
-      const statusResult = await client.callTool({ name: "extension-status", arguments: {} });
+      const statusResult = await client.callTool({ name: "browser-status", arguments: {} });
       expect(JSON.parse(readTextContent(statusResult))).toEqual(
         expect.objectContaining({
           connected: false,
@@ -1356,7 +1554,7 @@ describe("mcp server", () => {
       );
 
       const startResult = await client.callTool({
-        name: "start-scenario-trace",
+        name: "start-trace",
         arguments: { name: "Trace without extension" }
       });
       expect(startResult.isError).toBe(true);
@@ -1392,7 +1590,7 @@ describe("mcp server", () => {
       });
       expect(heartbeat.activeTrace).toBeNull();
 
-      const statusResult = await client.callTool({ name: "extension-status", arguments: {} });
+      const statusResult = await client.callTool({ name: "browser-status", arguments: {} });
       expect(JSON.parse(readTextContent(statusResult))).toEqual(
         expect.objectContaining({
           connected: true,
@@ -1404,7 +1602,7 @@ describe("mcp server", () => {
       );
 
       const startResult = await client.callTool({
-        name: "start-scenario-trace",
+        name: "start-trace",
         arguments: { name: "Settings trace" }
       });
       expect(startResult.isError).toBeFalsy();
@@ -1417,7 +1615,7 @@ describe("mcp server", () => {
         })
       );
 
-      const listResult = await client.callTool({ name: "list-scenario-traces", arguments: {} });
+      const listResult = await client.callTool({ name: "list-traces", arguments: {} });
       expect(JSON.parse(readTextContent(listResult))).toEqual([
         expect.objectContaining({
           traceId: startedTrace.traceId,
@@ -1426,7 +1624,7 @@ describe("mcp server", () => {
       ]);
 
       const readResult = await client.callTool({
-        name: "read-scenario-trace",
+        name: "read-trace",
         arguments: { traceId: startedTrace.traceId }
       });
       expect(JSON.parse(readTextContent(readResult))).toEqual(
@@ -1437,7 +1635,7 @@ describe("mcp server", () => {
       );
 
       const stopResult = await client.callTool({
-        name: "stop-scenario-trace",
+        name: "stop-trace",
         arguments: { traceId: startedTrace.traceId }
       });
       expect(JSON.parse(readTextContent(stopResult))).toEqual(
@@ -1465,56 +1663,62 @@ describe("mcp server", () => {
       expect(server.port).toBeGreaterThan(0);
       expect(server.url).toContain(`:${server.port}/mcp`);
       expect(server.tools).toEqual([
-        "extension-status",
-        "start-scenario-trace",
-        "stop-scenario-trace",
-        "list-scenario-traces",
-        "read-scenario-trace",
-        "list-origins",
-        "list-assets",
-        "list-endpoints",
-        "search-content",
-        "read-endpoint-fixture",
-        "read-fixture",
-        "read-fixture-snippet",
-        "read-manifest",
-        "list-scenarios",
-        "diff-scenarios"
+        "browser-status",
+        "start-trace",
+        "stop-trace",
+        "list-traces",
+        "read-trace",
+        "list-sites",
+        "list-files",
+        "list-api-routes",
+        "search-files",
+        "read-api-response",
+        "read-file",
+        "read-file-snippet",
+        "read-site-manifest",
+        "write-file",
+        "patch-file",
+        "restore-file",
+        "list-snapshots",
+        "diff-snapshots"
       ]);
 
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
-        "diff-scenarios",
-        "extension-status",
-        "list-assets",
-        "list-endpoints",
-        "list-origins",
-        "list-scenario-traces",
-        "list-scenarios",
-        "read-endpoint-fixture",
-        "read-fixture",
-        "read-fixture-snippet",
-        "read-manifest",
-        "read-scenario-trace",
-        "search-content",
-        "start-scenario-trace",
-        "stop-scenario-trace"
+        "browser-status",
+        "diff-snapshots",
+        "list-api-routes",
+        "list-files",
+        "list-sites",
+        "list-snapshots",
+        "list-traces",
+        "patch-file",
+        "read-api-response",
+        "read-file",
+        "read-file-snippet",
+        "read-site-manifest",
+        "read-trace",
+        "restore-file",
+        "search-files",
+        "start-trace",
+        "stop-trace",
+        "write-file"
       ]);
 
       const fixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
       expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
 
       const assetResult = await client.callTool({
-        name: "list-assets",
+        name: "list-files",
         arguments: { origin: "https://app.example.com" }
       });
       expect(readTextContent(assetResult)).toContain("\"totalMatched\": 3");
 
       const endpointResult = await client.callTool({
-        name: "read-endpoint-fixture",
+        name: "read-api-response",
         arguments: {
           fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
           pretty: true
@@ -1525,13 +1729,13 @@ describe("mcp server", () => {
       }));
 
       const searchResult = await client.callTool({
-        name: "search-content",
+        name: "search-files",
         arguments: { query: "dropdown" }
       });
       expect(readTextContent(searchResult)).toContain("\"sourceKind\": \"endpoint\"");
 
       const snippetResult = await client.callTool({
-        name: "read-fixture-snippet",
+        name: "read-file-snippet",
         arguments: {
           path: "cdn.example.com/assets/chunk.js",
           pretty: true,
@@ -1548,25 +1752,25 @@ describe("mcp server", () => {
       });
 
       const listOriginsResult = await client.callTool({
-        name: "list-origins",
+        name: "list-sites",
         arguments: {}
       });
       expect(readTextContent(listOriginsResult)).toContain("https://app.example.com");
 
       const scenariosResult = await client.callTool({
-        name: "list-scenarios",
+        name: "list-snapshots",
         arguments: {}
       });
       expect(readTextContent(scenariosResult)).toContain("baseline");
 
       const diffResult = await client.callTool({
-        name: "diff-scenarios",
+        name: "diff-snapshots",
         arguments: { scenarioA: "baseline", scenarioB: "candidate" }
       });
       expect(readTextContent(diffResult)).toContain("200 → 500");
 
       const invalidFixtureResult = await client.callTool({
-        name: "read-fixture",
+        name: "read-file",
         arguments: { path: "../escape" }
       });
       expect(invalidFixtureResult.isError).toBe(true);

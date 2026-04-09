@@ -14,12 +14,12 @@ Use guided traces when the user can point at the exact part of the UI they mean 
 
 Typical flow:
 
-1. Ask `extension-status`.
+1. Ask `browser-status`.
 2. Wait until `captureReady` is `true`.
-3. Call `start-scenario-trace`.
+3. Call `start-trace`.
 4. Ask the user to click the parts of the app they are talking about.
-5. Call `stop-scenario-trace`.
-6. Read the stored trace with `read-scenario-trace`.
+5. Call `stop-trace`.
+6. Read the stored trace with `read-trace`.
 
 That gives the agent:
 
@@ -32,13 +32,13 @@ That gives the agent:
 
 The local MCP server exposes:
 
-- `extension-status`
-- `start-scenario-trace`
-- `stop-scenario-trace`
-- `list-scenario-traces`
-- `read-scenario-trace`
+- `browser-status`
+- `start-trace`
+- `stop-trace`
+- `list-traces`
+- `read-trace`
 
-### `extension-status`
+### `browser-status`
 
 This is the readiness gate.
 
@@ -116,11 +116,11 @@ wraithwalker serve
 ```
 
 2. Start the extension session and browse normally.
-3. In your MCP client, call `extension-status`.
-4. When `captureReady` is `true`, call `start-scenario-trace`.
+3. In your MCP client, call `browser-status`.
+4. When `captureReady` is `true`, call `start-trace`.
 5. Ask the user to click through the relevant UI.
-6. Call `stop-scenario-trace`.
-7. Inspect the result with `read-scenario-trace`.
+6. Call `stop-trace`.
+7. Inspect the result with `read-trace`.
 
 ## Related Docs
 

@@ -19,13 +19,16 @@ import {
   listApiEndpoints,
   listScenarios,
   matchSiteConfigsByOrigin,
+  patchProjectionFile,
   readApiFixture,
   readFixtureBody,
   readFixtureSnippet,
   searchFixtureContent,
   flattenStaticResourceManifest,
   readOriginInfo,
-  resolveFixturePath
+  resolveFixturePath,
+  restoreProjectionFile,
+  writeProjectionFile
 } from "./fixture-reader.mjs";
 import { appendVaryHeader, buildLocalServerCorsHeaders } from "./local-server-cors.mjs";
 import { createServerRootRuntime } from "./root-runtime.mjs";
@@ -40,21 +43,24 @@ export const DEFAULT_HTTP_PORT = 4319;
 export const DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES = 25 * 1024 * 1024;
 
 export const MCP_TOOL_NAMES = [
-  "extension-status",
-  "start-scenario-trace",
-  "stop-scenario-trace",
-  "list-scenario-traces",
-  "read-scenario-trace",
-  "list-origins",
-  "list-assets",
-  "list-endpoints",
-  "search-content",
-  "read-endpoint-fixture",
-  "read-fixture",
-  "read-fixture-snippet",
-  "read-manifest",
-  "list-scenarios",
-  "diff-scenarios"
+  "browser-status",
+  "start-trace",
+  "stop-trace",
+  "list-traces",
+  "read-trace",
+  "list-sites",
+  "list-files",
+  "list-api-routes",
+  "search-files",
+  "read-api-response",
+  "read-file",
+  "read-file-snippet",
+  "read-site-manifest",
+  "write-file",
+  "patch-file",
+  "restore-file",
+  "list-snapshots",
+  "diff-snapshots"
 ] as const;
 
 export interface StartServerOptions {
@@ -183,14 +189,14 @@ function registerTools(
   }
 
   server.tool(
-    "extension-status",
+    "browser-status",
     "Report whether the browser extension is connected to this local server and ready to capture",
     {},
     async () => renderJson(await extensionSessions.getStatus())
   );
 
   server.tool(
-    "start-scenario-trace",
+    "start-trace",
     "Start a guided click-trace that the extension will record into the current WraithWalker root",
     {
       name: z.string().trim().min(1).optional().describe("Optional human-friendly name for the trace")
@@ -230,10 +236,10 @@ function registerTools(
   );
 
   server.tool(
-    "stop-scenario-trace",
+    "stop-trace",
     "Stop a guided click-trace and keep it as a completed scenario trace on disk",
     {
-      traceId: z.string().describe("Trace ID returned by start-scenario-trace")
+      traceId: z.string().describe("Trace ID returned by start-trace")
     },
     async ({ traceId }) => {
       try {
@@ -248,17 +254,17 @@ function registerTools(
   );
 
   server.tool(
-    "list-scenario-traces",
+    "list-traces",
     "List guided scenario traces stored in the current WraithWalker root",
     {},
     async () => renderJson(await runtime.listTraces())
   );
 
   server.tool(
-    "read-scenario-trace",
+    "read-trace",
     "Read a stored guided scenario trace by ID",
     {
-      traceId: z.string().describe("Trace ID returned by start-scenario-trace or list-scenario-traces")
+      traceId: z.string().describe("Trace ID returned by start-trace or list-traces")
     },
     async ({ traceId }) => {
       const trace = await runtime.readTrace(traceId);
@@ -274,7 +280,7 @@ function registerTools(
   );
 
   server.tool(
-    "list-origins",
+    "list-sites",
     "List all captured origins and their fixture summary",
     {
       search: z.string().trim().min(1).optional().describe("Optional case-insensitive origin substring filter")
@@ -303,7 +309,7 @@ function registerTools(
   );
 
   server.tool(
-    "list-assets",
+    "list-files",
     "List captured static assets for an origin with optional filters, pagination, and body availability",
     {
       origin: z.string().describe("The origin to list assets for (e.g., https://app.example.com)"),
@@ -312,7 +318,7 @@ function registerTools(
       pathnameContains: z.string().optional().describe("Optional case-insensitive pathname substring filter"),
       requestOrigin: z.string().optional().describe("Optional exact request origin filter"),
       limit: z.number().int().positive().max(200).optional().describe("Maximum number of assets to return"),
-      cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous list-assets call")
+      cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous list-files call")
     },
     async ({ origin, resourceTypes, mimeTypes, pathnameContains, requestOrigin, limit, cursor }) => {
       const { configs, matchedConfigs } = await resolveDiscoverySiteConfigs(origin);
@@ -341,7 +347,7 @@ function registerTools(
   );
 
   server.tool(
-    "list-endpoints",
+    "list-api-routes",
     "List all captured API endpoints for an origin",
     { origin: z.string().describe("The origin to list endpoints for (e.g., https://app.example.com)") },
     async ({ origin }) => {
@@ -356,7 +362,7 @@ function registerTools(
   );
 
   server.tool(
-    "search-content",
+    "search-files",
     "Search live fixture content across assets, endpoint bodies, and text-like files, with path fallback when body text is unavailable or misses",
     {
       query: z.string().trim().min(1).describe("Case-insensitive substring query to search for"),
@@ -365,7 +371,7 @@ function registerTools(
       mimeTypes: optionalStringArraySchema.describe("Optional MIME types to include"),
       resourceTypes: optionalStringArraySchema.describe("Optional resource types to include"),
       limit: z.number().int().positive().max(100).optional().describe("Maximum number of matches to return"),
-      cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous search-content call")
+      cursor: z.string().optional().describe("Opaque pagination cursor returned by a previous search-files call")
     },
     async ({ query, origin, pathContains, mimeTypes, resourceTypes, limit, cursor }) => {
       if (origin) {
@@ -397,7 +403,7 @@ function registerTools(
   );
 
   server.tool(
-    "read-fixture",
+    "read-file",
     "Read a fixture response body by its file path relative to the fixture root",
     {
       path: z.string().describe("Relative path to the fixture file (e.g., cdn.example.com/assets/app.js)"),
@@ -434,7 +440,7 @@ function registerTools(
   );
 
   server.tool(
-    "read-fixture-snippet",
+    "read-file-snippet",
     "Read a bounded text snippet from a fixture file relative to the fixture root",
     {
       path: z.string().describe("Relative path to the text fixture file"),
@@ -462,10 +468,10 @@ function registerTools(
   );
 
   server.tool(
-    "read-endpoint-fixture",
-    "Read the response metadata and body for an API fixture returned by list-endpoints",
+    "read-api-response",
+    "Read the response metadata and body for an API fixture returned by list-api-routes",
     {
-      fixtureDir: z.string().describe("Fixture directory returned by list-endpoints"),
+      fixtureDir: z.string().describe("Fixture directory returned by list-api-routes"),
       pretty: z.boolean().optional().describe("Format supported text-like response bodies for easier reading without changing stored bytes")
     },
     async ({ fixtureDir, pretty }) => {
@@ -499,7 +505,7 @@ function registerTools(
   );
 
   server.tool(
-    "read-manifest",
+    "read-site-manifest",
     "Read the RESOURCE_MANIFEST.json for an origin",
     { origin: z.string().describe("The origin to read the manifest for") },
     async ({ origin }) => {
@@ -521,7 +527,72 @@ function registerTools(
   );
 
   server.tool(
-    "list-scenarios",
+    "write-file",
+    "Overwrite a human-facing captured projection file with UTF-8 text",
+    {
+      path: z.string().describe("Visible projection path returned by list-files or search-files"),
+      content: z.string().describe("Replacement UTF-8 text to write into the projection")
+    },
+    async ({ path: filePath, content }) => {
+      try {
+        return renderJson(await writeProjectionFile(rootPath, filePath, content));
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "patch-file",
+    "Patch a human-facing captured projection file by line range, with conflict detection",
+    {
+      path: z.string().describe("Visible projection path returned by list-files or search-files"),
+      startLine: z.number().int().positive().describe("1-based line number where the replacement starts"),
+      endLine: z.number().int().positive().describe("1-based line number where the replacement ends"),
+      expectedText: z.string().describe("Current text expected in the selected line range"),
+      replacement: z.string().describe("Replacement text for the selected line range")
+    },
+    async ({ path: filePath, startLine, endLine, expectedText, replacement }) => {
+      try {
+        return renderJson(await patchProjectionFile(rootPath, {
+          path: filePath,
+          startLine,
+          endLine,
+          expectedText,
+          replacement
+        }));
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "restore-file",
+    "Restore a human-facing captured projection file from its canonical hidden snapshot",
+    {
+      path: z.string().describe("Visible projection path returned by list-files or search-files")
+    },
+    async ({ path: filePath }) => {
+      try {
+        return renderJson(await restoreProjectionFile(rootPath, filePath));
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "list-snapshots",
     "List all saved fixture scenarios",
     {},
     async () => {
@@ -531,7 +602,7 @@ function registerTools(
   );
 
   server.tool(
-    "diff-scenarios",
+    "diff-snapshots",
     "Compare two scenario snapshots and report differences in API endpoints",
     {
       scenarioA: z.string().describe("Name of the first scenario"),

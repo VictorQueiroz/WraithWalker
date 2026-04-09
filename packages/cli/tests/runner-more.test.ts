@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     baseUrl: "http://127.0.0.1:4319",
     trpcUrl: "http://127.0.0.1:4319/trpc",
     url: "http://127.0.0.1:4319/mcp",
-    tools: ["list-origins"],
+    tools: ["list-sites"],
     close: vi.fn().mockResolvedValue(undefined)
   })
 }));

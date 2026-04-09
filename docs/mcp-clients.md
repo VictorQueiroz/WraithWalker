@@ -28,17 +28,23 @@ Many MCP clients accept a JSON config shaped like this:
 }
 ```
 
-WraithWalker's MCP tools are storage-mode agnostic. Simple mode is usually the easiest to browse alongside MCP because the dumped file paths mirror the original site structure.
+WraithWalker's MCP tools are projection-first: agents inspect the human-facing files at the root while replay still keeps canonical hidden snapshots under `.wraithwalker/`.
 
 When the browser extension is connected to the local server, MCP can also inspect extension readiness and guided scenario traces through:
 
-- `extension-status`
-- `start-scenario-trace`
-- `stop-scenario-trace`
-- `list-scenario-traces`
-- `read-scenario-trace`
+- `browser-status`
+- `start-trace`
+- `stop-trace`
+- `list-traces`
+- `read-trace`
 
 More: [Guided scenario traces](./guided-scenario-traces.md)
+
+Projection-backed assets exposed by `list-files` and `search-files` also support:
+
+- `write-file`
+- `patch-file`
+- `restore-file`
 
 ## Codex
 

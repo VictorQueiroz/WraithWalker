@@ -16,7 +16,7 @@ import {
   type StaticResourceManifest,
   type StaticResourceManifestEntry
 } from "./fixture-layout.mjs";
-import { prettifyFixtureText } from "./fixture-presentation.mjs";
+import { createProjectedFixturePayload, prettifyFixtureText } from "./fixture-presentation.mjs";
 import { readEffectiveSiteConfigs } from "./project-config.mjs";
 import { createFixtureRootFs, resolveWithinRoot, type FixtureRootFs } from "./root-fs.mjs";
 import { mergeSiteConfigs, type SiteConfig } from "./site-config.mjs";
@@ -69,6 +69,8 @@ export interface AssetInfo extends StaticResourceManifestEntry {
   path: string;
   hasBody: boolean;
   bodySize: number | null;
+  editable: boolean;
+  canonicalPath: string | null;
 }
 
 export interface PaginatedResult<T> {
@@ -99,6 +101,24 @@ export interface SearchContentMatch {
   excerpt: string;
   matchLine: number;
   matchColumn: number;
+  editable: boolean;
+  canonicalPath: string | null;
+}
+
+export interface ProjectionFileInfo {
+  path: string;
+  canonicalPath: string;
+  metaPath: string;
+  currentText: string | null;
+  editable: boolean;
+}
+
+export interface PatchProjectionFileOptions {
+  path: string;
+  startLine: number;
+  endLine: number;
+  expectedText: string;
+  replacement: string;
 }
 
 export interface FixtureSnippetOptions {
@@ -136,6 +156,15 @@ interface SearchableFixtureEntry {
   pathname: string | null;
   mimeType: string | null;
   resourceType: string | null;
+  editable: boolean;
+  canonicalPath: string | null;
+}
+
+interface ResolvedProjectionFile extends ProjectionFileInfo {
+  projectionPayload: {
+    body: string;
+    bodyEncoding: "utf8" | "base64";
+  };
 }
 
 type TextFixtureReadResult =
@@ -156,6 +185,21 @@ const MAX_SNIPPET_LINE_COUNT = 400;
 const DEFAULT_SNIPPET_MAX_BYTES = 16000;
 const MAX_SNIPPET_MAX_BYTES = 64000;
 const MAX_FULL_READ_BYTES = 64 * 1024;
+const EDITABLE_PROJECTION_EXTENSIONS = new Set([
+  ".cjs",
+  ".css",
+  ".htm",
+  ".html",
+  ".js",
+  ".json",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".svg",
+  ".ts",
+  ".tsx",
+  ".txt"
+]);
 const SEARCH_EXACT_EXCLUDE = new Set([
   ROOT_SENTINEL_RELATIVE_PATH,
   path.join(WRAITHWALKER_DIR, "cli.json")
@@ -242,8 +286,25 @@ function normalizeSearchPath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
+function isHiddenFixturePath(relativePath: string): boolean {
+  const normalized = normalizeSearchPath(relativePath);
+  return normalized === WRAITHWALKER_DIR || normalized.startsWith(`${WRAITHWALKER_DIR}/`);
+}
+
+function isApiResponseBodyPath(relativePath: string): boolean {
+  return normalizeSearchPath(relativePath).endsWith("/response.body");
+}
+
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
 function isExcludedSearchPath(relativePath: string): boolean {
   const normalized = normalizeSearchPath(relativePath);
+  if (isHiddenFixturePath(normalized)) {
+    return true;
+  }
+
   if (normalized.startsWith(`${normalizeSearchPath(SCENARIOS_DIR)}/`)) {
     return true;
   }
@@ -285,6 +346,65 @@ function guessMimeType(relativePath: string): string | null {
   }
 }
 
+function isEditableProjectionMimeType(value?: string | null): boolean {
+  const mimeType = (value || "").split(";")[0]?.trim().toLowerCase() || "";
+  if (!mimeType) {
+    return false;
+  }
+
+  if (mimeType.startsWith("text/")) {
+    return true;
+  }
+
+  return mimeType === "application/javascript"
+    || mimeType === "text/javascript"
+    || mimeType === "application/ecmascript"
+    || mimeType === "text/ecmascript"
+    || mimeType === "application/typescript"
+    || mimeType === "text/typescript"
+    || mimeType === "application/json"
+    || mimeType.endsWith("+json")
+    || mimeType === "image/svg+xml"
+    || mimeType === "application/xml"
+    || mimeType === "text/xml";
+}
+
+function isEditableProjectionResourceType(value?: string | null): boolean {
+  const resourceType = (value || "").trim().toLowerCase();
+  return resourceType === "document"
+    || resourceType === "fetch"
+    || resourceType === "script"
+    || resourceType === "stylesheet"
+    || resourceType === "xhr";
+}
+
+function isEditableProjectionPath(relativePath?: string | null): boolean {
+  if (!relativePath) {
+    return false;
+  }
+
+  return EDITABLE_PROJECTION_EXTENSIONS.has(path.extname(relativePath).toLowerCase());
+}
+
+function isEditableProjectionAsset(
+  projectionPath: string | null | undefined,
+  {
+    mimeType,
+    resourceType
+  }: {
+    mimeType?: string | null;
+    resourceType?: string | null;
+  }
+): boolean {
+  if (!projectionPath) {
+    return false;
+  }
+
+  return isEditableProjectionMimeType(mimeType)
+    || isEditableProjectionResourceType(resourceType)
+    || isEditableProjectionPath(projectionPath);
+}
+
 function looksBinary(buffer: Buffer): boolean {
   return buffer.includes(0);
 }
@@ -314,6 +434,61 @@ async function readTextFixture(rootPath: string, relativePath: string): Promise<
   }
 }
 
+function splitTextLines(text: string): { lines: string[]; endsWithNewline: boolean } {
+  const normalized = normalizeLineEndings(text);
+  const endsWithNewline = normalized.endsWith("\n");
+  if (!normalized) {
+    return { lines: [], endsWithNewline: false };
+  }
+
+  const lines = normalized.split("\n");
+  if (endsWithNewline) {
+    lines.pop();
+  }
+
+  return { lines, endsWithNewline };
+}
+
+function joinTextLines(lines: string[], endsWithNewline: boolean): string {
+  const joined = lines.join("\n");
+  return endsWithNewline ? `${joined}\n` : joined;
+}
+
+function applyLinePatch(
+  text: string,
+  {
+    startLine,
+    endLine,
+    expectedText,
+    replacement
+  }: Omit<PatchProjectionFileOptions, "path">
+): string {
+  if (!Number.isInteger(startLine) || startLine < 1) {
+    throw new Error("startLine must be a positive integer.");
+  }
+  if (!Number.isInteger(endLine) || endLine < startLine) {
+    throw new Error("endLine must be a positive integer greater than or equal to startLine.");
+  }
+
+  const { lines, endsWithNewline } = splitTextLines(text);
+  if (endLine > lines.length) {
+    throw new Error(`Patch range ${startLine}-${endLine} is outside the current file.`);
+  }
+
+  const currentRange = lines.slice(startLine - 1, endLine).join("\n");
+  if (currentRange !== normalizeLineEndings(expectedText)) {
+    throw new Error(`Patch conflict for ${startLine}-${endLine}: current file content no longer matches expectedText.`);
+  }
+
+  const replacementText = normalizeLineEndings(replacement);
+  const replacementLines = replacementText === ""
+    ? []
+    : splitTextLines(replacementText).lines;
+
+  lines.splice(startLine - 1, endLine - startLine + 1, ...replacementLines);
+  return joinTextLines(lines, endsWithNewline);
+}
+
 function createExcerpt(text: string, matchIndex: number, queryLength: number): string {
   const contextRadius = 60;
   const start = Math.max(0, matchIndex - contextRadius);
@@ -329,7 +504,10 @@ function createExcerpt(text: string, matchIndex: number, queryLength: number): s
 function findSubstringMatch(
   text: string,
   query: string
-): Omit<SearchContentMatch, "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType"> | null {
+): Omit<
+  SearchContentMatch,
+  "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType" | "editable" | "canonicalPath"
+> | null {
   const lowerText = text.toLowerCase();
   const lowerQuery = query.toLowerCase();
   const matchIndex = lowerText.indexOf(lowerQuery);
@@ -364,7 +542,10 @@ function findSubstringMatch(
 function findPathMatch(
   entry: SearchableFixtureEntry,
   query: string
-): Omit<SearchContentMatch, "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType"> | null {
+): Omit<
+  SearchContentMatch,
+  "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType" | "editable" | "canonicalPath"
+> | null {
   const candidates = [entry.pathname, entry.path]
     .filter((candidate): candidate is string => Boolean(candidate));
 
@@ -574,7 +755,9 @@ async function buildSearchableFixtureEntries(rootPath: string): Promise<Searchab
           origin: info.origin,
           pathname: asset.pathname,
           mimeType: asset.mimeType || null,
-          resourceType: asset.resourceType || null
+          resourceType: asset.resourceType || null,
+          editable: isEditableProjectionAsset(asset.projectionPath, asset),
+          canonicalPath: asset.bodyPath
         });
       }
     }
@@ -587,7 +770,9 @@ async function buildSearchableFixtureEntries(rootPath: string): Promise<Searchab
           origin: info.origin,
           pathname: endpoint.pathname,
           mimeType: endpoint.mimeType || null,
-          resourceType: endpoint.resourceType || null
+          resourceType: endpoint.resourceType || null,
+          editable: false,
+          canonicalPath: null
         });
       }
     }
@@ -604,7 +789,9 @@ async function buildSearchableFixtureEntries(rootPath: string): Promise<Searchab
       origin: null,
       pathname: null,
       mimeType: guessMimeType(relativePath),
-      resourceType: null
+      resourceType: null,
+      editable: false,
+      canonicalPath: null
     });
   }
 
@@ -642,6 +829,95 @@ async function collectApiEndpoints(rootPath: string, baseRelativePath: string): 
   }
 
   return endpoints;
+}
+
+async function findProjectionAsset(
+  rootPath: string,
+  relativePath: string
+): Promise<StaticResourceManifestEntry | null> {
+  const configs = await readSiteConfigs(rootPath);
+  const normalizedTarget = normalizeSearchPath(relativePath);
+
+  for (const config of configs) {
+    const info = await readOriginInfo(rootPath, config);
+    for (const asset of flattenStaticResourceManifest(info.manifest)) {
+      if (asset.projectionPath && normalizeSearchPath(asset.projectionPath) === normalizedTarget) {
+        return asset;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function resolveProjectionFileDetails(
+  rootPath: string,
+  relativePath: string
+): Promise<ResolvedProjectionFile | null> {
+  if (isHiddenFixturePath(relativePath) || isApiResponseBodyPath(relativePath)) {
+    return null;
+  }
+
+  const asset = await findProjectionAsset(rootPath, relativePath);
+  if (!asset?.projectionPath) {
+    return null;
+  }
+
+  const rootFs = createFixtureRootFs(rootPath);
+  const [meta, currentTextResult, canonicalBodyBase64] = await Promise.all([
+    rootFs.readOptionalJson<ResponseMeta>(asset.metaPath),
+    readTextFixture(rootPath, asset.projectionPath),
+    rootFs.readBodyAsBase64(asset.bodyPath).catch(() => null)
+  ]);
+  if (!meta || !canonicalBodyBase64) {
+    return null;
+  }
+
+  const projectionPayload = await createProjectedFixturePayload({
+    relativePath: asset.projectionPath,
+    payload: {
+      body: canonicalBodyBase64,
+      bodyEncoding: "base64"
+    },
+    mimeType: meta.mimeType,
+    resourceType: meta.resourceType
+  });
+
+  return {
+    path: asset.projectionPath,
+    canonicalPath: asset.bodyPath,
+    metaPath: asset.metaPath,
+    currentText: isEditableProjectionAsset(asset.projectionPath, meta) && currentTextResult.ok ? currentTextResult.text : null,
+    editable: isEditableProjectionAsset(asset.projectionPath, meta) && projectionPayload.bodyEncoding === "utf8",
+    projectionPayload
+  };
+}
+
+function createProjectionEditError(relativePath: string): Error {
+  if (isApiResponseBodyPath(relativePath)) {
+    return new Error(`API response fixtures are read-only in this pass: ${relativePath}`);
+  }
+  if (isHiddenFixturePath(relativePath)) {
+    return new Error(`Hidden canonical files under .wraithwalker cannot be edited with projection tools: ${relativePath}`);
+  }
+  return new Error(`File is not a projection-backed captured asset: ${relativePath}`);
+}
+
+async function requireProjectionFile(
+  rootPath: string,
+  relativePath: string
+): Promise<ResolvedProjectionFile> {
+  const resolvedPath = resolveWithinRoot(rootPath, relativePath);
+  if (!resolvedPath) {
+    throw new Error(`Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`);
+  }
+
+  const details = await resolveProjectionFileDetails(rootPath, relativePath);
+  if (!details) {
+    throw createProjectionEditError(relativePath);
+  }
+
+  return details;
 }
 
 export async function readOriginInfo(rootPath: string, siteConfig: SiteConfigLike): Promise<OriginInfo> {
@@ -725,7 +1001,9 @@ export async function listAssets(
     return {
       ...entry,
       hasBody,
-      bodySize: hasBody ? stat!.size : null
+      bodySize: hasBody ? stat!.size : null,
+      editable: isEditableProjectionAsset(entry.projectionPath, entry),
+      canonicalPath: entry.bodyPath
     };
   })).then((entries) => entries.sort(compareAssetInfos));
 
@@ -762,7 +1040,7 @@ export async function readFixtureBody(
   await assertWithinFullReadLimit(rootFs, relativePath, (byteLength, limit) => (
     new Error(
       `File is too large to read in full: ${relativePath} (${byteLength} bytes; limit ${limit} bytes). `
-      + "Use read-fixture-snippet with this path and specify startLine and lineCount."
+      + "Use read-file-snippet with this path and specify startLine and lineCount."
     )
   ));
   const text = await rootFs.readOptionalText(relativePath);
@@ -852,7 +1130,7 @@ export async function readApiFixture(
       await assertWithinFullReadLimit(rootFs, bodyPath, (byteLength, limit) => (
         new Error(
           `Endpoint fixture body is too large to read in full: ${bodyPath} (${byteLength} bytes; limit ${limit} bytes). `
-          + `Use read-fixture-snippet with path "${bodyPath}" and specify startLine and lineCount.`
+          + `Use read-file-snippet with path "${bodyPath}" and specify startLine and lineCount.`
         )
       ));
       const body = await rootFs.readOptionalText(bodyPath);
@@ -918,7 +1196,9 @@ export async function searchFixtureContent(
           resourceType: entry.resourceType,
           excerpt: match.excerpt,
           matchLine: match.matchLine,
-          matchColumn: match.matchColumn
+          matchColumn: match.matchColumn,
+          editable: entry.editable,
+          canonicalPath: entry.canonicalPath
         });
         continue;
       }
@@ -940,7 +1220,9 @@ export async function searchFixtureContent(
       resourceType: entry.resourceType,
       excerpt: pathMatch.excerpt,
       matchLine: pathMatch.matchLine,
-      matchColumn: pathMatch.matchColumn
+      matchColumn: pathMatch.matchColumn,
+      editable: entry.editable,
+      canonicalPath: entry.canonicalPath
     });
   }
 
@@ -954,4 +1236,83 @@ export async function searchFixtureContent(
 
 export async function readSiteConfigs(rootPath: string): Promise<SiteConfig[]> {
   return readEffectiveSiteConfigs(rootPath);
+}
+
+export async function resolveProjectionFile(
+  rootPath: string,
+  relativePath: string
+): Promise<ProjectionFileInfo | null> {
+  const details = await resolveProjectionFileDetails(rootPath, relativePath);
+  if (!details) {
+    return null;
+  }
+
+  return {
+    path: details.path,
+    canonicalPath: details.canonicalPath,
+    metaPath: details.metaPath,
+    currentText: details.currentText,
+    editable: details.editable
+  };
+}
+
+export async function writeProjectionFile(
+  rootPath: string,
+  relativePath: string,
+  content: string
+): Promise<ProjectionFileInfo> {
+  const details = await requireProjectionFile(rootPath, relativePath);
+  if (!details.editable) {
+    throw new Error(`Projection file is not text-editable: ${relativePath}`);
+  }
+
+  await createFixtureRootFs(rootPath).writeText(details.path, content);
+  return {
+    path: details.path,
+    canonicalPath: details.canonicalPath,
+    metaPath: details.metaPath,
+    currentText: content,
+    editable: true
+  };
+}
+
+export async function patchProjectionFile(
+  rootPath: string,
+  options: PatchProjectionFileOptions
+): Promise<ProjectionFileInfo> {
+  const details = await requireProjectionFile(rootPath, options.path);
+  if (!details.editable) {
+    throw new Error(`Projection file is not text-editable: ${options.path}`);
+  }
+  if (details.currentText === null) {
+    throw new Error(`Projection file is missing or not currently readable as UTF-8 text: ${options.path}`);
+  }
+
+  const nextText = applyLinePatch(details.currentText, options);
+  await createFixtureRootFs(rootPath).writeText(details.path, nextText);
+  return {
+    path: details.path,
+    canonicalPath: details.canonicalPath,
+    metaPath: details.metaPath,
+    currentText: nextText,
+    editable: true
+  };
+}
+
+export async function restoreProjectionFile(
+  rootPath: string,
+  relativePath: string
+): Promise<ProjectionFileInfo> {
+  const details = await requireProjectionFile(rootPath, relativePath);
+  await createFixtureRootFs(rootPath).writeBody(details.path, details.projectionPayload);
+
+  return {
+    path: details.path,
+    canonicalPath: details.canonicalPath,
+    metaPath: details.metaPath,
+    currentText: details.projectionPayload.bodyEncoding === "utf8"
+      ? details.projectionPayload.body
+      : null,
+    editable: details.projectionPayload.bodyEncoding === "utf8"
+  };
 }

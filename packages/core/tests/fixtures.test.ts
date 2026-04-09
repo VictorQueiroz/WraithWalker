@@ -876,13 +876,13 @@ describe("fixture readers", () => {
       "File is too large to read in full: cdn.example.com/assets/huge.js"
     );
     await expect(readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")).rejects.toThrow(
-      "Use read-fixture-snippet with this path and specify startLine and lineCount."
+      "Use read-file-snippet with this path and specify startLine and lineCount."
     );
     await expect(readApiFixture(root.rootPath, endpointFixture.fixtureDir)).rejects.toThrow(
       `Endpoint fixture body is too large to read in full: ${endpointFixture.bodyPath}`
     );
     await expect(readApiFixture(root.rootPath, endpointFixture.fixtureDir)).rejects.toThrow(
-      `Use read-fixture-snippet with path "${endpointFixture.bodyPath}" and specify startLine and lineCount.`
+      `Use read-file-snippet with path "${endpointFixture.bodyPath}" and specify startLine and lineCount.`
     );
   });
 

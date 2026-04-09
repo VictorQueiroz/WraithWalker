@@ -14,13 +14,13 @@ const mocks = vi.hoisted(() => ({
     trpcUrl: "http://127.0.0.1:4319/trpc",
     url: "http://127.0.0.1:4319/mcp",
     tools: [
-      "list-origins",
-      "list-endpoints",
-      "read-endpoint-fixture",
-      "read-fixture",
-      "read-manifest",
-      "list-scenarios",
-      "diff-scenarios"
+      "list-sites",
+      "list-api-routes",
+      "read-api-response",
+      "read-file",
+      "read-site-manifest",
+      "list-snapshots",
+      "diff-snapshots"
     ],
     close: vi.fn().mockResolvedValue(undefined)
   })
@@ -76,13 +76,13 @@ beforeEach(() => {
     trpcUrl: "http://127.0.0.1:4319/trpc",
     url: "http://127.0.0.1:4319/mcp",
     tools: [
-      "list-origins",
-      "list-endpoints",
-      "read-endpoint-fixture",
-      "read-fixture",
-      "read-manifest",
-      "list-scenarios",
-      "diff-scenarios"
+      "list-sites",
+      "list-api-routes",
+      "read-api-response",
+      "read-file",
+      "read-site-manifest",
+      "list-snapshots",
+      "diff-snapshots"
     ],
     close: vi.fn().mockResolvedValue(undefined)
   });
@@ -378,13 +378,13 @@ describe("cli runner", () => {
       trpcUrl: "http://127.0.0.1:4319/trpc",
       url: "http://127.0.0.1:4319/mcp",
       tools: [
-        "list-origins",
-        "list-endpoints",
-        "read-endpoint-fixture",
-        "read-fixture",
-        "read-manifest",
-        "list-scenarios",
-        "diff-scenarios"
+        "list-sites",
+        "list-api-routes",
+        "read-api-response",
+        "read-file",
+        "read-site-manifest",
+        "list-snapshots",
+        "diff-snapshots"
       ],
       close: vi.fn().mockResolvedValue(undefined)
     });
@@ -407,7 +407,7 @@ describe("cli runner", () => {
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/mcp");
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/trpc");
     expect(capture.logs.join("\n")).toContain("Agents and MCP clients talk to http://127.0.0.1:4319/mcp");
-    expect(capture.logs.join("\n")).toContain("list-origins");
+    expect(capture.logs.join("\n")).toContain("list-sites");
     expect(capture.logs.join("\n")).toContain("Press Ctrl+C to close the local server.");
   });
 
@@ -421,7 +421,7 @@ describe("cli runner", () => {
       baseUrl: "http://0.0.0.0:8321",
       trpcUrl: "http://0.0.0.0:8321/trpc",
       url: "http://0.0.0.0:8321/mcp",
-      tools: ["list-origins"],
+      tools: ["list-sites"],
       close: vi.fn().mockResolvedValue(undefined)
     });
     const capture = consoleCapture();
@@ -454,7 +454,7 @@ describe("cli runner", () => {
       baseUrl: "http://127.0.0.1:5000",
       trpcUrl: "http://127.0.0.1:5000/trpc",
       url: "http://127.0.0.1:5000/mcp",
-      tools: ["list-origins"],
+      tools: ["list-sites"],
       close: vi.fn().mockResolvedValue(undefined)
     });
 

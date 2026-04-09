@@ -143,7 +143,7 @@ That makes it possible to run guided scenario traces without changing the extens
 
 1. Start `wraithwalker serve`
 2. Start an extension session
-3. Ask `extension-status` from MCP
+3. Ask `browser-status` from MCP
 4. Start a scenario trace from MCP
 5. Ask the user to click the relevant parts of the app
 6. Stop the trace and inspect `.wraithwalker/scenario-traces/<traceId>/trace.json`

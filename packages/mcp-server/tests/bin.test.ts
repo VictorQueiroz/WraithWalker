@@ -61,7 +61,7 @@ describe("mcp server bin", () => {
       host: "127.0.0.1",
       port: 4319,
       url: "http://127.0.0.1:4319/mcp",
-      tools: ["list-origins"],
+      tools: ["list-sites"],
       close: vi.fn().mockResolvedValue(undefined)
     });
     const writeLine = vi.fn();
@@ -86,7 +86,7 @@ describe("mcp server bin", () => {
       host: "0.0.0.0",
       port: 8321,
       url: "http://0.0.0.0:8321/mcp",
-      tools: ["list-origins"],
+      tools: ["list-sites"],
       close: vi.fn().mockResolvedValue(undefined)
     });
 

@@ -97,21 +97,24 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
-| `extension-status` | — | Report whether the browser extension is connected, capture-ready, and currently using the server root |
-| `start-scenario-trace` | optional `name` | Start a guided click trace for the connected extension |
-| `stop-scenario-trace` | `traceId` | Stop a guided click trace and keep it on disk |
-| `list-scenario-traces` | — | List stored guided traces from `.wraithwalker/scenario-traces` |
-| `read-scenario-trace` | `traceId` | Read one stored guided trace with its steps and linked fixtures |
-| `list-origins` | optional `search` | List all captured origins with endpoint counts, asset counts, and manifest presence |
-| `list-assets` | `origin`, optional filters | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, and body availability (`hasBody`, `bodySize`) |
-| `list-endpoints` | `origin` | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath` |
-| `search-content` | `query`, optional filters | Search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, and per-file `matchCount` |
-| `read-endpoint-fixture` | `fixtureDir`, optional `pretty` | Read the response metadata and body for a fixture returned by `list-endpoints` |
-| `read-fixture` | `path`, optional `pretty` | Read a fixture response body by relative path, restricted to the fixture root |
-| `read-fixture-snippet` | `path`, optional `pretty`, optional bounds | Read a bounded text snippet from a fixture file without dumping the full blob |
-| `read-manifest` | `origin` | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
-| `list-scenarios` | — | List saved scenario snapshots |
-| `diff-scenarios` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
+| `browser-status` | — | Report whether the browser extension is connected, capture-ready, and currently using the server root |
+| `start-trace` | optional `name` | Start a guided click trace for the connected extension |
+| `stop-trace` | `traceId` | Stop a guided click trace and keep it on disk |
+| `list-traces` | — | List stored guided traces from `.wraithwalker/scenario-traces` |
+| `read-trace` | `traceId` | Read one stored guided trace with its steps and linked fixtures |
+| `list-sites` | optional `search` | List all captured origins with endpoint counts, asset counts, and manifest presence |
+| `list-files` | `origin`, optional filters | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, body availability (`hasBody`, `bodySize`), plus `editable` and `canonicalPath` for projection-backed files |
+| `list-api-routes` | `origin` | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath` |
+| `search-files` | `query`, optional filters | Search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, `editable`, `canonicalPath`, and per-file `matchCount` |
+| `read-api-response` | `fixtureDir`, optional `pretty` | Read the response metadata and body for a fixture returned by `list-api-routes` |
+| `read-file` | `path`, optional `pretty` | Read a fixture response body by relative path, restricted to the fixture root |
+| `read-file-snippet` | `path`, optional `pretty`, optional bounds | Read a bounded text snippet from a fixture file without dumping the full blob |
+| `read-site-manifest` | `origin` | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
+| `write-file` | `path`, `content` | Overwrite an editable human-facing projection file with UTF-8 text |
+| `patch-file` | `path`, `startLine`, `endLine`, `expectedText`, `replacement` | Apply a line-range patch to an editable projection file and fail if the expected text no longer matches |
+| `restore-file` | `path` | Regenerate the visible projection from its canonical hidden snapshot |
+| `list-snapshots` | — | List saved scenario snapshots |
+| `diff-snapshots` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
 
 ## tRPC Backend
 
@@ -132,7 +135,7 @@ When the extension detects the default loopback server at `http://127.0.0.1:4319
 
 While the extension is connected to the local server, the server root's effective site config is authoritative. Chrome-local extension settings become fallback-only until the server disappears again.
 
-The extension Settings page follows that same authority switch: while connected, origin/mode/dump-pattern edits are written through tRPC into the server root's `.wraithwalker/config.json`. Without the server, the extension writes those settings to its selected local root instead.
+The extension Settings page follows that same authority switch: while connected, origin and dump-pattern edits are written through tRPC into the server root's `.wraithwalker/config.json`. Without the server, the extension writes those settings to its selected local root instead.
 
 If older extension-local site config exists, the extension imports it into the selected root once and then continues from the root-backed config.
 
@@ -142,35 +145,41 @@ Guided traces are server-root-only in v1 and live under `.wraithwalker/scenario-
 
 WraithWalker now exposes a progressive-disclosure MCP surface for agents:
 
-1. `list-origins` to discover what has been captured, optionally narrowed with `search`
-2. `list-assets` or `list-endpoints` to narrow to the relevant files or API fixtures, using `matchedOrigins` plus `hasBody` / `bodySize` to see what is actually readable
-3. `search-content` to find the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about, using `matchCount` for body hits and `matchKind: "path"` when only the name/path matched
-4. `read-fixture-snippet` to inspect only the relevant section of a large file, optionally with `pretty: true` for minified chunks
-5. `read-fixture`, `read-endpoint-fixture`, or `read-manifest` only when you need the full raw payload
+1. `list-sites` to discover what has been captured, optionally narrowed with `search`
+2. `list-files` or `list-api-routes` to narrow to the relevant files or API fixtures, using `matchedOrigins` plus `hasBody` / `bodySize` to see what is actually readable
+3. `search-files` to find the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about, using `matchCount` for body hits and `matchKind: "path"` when only the name/path matched
+4. `read-file-snippet` to inspect only the relevant section of a large file, optionally with `pretty: true` for minified chunks
+5. `read-file`, `read-api-response`, or `read-site-manifest` only when you need the full raw payload
 
-`list-assets`, `list-endpoints`, and `search-content` treat HTTP and HTTPS origins with the same host and port as one discovery group, and report the concrete origins they matched in `matchedOrigins`.
+When `list-files` or `search-files` marks a result as `editable: true`, agents can change the human-facing projection with:
 
-`read-fixture` and `read-endpoint-fixture` reject oversized full reads above 64 KB and direct agents to `read-fixture-snippet` with `startLine` and `lineCount`.
+1. `write-file(path, content)` to replace it outright
+2. `patch-file(path, startLine, endLine, expectedText, replacement)` for conflict-aware line edits
+3. `restore-file(path)` to regenerate it from the canonical hidden snapshot
 
-`read-manifest` intentionally stays available for full-fidelity debugging, but it should not be the main discovery path for agents.
+`list-files`, `list-api-routes`, and `search-files` treat HTTP and HTTPS origins with the same host and port as one discovery group, and report the concrete origins they matched in `matchedOrigins`.
+
+`read-file` and `read-api-response` reject oversized full reads above 64 KB and direct agents to `read-file-snippet` with `startLine` and `lineCount`.
+
+`read-site-manifest` intentionally stays available for full-fidelity debugging, but it should not be the main discovery path for agents.
 
 ### UI Imitation Example
 
 When an agent wants to imitate a dropdown, modal, or other UI behavior from captured files:
 
-1. `list-origins`
-2. `list-assets(origin, { resourceTypes: ["Script", "Stylesheet"] })`
-3. `search-content("dropdown")`
-4. `read-fixture-snippet(...)`
+1. `list-sites`
+2. `list-files(origin, { resourceTypes: ["Script", "Stylesheet"] })`
+3. `search-files("dropdown")`
+4. `read-file-snippet(...)`
 
 ### State And Debugging Example
 
 When an agent wants to understand a state transition or compare captured API behavior:
 
-1. `list-scenarios`
-2. `diff-scenarios(...)`
-3. `list-endpoints(origin)`
-4. `read-endpoint-fixture(...)`
+1. `list-snapshots`
+2. `diff-snapshots(...)`
+3. `list-api-routes(origin)`
+4. `read-api-response(...)`
 
 ## Client Setup
 
