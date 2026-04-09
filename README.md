@@ -14,8 +14,6 @@ npm run build
 npm test
 ```
 
-`npm test` now writes a repo-wide coverage report to `coverage/lcov-report/index.html` plus a merged `coverage/lcov.info`, and it fails if merged repo coverage drops below the enforced root thresholds.
-
 ## Basic Capture
 
 1. Load `packages/extension/dist` as an unpacked Chrome extension.
@@ -65,3 +63,5 @@ More: [Extension and Cursor workflow](docs/extension-workflow.md)
 - [MCP server tools and tRPC backend](packages/mcp-server/README.md)
 - [MCP clients](docs/mcp-clients.md)
 - [npm releases](docs/npm-releases.md)
+
+For development and release steps, use the docs in `docs/` as the source of truth.
