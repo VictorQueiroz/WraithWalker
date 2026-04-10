@@ -11,7 +11,7 @@ import type { RootSentinel } from "@wraithwalker/core/root";
 import { listScenarios, saveScenario, switchScenario } from "@wraithwalker/core/scenarios";
 import { z } from "zod";
 
-import type { ExtensionStatus } from "./extension-session.mjs";
+import type { ExtensionConsoleEntry, ExtensionStatus } from "./extension-session.mjs";
 import { createServerRootRuntime } from "./root-runtime.mjs";
 import { revealRootDirectory } from "./root-reveal.mjs";
 
@@ -100,6 +100,18 @@ export const siteConfigSchema = z.object({
   dumpAllowlistPatterns: z.array(z.string())
 });
 
+export const consoleEntrySchema = z.object({
+  tabId: z.number().int().nonnegative(),
+  topOrigin: z.string(),
+  source: z.string(),
+  level: z.string(),
+  text: z.string(),
+  timestamp: z.string(),
+  url: z.string().optional(),
+  lineNumber: z.number().int().optional(),
+  columnNumber: z.number().int().optional()
+});
+
 export interface TrpcSystemInfo {
   serverName: string;
   serverVersion: string;
@@ -141,6 +153,7 @@ export interface CreateWraithwalkerRouterDependencies {
       extensionVersion: string;
       sessionActive: boolean;
       enabledOrigins: string[];
+      recentConsoleEntries?: ExtensionConsoleEntry[];
     }): Promise<ExtensionStatus>;
   };
   getServerUrls: () => {
@@ -183,7 +196,8 @@ export function createWraithwalkerRouter({
           clientId: z.string().min(1),
           extensionVersion: z.string().min(1),
           sessionActive: z.boolean(),
-          enabledOrigins: z.array(z.string())
+          enabledOrigins: z.array(z.string()),
+          recentConsoleEntries: z.array(consoleEntrySchema).optional()
         }))
         .mutation(async ({ input }): Promise<TrpcHeartbeatInfo> => {
           const status = await extensionSessions.heartbeat(input);

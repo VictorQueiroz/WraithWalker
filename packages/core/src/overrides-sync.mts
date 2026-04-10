@@ -219,17 +219,22 @@ function applyHeaderOverrides(
   requestPath: string,
   mimeType: string,
   rules: HeaderOverrideRule[]
-): HeaderEntry[] {
+): { headers: HeaderEntry[]; hasExplicitOverrides: boolean } {
   let headers: HeaderEntry[] = [{ name: "Content-Type", value: mimeType }];
+  let hasExplicitOverrides = false;
 
   for (const rule of rules) {
     if (!createHeaderMatcher(rule).test(requestPath)) {
       continue;
     }
+    hasExplicitOverrides = true;
     headers = mergeHeaders(headers, rule.headers);
   }
 
-  return headers;
+  return {
+    headers,
+    hasExplicitOverrides
+  };
 }
 
 function normalizeIgnorePath(relativePath: string, isDirectory = false): string {
@@ -513,7 +518,7 @@ export async function syncOverridesDirectory(
     const requestUrl = new URL(candidate.requestUrl);
     const mimeType = deriveMimeTypeFromPathname(requestUrl.pathname);
     const resourceType = inferResourceTypeFromMime(mimeType);
-    const headers = applyHeaderOverrides(candidate.requestPath, mimeType, rules);
+    const { headers, hasExplicitOverrides } = applyHeaderOverrides(candidate.requestPath, mimeType, rules);
     const metadataPaths = getMetadataPaths(candidate.topOrigin, candidate.relativePath);
     const queryHash = await shortHash(requestUrl.search || "");
     const bodyHash = await shortHash("");
@@ -546,15 +551,18 @@ export async function syncOverridesDirectory(
       }
     }, candidate.capturedAt));
 
-    await rootFs.writeJson(metadataPaths.metaPath, buildResponseMeta({
-      responseStatus: 200,
-      responseStatusText: "OK",
-      responseHeaders: headers,
-      mimeType,
-      resourceType,
-      url: candidate.requestUrl,
-      method: "GET"
-    }, candidate.bodyEncoding, candidate.capturedAt));
+    await rootFs.writeJson(metadataPaths.metaPath, {
+      ...buildResponseMeta({
+        responseStatus: 200,
+        responseStatusText: "OK",
+        responseHeaders: headers,
+        mimeType,
+        resourceType,
+        url: candidate.requestUrl,
+        method: "GET"
+      }, candidate.bodyEncoding, candidate.capturedAt),
+      headerStrategy: hasExplicitOverrides ? "stored" : "live"
+    });
 
     await rootFs.copyRecursive(candidate.relativePath, metadataPaths.bodyPath);
 

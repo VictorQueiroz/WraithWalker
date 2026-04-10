@@ -949,7 +949,8 @@ describe("tRPC capture backend", () => {
           })),
           activeTrace: null,
           tracePhase: sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready",
-          activeTraceSummary: null
+          activeTraceSummary: null,
+          recentConsoleEntries: []
         })
       },
       getServerUrls: () => ({
@@ -1049,7 +1050,8 @@ describe("tRPC capture backend", () => {
           siteConfigs: [],
           activeTrace: null,
           tracePhase: sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready",
-          activeTraceSummary: null
+          activeTraceSummary: null,
+          recentConsoleEntries: []
         })
       },
       getServerUrls: () => ({
@@ -1092,7 +1094,8 @@ describe("tRPC capture backend", () => {
           siteConfigs: [],
           activeTrace: null,
           tracePhase: sessionActive && enabledOrigins.length > 0 ? "idle" : "not_ready",
-          activeTraceSummary: null
+          activeTraceSummary: null,
+          recentConsoleEntries: []
         })
       },
       getServerUrls: () => ({
@@ -1177,7 +1180,8 @@ describe("tRPC capture backend", () => {
                   linkedFixtureCount: activeTrace.steps.reduce((count, step) => count + step.linkedFixtures.length, 0),
                   recentSteps: []
                 }
-              : null
+              : null,
+            recentConsoleEntries: []
           };
         }
       },
@@ -1198,7 +1202,18 @@ describe("tRPC capture backend", () => {
       clientId: "client-1",
       extensionVersion: "1.0.0",
       sessionActive: true,
-      enabledOrigins: ["https://app.example.com"]
+      enabledOrigins: ["https://app.example.com"],
+      recentConsoleEntries: [{
+        tabId: 3,
+        topOrigin: "https://app.example.com",
+        source: "javascript",
+        level: "error",
+        text: "Unhandled exception: boom",
+        timestamp: "2026-04-08T00:00:00.000Z",
+        url: "https://app.example.com/assets/app.js",
+        lineNumber: 42,
+        columnNumber: 7
+      }]
     });
     expect(heartbeat.activeTrace).toEqual(
       expect.objectContaining({

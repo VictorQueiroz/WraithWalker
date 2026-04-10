@@ -13,6 +13,19 @@ export interface ActiveExtensionClientState {
   sessionActive: boolean;
   enabledOrigins: string[];
   lastHeartbeatAt: string;
+  recentConsoleEntries: ExtensionConsoleEntry[];
+}
+
+export interface ExtensionConsoleEntry {
+  tabId: number;
+  topOrigin: string;
+  source: string;
+  level: string;
+  text: string;
+  timestamp: string;
+  url?: string;
+  lineNumber?: number;
+  columnNumber?: number;
 }
 
 export interface ExtensionStatus {
@@ -29,6 +42,7 @@ export interface ExtensionStatus {
   tracePhase: ScenarioTracePhase;
   blockingReason?: ScenarioTraceBlockingReason;
   activeTraceSummary: ScenarioTraceAgentSummary | null;
+  recentConsoleEntries: ExtensionConsoleEntry[];
 }
 
 export interface ExtensionHeartbeatInput {
@@ -36,6 +50,7 @@ export interface ExtensionHeartbeatInput {
   extensionVersion: string;
   sessionActive: boolean;
   enabledOrigins: string[];
+  recentConsoleEntries?: ExtensionConsoleEntry[];
 }
 
 interface CreateExtensionSessionTrackerDependencies {
@@ -177,7 +192,8 @@ export function createExtensionSessionTracker({
       extensionVersion: input.extensionVersion,
       sessionActive: input.sessionActive,
       enabledOrigins: [...input.enabledOrigins],
-      lastHeartbeatAt: heartbeatAt
+      lastHeartbeatAt: heartbeatAt,
+      recentConsoleEntries: [...(input.recentConsoleEntries ?? [])]
     };
 
     return getStatus();
@@ -220,7 +236,8 @@ export function createExtensionSessionTracker({
         activeTrace: trace,
         tracePhase,
         ...(blockingReason ? { blockingReason } : {}),
-        activeTraceSummary
+        activeTraceSummary,
+        recentConsoleEntries: []
       };
     }
 
@@ -237,7 +254,10 @@ export function createExtensionSessionTracker({
       activeTrace: trace,
       tracePhase,
       ...(blockingReason ? { blockingReason } : {}),
-      activeTraceSummary
+      activeTraceSummary,
+      recentConsoleEntries: connected
+        ? [...activeClient.recentConsoleEntries]
+        : []
     };
   }
 

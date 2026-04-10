@@ -137,6 +137,7 @@ export interface ResponseMeta {
   status: number;
   statusText: string;
   headers: HeaderEntry[];
+  headerStrategy?: "live" | "stored";
   mimeType: string;
   resourceType: string;
   url: string;

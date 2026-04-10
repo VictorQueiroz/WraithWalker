@@ -115,6 +115,7 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `browser-status` | — | Report whether the browser extension is connected, capture-ready, and currently using the server root |
+| `read-console` | optional `limit`, optional filters | Read recent browser console and log entries observed by the connected extension |
 | `trace-status` | — | Report guided trace readiness plus a compact agent summary of the active trace |
 | `start-trace` | optional `name`, optional `goal` | Start a guided click trace for the connected extension |
 | `stop-trace` | `traceId` | Stop a guided click trace and keep it on disk |

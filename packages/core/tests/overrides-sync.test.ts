@@ -132,6 +132,7 @@ describe("syncOverridesDirectory", () => {
       ".wraithwalker/captures/assets/https__app.example.com/app.example.com/styles/app.css.__response.json"
     );
     expect(cssMeta.resourceType).toBe("Stylesheet");
+    expect((cssMeta as { headerStrategy?: string }).headerStrategy).toBe("live");
 
     const jsMeta = await readJson<{
       headers: Array<{ name: string; value: string }>;
@@ -143,6 +144,7 @@ describe("syncOverridesDirectory", () => {
       { name: "Set-Cookie", value: "a=1" },
       { name: "Set-Cookie", value: "b=2" }
     ]));
+    expect((jsMeta as { headerStrategy?: string }).headerStrategy).toBe("stored");
 
     const fontMeta = await readJson<{ resourceType: string; bodyEncoding: string }>(
       dir,

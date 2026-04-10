@@ -35,6 +35,7 @@ That gives the agent:
 The local MCP server exposes:
 
 - `browser-status`
+- `read-console`
 - `trace-status`
 - `start-trace`
 - `stop-trace`
@@ -56,6 +57,18 @@ Important fields:
 - `tracePhase`
 - `blockingReason`
 - `activeTraceSummary`
+
+### `read-console`
+
+This returns the recent console and log entries that the connected extension observed through the Chrome Debugger session.
+
+Useful filters:
+
+- `limit`
+- `tabId`
+- `search`
+- `sources`
+- `levels`
 
 `captureReady` means:
 

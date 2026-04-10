@@ -351,6 +351,76 @@ async function createFixtureRootWithData() {
   return root;
 }
 
+async function createBinaryProjectionRoot() {
+  const root = await createWraithwalkerFixtureRoot({
+    prefix: "wraithwalker-mcp-server-binary-",
+    rootId: "root-mcp-server-binary"
+  });
+  const topOriginKey = "https__app.example.com";
+  const projectionPath = "cdn.example.com/assets/logo.png";
+  const canonicalPath = `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/logo.png.__body`;
+  const requestPath = `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/logo.png.__request.json`;
+  const metaPath = `.wraithwalker/captures/assets/${topOriginKey}/cdn.example.com/assets/logo.png.__response.json`;
+
+  await root.writeManifest({
+    topOrigin: "https://app.example.com",
+    manifest: {
+      schemaVersion: 1,
+      topOrigin: "https://app.example.com",
+      topOriginKey,
+      generatedAt: "2026-04-09T00:00:00.000Z",
+      resourcesByPathname: {
+        "/assets/logo.png": [{
+          requestUrl: "https://cdn.example.com/assets/logo.png",
+          requestOrigin: "https://cdn.example.com",
+          pathname: "/assets/logo.png",
+          search: "",
+          bodyPath: canonicalPath,
+          projectionPath,
+          requestPath,
+          metaPath,
+          mimeType: "image/png",
+          resourceType: "Image",
+          capturedAt: "2026-04-09T00:00:00.000Z"
+        }]
+      }
+    }
+  });
+
+  await fs.mkdir(path.dirname(root.resolve(canonicalPath)), { recursive: true });
+  await fs.writeFile(root.resolve(canonicalPath), Buffer.from([0, 1, 2, 3]));
+  await fs.mkdir(path.dirname(root.resolve(projectionPath)), { recursive: true });
+  await fs.writeFile(root.resolve(projectionPath), Buffer.from([0, 1, 2, 3]));
+  await root.writeJson(requestPath, {
+    topOrigin: "https://app.example.com",
+    url: "https://cdn.example.com/assets/logo.png",
+    method: "GET",
+    headers: [],
+    body: "",
+    bodyEncoding: "utf8",
+    bodyHash: "b-empty",
+    queryHash: "q-empty",
+    capturedAt: "2026-04-09T00:00:00.000Z"
+  });
+  await root.writeJson(metaPath, {
+    status: 200,
+    statusText: "OK",
+    headers: [{ name: "Content-Type", value: "image/png" }],
+    mimeType: "image/png",
+    resourceType: "Image",
+    url: "https://cdn.example.com/assets/logo.png",
+    method: "GET",
+    capturedAt: "2026-04-09T00:00:00.000Z",
+    bodyEncoding: "base64",
+    bodySuggestedExtension: "png"
+  });
+
+  return {
+    root,
+    projectionPath
+  };
+}
+
 afterEach(() => {
   // The tests explicitly close the MCP client/server pair. This hook keeps the
   // test file symmetric with other suites and makes later cleanup additions safe.
@@ -376,6 +446,7 @@ describe("mcp server", () => {
         "list-traces",
         "patch-file",
         "read-api-response",
+        "read-console",
         "read-file",
         "read-file-snippet",
         "read-site-manifest",
@@ -757,6 +828,53 @@ describe("mcp server", () => {
     }
   });
 
+  it("rejects non-projection and binary write targets and non-projection restores", async () => {
+    const root = await createFixtureRootWithData();
+    const binaryRoot = await createBinaryProjectionRoot();
+    const { client, server } = await connectClient(root.rootPath);
+    const { client: binaryClient, server: binaryServer } = await connectClient(binaryRoot.root.rootPath);
+
+    try {
+      const arbitraryWriteResult = await client.callTool({
+        name: "write-file",
+        arguments: {
+          path: "notes/ui-guidelines.txt",
+          content: "oops"
+        }
+      });
+      expect(arbitraryWriteResult.isError).toBe(true);
+      expect(readTextContent(arbitraryWriteResult)).toContain(
+        "File is not a projection-backed captured asset: notes/ui-guidelines.txt"
+      );
+
+      const restoreResult = await client.callTool({
+        name: "restore-file",
+        arguments: { path: "notes/ui-guidelines.txt" }
+      });
+      expect(restoreResult.isError).toBe(true);
+      expect(readTextContent(restoreResult)).toContain(
+        "File is not a projection-backed captured asset: notes/ui-guidelines.txt"
+      );
+
+      const binaryWriteResult = await binaryClient.callTool({
+        name: "write-file",
+        arguments: {
+          path: binaryRoot.projectionPath,
+          content: "oops"
+        }
+      });
+      expect(binaryWriteResult.isError).toBe(true);
+      expect(readTextContent(binaryWriteResult)).toContain(
+        `Projection file is not text-editable: ${binaryRoot.projectionPath}`
+      );
+    } finally {
+      await client.close();
+      await server.close();
+      await binaryClient.close();
+      await binaryServer.close();
+    }
+  });
+
   it("returns MCP tool errors for invalid requests", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-server-",
@@ -874,6 +992,32 @@ describe("mcp server", () => {
       expect(invalidScenarioResult.isError).toBe(true);
       expect(readTextContent(invalidScenarioResult)).toContain("Scenario name must be 1-64 alphanumeric");
       expect(readTextContent(invalidScenarioResult)).not.toContain("Available scenarios:");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("reports syntactically valid but missing API fixtures as not found", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const missingFixtureDir = root.apiFixturePaths({
+      topOrigin: "https://app.example.com",
+      requestOrigin: "https://api.example.com",
+      method: "GET",
+      fixtureName: "missing__q-empty__b-empty"
+    }).fixtureDir;
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const result = await client.callTool({
+        name: "read-api-response",
+        arguments: { fixtureDir: missingFixtureDir }
+      });
+      expect(result.isError).toBe(true);
+      expect(readTextContent(result)).toContain(`Endpoint fixture not found: ${missingFixtureDir}`);
     } finally {
       await client.close();
       await server.close();
@@ -1599,7 +1743,18 @@ describe("mcp server", () => {
         clientId: "client-1",
         extensionVersion: "1.0.0",
         sessionActive: true,
-        enabledOrigins: ["https://app.example.com"]
+        enabledOrigins: ["https://app.example.com"],
+        recentConsoleEntries: [{
+          tabId: 7,
+          topOrigin: "https://app.example.com",
+          source: "javascript",
+          level: "error",
+          text: "Unhandled exception: boom",
+          timestamp: "2026-04-08T00:00:00.000Z",
+          url: "https://app.example.com/assets/app.js",
+          lineNumber: 42,
+          columnNumber: 7
+        }]
       });
       expect(heartbeat.activeTrace).toBeNull();
 
@@ -1612,7 +1767,35 @@ describe("mcp server", () => {
           clientId: "client-1",
           enabledOrigins: ["https://app.example.com"],
           siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })],
+          recentConsoleEntries: [
+            expect.objectContaining({
+              tabId: 7,
+              level: "error",
+              text: "Unhandled exception: boom"
+            })
+          ],
           activeTraceSummary: null
+        })
+      );
+      const consoleResult = await client.callTool({
+        name: "read-console",
+        arguments: { search: "boom" }
+      });
+      expect(JSON.parse(readTextContent(consoleResult))).toEqual(
+        expect.objectContaining({
+          connected: true,
+          captureReady: true,
+          totalEntries: 1,
+          returnedEntries: 1,
+          entries: [
+            expect.objectContaining({
+              tabId: 7,
+              topOrigin: "https://app.example.com",
+              source: "javascript",
+              level: "error",
+              text: "Unhandled exception: boom"
+            })
+          ]
         })
       );
       const idleTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
@@ -1759,6 +1942,139 @@ describe("mcp server", () => {
     }
   });
 
+  it("filters console entries by tab, search, source, level, and limit", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-console-",
+      rootId: "root-mcp-server-console"
+    });
+    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const trpcClient = createTrpcClient(server.trpcUrl);
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }]
+    });
+
+    try {
+      await trpcClient.extension.heartbeat.mutate({
+        clientId: "client-console",
+        extensionVersion: "1.0.0",
+        sessionActive: true,
+        enabledOrigins: ["https://app.example.com"],
+        recentConsoleEntries: [
+          {
+            tabId: 7,
+            topOrigin: "https://app.example.com",
+            source: "javascript",
+            level: "error",
+            text: "Boom render failed",
+            timestamp: "2026-04-08T00:00:00.000Z",
+            url: "https://app.example.com/assets/app.js",
+            lineNumber: 11,
+            columnNumber: 2
+          },
+          {
+            tabId: 7,
+            topOrigin: "https://app.example.com",
+            source: "network",
+            level: "warn",
+            text: "Request timeout",
+            timestamp: "2026-04-08T00:00:01.000Z",
+            url: "https://app.example.com/api/users"
+          },
+          {
+            tabId: 9,
+            topOrigin: "https://admin.example.com",
+            source: "javascript",
+            level: "info",
+            text: "Boom recovered",
+            timestamp: "2026-04-08T00:00:02.000Z",
+            url: "https://admin.example.com/assets/admin.js",
+            lineNumber: 1,
+            columnNumber: 1
+          },
+          {
+            tabId: 7,
+            topOrigin: "https://app.example.com",
+            source: "javascript",
+            level: "log",
+            text: "Boot complete",
+            timestamp: "2026-04-08T00:00:03.000Z",
+            url: "https://app.example.com/assets/app.js",
+            lineNumber: 1,
+            columnNumber: 1
+          }
+        ]
+      });
+
+      const limitedResult = await client.callTool({
+        name: "read-console",
+        arguments: { limit: 2 }
+      });
+      expect(JSON.parse(readTextContent(limitedResult))).toEqual(expect.objectContaining({
+        totalEntries: 4,
+        returnedEntries: 2,
+        entries: [
+          expect.objectContaining({ text: "Boom recovered" }),
+          expect.objectContaining({ text: "Boot complete" })
+        ]
+      }));
+
+      const tabResult = await client.callTool({
+        name: "read-console",
+        arguments: { tabId: 7 }
+      });
+      expect(JSON.parse(readTextContent(tabResult))).toEqual(expect.objectContaining({
+        returnedEntries: 3,
+        entries: [
+          expect.objectContaining({ text: "Boom render failed" }),
+          expect.objectContaining({ text: "Request timeout" }),
+          expect.objectContaining({ text: "Boot complete" })
+        ]
+      }));
+
+      const searchResult = await client.callTool({
+        name: "read-console",
+        arguments: { search: "BOOM" }
+      });
+      expect(JSON.parse(readTextContent(searchResult))).toEqual(expect.objectContaining({
+        returnedEntries: 2,
+        entries: [
+          expect.objectContaining({ text: "Boom render failed" }),
+          expect.objectContaining({ text: "Boom recovered" })
+        ]
+      }));
+
+      const sourceResult = await client.callTool({
+        name: "read-console",
+        arguments: { sources: ["NETWORK"] }
+      });
+      expect(JSON.parse(readTextContent(sourceResult))).toEqual(expect.objectContaining({
+        returnedEntries: 1,
+        entries: [expect.objectContaining({ source: "network", text: "Request timeout" })]
+      }));
+
+      const levelResult = await client.callTool({
+        name: "read-console",
+        arguments: { levels: ["ERROR", "WARN"] }
+      });
+      expect(JSON.parse(readTextContent(levelResult))).toEqual(expect.objectContaining({
+        returnedEntries: 2,
+        entries: [
+          expect.objectContaining({ level: "error", text: "Boom render failed" }),
+          expect.objectContaining({ level: "warn", text: "Request timeout" })
+        ]
+      }));
+    } finally {
+      await transport.close();
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("reports connected-but-not-ready trace status when the extension session is inactive", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-server-",
@@ -1880,6 +2196,7 @@ describe("mcp server", () => {
       expect(server.url).toContain(`:${server.port}/mcp`);
       expect(server.tools).toEqual([
         "browser-status",
+        "read-console",
         "trace-status",
         "start-trace",
         "stop-trace",
@@ -1911,6 +2228,7 @@ describe("mcp server", () => {
         "list-traces",
         "patch-file",
         "read-api-response",
+        "read-console",
         "read-file",
         "read-file-snippet",
         "read-site-manifest",

@@ -26,6 +26,7 @@ describe("extension session tracker", () => {
         captureReady: false,
         tracePhase: "disconnected",
         blockingReason: "extension_disconnected",
+        recentConsoleEntries: [],
         activeTrace: expect.objectContaining({ traceId: "trace-1" }),
         activeTraceSummary: expect.objectContaining({
           traceId: "trace-1",
@@ -53,7 +54,18 @@ describe("extension session tracker", () => {
       clientId: "client-1",
       extensionVersion: "1.0.0",
       sessionActive: true,
-      enabledOrigins: ["https://app.example.com"]
+      enabledOrigins: ["https://app.example.com"],
+      recentConsoleEntries: [{
+        tabId: 7,
+        topOrigin: "https://app.example.com",
+        source: "javascript",
+        level: "error",
+        text: "Unhandled exception: boom",
+        timestamp: "2026-04-08T00:00:00.000Z",
+        url: "https://app.example.com/assets/app.js",
+        lineNumber: 42,
+        columnNumber: 7
+      }]
     });
     expect(ready).toEqual(
       expect.objectContaining({
@@ -64,6 +76,13 @@ describe("extension session tracker", () => {
         clientId: "client-1",
         enabledOrigins: ["https://app.example.com"],
         siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })],
+        recentConsoleEntries: [
+          expect.objectContaining({
+            tabId: 7,
+            level: "error",
+            text: "Unhandled exception: boom"
+          })
+        ],
         activeTraceSummary: null
       })
     );
@@ -79,7 +98,8 @@ describe("extension session tracker", () => {
         blockingReason: "extension_disconnected",
         captureDestination: "none",
         enabledOrigins: [],
-        siteConfigs: []
+        siteConfigs: [],
+        recentConsoleEntries: []
       })
     );
   });
