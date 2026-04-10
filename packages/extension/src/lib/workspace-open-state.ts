@@ -81,7 +81,9 @@ export function deriveEditorLaunchState(
   } = {}
 ): EditorLaunchState {
   const launch = resolveEditorLaunch(nativeHostConfig, editorId);
-  const launchPath = nativeHostConfig.launchPath.trim();
+  const launchPath = typeof nativeHostConfig.launchPath === "string"
+    ? nativeHostConfig.launchPath.trim()
+    : "";
   const appUrl = launch.appUrl.trim();
 
   if (launch.urlTemplate.trim()) {
@@ -124,7 +126,7 @@ export function deriveEditorLaunchState(
     };
   }
 
-  if (!nativeHostConfig.hostName.trim()) {
+  if (!(typeof nativeHostConfig.hostName === "string" && nativeHostConfig.hostName.trim())) {
     return {
       kind: "missing_native_host",
       editorId: launch.editorId,

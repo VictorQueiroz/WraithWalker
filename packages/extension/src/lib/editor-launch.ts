@@ -119,7 +119,7 @@ export function getEditorLaunchOverride(
   nativeHostConfig: NativeHostConfig,
   editorId: string
 ): EditorLaunchOverride {
-  return nativeHostConfig.editorLaunchOverrides[normalizePreferredEditorId(editorId)] ?? {};
+  return nativeHostConfig.editorLaunchOverrides?.[normalizePreferredEditorId(editorId)] ?? {};
 }
 
 export interface ResolvedEditorLaunch {

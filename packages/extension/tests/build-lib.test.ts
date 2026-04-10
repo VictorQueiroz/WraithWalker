@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  applyExtensionVersionToManifest,
   createBuildPaths,
   createDistRuntimeCopies,
   createStaticExtensionCopies,
@@ -14,8 +15,11 @@ describe("build layout helpers", () => {
     const paths = createBuildPaths(process.cwd());
 
     expect(paths.emitDir).toBe(path.join(process.cwd(), ".ts-emit"));
+    expect(paths.packageJsonFile).toBe(path.join(process.cwd(), "package.json"));
     expect(paths.staticDir).toBe(path.join(process.cwd(), "static"));
+    expect(paths.staticManifestFile).toBe(path.join(process.cwd(), "static", "manifest.json"));
     expect(paths.distDir).toBe(path.join(process.cwd(), "dist"));
+    expect(paths.distManifestFile).toBe(path.join(process.cwd(), "dist", "manifest.json"));
     expect(paths.libEmitDir).toBe(path.join(process.cwd(), ".ts-emit", "lib"));
     expect(paths.distVendorFile).toBe(path.join(process.cwd(), "dist", "vendor", "idb.js"));
     expect(paths.vendorSource).toMatch(/idb[/\\]build[/\\]index\.js$/);
@@ -91,6 +95,27 @@ describe("build layout helpers", () => {
   });
 });
 
+describe("applyExtensionVersionToManifest", () => {
+  it("overrides the manifest version with the extension package version", () => {
+    expect(
+      applyExtensionVersionToManifest(
+        {
+          manifest_version: 3,
+          name: "WraithWalker",
+          version: "0.0.0"
+        },
+        {
+          version: "2.4.1"
+        }
+      )
+    ).toEqual({
+      manifest_version: 3,
+      name: "WraithWalker",
+      version: "2.4.1"
+    });
+  });
+});
+
 describe("rewriteIdbSpecifiers", () => {
   it("rewrites a bare double-quoted idb import to the vendor path", () => {
     const input = 'import { openDB } from "idb";';
@@ -138,6 +163,8 @@ const distOffscreenPath = path.join(process.cwd(), "dist", "offscreen.js");
 const distPopupPath = path.join(process.cwd(), "dist", "popup.js");
 const distOptionsPath = path.join(process.cwd(), "dist", "options.js");
 const distCssPath = path.join(process.cwd(), "dist", "app.css");
+const distManifestPath = path.join(process.cwd(), "dist", "manifest.json");
+const packageManifestPath = path.join(process.cwd(), "package.json");
 
 describe("dist output", () => {
   it.skipIf(!(existsSync(distBackgroundPath) && existsSync(distOffscreenPath) && existsSync(distPopupPath) && existsSync(distOptionsPath) && existsSync(distCssPath)))(
@@ -166,6 +193,20 @@ describe("dist output", () => {
       const content = await fs.readFile(distBackgroundPath, "utf-8");
       expect(content).not.toMatch(/from\s+["']@trpc\/client["']/);
       expect(content).not.toContain('"@trpc/client"');
+    }
+  );
+
+  it.skipIf(!(existsSync(distManifestPath) && existsSync(packageManifestPath)))(
+    "writes a built manifest that matches the extension package version",
+    async () => {
+      const [manifestContent, packageManifestContent] = await Promise.all([
+        fs.readFile(distManifestPath, "utf-8"),
+        fs.readFile(packageManifestPath, "utf-8")
+      ]);
+      const manifest = JSON.parse(manifestContent) as { version: string };
+      const packageManifest = JSON.parse(packageManifestContent) as { version: string };
+
+      expect(manifest.version).toBe(packageManifest.version);
     }
   );
 });

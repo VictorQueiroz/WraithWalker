@@ -90,6 +90,20 @@ describe("editor launch helpers", () => {
     });
   });
 
+  it("tolerates configs that omit editorLaunchOverrides", () => {
+    expect(getEditorLaunchOverride({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      editorLaunchOverrides: undefined as unknown as Record<string, never>
+    }, "cursor")).toEqual({});
+    expect(resolveEditorLaunch({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      editorLaunchOverrides: undefined as unknown as Record<string, never>
+    }, "cursor")).toMatchObject({
+      editorId: "cursor",
+      appUrl: "cursor://"
+    });
+  });
+
   it("deletes per-editor overrides when the replacement is empty", () => {
     const withOverride = updateEditorLaunchOverride(DEFAULT_NATIVE_HOST_CONFIG, "cursor", {
       urlTemplate: "custom://open?folder=$DIR_COMPONENT"

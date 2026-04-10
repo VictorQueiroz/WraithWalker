@@ -10,16 +10,20 @@
   "scripts": {
     "build": "turbo run build",
     "test": "npm run coverage",
-    "test:release": "node --test scripts/release.test.mjs",
+    "test:versioning": "node --test scripts/versioning.test.mjs",
     "test:workspaces": "turbo run test",
-    "coverage": "npm run test:release && npm run test:workspaces && npm run coverage:report",
+    "coverage": "npm run test:versioning && npm run test:workspaces && npm run coverage:report",
     "coverage:report": "node scripts/coverage-report.mjs",
     "typecheck": "turbo run typecheck",
     "generate:icons": "turbo run generate:icons --filter=@wraithwalker/extension",
-    "release:prepare": "node scripts/release-prepare.mjs",
-    "release:check": "node scripts/release-check.mjs"
+    "changeset": "changeset",
+    "sync:extension-manifest-version": "node scripts/sync-extension-manifest-version.mjs",
+    "version:packages": "changeset version && npm run sync:extension-manifest-version",
+    "release:prepare": "npm run version:packages",
+    "release:publish": "changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
     "turbo": "^2.5.4",
     "typescript": "^6.0.2"
   }
