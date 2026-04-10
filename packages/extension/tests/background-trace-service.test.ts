@@ -85,6 +85,124 @@ describe("background trace service", () => {
     expect(scheduleHeartbeat).toHaveBeenCalled();
   });
 
+  it("returns false for unrelated runtime binding payloads", async () => {
+    const service = createBackgroundTraceService({
+      state: createBackgroundState(),
+      serverClient: createMockServerClient(),
+      sendDebuggerCommand: vi.fn(),
+      scheduleHeartbeat: vi.fn(),
+      markServerOffline: vi.fn()
+    });
+
+    await expect(service.handleBindingCalled(1, {
+      name: "other",
+      payload: JSON.stringify({ selector: "#save" })
+    })).resolves.toBe(false);
+    await expect(service.handleBindingCalled(1, {
+      name: TRACE_BINDING_NAME,
+      payload: 42
+    })).resolves.toBe(false);
+  });
+
+  it("skips trace work when the server, trace, or request context is incomplete", async () => {
+    const serverClient = createMockServerClient();
+    const sendDebuggerCommand = vi.fn();
+    const service = createBackgroundTraceService({
+      state: createBackgroundState({
+        attachedTabs: new Map([[2, {
+          topOrigin: "https://app.example.com",
+          traceScriptIdentifier: null,
+          traceArmedForTraceId: null
+        }]])
+      }),
+      serverClient,
+      sendDebuggerCommand,
+      scheduleHeartbeat: vi.fn(),
+      markServerOffline: vi.fn()
+    });
+
+    await service.recordTraceClick(2, {
+      pageUrl: "https://app.example.com",
+      topOrigin: "https://app.example.com",
+      selector: "#save",
+      tagName: "button",
+      textSnippet: "Save"
+    });
+    await service.linkTraceFixtureIfNeeded({
+      descriptor: {
+        bodyPath: "assets/app.js",
+        requestUrl: "https://cdn.example.com/app.js"
+      } as FixtureDescriptor,
+      entry: {
+        tabId: 2,
+        requestId: "req-2",
+        requestedAt: "",
+        resourceType: "Script",
+        url: "https://cdn.example.com/app.js"
+      } as RequestEntry,
+      capturedAt: "2026-04-09T00:00:00.000Z"
+    });
+    await service.armTraceForTab(2);
+
+    expect(serverClient.recordTraceClick).not.toHaveBeenCalled();
+    expect(serverClient.linkTraceFixture).not.toHaveBeenCalled();
+    expect(sendDebuggerCommand).not.toHaveBeenCalled();
+  });
+
+  it("marks the server offline when trace persistence requests fail", async () => {
+    const markServerOffline = vi.fn();
+    const serverClient = createMockServerClient({
+      recordTraceClick: vi.fn().mockRejectedValue(new Error("record failed")),
+      linkTraceFixture: vi.fn().mockRejectedValue(new Error("link failed"))
+    });
+    const state = createBackgroundState({
+      serverInfo: {
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      },
+      activeTrace: createActiveTrace(),
+      attachedTabs: new Map([[3, {
+        topOrigin: "https://app.example.com",
+        traceScriptIdentifier: null,
+        traceArmedForTraceId: null
+      }]])
+    });
+    const service = createBackgroundTraceService({
+      state,
+      serverClient,
+      sendDebuggerCommand: vi.fn(),
+      scheduleHeartbeat: vi.fn(),
+      markServerOffline
+    });
+
+    await service.recordTraceClick(3, {
+      pageUrl: "https://app.example.com",
+      topOrigin: "",
+      selector: "#save",
+      tagName: "button",
+      textSnippet: "Save"
+    });
+    await service.linkTraceFixtureIfNeeded({
+      descriptor: {
+        bodyPath: "assets/app.js",
+        requestUrl: "https://cdn.example.com/app.js"
+      } as FixtureDescriptor,
+      entry: {
+        tabId: 3,
+        requestId: "req-3",
+        requestedAt: "2026-04-09T00:00:00.000Z",
+        resourceType: "Script",
+        url: "https://cdn.example.com/app.js"
+      } as RequestEntry,
+      capturedAt: "2026-04-09T00:00:05.000Z"
+    });
+
+    expect(markServerOffline).toHaveBeenCalledTimes(2);
+  });
+
   it("links persisted fixtures to the active trace", async () => {
     const state = createBackgroundState({
       serverInfo: {
@@ -235,6 +353,140 @@ describe("background trace service", () => {
       traceScriptIdentifier: null,
       traceArmedForTraceId: null
     });
+  });
+
+  it("returns quietly when a stale injected trace script cannot be removed from a detached tab", async () => {
+    const state = createBackgroundState({
+      sessionActive: true,
+      serverInfo: {
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      },
+      activeTrace: createActiveTrace(),
+      attachedTabs: new Map([[10, {
+        topOrigin: "https://app.example.com",
+        traceScriptIdentifier: "trace-script-old",
+        traceArmedForTraceId: null
+      }]])
+    });
+    const sendDebuggerCommand = vi.fn(async <T = unknown>(_tabId: number, method: string) => {
+      if (method === "Runtime.addBinding") {
+        return undefined as T;
+      }
+      if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+        throw new DetachedDebuggerCommandError(
+          10,
+          method,
+          "Debugger is not attached to the tab with id: 10."
+        );
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    }) as <T = unknown>(
+      tabId: number,
+      method: string,
+      params?: Record<string, unknown>
+    ) => Promise<T>;
+    const service = createBackgroundTraceService({
+      state,
+      serverClient: createMockServerClient(),
+      sendDebuggerCommand,
+      scheduleHeartbeat: vi.fn(),
+      markServerOffline: vi.fn()
+    });
+
+    await expect(service.armTraceForTab(10)).resolves.toBeUndefined();
+    expect(state.attachedTabs.get(10)).toMatchObject({
+      traceScriptIdentifier: "trace-script-old",
+      traceArmedForTraceId: null
+    });
+  });
+
+  it("returns quietly when the tab detaches during trace-script injection", async () => {
+    const state = createBackgroundState({
+      sessionActive: true,
+      serverInfo: {
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      },
+      activeTrace: createActiveTrace(),
+      attachedTabs: new Map([[11, {
+        topOrigin: "https://app.example.com",
+        traceScriptIdentifier: null,
+        traceArmedForTraceId: null
+      }]])
+    });
+    const sendDebuggerCommand = vi.fn(async <T = unknown>(_tabId: number, method: string) => {
+      if (method === "Runtime.addBinding") {
+        return undefined as T;
+      }
+      if (method === "Page.addScriptToEvaluateOnNewDocument") {
+        throw new DetachedDebuggerCommandError(
+          11,
+          method,
+          "Debugger is not attached to the tab with id: 11."
+        );
+      }
+      return undefined as T;
+    }) as <T = unknown>(
+      tabId: number,
+      method: string,
+      params?: Record<string, unknown>
+    ) => Promise<T>;
+    const service = createBackgroundTraceService({
+      state,
+      serverClient: createMockServerClient(),
+      sendDebuggerCommand,
+      scheduleHeartbeat: vi.fn(),
+      markServerOffline: vi.fn()
+    });
+
+    await expect(service.armTraceForTab(11)).resolves.toBeUndefined();
+    expect(state.attachedTabs.get(11)).toMatchObject({
+      traceScriptIdentifier: null,
+      traceArmedForTraceId: null
+    });
+  });
+
+  it("rethrows non-detached trace injection failures", async () => {
+    const state = createBackgroundState({
+      sessionActive: true,
+      serverInfo: {
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      },
+      activeTrace: createActiveTrace(),
+      attachedTabs: new Map([[12, {
+        topOrigin: "https://app.example.com",
+        traceScriptIdentifier: null,
+        traceArmedForTraceId: null
+      }]])
+    });
+    const service = createBackgroundTraceService({
+      state,
+      serverClient: createMockServerClient(),
+      sendDebuggerCommand: vi.fn(async (_tabId: number, method: string) => {
+        if (method === "Runtime.addBinding") {
+          return undefined;
+        }
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          throw new Error("Script injection failed.");
+        }
+        return undefined;
+      }),
+      scheduleHeartbeat: vi.fn(),
+      markServerOffline: vi.fn()
+    });
+
+    await expect(service.armTraceForTab(12)).rejects.toThrow("Script injection failed.");
   });
 
   it("syncs trace bindings by disarming attached tabs when tracing is inactive", async () => {

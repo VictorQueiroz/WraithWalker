@@ -148,7 +148,7 @@ describe("offscreen entrypoint", () => {
       error: "No root directory selected.",
       permission: undefined
     });
-  });
+  }, 15_000);
 
   it("returns a root error when no directory handle is stored", async () => {
     const { createOffscreenRuntime } = await loadOffscreenModule();

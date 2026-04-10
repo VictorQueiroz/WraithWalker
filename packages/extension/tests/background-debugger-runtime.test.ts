@@ -170,4 +170,65 @@ describe("background debugger runtime", () => {
       })
     ]);
   });
+
+  it("ignores malformed debugger console payloads", async () => {
+    const state = createBackgroundState({
+      attachedTabs: new Map([[4, {
+        topOrigin: "https://app.example.com",
+        traceScriptIdentifier: null,
+        traceArmedForTraceId: null
+      }]])
+    });
+    const runtime = createBackgroundDebuggerRuntime({
+      state,
+      chromeApi: createChromeApi(),
+      setLastError: vi.fn(),
+      persistSnapshot: vi.fn().mockResolvedValue(undefined),
+      stopSession: vi.fn().mockResolvedValue(undefined),
+      requestLifecycle: () => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }),
+      traceService: {
+        handleBindingCalled: vi.fn().mockResolvedValue(false),
+        disarmTraceForTab: vi.fn().mockResolvedValue(undefined),
+        syncTraceBindings: vi.fn().mockResolvedValue(undefined)
+      }
+    });
+
+    await runtime.handleDebuggerEvent({ tabId: 4 }, "Log.entryAdded", {});
+
+    expect(state.recentConsoleEntries).toEqual([]);
+  });
+
+  it("rethrows non-detached setup errors while attaching tabs", async () => {
+    const state = createBackgroundState();
+    const chromeApi = createChromeApi();
+    chromeApi.debugger.sendCommand.mockRejectedValueOnce(new Error("Network enable failed."));
+    const runtime = createBackgroundDebuggerRuntime({
+      state,
+      chromeApi,
+      setLastError: vi.fn(),
+      persistSnapshot: vi.fn().mockResolvedValue(undefined),
+      stopSession: vi.fn().mockResolvedValue(undefined),
+      requestLifecycle: () => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }),
+      traceService: {
+        handleBindingCalled: vi.fn().mockResolvedValue(false),
+        disarmTraceForTab: vi.fn().mockResolvedValue(undefined),
+        syncTraceBindings: vi.fn().mockResolvedValue(undefined)
+      }
+    });
+
+    await expect(runtime.attachTab(3, "https://app.example.com")).rejects.toThrow("Network enable failed.");
+    expect(state.attachedTabs.has(3)).toBe(false);
+  });
 });
