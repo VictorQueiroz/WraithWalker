@@ -53,6 +53,18 @@ export interface SessionSnapshot {
   lastError: string;
 }
 
+export interface BrowserConsoleEntry {
+  tabId: number;
+  topOrigin: string;
+  source: string;
+  level: string;
+  text: string;
+  timestamp: string;
+  url?: string;
+  lineNumber?: number;
+  columnNumber?: number;
+}
+
 export interface RootSentinel {
   rootId: string;
   schemaVersion?: number;
@@ -88,6 +100,7 @@ export interface RequestEntry {
   resourceType: string;
   mimeType: string;
   replayed: boolean;
+  replayOnResponse: boolean;
   responseStatus: number;
   responseStatusText: string;
   responseHeaders: HeaderEntry[];

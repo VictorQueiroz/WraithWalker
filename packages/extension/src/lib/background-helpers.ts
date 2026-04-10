@@ -43,6 +43,13 @@ function withOriginVary(headers: HeaderEntry[]): HeaderEntry[] {
   ));
 }
 
+function isCredentialedAssetRequest(headers: HeaderEntry[]): boolean {
+  return Boolean(
+    findHeader(headers, "Cookie")?.value.trim()
+    || findHeader(headers, "Authorization")?.value.trim()
+  );
+}
+
 export function isHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -92,10 +99,16 @@ export function replayResponseHeaders(
     return replayedHeaders;
   }
 
-  return withOriginVary([
+  const synthesizedHeaders: HeaderEntry[] = [
     ...replayedHeaders,
     { name: "Access-Control-Allow-Origin", value: allowOrigin }
-  ]);
+  ];
+
+  if (isCredentialedAssetRequest(options.requestHeaders || [])) {
+    synthesizedHeaders.push({ name: "Access-Control-Allow-Credentials", value: "true" });
+  }
+
+  return withOriginVary(synthesizedHeaders);
 }
 
 export function buildSessionSnapshot({
@@ -153,6 +166,7 @@ export function createRequestEntry({
     resourceType: "",
     mimeType: "",
     replayed: false,
+    replayOnResponse: false,
     responseStatus: 200,
     responseStatusText: "OK",
     responseHeaders: []

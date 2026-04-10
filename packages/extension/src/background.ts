@@ -1,4 +1,4 @@
-import { buildSessionSnapshot } from "./lib/background-helpers.js";
+import { buildSessionSnapshot, extractOrigin } from "./lib/background-helpers.js";
 import {
   getLegacySiteConfigsMigrated as defaultGetLegacySiteConfigsMigrated,
   getOrCreateExtensionClientId as defaultGetOrCreateExtensionClientId,
@@ -42,6 +42,7 @@ import { createSessionController as defaultCreateSessionController } from "./lib
 import { normalizeSiteConfigs as defaultNormalizeSiteConfigs } from "./lib/site-config.js";
 import type {
   AttachedTabState,
+  BrowserConsoleEntry,
   FixtureDescriptor,
   NativeHostConfig,
   RequestEntry,
@@ -62,6 +63,8 @@ import {
 const DEBUGGER_VERSION = "1.3";
 const TRACE_BINDING_NAME = "__wraithwalkerTraceBinding";
 const HEARTBEAT_ALARM_NAME = "wraithwalker-server-heartbeat";
+const MAX_RECENT_CONSOLE_ENTRIES = 200;
+const MAX_CONSOLE_ENTRY_TEXT_LENGTH = 4_000;
 type DetachReason = "target_closed" | "canceled_by_user";
 
 interface DebuggeeTarget {
@@ -145,6 +148,7 @@ interface BackgroundState {
   sessionActive: boolean;
   attachedTabs: Map<number, AttachedTabState>;
   requests: Map<string, RequestEntry>;
+  recentConsoleEntries: BrowserConsoleEntry[];
   enabledOrigins: string[];
   siteConfigsByOrigin: Map<string, SiteConfig>;
   localEnabledOrigins: string[];
@@ -239,6 +243,18 @@ interface TraceBindingPayload {
   ariaLabel?: string;
   href?: string;
   recordedAt?: string;
+}
+
+interface DebuggerLogEntryPayload {
+  entry?: {
+    source?: string;
+    level?: string;
+    text?: string;
+    timestamp?: number;
+    url?: string;
+    lineNumber?: number;
+    columnNumber?: number;
+  };
 }
 
 function buildTraceCollectorSource(bindingName: string): string {
@@ -336,6 +352,80 @@ function debuggerTarget(tabId: number): DebuggeeTarget {
   return { tabId };
 }
 
+class DetachedDebuggerCommandError extends Error {
+  constructor(
+    readonly tabId: number,
+    readonly method: string,
+    readonly rawMessage: string
+  ) {
+    super("");
+    this.name = "DetachedDebuggerCommandError";
+  }
+}
+
+function isDetachedDebuggerCommandMessage(message: string, tabId: number): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("debugger is not attached to the tab with id:")
+    && normalized.includes(String(tabId));
+}
+
+function normalizeConsoleTimestamp(value: unknown): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return new Date().toISOString();
+  }
+
+  const milliseconds = value >= 1_000_000_000_000
+    ? value
+    : value * 1_000;
+  return new Date(milliseconds).toISOString();
+}
+
+function clipConsoleText(value: unknown): string {
+  const text = typeof value === "string"
+    ? value
+    : String(value ?? "");
+  return text.length > MAX_CONSOLE_ENTRY_TEXT_LENGTH
+    ? `${text.slice(0, MAX_CONSOLE_ENTRY_TEXT_LENGTH)}...`
+    : text;
+}
+
+function toBrowserConsoleEntry(
+  tabId: number,
+  params: unknown,
+  tabState?: AttachedTabState
+): BrowserConsoleEntry | null {
+  const entry = (params as DebuggerLogEntryPayload | null | undefined)?.entry;
+  if (!entry) {
+    return null;
+  }
+
+  const topOrigin = tabState?.topOrigin
+    || extractOrigin(entry.url || "")
+    || "";
+
+  return {
+    tabId,
+    topOrigin,
+    source: typeof entry.source === "string" && entry.source.trim()
+      ? entry.source
+      : "other",
+    level: typeof entry.level === "string" && entry.level.trim()
+      ? entry.level
+      : "info",
+    text: clipConsoleText(entry.text),
+    timestamp: normalizeConsoleTimestamp(entry.timestamp),
+    ...(typeof entry.url === "string" && entry.url.trim()
+      ? { url: entry.url }
+      : {}),
+    ...(typeof entry.lineNumber === "number" && Number.isFinite(entry.lineNumber)
+      ? { lineNumber: entry.lineNumber }
+      : {}),
+    ...(typeof entry.columnNumber === "number" && Number.isFinite(entry.columnNumber)
+      ? { columnNumber: entry.columnNumber }
+      : {})
+  };
+}
+
 function isBackgroundMessage(message: unknown): message is BackgroundMessage {
   if (!message || typeof message !== "object") {
     return false;
@@ -405,6 +495,7 @@ export function createBackgroundRuntime({
     sessionActive: false,
     attachedTabs: new Map(),
     requests: new Map(),
+    recentConsoleEntries: [],
     enabledOrigins: [],
     siteConfigsByOrigin: new Map(),
     localEnabledOrigins: [],
@@ -434,6 +525,49 @@ export function createBackgroundRuntime({
 
   function setLastError(message: string) {
     state.lastError = message || "";
+  }
+
+  function clearTrackedTabState(tabId: number): void {
+    state.attachedTabs.delete(tabId);
+    for (const key of [...state.requests.keys()]) {
+      if (key.startsWith(`${tabId}:`)) {
+        state.requests.delete(key);
+      }
+    }
+  }
+
+  async function sendDebuggerCommand<T = unknown>(
+    tabId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ): Promise<T> {
+    try {
+      if (typeof params === "undefined") {
+        return await chromeApi.debugger.sendCommand<T>(debuggerTarget(tabId), method);
+      }
+
+      return await chromeApi.debugger.sendCommand<T>(debuggerTarget(tabId), method, params);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isDetachedDebuggerCommandMessage(message, tabId)) {
+        clearTrackedTabState(tabId);
+        throw new DetachedDebuggerCommandError(tabId, method, message);
+      }
+
+      throw error;
+    }
+  }
+
+  function recordConsoleEntry(tabId: number, params: unknown): void {
+    const entry = toBrowserConsoleEntry(tabId, params, state.attachedTabs.get(tabId));
+    if (!entry) {
+      return;
+    }
+
+    state.recentConsoleEntries = [
+      ...state.recentConsoleEntries,
+      entry
+    ].slice(-MAX_RECENT_CONSOLE_ENTRIES);
   }
 
   function normalizeEffectiveSiteConfigs(siteConfigs: SiteConfig[]): SiteConfig[] {
@@ -559,7 +693,8 @@ export function createBackgroundRuntime({
           clientId: state.extensionClientId,
           extensionVersion: state.extensionVersion,
           sessionActive: state.sessionActive,
-          enabledOrigins: [...state.enabledOrigins]
+          enabledOrigins: [...state.enabledOrigins],
+          recentConsoleEntries: [...state.recentConsoleEntries]
         });
         const previousTraceId = state.activeTrace?.traceId || null;
         const siteConfigsChanged = applyEffectiveSiteConfigs(
@@ -1603,10 +1738,14 @@ export function createBackgroundRuntime({
     }
 
     try {
-      await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.addBinding", {
+      await sendDebuggerCommand(tabId, "Runtime.addBinding", {
         name: TRACE_BINDING_NAME
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof DetachedDebuggerCommandError) {
+        return;
+      }
+
       // The binding may already be registered for this target.
     }
 
@@ -1614,24 +1753,37 @@ export function createBackgroundRuntime({
 
     if (tabState.traceScriptIdentifier) {
       try {
-        await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Page.removeScriptToEvaluateOnNewDocument", {
+        await sendDebuggerCommand(tabId, "Page.removeScriptToEvaluateOnNewDocument", {
           identifier: tabState.traceScriptIdentifier
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof DetachedDebuggerCommandError) {
+          return;
+        }
+
         // Ignore stale script identifiers on refresh/navigate races.
       }
     }
 
-    const injected = await chromeApi.debugger.sendCommand<{ identifier?: string }>(
-      debuggerTarget(tabId),
-      "Page.addScriptToEvaluateOnNewDocument",
-      { source }
-    );
-    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.evaluate", {
-      expression: source,
-      awaitPromise: false,
-      returnByValue: false
-    });
+    let injected: { identifier?: string };
+    try {
+      injected = await sendDebuggerCommand<{ identifier?: string }>(
+        tabId,
+        "Page.addScriptToEvaluateOnNewDocument",
+        { source }
+      );
+      await sendDebuggerCommand(tabId, "Runtime.evaluate", {
+        expression: source,
+        awaitPromise: false,
+        returnByValue: false
+      });
+    } catch (error) {
+      if (error instanceof DetachedDebuggerCommandError) {
+        return;
+      }
+
+      throw error;
+    }
 
     tabState.traceScriptIdentifier = injected.identifier || null;
     tabState.traceArmedForTraceId = activeTrace.traceId;
@@ -1645,7 +1797,7 @@ export function createBackgroundRuntime({
 
     if (tabState.traceScriptIdentifier) {
       try {
-        await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Page.removeScriptToEvaluateOnNewDocument", {
+        await sendDebuggerCommand(tabId, "Page.removeScriptToEvaluateOnNewDocument", {
           identifier: tabState.traceScriptIdentifier
         });
       } catch {
@@ -1654,7 +1806,7 @@ export function createBackgroundRuntime({
     }
 
     try {
-      await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.evaluate", {
+      await sendDebuggerCommand(tabId, "Runtime.evaluate", {
         expression: "globalThis.__wraithwalkerDisableTrace?.()",
         awaitPromise: false,
         returnByValue: false
@@ -1685,13 +1837,22 @@ export function createBackgroundRuntime({
     }
 
     await chromeApi.debugger.attach(debuggerTarget(tabId), DEBUGGER_VERSION);
-    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Network.enable");
-    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Runtime.enable");
-    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Page.enable");
-    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Network.setCacheDisabled", { cacheDisabled: true });
-    await chromeApi.debugger.sendCommand(debuggerTarget(tabId), "Fetch.enable", {
-      patterns: [{ urlPattern: "*" }]
-    });
+    try {
+      await sendDebuggerCommand(tabId, "Network.enable");
+      await sendDebuggerCommand(tabId, "Runtime.enable");
+      await sendDebuggerCommand(tabId, "Log.enable");
+      await sendDebuggerCommand(tabId, "Page.enable");
+      await sendDebuggerCommand(tabId, "Network.setCacheDisabled", { cacheDisabled: true });
+      await sendDebuggerCommand(tabId, "Fetch.enable", {
+        patterns: [{ urlPattern: "*" }]
+      });
+    } catch (error) {
+      if (error instanceof DetachedDebuggerCommandError) {
+        return;
+      }
+
+      throw error;
+    }
     state.attachedTabs.set(tabId, {
       topOrigin,
       traceScriptIdentifier: null,
@@ -1706,12 +1867,7 @@ export function createBackgroundRuntime({
     }
 
     await disarmTraceForTab(tabId);
-    state.attachedTabs.delete(tabId);
-    for (const key of [...state.requests.keys()]) {
-      if (key.startsWith(`${tabId}:`)) {
-        state.requests.delete(key);
-      }
-    }
+    clearTrackedTabState(tabId);
 
     try {
       await chromeApi.debugger.detach(debuggerTarget(tabId));
@@ -1735,8 +1891,7 @@ export function createBackgroundRuntime({
 
   const requestLifecycle = createRequestLifecycle({
     state,
-    sendDebuggerCommand: (tabId: number, method: string, params?: Record<string, unknown>) =>
-      chromeApi.debugger.sendCommand(debuggerTarget(tabId), method, params),
+    sendDebuggerCommand,
     sendOffscreenMessage: ((type: string, payload?: Record<string, unknown>) =>
       sendOffscreenMessage(type as OffscreenMessage["type"], payload)) as <T = unknown>(
       type: string,
@@ -1784,6 +1939,11 @@ export function createBackgroundRuntime({
         return;
       }
 
+      if (method === "Log.entryAdded" && source.tabId) {
+        recordConsoleEntry(source.tabId, params);
+        return;
+      }
+
       if (method === "Fetch.requestPaused") {
         await requestLifecycle.handleFetchRequestPaused(source, params as never);
         return;
@@ -1808,6 +1968,10 @@ export function createBackgroundRuntime({
         requestLifecycle.handleNetworkLoadingFailed(source, params as never);
       }
     } catch (error) {
+      if (error instanceof DetachedDebuggerCommandError) {
+        return;
+      }
+
       setLastError(error instanceof Error ? error.message : String(error));
     }
   }
@@ -1824,12 +1988,7 @@ export function createBackgroundRuntime({
       return;
     }
 
-    for (const key of [...state.requests.keys()]) {
-      if (key.startsWith(`${source.tabId}:`)) {
-        state.requests.delete(key);
-      }
-    }
-    state.attachedTabs.delete(source.tabId);
+    clearTrackedTabState(source.tabId);
   }
 
   function handleTabUpdated(tabId: number, _changeInfo: Record<string, unknown>, tab: { id?: number; url?: string }): void {
@@ -1884,6 +2043,7 @@ export function createBackgroundRuntime({
       case "config.writeConfiguredSiteConfigs":
         return writeConfiguredSiteConfigsForAuthority(message.siteConfigs);
       case "session.start": {
+        state.recentConsoleEntries = [];
         await refreshServerInfo({ force: true });
         const result = await sessionController.startSession();
         queueServerRefresh({ force: true });

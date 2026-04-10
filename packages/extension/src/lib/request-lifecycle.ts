@@ -26,6 +26,7 @@ interface FetchRequestPausedParams {
   request: LifecycleRequest;
   resourceType?: string;
   responseStatusCode?: number;
+  responseHeaders?: HeaderInput;
   responseErrorReason?: string;
 }
 
@@ -170,8 +171,15 @@ export function createRequestLifecycle({
     }
   }
 
-  async function continueRequest(tabId: number, requestId: string): Promise<void> {
-    await sendDebuggerCommand(tabId, "Fetch.continueRequest", { requestId });
+  async function continueRequest(
+    tabId: number,
+    requestId: string,
+    options: { interceptResponse?: boolean } = {}
+  ): Promise<void> {
+    await sendDebuggerCommand(tabId, "Fetch.continueRequest", {
+      requestId,
+      ...(options.interceptResponse ? { interceptResponse: true } : {})
+    });
   }
 
   const capturePolicy = createCapturePolicy({ getSiteConfigForOrigin });
@@ -243,7 +251,7 @@ export function createRequestLifecycle({
       return;
     }
 
-    if (params.responseStatusCode || params.responseErrorReason || !isHttpUrl(params.request.url)) {
+    if (!isHttpUrl(params.request.url)) {
       await continueRequest(tabId, params.requestId);
       return;
     }
@@ -255,13 +263,82 @@ export function createRequestLifecycle({
     entry.url = params.request.url;
     entry.requestHeaders = arrayifyHeaders(params.request.headers);
     entry.resourceType = params.resourceType || entry.resourceType;
-    await middleware.replayFromRepository({
-      entry,
-      tabId,
-      pausedRequestId: params.requestId,
-      networkRequestId,
-      fallbackRequest: params.request
-    });
+    if (params.responseStatusCode || params.responseErrorReason) {
+      if (params.responseStatusCode) {
+        entry.responseStatus = params.responseStatusCode;
+      }
+      if (params.responseHeaders) {
+        entry.responseHeaders = arrayifyHeaders(params.responseHeaders);
+      }
+
+      if (!entry.replayOnResponse || params.responseErrorReason) {
+        entry.replayOnResponse = false;
+        await continueRequest(tabId, params.requestId);
+        return;
+      }
+
+      try {
+        const replayFixture = await middleware.loadReplayFixture({
+          entry,
+          tabId,
+          networkRequestId,
+          fallbackRequest: params.request
+        });
+        if (!replayFixture) {
+          entry.replayOnResponse = false;
+          await continueRequest(tabId, params.requestId);
+          return;
+        }
+
+        await middleware.fulfillReplay({
+          entry,
+          tabId,
+          pausedRequestId: params.requestId,
+          descriptor: replayFixture.descriptor,
+          fixture: replayFixture.fixture,
+          liveResponse: {
+            status: params.responseStatusCode,
+            statusText: entry.responseStatusText,
+            headers: entry.responseHeaders
+          }
+        });
+      } catch (error) {
+        entry.replayOnResponse = false;
+        setLastError(error instanceof Error ? error.message : String(error));
+        await continueRequest(tabId, params.requestId);
+      }
+      return;
+    }
+
+    try {
+      const replayFixture = await middleware.loadReplayFixture({
+        entry,
+        tabId,
+        networkRequestId,
+        fallbackRequest: params.request
+      });
+      if (!replayFixture) {
+        await continueRequest(tabId, params.requestId);
+        return;
+      }
+
+      if (middleware.shouldReplayWithLiveResponseHeaders(replayFixture)) {
+        entry.replayOnResponse = true;
+        await continueRequest(tabId, params.requestId, { interceptResponse: true });
+        return;
+      }
+
+      await middleware.fulfillReplay({
+        entry,
+        tabId,
+        pausedRequestId: params.requestId,
+        descriptor: replayFixture.descriptor,
+        fixture: replayFixture.fixture
+      });
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : String(error));
+      await continueRequest(tabId, params.requestId);
+    }
   }
 
   function handleNetworkRequestWillBeSent(source: LifecycleSource, params: NetworkRequestWillBeSentParams): void {

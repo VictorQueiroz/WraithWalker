@@ -5,7 +5,14 @@ import type {
   TrpcSystemInfo
 } from "@wraithwalker/mcp-server/trpc";
 
-import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SiteConfig } from "./types.js";
+import type {
+  BrowserConsoleEntry,
+  FixtureDescriptor,
+  RequestPayload,
+  ResponseMeta,
+  RootSentinel,
+  SiteConfig
+} from "./types.js";
 
 export const DEFAULT_WRAITHWALKER_SERVER_TRPC_URL = "http://127.0.0.1:4319/trpc";
 export const WRAITHWALKER_SERVER_CACHE_TTL_MS = 5_000;
@@ -90,6 +97,7 @@ export interface WraithWalkerServerClient {
     extensionVersion: string;
     sessionActive: boolean;
     enabledOrigins: string[];
+    recentConsoleEntries?: BrowserConsoleEntry[];
   }): Promise<TrpcHeartbeatInfo>;
   hasFixture(descriptor: FixtureDescriptor): Promise<{ exists: boolean; sentinel: RootSentinel }>;
   readConfiguredSiteConfigs(): Promise<TrpcSiteConfigsInfo>;

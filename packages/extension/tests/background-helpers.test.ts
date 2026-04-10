@@ -87,6 +87,28 @@ describe("background helpers", () => {
     ]);
   });
 
+  it("adds credential-aware CORS replay headers for credentialed asset requests", () => {
+    const headers = replayResponseHeaders(
+      [{ name: "Content-Type", value: "font/woff2" }],
+      {
+        assetLike: true,
+        topOrigin: "https://app.example.com",
+        requestHeaders: [
+          { name: "Origin", value: "https://app.example.com" },
+          { name: "Sec-Fetch-Mode", value: "cors" },
+          { name: "Cookie", value: "session=abc123" }
+        ]
+      }
+    );
+
+    expect(headers).toEqual([
+      { name: "Content-Type", value: "font/woff2" },
+      { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+      { name: "Access-Control-Allow-Credentials", value: "true" },
+      { name: "Vary", value: "Origin" }
+    ]);
+  });
+
   it("builds a session snapshot without editor-launch state", () => {
     const snapshot = buildSessionSnapshot({
       sessionActive: true,

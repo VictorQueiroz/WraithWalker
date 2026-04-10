@@ -18,6 +18,7 @@ function createEntry(overrides: Partial<RequestEntry> = {}): RequestEntry {
     resourceType: "Script",
     mimeType: "application/javascript",
     replayed: false,
+    replayOnResponse: false,
     responseStatus: 200,
     responseStatusText: "OK",
     responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],

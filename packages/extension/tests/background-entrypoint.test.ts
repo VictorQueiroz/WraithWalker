@@ -1246,6 +1246,7 @@ describe("background entrypoint", () => {
       goal: "Capture the active trace details without breaking debugger arming."
     }));
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.enable");
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Log.enable");
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Page.enable");
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.addBinding", {
       name: "__wraithwalkerTraceBinding"
@@ -1825,6 +1826,7 @@ describe("background entrypoint", () => {
         resourceType: "Script",
         mimeType: "application/javascript",
         replayed: false,
+        replayOnResponse: false,
         responseStatus: 200,
         responseStatusText: "OK",
         responseHeaders: []
@@ -1843,6 +1845,83 @@ describe("background entrypoint", () => {
         capturedAt: "2026-04-08T00:00:02.500Z"
       }
     });
+  });
+
+  it("captures recent console entries from Log.entryAdded and includes them in the next heartbeat", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+    await flushPromises();
+
+    heartbeat.mockClear();
+
+    await runtime.handleDebuggerEvent(
+      { tabId: 7 },
+      "Log.entryAdded",
+      {
+        entry: {
+          source: "javascript",
+          level: "error",
+          text: "Unhandled exception: boom",
+          timestamp: 1_775_692_800,
+          url: "https://app.example.com/assets/app.js",
+          lineNumber: 42,
+          columnNumber: 7
+        }
+      }
+    );
+
+    expect(runtime.state.recentConsoleEntries).toEqual([
+      expect.objectContaining({
+        tabId: 7,
+        topOrigin: "https://app.example.com",
+        source: "javascript",
+        level: "error",
+        text: "Unhandled exception: boom",
+        url: "https://app.example.com/assets/app.js",
+        lineNumber: 42,
+        columnNumber: 7,
+        timestamp: "2026-04-09T00:00:00.000Z"
+      })
+    ]);
+
+    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    await flushPromises();
+
+    expect(heartbeat).toHaveBeenCalledWith(expect.objectContaining({
+      recentConsoleEntries: [
+        expect.objectContaining({
+          tabId: 7,
+          topOrigin: "https://app.example.com",
+          source: "javascript",
+          level: "error",
+          text: "Unhandled exception: boom"
+        })
+      ]
+    }));
   });
 
   it("marks the server offline when linking a persisted fixture to an active trace fails", async () => {
@@ -1921,6 +2000,7 @@ describe("background entrypoint", () => {
         resourceType: "Script",
         mimeType: "application/javascript",
         replayed: false,
+        replayOnResponse: false,
         responseStatus: 200,
         responseStatusText: "OK",
         responseHeaders: []
@@ -2431,6 +2511,322 @@ describe("background entrypoint", () => {
       type: "fs.ensureRoot",
       payload: { requestPermission: true }
     });
+  });
+
+  it("ignores detached-tab debugger command races from in-flight lifecycle work", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    let releaseSendCommand: (() => void) | null = null;
+    const sendCommandGate = new Promise<void>((resolve) => {
+      releaseSendCommand = resolve;
+    });
+    const requestLifecycleFactory = vi.fn((deps) => ({
+      handleFetchRequestPaused: vi.fn(async () => {
+        await sendCommandGate;
+        await deps.sendDebuggerCommand(9, "Fetch.continueRequest", { requestId: "fetch-9" });
+      }),
+      handleNetworkRequestWillBeSent: vi.fn(),
+      handleNetworkResponseReceived: vi.fn(),
+      handleNetworkLoadingFinished: vi.fn(),
+      handleNetworkLoadingFailed: vi.fn()
+    }));
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: requestLifecycleFactory
+    });
+
+    await runtime.start();
+    runtime.state.sessionActive = true;
+    runtime.state.attachedTabs.set(9, { topOrigin: "https://app.example.com" });
+    runtime.state.requests.set("9:req-1", { requestId: "req-1" } as any);
+    chromeApi.debugger.sendCommand.mockRejectedValueOnce(
+      new Error("Debugger is not attached to the tab with id: 9.")
+    );
+
+    const pending = runtime.handleDebuggerEvent({ tabId: 9 }, "Fetch.requestPaused", { requestId: "fetch-9" });
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 9 }, "target_closed");
+    await flushPromises();
+    releaseSendCommand?.();
+    await pending;
+
+    expect(runtime.state.lastError).toBe("");
+    expect(runtime.state.attachedTabs.has(9)).toBe(false);
+    expect(runtime.state.requests.has("9:req-1")).toBe(false);
+  });
+
+  it("cleans up and recovers from a detached-tab race in the real request lifecycle", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 11, url: "https://app.example.com/page" }]);
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.type === "fs.ensureRoot") {
+        return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+      }
+      if (message?.type === "fs.hasFixture") {
+        return { ok: true, exists: false };
+      }
+      return { ok: true };
+    });
+
+    let releaseContinueRequest: (() => void) | null = null;
+    let blockDetachedContinueRequest = true;
+    const continueRequestGate = new Promise<void>((resolve) => {
+      releaseContinueRequest = resolve;
+    });
+    chromeApi.debugger.sendCommand.mockImplementation(async (target, method, params) => {
+      if (
+        blockDetachedContinueRequest
+        && (target as { tabId?: number }).tabId === 11
+        && method === "Fetch.continueRequest"
+        && (params as { requestId?: string } | undefined)?.requestId === "fetch-11"
+      ) {
+        await continueRequestGate;
+        throw new Error("Debugger is not attached to the tab with id: 11.");
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined)
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+
+    expect(runtime.state.attachedTabs.has(11)).toBe(true);
+
+    runtime.handleDebuggerEvent(
+      { tabId: 11 },
+      "Network.requestWillBeSent",
+      {
+        requestId: "network-11",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        type: "Script"
+      }
+    );
+
+    const pending = runtime.handleDebuggerEvent(
+      { tabId: 11 },
+      "Fetch.requestPaused",
+      {
+        requestId: "fetch-11",
+        networkId: "network-11",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        resourceType: "Script"
+      }
+    );
+
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 11 }, "target_closed");
+    await flushPromises();
+    releaseContinueRequest?.();
+    await pending;
+
+    expect(runtime.state.lastError).toBe("");
+    expect(runtime.state.attachedTabs.has(11)).toBe(false);
+    expect(runtime.state.requests.has("11:network-11")).toBe(false);
+
+    blockDetachedContinueRequest = false;
+    chromeApi.tabs.onUpdated.listeners[0](11, {}, { id: 11, url: "https://app.example.com/page" });
+    await flushPromises();
+
+    expect(runtime.state.lastError).toBe("");
+    expect(runtime.state.attachedTabs.has(11)).toBe(true);
+    expect(chromeApi.debugger.attach).toHaveBeenCalledTimes(2);
+
+    runtime.handleDebuggerEvent(
+      { tabId: 11 },
+      "Network.requestWillBeSent",
+      {
+        requestId: "network-11-recovered",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        type: "Script"
+      }
+    );
+
+    await runtime.handleDebuggerEvent(
+      { tabId: 11 },
+      "Fetch.requestPaused",
+      {
+        requestId: "fetch-11-recovered",
+        networkId: "network-11-recovered",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        resourceType: "Script"
+      }
+    );
+
+    expect(runtime.state.requests.has("11:network-11")).toBe(false);
+    expect(runtime.state.requests.has("11:network-11-recovered")).toBe(true);
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 11 },
+      "Fetch.continueRequest",
+      { requestId: "fetch-11-recovered" }
+    );
+  });
+
+  it("clears multiple in-flight requests and ignores late lifecycle events after target_closed", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 12, url: "https://app.example.com/page" }]);
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.type === "fs.ensureRoot") {
+        return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+      }
+      if (message?.type === "fs.hasFixture") {
+        return { ok: true, exists: false };
+      }
+      return { ok: true };
+    });
+
+    let releaseContinueRequest: (() => void) | null = null;
+    const continueRequestGate = new Promise<void>((resolve) => {
+      releaseContinueRequest = resolve;
+    });
+    chromeApi.debugger.sendCommand.mockImplementation(async (target, method, params) => {
+      if (
+        (target as { tabId?: number }).tabId === 12
+        && method === "Fetch.continueRequest"
+        && (params as { requestId?: string } | undefined)?.requestId === "fetch-detach-12"
+      ) {
+        await continueRequestGate;
+        throw new Error("Debugger is not attached to the tab with id: 12.");
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined)
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+
+    runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Network.requestWillBeSent",
+      {
+        requestId: "network-a",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        type: "Script"
+      }
+    );
+    runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Network.requestWillBeSent",
+      {
+        requestId: "network-b",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/logo.svg",
+          headers: {}
+        },
+        type: "Image"
+      }
+    );
+
+    expect(runtime.state.requests.has("12:network-a")).toBe(true);
+    expect(runtime.state.requests.has("12:network-b")).toBe(true);
+
+    const pending = runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Fetch.requestPaused",
+      {
+        requestId: "fetch-detach-12",
+        networkId: "network-a",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        resourceType: "Script"
+      }
+    );
+
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 12 }, "target_closed");
+    await flushPromises();
+    releaseContinueRequest?.();
+    await pending;
+
+    expect(runtime.state.lastError).toBe("");
+    expect(runtime.state.attachedTabs.has(12)).toBe(false);
+    expect(runtime.state.requests.size).toBe(0);
+
+    await runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Network.responseReceived",
+      {
+        requestId: "network-a",
+        response: {
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          mimeType: "application/javascript"
+        },
+        type: "Script"
+      }
+    );
+    await runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Network.responseReceived",
+      {
+        requestId: "network-b",
+        response: {
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          mimeType: "image/svg+xml"
+        },
+        type: "Image"
+      }
+    );
+    await runtime.handleDebuggerEvent({ tabId: 12 }, "Network.loadingFinished", { requestId: "network-a" });
+    await runtime.handleDebuggerEvent({ tabId: 12 }, "Network.loadingFinished", { requestId: "network-b" });
+
+    expect(runtime.state.lastError).toBe("");
+    expect(runtime.state.requests.size).toBe(0);
   });
 
   it("dispatches runtime session messages through the registered message listener", async () => {
@@ -3622,6 +4018,44 @@ describe("background entrypoint", () => {
     expect(runtime.state.lastError).toBe("");
   });
 
+  it("does not surface a lastError when a tab detaches during debugger setup", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 5, url: "https://app.example.com/dashboard" }]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({ ok: true, sentinel: { rootId: "root-1" }, permission: "granted" });
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.debugger.sendCommand.mockImplementation(async (target, method) => {
+      if ((target as { tabId?: number }).tabId === 5 && method === "Runtime.enable") {
+        throw new Error("Debugger is not attached to the tab with id: 5.");
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+
+    expect(runtime.state.sessionActive).toBe(true);
+    expect(runtime.state.attachedTabs.has(5)).toBe(false);
+    expect(runtime.state.lastError).toBe("");
+  });
+
   it("ignores tab-removal cleanup when the tab is not attached", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
@@ -4698,6 +5132,7 @@ describe("background entrypoint", () => {
       resourceType: "Script",
       mimeType: "application/javascript",
       replayed: false,
+      replayOnResponse: false,
       responseStatus: 0,
       responseStatusText: "",
       responseHeaders: []

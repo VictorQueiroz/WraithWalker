@@ -6,6 +6,7 @@ import { createRequestLifecycle } from "../src/lib/request-lifecycle.js";
 import { createFixtureDescriptor as realCreateFixtureDescriptor } from "../src/lib/fixture-mapper.js";
 import type { SiteConfig } from "../src/lib/types.js";
 import { createWraithWalkerServerClient } from "../src/lib/wraithwalker-server.js";
+import { syncOverridesDirectory } from "../../core/src/overrides-sync.mts";
 import { startHttpServer } from "../../mcp-server/src/server.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
@@ -176,6 +177,16 @@ function createLifecycleHarness({ siteConfig, createFixtureDescriptor }: Lifecyc
   };
 }
 
+async function createTempOverridesDir(prefix = "wraithwalker-extension-overrides-"): Promise<string> {
+  return fs.mkdtemp(`/tmp/${prefix}`);
+}
+
+async function writeOverrideFile(root: string, relativePath: string, content: string | Uint8Array): Promise<void> {
+  const filePath = `${root}/${relativePath}`;
+  await fs.mkdir(filePath.slice(0, Math.max(0, filePath.lastIndexOf("/"))), { recursive: true });
+  await fs.writeFile(filePath, content);
+}
+
 function createFetchPausedParams(overrides: { request?: Record<string, unknown> } & Record<string, unknown> = {}) {
   const { request: requestOverrides = {}, ...restOverrides } = overrides;
   const baseRequest = {
@@ -240,6 +251,7 @@ describe("request lifecycle", () => {
       mimeType: "application/javascript",
       topOrigin: "https://app.example.com",
       replayed: false,
+      replayOnResponse: false,
       responseStatus: 200,
       responseStatusText: "OK",
       responseHeaders: []
@@ -572,6 +584,499 @@ describe("request lifecycle", () => {
         body: Buffer.from("body{color:red}", "utf8").toString("base64")
       })
     );
+  });
+
+  it("synthesizes credential-aware CORS headers for replayed font overrides", async () => {
+    const harness = createLifecycleHarness({
+      createFixtureDescriptor: realCreateFixtureDescriptor
+    });
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: true };
+      }
+      if (type === "fs.readFixture") {
+        return {
+          ok: true,
+          exists: true,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/assets/app.woff2",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          },
+          bodyBase64: Buffer.from([0, 1, 2, 3]).toString("base64"),
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "font/woff2" }]
+          }
+        };
+      }
+      return { ok: true };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-font-cors",
+        networkId: "network-font-cors",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.woff2",
+          headers: {
+            Origin: "https://app.example.com",
+            "Sec-Fetch-Mode": "cors",
+            Cookie: "session=abc123"
+          }
+        },
+        resourceType: "Font"
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({
+        requestId: "fetch-font-cors",
+        responseCode: 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "font/woff2" },
+          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          { name: "Access-Control-Allow-Credentials", value: "true" },
+          { name: "Vary", value: "Origin" }
+        ],
+        body: Buffer.from([0, 1, 2, 3]).toString("base64")
+      })
+    );
+  });
+
+  it("replays synced asset overrides with the current live response headers on each reload when no .headers rule exists", async () => {
+    const harness = createLifecycleHarness({
+      createFixtureDescriptor: realCreateFixtureDescriptor
+    });
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: true };
+      }
+      if (type === "fs.readFixture") {
+        return {
+          ok: true,
+          exists: true,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/assets/app.css",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          },
+          bodyBase64: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64"),
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "text/css" }],
+            headerStrategy: "live"
+          }
+        };
+      }
+      return { ok: true };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-live-headers-1",
+        networkId: "network-live-headers-1",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.css",
+          headers: {
+            Origin: "https://app.example.com",
+            "Sec-Fetch-Mode": "cors"
+          }
+        },
+        resourceType: "Stylesheet"
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-live-headers-1",
+        interceptResponse: true
+      }
+    );
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({ requestId: "fetch-live-headers-1" })
+    );
+
+    harness.lifecycle.handleNetworkResponseReceived(
+      { tabId: 1 },
+      {
+        requestId: "network-live-headers-1",
+        response: {
+          status: 200,
+          statusText: "OK",
+          headers: {
+            "Content-Type": "text/css",
+            ETag: "\"v1\""
+          },
+          mimeType: "text/css"
+        },
+        type: "Stylesheet"
+      }
+    );
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-live-headers-1-response",
+        networkId: "network-live-headers-1",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.css",
+          headers: {
+            Origin: "https://app.example.com",
+            "Sec-Fetch-Mode": "cors"
+          }
+        },
+        resourceType: "Stylesheet",
+        responseStatusCode: 200,
+        responseHeaders: {
+          "Content-Type": "text/css",
+          ETag: "\"v1\""
+        }
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({
+        requestId: "fetch-live-headers-1-response",
+        responseCode: 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "text/css" },
+          { name: "ETag", value: "\"v1\"" },
+          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          { name: "Vary", value: "Origin" }
+        ],
+        body: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64")
+      })
+    );
+
+    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "network-live-headers-1" });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-live-headers-2",
+        networkId: "network-live-headers-2",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.css",
+          headers: {
+            Origin: "https://app.example.com",
+            "Sec-Fetch-Mode": "cors"
+          }
+        },
+        resourceType: "Stylesheet"
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-live-headers-2",
+        interceptResponse: true
+      }
+    );
+
+    harness.lifecycle.handleNetworkResponseReceived(
+      { tabId: 1 },
+      {
+        requestId: "network-live-headers-2",
+        response: {
+          status: 200,
+          statusText: "OK",
+          headers: {
+            "Content-Type": "text/css",
+            ETag: "\"v2\"",
+            "Cache-Control": "max-age=60"
+          },
+          mimeType: "text/css"
+        },
+        type: "Stylesheet"
+      }
+    );
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-live-headers-2-response",
+        networkId: "network-live-headers-2",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.css",
+          headers: {
+            Origin: "https://app.example.com",
+            "Sec-Fetch-Mode": "cors"
+          }
+        },
+        resourceType: "Stylesheet",
+        responseStatusCode: 200,
+        responseHeaders: {
+          "Content-Type": "text/css",
+          ETag: "\"v2\"",
+          "Cache-Control": "max-age=60"
+        }
+      })
+    );
+
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({
+        requestId: "fetch-live-headers-2-response",
+        responseCode: 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "text/css" },
+          { name: "ETag", value: "\"v2\"" },
+          { name: "Cache-Control", value: "max-age=60" },
+          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          { name: "Vary", value: "Origin" }
+        ],
+        body: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64")
+      })
+    );
+  });
+
+  it("replays a synced override without .headers using the current live response headers end-to-end", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-sync-live-headers-"
+    });
+    const overridesDir = await createTempOverridesDir();
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-09T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.css$"]
+    };
+
+    try {
+      await writeOverrideFile(overridesDir, "app.example.com/assets/app.css", "body { color: rebeccapurple; }");
+      await syncOverridesDirectory({
+        dir: overridesDir,
+        onEvent: undefined
+      });
+
+      await fs.cp(overridesDir, serverRoot.rootPath, { recursive: true });
+
+      const descriptor = await realCreateFixtureDescriptor({
+        topOrigin: siteConfig.origin,
+        method: "GET",
+        url: "https://app.example.com/assets/app.css",
+        resourceType: "Stylesheet",
+        mimeType: "text/css"
+      });
+      const syncedMeta = await serverRoot.readJson<{
+        headerStrategy?: string;
+      }>(descriptor.metaPath);
+      expect(syncedMeta.headerStrategy).toBe("live");
+
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-synced-live",
+          networkId: "network-synced-live",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {
+              Origin: siteConfig.origin,
+              "Sec-Fetch-Mode": "cors"
+            }
+          },
+          resourceType: "Stylesheet"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.continueRequest",
+        {
+          requestId: "fetch-synced-live",
+          interceptResponse: true
+        }
+      );
+
+      harness.lifecycle.handleNetworkResponseReceived(
+        { tabId: 1 },
+        {
+          requestId: "network-synced-live",
+          response: {
+            status: 200,
+            statusText: "OK",
+            headers: {
+              "Content-Type": "text/css",
+              ETag: "\"synced-live\""
+            },
+            mimeType: "text/css"
+          },
+          type: "Stylesheet"
+        }
+      );
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-synced-live-response",
+          networkId: "network-synced-live",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {
+              Origin: siteConfig.origin,
+              "Sec-Fetch-Mode": "cors"
+            }
+          },
+          resourceType: "Stylesheet",
+          responseStatusCode: 200,
+          responseHeaders: {
+            "Content-Type": "text/css",
+            ETag: "\"synced-live\""
+          }
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        expect.objectContaining({
+          requestId: "fetch-synced-live-response",
+          responseHeaders: [
+            { name: "Content-Type", value: "text/css" },
+            { name: "ETag", value: "\"synced-live\"" },
+            { name: "Access-Control-Allow-Origin", value: siteConfig.origin },
+            { name: "Vary", value: "Origin" }
+          ],
+          body: Buffer.from("body { color: rebeccapurple; }", "utf8").toString("base64")
+        })
+      );
+    } finally {
+      await server.close();
+      await fs.rm(overridesDir, { recursive: true, force: true });
+    }
+  });
+
+  it("replays a synced override with .headers using stored headers without response-stage interception", async () => {
+    const serverRoot = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-extension-sync-stored-headers-"
+    });
+    const overridesDir = await createTempOverridesDir();
+    const server = await startHttpServer(serverRoot.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const serverClient = createWraithWalkerServerClient(server.trpcUrl, {
+      timeoutMs: 2_000
+    });
+    const siteConfig: SiteConfig = {
+      origin: "https://app.example.com",
+      createdAt: "2026-04-09T00:00:00.000Z",
+      dumpAllowlistPatterns: ["\\.js$"]
+    };
+
+    try {
+      await writeOverrideFile(overridesDir, "app.example.com/scripts/.headers", JSON.stringify([
+        {
+          applyTo: "*.js",
+          headers: [
+            { name: "Content-Type", value: "application/x-custom-js" },
+            { name: "Cache-Control", value: "no-store" }
+          ]
+        }
+      ], null, 2));
+      await writeOverrideFile(overridesDir, "app.example.com/scripts/app.js", "console.log('synced script');");
+      await syncOverridesDirectory({
+        dir: overridesDir,
+        onEvent: undefined
+      });
+
+      await fs.cp(overridesDir, serverRoot.rootPath, { recursive: true });
+
+      const descriptor = await realCreateFixtureDescriptor({
+        topOrigin: siteConfig.origin,
+        method: "GET",
+        url: "https://app.example.com/scripts/app.js",
+        resourceType: "Script",
+        mimeType: "application/javascript"
+      });
+      const syncedMeta = await serverRoot.readJson<{
+        headerStrategy?: string;
+      }>(descriptor.metaPath);
+      expect(syncedMeta.headerStrategy).toBe("stored");
+
+      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+
+      await harness.lifecycle.handleFetchRequestPaused(
+        { tabId: 1 },
+        createFetchPausedParams({
+          requestId: "fetch-synced-stored",
+          networkId: "network-synced-stored",
+          request: {
+            method: "GET",
+            url: descriptor.requestUrl,
+            headers: {}
+          },
+          resourceType: "Script"
+        })
+      );
+
+      expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+        1,
+        "Fetch.continueRequest",
+        expect.objectContaining({
+          requestId: "fetch-synced-stored",
+          interceptResponse: true
+        })
+      );
+      expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+        1,
+        "Fetch.fulfillRequest",
+        expect.objectContaining({
+          requestId: "fetch-synced-stored",
+          responseHeaders: [
+            { name: "Content-Type", value: "application/x-custom-js" },
+            { name: "Cache-Control", value: "no-store" }
+          ],
+          body: Buffer.from("console.log('synced script');", "utf8").toString("base64")
+        })
+      );
+    } finally {
+      await server.close();
+      await fs.rm(overridesDir, { recursive: true, force: true });
+    }
   });
 
   it("falls back to continueRequest when fixture read fails after a positive existence check", async () => {
@@ -2049,6 +2554,48 @@ describe("request lifecycle", () => {
 
     expect(harness.setLastError).toHaveBeenCalledWith("disk unavailable");
     expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-4" });
+  });
+
+  it("retries a failed continueRequest without relying on Chrome-specific detach handling", async () => {
+    const harness = createLifecycleHarness();
+    let continueAttempts = 0;
+    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
+      if (method === "Network.getRequestPostData") {
+        return { postData: '{"seed":"one"}', base64Encoded: false };
+      }
+      if (method === "Network.getResponseBody") {
+        return { body: '{"ok":true}', base64Encoded: false };
+      }
+      if (
+        method === "Fetch.continueRequest"
+        && (params as { requestId?: string } | undefined)?.requestId === "fetch-continue-retry"
+        && continueAttempts++ === 0
+      ) {
+        throw new Error("transport unavailable");
+      }
+
+      return { method, params };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-continue-retry",
+        networkId: "network-continue-retry"
+      })
+    );
+
+    expect(harness.setLastError).toHaveBeenCalledWith("transport unavailable");
+    expect(
+      harness.sendDebuggerCommand.mock.calls.filter(([, method]) => method === "Fetch.continueRequest")
+    ).toEqual([
+      [1, "Fetch.continueRequest", { requestId: "fetch-continue-retry" }],
+      [1, "Fetch.continueRequest", { requestId: "fetch-continue-retry" }]
+    ]);
+    expect(harness.state.requests.get("1:network-continue-retry")).toMatchObject({
+      requestId: "network-continue-retry",
+      url: "https://cdn.example.com/app.js"
+    });
   });
 
   it("does not delete failed requests when no tabId is present", () => {

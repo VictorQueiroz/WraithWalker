@@ -66,7 +66,7 @@ interface InterceptionMiddlewareDependencies {
     requestId: string,
     fallbackRequest?: { postData?: string }
   ) => Promise<PostDataResult>;
-  continueRequest: (tabId: number, requestId: string) => Promise<void>;
+  continueRequest: (tabId: number, requestId: string, options?: { interceptResponse?: boolean }) => Promise<void>;
   fulfillRequest: (tabId: number, payload: {
     requestId: string;
     responseCode: number;
@@ -131,51 +131,119 @@ export function createInterceptionMiddleware({
     return entry.descriptor;
   }
 
+  async function loadReplayFixture({
+    entry,
+    tabId,
+    networkRequestId,
+    fallbackRequest
+  }: {
+    entry: RequestEntry;
+    tabId: number;
+    networkRequestId: string;
+    fallbackRequest?: { postData?: string };
+  }): Promise<{ descriptor: FixtureDescriptor; fixture: StoredFixture } | null> {
+    await ensureRequestBody(entry, tabId, networkRequestId, fallbackRequest);
+    const descriptor = await ensureDescriptor(entry);
+    const fixtureExists = await repository.exists(descriptor);
+
+    if (!fixtureExists) {
+      return null;
+    }
+
+    const fixture = await repository.read(descriptor);
+    if (!fixture) {
+      setLastError("Fixture lookup failed.");
+      return null;
+    }
+
+    return {
+      descriptor,
+      fixture
+    };
+  }
+
+  function shouldReplayWithLiveResponseHeaders({
+    descriptor,
+    fixture
+  }: {
+    descriptor: FixtureDescriptor;
+    fixture: StoredFixture;
+  }): boolean {
+    return descriptor.assetLike && fixture.meta.headerStrategy === "live";
+  }
+
+  async function fulfillReplay({
+    entry,
+    tabId,
+    pausedRequestId,
+    descriptor,
+    fixture,
+    liveResponse
+  }: {
+    entry: RequestEntry;
+    tabId: number;
+    pausedRequestId: string;
+    descriptor: FixtureDescriptor;
+    fixture: StoredFixture;
+    liveResponse?: {
+      status?: number;
+      statusText?: string;
+      headers?: HeaderEntry[];
+    };
+  }): Promise<void> {
+    entry.replayed = true;
+    entry.replayOnResponse = false;
+
+    const responseCode = normalizeReplayStatusCode(liveResponse?.status ?? fixture.meta.status);
+    const responsePhrase = normalizeResponsePhrase(liveResponse?.statusText ?? fixture.meta.statusText);
+    const responseHeaders = liveResponse?.headers?.length
+      ? liveResponse.headers
+      : fixture.meta.headers;
+
+    await fulfillRequest(tabId, {
+      requestId: pausedRequestId,
+      responseCode,
+      responseHeaders: replayResponseHeaders(responseHeaders, {
+        assetLike: descriptor.assetLike,
+        requestHeaders: entry.requestHeaders,
+        topOrigin: entry.topOrigin
+      }),
+      body: fixture.bodyBase64,
+      ...(responsePhrase ? { responsePhrase } : {})
+    });
+  }
+
   async function replayFromRepository({
     entry,
     tabId,
     pausedRequestId,
     networkRequestId,
     fallbackRequest
-  }: {
-    entry: RequestEntry;
-    tabId: number;
-    pausedRequestId: string;
-    networkRequestId: string;
-    fallbackRequest?: { postData?: string };
-  }): Promise<void> {
+    }: {
+      entry: RequestEntry;
+      tabId: number;
+      pausedRequestId: string;
+      networkRequestId: string;
+      fallbackRequest?: { postData?: string };
+    }): Promise<void> {
     try {
-      await ensureRequestBody(entry, tabId, networkRequestId, fallbackRequest);
-      const descriptor = await ensureDescriptor(entry);
-      const fixtureExists = await repository.exists(descriptor);
-
-      if (!fixtureExists) {
+      const replayFixture = await loadReplayFixture({
+        entry,
+        tabId,
+        networkRequestId,
+        fallbackRequest
+      });
+      if (!replayFixture) {
         await continueRequest(tabId, pausedRequestId);
         return;
       }
 
-      const fixture = await repository.read(descriptor);
-      if (!fixture) {
-        setLastError("Fixture lookup failed.");
-        await continueRequest(tabId, pausedRequestId);
-        return;
-      }
-
-      entry.replayed = true;
-
-      const responseCode = normalizeReplayStatusCode(fixture.meta.status);
-      const responsePhrase = normalizeResponsePhrase(fixture.meta.statusText);
-
-      await fulfillRequest(tabId, {
-        requestId: pausedRequestId,
-        responseCode,
-        responseHeaders: replayResponseHeaders(fixture.meta.headers, {
-          assetLike: descriptor.assetLike,
-          requestHeaders: entry.requestHeaders,
-          topOrigin: entry.topOrigin
-        }),
-        body: fixture.bodyBase64,
-        ...(responsePhrase ? { responsePhrase } : {})
+      await fulfillReplay({
+        entry,
+        tabId,
+        pausedRequestId,
+        descriptor: replayFixture.descriptor,
+        fixture: replayFixture.fixture
       });
     } catch (error) {
       setLastError(error instanceof Error ? error.message : String(error));
@@ -227,6 +295,9 @@ export function createInterceptionMiddleware({
   return {
     ensureDescriptor,
     ensureRequestBody,
+    loadReplayFixture,
+    shouldReplayWithLiveResponseHeaders,
+    fulfillReplay,
     replayFromRepository,
     persistResponse
   };
