@@ -195,6 +195,30 @@ export function isDetachedDebuggerCommandMessage(message: string, tabId: number)
     && normalized.includes(String(tabId));
 }
 
+export class StaleFetchRequestCommandError extends Error {
+  constructor(
+    readonly tabId: number,
+    readonly method: string,
+    readonly rawMessage: string
+  ) {
+    super("");
+    this.name = "StaleFetchRequestCommandError";
+  }
+}
+
+export function isInvalidFetchRequestMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("invalid interceptionid")
+    || normalized.includes("invalid requestid");
+}
+
+export function isFetchResolutionCommand(method: string): boolean {
+  return method === "Fetch.continueRequest"
+    || method === "Fetch.fulfillRequest"
+    || method === "Fetch.failRequest"
+    || method === "Fetch.continueResponse";
+}
+
 export function normalizeConsoleTimestamp(value: unknown): string {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return new Date().toISOString();

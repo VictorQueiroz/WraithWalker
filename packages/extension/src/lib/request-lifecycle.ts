@@ -7,6 +7,7 @@ import { createCapturePolicy } from "./capture-policy.js";
 import { createFixtureDescriptor as defaultCreateFixtureDescriptor } from "./fixture-mapper.js";
 import { createInterceptionMiddleware as defaultCreateInterceptionMiddleware } from "./interception-middleware.js";
 import { createStorageLayoutResolver } from "./storage-layout.js";
+import { StaleFetchRequestCommandError } from "./background-runtime-shared.js";
 import type { AttachedTabState, FixtureDescriptor, HeaderEntry, HeaderInput, RequestEntry, RequestPayload, ResponseMeta, SiteConfig, StoredFixture } from "./types.js";
 
 interface LifecycleSource {
@@ -182,6 +183,23 @@ export function createRequestLifecycle({
     });
   }
 
+  function clearTrackedRequest(tabId: number, requestId: string): void {
+    state.requests.delete(requestKey(tabId, requestId));
+  }
+
+  function handleStalePausedRequest(
+    error: unknown,
+    tabId: number,
+    networkRequestId: string
+  ): boolean {
+    if (!(error instanceof StaleFetchRequestCommandError)) {
+      return false;
+    }
+
+    clearTrackedRequest(tabId, networkRequestId);
+    return true;
+  }
+
   const capturePolicy = createCapturePolicy({ getSiteConfigForOrigin });
   const storageLayout = createStorageLayoutResolver({ createFixtureDescriptor });
 
@@ -252,7 +270,14 @@ export function createRequestLifecycle({
     }
 
     if (!isHttpUrl(params.request.url)) {
-      await continueRequest(tabId, params.requestId);
+      try {
+        await continueRequest(tabId, params.requestId);
+      } catch (error) {
+        if (handleStalePausedRequest(error, tabId, params.networkId || params.requestId)) {
+          return;
+        }
+        throw error;
+      }
       return;
     }
 
@@ -273,7 +298,14 @@ export function createRequestLifecycle({
 
       if (!entry.replayOnResponse || params.responseErrorReason) {
         entry.replayOnResponse = false;
-        await continueRequest(tabId, params.requestId);
+        try {
+          await continueRequest(tabId, params.requestId);
+        } catch (error) {
+          if (handleStalePausedRequest(error, tabId, networkRequestId)) {
+            return;
+          }
+          throw error;
+        }
         return;
       }
 
@@ -304,8 +336,18 @@ export function createRequestLifecycle({
         });
       } catch (error) {
         entry.replayOnResponse = false;
+        if (handleStalePausedRequest(error, tabId, networkRequestId)) {
+          return;
+        }
         setLastError(error instanceof Error ? error.message : String(error));
-        await continueRequest(tabId, params.requestId);
+        try {
+          await continueRequest(tabId, params.requestId);
+        } catch (continueError) {
+          if (handleStalePausedRequest(continueError, tabId, networkRequestId)) {
+            return;
+          }
+          throw continueError;
+        }
       }
       return;
     }
@@ -336,8 +378,18 @@ export function createRequestLifecycle({
         fixture: replayFixture.fixture
       });
     } catch (error) {
+      if (handleStalePausedRequest(error, tabId, networkRequestId)) {
+        return;
+      }
       setLastError(error instanceof Error ? error.message : String(error));
-      await continueRequest(tabId, params.requestId);
+      try {
+        await continueRequest(tabId, params.requestId);
+      } catch (continueError) {
+        if (handleStalePausedRequest(continueError, tabId, networkRequestId)) {
+          return;
+        }
+        throw continueError;
+      }
     }
   }
 

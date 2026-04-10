@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createRequestLifecycle } from "../src/lib/request-lifecycle.js";
 import { createFixtureDescriptor as realCreateFixtureDescriptor } from "../src/lib/fixture-mapper.js";
+import { StaleFetchRequestCommandError } from "../src/lib/background-runtime-shared.js";
 import type { SiteConfig } from "../src/lib/types.js";
 import { createWraithWalkerServerClient } from "../src/lib/wraithwalker-server.js";
 import { syncOverridesDirectory } from "../../core/src/overrides-sync.mts";
@@ -2596,6 +2597,40 @@ describe("request lifecycle", () => {
       requestId: "network-continue-retry",
       url: "https://cdn.example.com/app.js"
     });
+  });
+
+  it("drops a stale paused request without surfacing a stale fetch resolution error", async () => {
+    const harness = createLifecycleHarness();
+    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
+      if (
+        method === "Fetch.continueRequest"
+        && (params as { requestId?: string } | undefined)?.requestId === "fetch-stale-pause"
+      ) {
+        throw new StaleFetchRequestCommandError(
+          1,
+          method,
+          "{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
+        );
+      }
+
+      return { method, params };
+    });
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-stale-pause",
+        networkId: "network-stale-pause"
+      })
+    );
+
+    expect(harness.setLastError).not.toHaveBeenCalled();
+    expect(harness.state.requests.has("1:network-stale-pause")).toBe(false);
+    expect(
+      harness.sendDebuggerCommand.mock.calls.filter(([, method]) => method === "Fetch.continueRequest")
+    ).toEqual([
+      [1, "Fetch.continueRequest", { requestId: "fetch-stale-pause" }]
+    ]);
   });
 
   it("does not delete failed requests when no tabId is present", () => {

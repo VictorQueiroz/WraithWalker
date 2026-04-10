@@ -9,8 +9,11 @@ import type {
 import {
   debuggerTarget,
   DetachedDebuggerCommandError,
+  isFetchResolutionCommand,
+  isInvalidFetchRequestMessage,
   isDetachedDebuggerCommandMessage,
   MAX_RECENT_CONSOLE_ENTRIES,
+  StaleFetchRequestCommandError,
   toBrowserConsoleEntry
 } from "./background-runtime-shared.js";
 import type { BackgroundTraceServiceApi } from "./background-trace-service.js";
@@ -70,6 +73,9 @@ export function createBackgroundDebuggerRuntime({
       if (isDetachedDebuggerCommandMessage(message, tabId)) {
         clearTrackedTabState(tabId);
         throw new DetachedDebuggerCommandError(tabId, method, message);
+      }
+      if (isFetchResolutionCommand(method) && isInvalidFetchRequestMessage(message)) {
+        throw new StaleFetchRequestCommandError(tabId, method, message);
       }
 
       throw error;
@@ -174,7 +180,10 @@ export function createBackgroundDebuggerRuntime({
         lifecycle.handleNetworkLoadingFailed(source, params);
       }
     } catch (error) {
-      if (error instanceof DetachedDebuggerCommandError) {
+      if (
+        error instanceof DetachedDebuggerCommandError
+        || error instanceof StaleFetchRequestCommandError
+      ) {
         return;
       }
 

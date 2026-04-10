@@ -2696,6 +2696,82 @@ describe("background entrypoint", () => {
     );
   });
 
+  it("ignores stale paused-request resolution errors from the real request lifecycle", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([{ id: 13, url: "https://app.example.com/page" }]);
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.type === "fs.ensureRoot") {
+        return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+      }
+      if (message?.type === "fs.hasFixture") {
+        return { ok: true, exists: false };
+      }
+      return { ok: true };
+    });
+    chromeApi.debugger.sendCommand.mockImplementation(async (target, method, params) => {
+      if (
+        (target as { tabId?: number }).tabId === 13
+        && method === "Fetch.continueRequest"
+        && (params as { requestId?: string } | undefined)?.requestId === "fetch-13"
+      ) {
+        throw new Error("{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}");
+      }
+
+      return undefined;
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+      ]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined)
+    });
+
+    await runtime.start();
+    await runtime.handleRuntimeMessage({ type: "session.start" });
+
+    runtime.handleDebuggerEvent(
+      { tabId: 13 },
+      "Network.requestWillBeSent",
+      {
+        requestId: "network-13",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        type: "Script"
+      }
+    );
+
+    await runtime.handleDebuggerEvent(
+      { tabId: 13 },
+      "Fetch.requestPaused",
+      {
+        requestId: "fetch-13",
+        networkId: "network-13",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/app.js",
+          headers: {}
+        },
+        resourceType: "Script"
+      }
+    );
+
+    expect(runtime.state.lastError).toBe("");
+    expect(runtime.state.requests.has("13:network-13")).toBe(false);
+    expect(
+      chromeApi.debugger.sendCommand.mock.calls.filter(([, method]) => method === "Fetch.continueRequest")
+    ).toEqual([
+      [{ tabId: 13 }, "Fetch.continueRequest", { requestId: "fetch-13" }]
+    ]);
+  });
+
   it("clears multiple in-flight requests and ignores late lifecycle events after target_closed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
