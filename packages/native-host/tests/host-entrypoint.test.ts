@@ -27,6 +27,17 @@ async function loadHostModule() {
   };
 }
 
+async function loadHostModuleWithArgv(argv: string[]) {
+  const originalArgv = process.argv;
+  process.argv = argv;
+
+  try {
+    return await loadHostModule();
+  } finally {
+    process.argv = originalArgv;
+  }
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unmock("../src/lib.mjs");
@@ -90,6 +101,21 @@ describe("native host entrypoint", () => {
     expect(writeMessageImpl).toHaveBeenCalledWith({ ok: true, result: 42 });
   });
 
+  it("accepts string chunks when reading the native host message body", async () => {
+    const { host } = await loadHostModule();
+    const handleMessageImpl = vi.fn().mockResolvedValue({ ok: true, result: 7 });
+    const writeMessageImpl = vi.fn();
+
+    await host.main({
+      stdin: [createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" }).toString("utf8")],
+      handleMessageImpl,
+      writeMessageImpl
+    });
+
+    expect(handleMessageImpl).toHaveBeenCalledWith({ type: "verifyRoot", expectedRootId: "root-123" });
+    expect(writeMessageImpl).toHaveBeenCalledWith({ ok: true, result: 7 });
+  });
+
   it("rejects malformed messages that are missing the length prefix", async () => {
     const { host } = await loadHostModule();
 
@@ -119,5 +145,64 @@ describe("native host entrypoint", () => {
       ok: false,
       error: "Native host expected a length-prefixed message."
     });
+  });
+
+  it("passes successful entrypoint responses through without rewriting them", async () => {
+    const { host } = await loadHostModule();
+    const handleMessageImpl = vi.fn().mockResolvedValue({ ok: true, result: "done" });
+    const writeMessageImpl = vi.fn();
+
+    await host.runEntrypoint({
+      stdin: [createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" })],
+      handleMessageImpl,
+      writeMessageImpl
+    });
+
+    expect(writeMessageImpl).toHaveBeenCalledWith({ ok: true, result: "done" });
+  });
+
+  it("falls back to the default native host writer when no custom writer is provided", async () => {
+    const { host } = await loadHostModule();
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockReturnValue(true as never);
+
+    await host.runEntrypoint({
+      stdin: [Buffer.from("bad")]
+    });
+
+    expect(stdoutWrite).toHaveBeenCalledTimes(1);
+
+    const payload = stdoutWrite.mock.calls[0]?.[0] as Buffer;
+    const messageLength = payload.readUInt32LE(0);
+    const body = JSON.parse(payload.subarray(4).toString("utf8"));
+
+    expect(messageLength).toBe(payload.length - 4);
+    expect(body).toEqual({
+      ok: false,
+      error: "Native host expected a length-prefixed message."
+    });
+  });
+
+  it("stringifies non-Error entrypoint failures", async () => {
+    const { host } = await loadHostModule();
+    const writeMessageImpl = vi.fn();
+
+    await host.runEntrypoint({
+      stdin: [createNativeMessage({ type: "verifyRoot" })],
+      handleMessageImpl: vi.fn().mockRejectedValue("plain failure"),
+      writeMessageImpl
+    });
+
+    expect(writeMessageImpl).toHaveBeenCalledWith({
+      ok: false,
+      error: "plain failure"
+    });
+  });
+
+  it("does not auto-run when imported without an entrypoint argv", async () => {
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockReturnValue(true as never);
+
+    await loadHostModuleWithArgv([process.argv[0] ?? "node"]);
+
+    expect(stdoutWrite).not.toHaveBeenCalled();
   });
 });
