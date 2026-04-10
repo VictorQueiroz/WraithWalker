@@ -1,6 +1,15 @@
-# Extension And Cursor Workflow
+# Extension Workflow
 
-## What The Extension Does
+## Start Here
+
+There are two valid ways to use the extension:
+
+- **Local-root mode**: you pick a folder in the browser, and the extension writes captures there directly
+- **Server-backed mode**: you run `wraithwalker serve`, and the extension uses the server's root and config automatically
+
+If you are new to WraithWalker, start with local-root mode first. Add the server later when you want MCP, guided traces, or one shared root for the CLI and browser.
+
+## What The Extension Captures
 
 The Chrome extension captures matching network responses from selected origins and writes them into a local WraithWalker root directory.
 
@@ -18,13 +27,15 @@ Shared defaults match JavaScript/TypeScript, CSS, and WebAssembly files. When yo
 
 Fonts, images, SVGs, and other asset types are available too, but only when your allowlist patterns include them or they arrive through an import flow such as HAR sync.
 
-## Capture Flow
+## First-Time Local Setup
 
-1. Add one or more exact origins in Settings.
-2. Choose a WraithWalker root directory with the directory picker.
-3. Start the session from the popup.
-4. Browse the target site normally.
-5. WraithWalker writes matching responses into the WraithWalker root directory.
+1. Build the repo with `npm run build`.
+2. Load `packages/extension/dist` as an unpacked extension in Chrome.
+3. Open **Settings**.
+4. Add one or more exact origins.
+5. Choose a WraithWalker root directory with the directory picker.
+6. Start the session from the popup.
+7. Browse the target site normally.
 
 Nothing is captured unless the session is running.
 
@@ -55,9 +66,9 @@ If you already had domains saved in the extension before this root-backed config
 
 If there is no local `.wraithwalker` root in the current project, `wraithwalker config` falls back to the same default root that `wraithwalker serve` would use and creates it automatically. That makes the server-backed workflow usable even before the extension has ever been configured.
 
-## Local Server Preference
+## Server-Backed Mode
 
-The extension can also capture through a local WraithWalker server started with:
+Start the local server with:
 
 ```bash
 wraithwalker serve
@@ -77,7 +88,22 @@ When the extension detects the local server at `http://127.0.0.1:4319/trpc`, it 
 
 If the server is not running, the extension falls back to the remembered local root exactly as before.
 
-That also means the options page stays useful as the local fallback editor, but it does not override the server root config while the local server is connected. The server/root config is the authority in that mode.
+That also means the options page stays useful as the local fallback editor, but it does not override the server root config while the local server is connected. The server root config is the authority in that mode.
+
+## Choose The Right Mode
+
+Use local-root mode when:
+
+- you only need local capture into one folder
+- you do not need MCP
+- you want the fewest moving parts
+
+Use server-backed mode when:
+
+- you want MCP tools at `/mcp`
+- you want guided scenario traces
+- you want the CLI and extension to share the same root and config automatically
+- you want **Open in folder** to reveal the active server root
 
 ## How To Think About The Root Folder
 
@@ -103,7 +129,7 @@ When the local WraithWalker server is active, the “root folder” is the serve
 
 ## Open In Cursor
 
-The popup is intentionally minimal:
+The popup stays intentionally small:
 
 - `Start Session` / `Stop Session`
 - `Open in Cursor`
@@ -132,9 +158,16 @@ WraithWalker writes the supporting workspace context into:
 - `.cursorrules`
 - `.wraithwalker/types/*.d.ts`
 
-The goal is simple: let the agent make sense of the dumped CSS, JS, and other accessed files that were captured during the session.
-
 The same root is also where `wraithwalker config` writes `.wraithwalker/config.json`, so the capture rules and the captured files live together.
+
+## Open In Cursor Requirements
+
+`Open in Cursor` works best when WraithWalker can resolve an absolute filesystem path for the root:
+
+- in server-backed mode, the server reports that root path directly
+- in local-root mode, the extension still needs a shared launch path because the browser directory handle does not reveal the OS path
+
+If no shared launch path is configured, WraithWalker can still launch Cursor and send the prompt, but Cursor may not open directly into the remembered root folder.
 
 ## Guided Scenario Traces
 
@@ -162,10 +195,6 @@ These are different things:
 - **Shared launch path**  
   Lets WraithWalker ask Cursor or the native host to open that exact folder by OS path.
 
-If no shared launch path is configured, **Open in Cursor** still launches Cursor and sends the chat prompt, but Cursor may not open directly into the remembered folder.
-
-When the local WraithWalker server is active, WraithWalker uses the server-reported root path instead of the local shared launch path.
-
 ## Native Host
 
 The native host is optional.
@@ -177,6 +206,8 @@ Use it when you want:
 - command-based editor or shell integrations
 
 The default Cursor flow is URL-first. Native messaging is not required just to launch Cursor and send the workspace brief.
+
+When the local server is connected, reveal-root and scenario actions can also go through the server instead of the native host.
 
 ## Diagnostics And Support
 
@@ -201,11 +232,13 @@ wraithwalker doctor --json
 
 That gives you a root-level health report that pairs well with the extension diagnostics bundle when you need to debug local setup issues.
 
-## Related Commands
+## Common CLI Commands
 
 ```bash
+wraithwalker init /path/to/root
+wraithwalker config list
 wraithwalker import-har ./capture.har /path/to/root
-wraithwalker sync /path/to/chrome-overrides
+wraithwalker sync ./overrides
 wraithwalker context --editor cursor
 wraithwalker serve
 ```

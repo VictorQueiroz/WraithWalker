@@ -4,6 +4,21 @@ This package provides a native-messaging host so the extension can open the acti
 
 Root verification and scenario operations are backed by `@wraithwalker/core`, so the native host stays aligned with the CLI and MCP server.
 
+## Do You Need This?
+
+Usually, no.
+
+You normally do **not** need the native host when:
+
+- `wraithwalker serve` is running and handling root reveal or scenario actions
+- the default URL-based Cursor flow is enough for your editor-open workflow
+
+You **do** want the native host when you need:
+
+- OS-level folder reveal without the local server
+- scenario save or switch actions without the local server
+- command-based editor or shell integrations that should run outside the browser
+
 ## What It Does
 
 | Message | Description |
@@ -45,6 +60,8 @@ chmod +x /absolute/path/to/out/host.mjs
 ```
 ~/.config/google-chrome/NativeMessagingHosts/com.wraithwalker.host.json
 ```
+
+If you use another Chromium-based browser, the host manifest location may differ slightly from the Chrome paths above.
 
 6. In the extension options page, set:
    - **Host name:** `com.wraithwalker.host`

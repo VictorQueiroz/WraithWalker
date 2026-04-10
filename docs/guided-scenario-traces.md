@@ -1,34 +1,47 @@
 # Guided Scenario Traces
 
-Guided scenario traces let an MCP-connected agent ask a user to click through specific parts of an app, then store those clicks alongside the captured fixtures inside the active WraithWalker root.
+Guided scenario traces let an MCP-connected agent ask a user to click through a running app, then store those clicks alongside the captured fixtures inside the active WraithWalker root.
 
-This feature is server-backed in v1:
+## Requirements
 
-- `wraithwalker serve` must be running
-- the extension must be connected to that local server
-- the browser session must be active
+Guided traces currently require all of the following:
 
-## What It Is For
+- `wraithwalker serve` is running
+- the browser extension is connected to that local server
+- the browser session is active
+- at least one origin is enabled for capture
 
-Use guided traces when the user can point at the exact part of the UI they mean more easily than they can describe it.
+If any of those are missing, `trace-status` explains what is blocking the flow.
 
-Typical flow:
+## When To Use It
 
-1. Ask `trace-status`.
-2. Wait until the phase is `idle`.
-3. Call `start-trace`, optionally with a `name` and `goal`.
-4. Ask the user to click the parts of the app they are talking about.
-5. Poll `trace-status` while the trace is active.
-6. Call `stop-trace`.
-7. Call `read-trace` only when you need the full stored record.
+Use guided traces when the user can point at the exact UI they mean more easily than they can describe it.
 
-That gives the agent:
+Examples:
+
+- “This dropdown opens from here”
+- “This modal appears after I click this button”
+- “This page breaks after this sequence of clicks”
+
+The trace gives the agent:
 
 - the click selector
 - the page URL
-- a small text snippet from the clicked element
+- a short text snippet from the clicked element
 - linked captured fixtures written right after that click
-- a small summary of recent steps, linked fixture counts, and trace progress without forcing a full raw trace read
+- a compact progress summary without forcing a full raw trace read
+
+## Recommended MCP Flow
+
+1. Call `trace-status`.
+2. Wait until the phase is `idle`.
+3. Call `start-trace`, optionally with a `name` and `goal`.
+4. Ask the user to click the relevant parts of the app.
+5. Poll `trace-status` while the trace is active.
+6. Call `stop-trace` with the returned `traceId`.
+7. Call `read-trace` only when you need the full stored record.
+
+For most agents, `trace-status` should stay the main progress surface. Save `read-trace` for the moments when the compact summary is not enough.
 
 ## MCP Tools
 
@@ -58,6 +71,13 @@ Important fields:
 - `blockingReason`
 - `activeTraceSummary`
 
+`captureReady` means:
+
+- the extension heartbeat is live
+- the extension session is active
+- capture is using the server root
+- at least one origin is enabled
+
 ### `read-console`
 
 This returns the recent console and log entries that the connected extension observed through the Chrome Debugger session.
@@ -69,13 +89,6 @@ Useful filters:
 - `search`
 - `sources`
 - `levels`
-
-`captureReady` means:
-
-- the extension heartbeat is live
-- the extension session is active
-- capture is using the server root
-- at least one origin is enabled
 
 ### `trace-status`
 
@@ -125,7 +138,7 @@ Guided traces live under:
 - recorded click steps
 - linked fixtures for each step
 
-Simple-mode storage still works the same way:
+Simple-mode fixture storage still works the same way:
 
 - captured asset bodies stay visible at the root
 - metadata and manifests stay under `.wraithwalker`
@@ -155,7 +168,7 @@ WraithWalker uses the existing Chrome Debugger session and adds DevTools Protoco
 - `Runtime.evaluate`
 - `Runtime.bindingCalled`
 
-The extension injects a small page-side click collector through the debugger transport, not through a general MV3 content-script messaging architecture.
+The extension injects a small page-side click collector through the debugger transport, not through a general MV3 content-script messaging layer.
 
 That collector computes a selector in the page, sends a sanitized payload back through the debugger binding, and the background worker forwards that to the local tRPC server.
 
@@ -163,9 +176,9 @@ That collector computes a selector in the page, sends a sanitized payload back t
 
 1. Start the server:
 
-```bash
-wraithwalker serve
-```
+   ```bash
+   wraithwalker serve
+   ```
 
 2. Start the extension session and browse normally.
 3. In your MCP client, call `trace-status`.
@@ -177,6 +190,6 @@ wraithwalker serve
 
 ## Related Docs
 
-- [Extension and Cursor workflow](./extension-workflow.md)
-- [MCP clients](./mcp-clients.md)
+- [Extension workflow](./extension-workflow.md)
+- [MCP client setup](./mcp-clients.md)
 - [MCP server README](../packages/mcp-server/README.md)

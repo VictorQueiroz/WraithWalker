@@ -4,34 +4,60 @@
 
 # WraithWalker
 
-Turn a running website into local files, open that fixture root in Cursor, and optionally expose it over MCP.
+Turn a running website into a local fixture workspace, open it in your editor, and optionally expose it over MCP for agent workflows.
 
-## Quick Start
+WraithWalker has two main ways to work:
+
+- **Extension-first** for quick local capture into a folder you choose
+- **Server-backed** for MCP, guided traces, and a shared local root that the extension and CLI use together
+
+## Before You Start
+
+You will usually want:
+
+- Node `22+`
+- npm `11.11.1+`
+- Google Chrome or another Chromium browser for the extension workflow
+
+Install and validate the repo:
 
 ```bash
-npm install
+npm ci
 npm run build
 npm test
 ```
 
-## Basic Capture
+## Fastest First Capture
+
+Use this path if you want to capture a site into local files as quickly as possible.
 
 1. Load `packages/extension/dist` as an unpacked Chrome extension.
-2. Add the origins you want to capture.
-3. Choose a WraithWalker root folder where dumped assets will be written.
-4. Start a session.
-5. Browse the website while the session is running.
+2. Open **Settings** and add the exact origins you want to capture.
+3. Choose a WraithWalker root folder where captured files will be written.
+4. Start the session from the popup.
+5. Browse the target site while the session is running.
 6. Click **Open in Cursor** to open that same folder and send the workspace prompt.
 
-No files are captured unless a Session is running.
+Nothing is captured unless a session is running.
 
-More: [Extension and Cursor workflow](docs/extension-workflow.md)
+More: [Extension workflow](docs/extension-workflow.md)
 
-## Local Server
+## Server-Backed Workflow
 
-Run `wraithwalker serve` if you want one local HTTP server that exposes both MCP and the WraithWalker capture backend.
+Use this path when you want MCP access, guided traces, or one shared local root for the CLI and extension.
 
-When that server is running, the extension automatically prefers the server root for capture and Cursor open flows. Without it, the extension keeps using the locally selected root folder.
+Start the local server:
+
+```bash
+wraithwalker serve
+```
+
+By default this exposes:
+
+- MCP at `http://127.0.0.1:4319/mcp`
+- the extension capture backend at `http://127.0.0.1:4319/trpc`
+
+When that server is running, the extension automatically prefers the server root for capture, context generation, and editor-open flows. Without it, the extension keeps using the locally selected root folder.
 
 More: [Serve command and local server flow](packages/cli/README.md)
 
@@ -45,23 +71,30 @@ When `wraithwalker serve` is running, MCP tools can see whether the extension is
 4. Ask the user to click through the app while the session is running and poll `trace-status` while it progresses.
 5. Stop the trace and read it back from `.wraithwalker/scenario-traces` only when the compact summaries are not enough.
 
-This lets an agent connect user clicks to captured fixtures and explain how a specific part of the app works.
+This lets an agent connect user clicks to captured fixtures and explain how a specific part of the app works without guessing from filenames alone.
 
 More: [Guided scenario traces](docs/guided-scenario-traces.md)
 
-## Open In Cursor
+## What WraithWalker Writes
 
-Cursor works from the dumped CSS, JS, HTML, and other accessed assets captured into that root folder. The prompt and generated workspace files help the agent prettify what was dumped and understand how the selected website is structured.
+Each WraithWalker root is a working fixture workspace:
 
-More: [Extension and Cursor workflow](docs/extension-workflow.md)
+- readable, editable files stay visible at the root
+- canonical replay data and metadata live under `.wraithwalker/`
+- generated editor context files such as `CLAUDE.md` and `.cursorrules` also live in that same workspace
+
+That means you can inspect, edit, diff, snapshot, and replay the same captured workspace without needing the original source repository.
+
+More: [Extension workflow](docs/extension-workflow.md)
 
 ## More Docs
 
-- [Extension and Cursor workflow](docs/extension-workflow.md)
+- [Extension workflow](docs/extension-workflow.md)
 - [Guided scenario traces](docs/guided-scenario-traces.md)
-- [Serve command and local server flow](packages/cli/README.md)
+- [CLI commands and local server flow](packages/cli/README.md)
 - [MCP server tools and tRPC backend](packages/mcp-server/README.md)
-- [MCP clients](docs/mcp-clients.md)
-- [npm releases](docs/npm-releases.md)
+- [MCP client setup](docs/mcp-clients.md)
+- [Native host setup](packages/native-host/README.md)
+- [npm release process](docs/npm-releases.md)
 
 For development and release steps, use the docs in `docs/` as the source of truth.

@@ -4,6 +4,8 @@ Shared Node-side domain logic for WraithWalker.
 
 This package is the shared foundation behind the published WraithWalker packages.
 
+Most users do not need to install `@wraithwalker/core` directly. Reach for it when you are building tooling or integrations on top of WraithWalker internals.
+
 It contains:
 
 - fixture root creation and discovery

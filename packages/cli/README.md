@@ -4,6 +4,16 @@ The `wraithwalker` command-line tool for managing fixture roots, project capture
 
 The CLI is a thin shell over shared domain logic in `@wraithwalker/core`, with `serve` delegating directly to `@wraithwalker/mcp-server/server`.
 
+## Start Here
+
+If you are new to the CLI, the most common flows are:
+
+1. Create or find a root with `wraithwalker init` or by running `wraithwalker serve`
+2. Add capture config with `wraithwalker config add ...`
+3. Capture with the browser extension
+4. Inspect the root with `wraithwalker status` or `wraithwalker doctor`
+5. Generate editor context with `wraithwalker context --editor cursor`
+
 ## Commands
 
 ```bash
@@ -27,7 +37,13 @@ wraithwalker serve [dir] [--http] [--host <host>] [--port <port>] # Start the co
 
 ## Root Discovery
 
-All commands except `init`, `sync`, and `import-har` discover the fixture root automatically by walking up from the current directory looking for `.wraithwalker/root.json`. Use `wraithwalker init` to create one, `wraithwalker sync` to derive metadata from an existing Chrome Overrides directory, or `wraithwalker import-har` / `wraithwalker sync --har` to populate from a HAR file.
+All commands except `init`, `sync`, and `import-har` discover the fixture root automatically by walking up from the current directory looking for `.wraithwalker/root.json`.
+
+Use:
+
+- `wraithwalker init` to create a new root
+- `wraithwalker sync` to derive metadata from an existing Chrome Overrides directory
+- `wraithwalker import-har` or `wraithwalker sync --har` to populate from a HAR file
 
 ## Project Capture Config
 
@@ -100,6 +116,8 @@ It checks:
 
 The command exits successfully even when the root is missing, so it is safe to use as a first-line support check. `--json` prints the same report as machine-readable JSON for issue reports or tooling.
 
+For beginners, `wraithwalker doctor` is usually the fastest way to answer “is this root set up correctly?”
+
 ## Overrides Sync
 
 `wraithwalker sync` reads a standard Chrome DevTools Local Overrides directory in place, creates `.wraithwalker/root.json` if needed, and generates canonical hidden capture metadata plus request/response sidecars without rewriting the visible override files.
@@ -107,12 +125,14 @@ The command exits successfully even when the root is missing, so it is safe to u
 ```bash
 wraithwalker sync
 wraithwalker sync ./overrides
+wraithwalker sync ./fixtures --har ./captures/app.har --top-origin https://app.example.com
 ```
 
 - `dir` defaults to the current directory.
 - Override files are treated as static GET fixtures.
 - Standard `.headers` files are parsed and applied to generated response metadata.
 - Because DevTools override paths are scheme-agnostic, sync materializes both `http://` and `https://` origin metadata for each discovered host.
+- `--har` switches the command into HAR import mode when you want one umbrella command instead of `import-har`.
 
 ## HAR Import
 
@@ -132,7 +152,7 @@ wraithwalker sync ./fixtures --har ./captures/app.har --top-origin https://app.e
 
 ## Configuration And Theming
 
-Theme customization is config-only in v1. The CLI keeps its command layout and message structure, but you can customize semantic styles, icons, banner content, indent, and label width.
+Theme customization is config-only today. The CLI keeps its command layout and message structure, but you can customize semantic styles, icons, banner content, indent, and label width.
 
 Config files are loaded in this order:
 
@@ -189,6 +209,8 @@ Project config overrides global config for commands that operate on a fixture ro
 
 Supported editor IDs: `cursor`, `antigravity`, `vscode`, `windsurf`.
 
+If you only use one editor, regenerate context after large captures, HAR imports, or scenario switches so the workspace brief stays current.
+
 ## Scenario Management
 
 Scenarios save the current fixture state as a named snapshot. You can switch between scenarios to test different application states:
@@ -236,7 +258,15 @@ The same server also tracks extension heartbeats and guided scenario traces. Tho
 - `.wraithwalker/scenario-traces/active.json`
 - `.wraithwalker/scenario-traces/<traceId>/trace.json`
 
-Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and local-only by design.
+Only loopback hosts are allowed because the tRPC surface is write-capable and local-only by design.
+
+For most users, `wraithwalker serve` is the easiest way to get one shared local root for:
+
+- the browser extension
+- MCP clients
+- context generation
+- scenario tracing
+- root reveal and scenario actions when the local server is connected
 
 ## Development
 

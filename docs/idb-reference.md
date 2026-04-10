@@ -1,5 +1,7 @@
 # `idb` Reference
 
+This is a small implementation note for the extension's IndexedDB wrapper. Most users can ignore it unless they are changing browser-side persistence.
+
 ## Repository
 
 - GitHub: `jakearchibald/idb`

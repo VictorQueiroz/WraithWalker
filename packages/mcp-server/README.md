@@ -2,6 +2,16 @@
 
 An [MCP](https://modelcontextprotocol.io/) server that exposes WraithWalker fixture directories to AI agents.
 
+## Start Here
+
+Most users should start the server through the main CLI:
+
+```bash
+wraithwalker serve
+```
+
+Use this package directly only when you specifically want the standalone `wraithwalker-mcp` binary or the programmatic server APIs.
+
 ## Usage
 
 The CLI command:
@@ -64,7 +74,7 @@ The server treats that file as the explicit source of truth for capture origins 
 
 Shared defaults remain JavaScript/TypeScript, CSS, and WebAssembly patterns. If the extension UI adds `\.json$` for a domain, that is written into the root config as an extension convenience, not as a server-wide default policy.
 
-Only loopback hosts are allowed in v1 because the tRPC surface is write-capable and intended for local use.
+Only loopback hosts are allowed because the tRPC surface is write-capable and intended for local use.
 
 If you install this package directly, it also ships the `wraithwalker-mcp` bin.
 
@@ -81,6 +91,8 @@ wraithwalker-mcp /path/to/fixture-root --http --host 127.0.0.1 --port 4319
 ```
 
 `--host` and `--port` only apply in `--http` mode. Without `--http`, the package bin starts the stdio MCP transport.
+
+If you do not need the standalone transport split, prefer `wraithwalker serve` because it starts both `/mcp` and `/trpc` together and matches the extension workflow directly.
 
 ## Programmatic API
 
@@ -165,7 +177,7 @@ The extension Settings page follows that same authority switch: while connected,
 
 If older extension-local site config exists, the extension imports it into the selected root once and then continues from the root-backed config.
 
-Guided traces are server-root-only in v1 and live under `.wraithwalker/scenario-traces/`.
+Guided traces are server-root-only and live under `.wraithwalker/scenario-traces/`.
 
 These procedures are the extension's local implementation API. The public agent-facing surface remains the MCP tool set documented above.
 
@@ -219,7 +231,7 @@ When an agent wants to understand a state transition or compare captured API beh
 
 ## Client Setup
 
-For `stdio` clients, configure the server command directly:
+For `stdio` clients from a repo checkout, configure the server command directly:
 
 ```json
 {
