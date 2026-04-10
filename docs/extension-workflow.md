@@ -39,6 +39,17 @@ Fonts, images, SVGs, and other asset types are available too, but only when your
 
 Nothing is captured unless the session is running.
 
+## Extension Versioning
+
+The extension version is owned by `packages/extension/package.json`.
+
+During development and release preparation:
+
+- `npm run sync:extension-manifest-version` keeps `packages/extension/static/manifest.json` aligned with that package version
+- `npm run build` writes `packages/extension/dist/manifest.json` from the extension package version so the unpacked extension and release artifact report the same version
+
+That keeps the Chrome manifest version and the extension package metadata in sync while still letting the extension version independently from the CLI and npm packages.
+
 The extension remembers the previously granted directory handle. Chrome does not expose the absolute local path for that picked directory back to the extension, so the remembered WraithWalker root is permission-based, not path-based.
 
 ## Project Config

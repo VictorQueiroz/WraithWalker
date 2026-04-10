@@ -5,10 +5,13 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import {
+  applyExtensionVersionToManifest,
   type CopySpec,
   createBuildPaths,
   createDistRuntimeCopies,
   createStaticExtensionCopies,
+  type ExtensionManifestTemplate,
+  type ExtensionPackageManifest,
   ROOT_RUNTIME_FILES,
   rewriteCoreFixtureLayoutSpecifiers,
   rewriteIdbSpecifiers
@@ -55,6 +58,18 @@ async function copyFiles(copySpecs: CopySpec[]) {
   for (const copySpec of copySpecs) {
     await copyFile(copySpec.sourcePath, copySpec.targetPath);
   }
+}
+
+async function buildManifest() {
+  const [manifestContent, packageManifestContent] = await Promise.all([
+    fs.readFile(PATHS.staticManifestFile, "utf-8"),
+    fs.readFile(PATHS.packageJsonFile, "utf-8")
+  ]);
+  const manifest = JSON.parse(manifestContent) as ExtensionManifestTemplate;
+  const packageManifest = JSON.parse(packageManifestContent) as ExtensionPackageManifest;
+  const versionedManifest = applyExtensionVersionToManifest(manifest, packageManifest);
+
+  await fs.writeFile(PATHS.distManifestFile, `${JSON.stringify(versionedManifest, null, 2)}\n`, "utf-8");
 }
 
 async function buildRuntime() {
@@ -116,6 +131,7 @@ async function buildDist() {
   await ensureDir(PATHS.distDir);
 
   await copyFiles(createStaticExtensionCopies(PATHS));
+  await buildManifest();
   await copyFiles(createDistRuntimeCopies(PATHS));
   await copyDirectory(PATHS.libEmitDir, path.join(PATHS.distDir, "lib"));
   await ensureDir(PATHS.distVendorDir);

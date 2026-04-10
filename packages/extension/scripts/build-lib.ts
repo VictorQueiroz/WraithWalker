@@ -16,9 +16,12 @@ export const STATIC_EXTENSION_FILES = [
 
 export interface BuildPaths {
   rootDir: string;
+  packageJsonFile: string;
   staticDir: string;
+  staticManifestFile: string;
   emitDir: string;
   distDir: string;
+  distManifestFile: string;
   libEmitDir: string;
   vendorSource: string;
   distVendorDir: string;
@@ -35,6 +38,15 @@ export interface CopySpec {
   targetPath: string;
 }
 
+export interface ExtensionPackageManifest {
+  version: string;
+}
+
+export interface ExtensionManifestTemplate {
+  version: string;
+  [key: string]: unknown;
+}
+
 export function createBuildPaths(rootDir: string): BuildPaths {
   const emitDir = path.join(rootDir, ".ts-emit");
   const distDir = path.join(rootDir, "dist");
@@ -45,9 +57,12 @@ export function createBuildPaths(rootDir: string): BuildPaths {
 
   return {
     rootDir,
+    packageJsonFile: path.join(rootDir, "package.json"),
     staticDir,
+    staticManifestFile: path.join(staticDir, "manifest.json"),
     emitDir,
     distDir,
+    distManifestFile: path.join(distDir, "manifest.json"),
     libEmitDir: path.join(emitDir, "lib"),
     vendorSource,
     distVendorDir: path.join(distDir, "vendor"),
@@ -72,6 +87,16 @@ export function createStaticExtensionCopies(paths: BuildPaths): CopySpec[] {
     sourcePath: path.join(paths.staticDir, fileName),
     targetPath: path.join(paths.distDir, fileName)
   }));
+}
+
+export function applyExtensionVersionToManifest(
+  manifest: ExtensionManifestTemplate,
+  packageManifest: ExtensionPackageManifest
+): ExtensionManifestTemplate {
+  return {
+    ...manifest,
+    version: packageManifest.version
+  };
 }
 
 /**

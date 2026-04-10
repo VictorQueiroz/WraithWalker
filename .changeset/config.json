@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "changedFilePatterns": [
+    "packages/*/src/**",
+    "packages/*/scripts/**",
+    "packages/*/static/**",
+    "packages/*/package.json",
+    "packages/*/host-manifest.template.json"
+  ],
+  "updateInternalDependencies": "patch",
+  "ignore": [],
+  "privatePackages": {
+    "tag": false,
+    "version": true
+  }
+}

@@ -1,17 +1,20 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -19,11 +22,41 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install --global npm@11.11.1
       - run: npm ci
+      - id: extension_version
+        shell: bash
+        run: |
+          current_version=$(node -p "JSON.parse(require('node:fs').readFileSync('packages/extension/package.json', 'utf8')).version")
+          previous_version=""
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            previous_version=$(git show HEAD^:packages/extension/package.json | node -e "let source=''; process.stdin.on('data', (chunk) => source += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(source).version));")
+          fi
+
+          if [[ -n "$previous_version" && "$previous_version" != "$current_version" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=$current_version" >> "$GITHUB_OUTPUT"
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm run release:check -- "${{ github.event.release.tag_name }}"
-      - run: npm publish --workspace @wraithwalker/core
-      - run: npm publish --workspace @wraithwalker/mcp-server
-      - run: npm publish --workspace @wraithwalker/native-host
-      - run: npm publish --workspace @wraithwalker/cli
+      - id: changesets
+        uses: changesets/action@v1
+        with:
+          version: npm run release:prepare
+          publish: npm run release:publish
+          title: chore: version packages
+          commit: chore: version packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - if: steps.extension_version.outputs.changed == 'true'
+        run: |
+          artifact_name="wraithwalker-extension-v${{ steps.extension_version.outputs.version }}.zip"
+          cd packages/extension/dist
+          zip -r "../../../${artifact_name}" .
+      - if: steps.extension_version.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wraithwalker-extension-v${{ steps.extension_version.outputs.version }}
+          path: wraithwalker-extension-v${{ steps.extension_version.outputs.version }}.zip

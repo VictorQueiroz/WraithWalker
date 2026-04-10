@@ -42,6 +42,8 @@ Nothing is captured unless a session is running.
 
 More: [Extension workflow](docs/extension-workflow.md)
 
+The CLI and Chrome extension version independently. When the extension version changes, the build keeps `packages/extension/package.json`, `packages/extension/static/manifest.json`, and the built `packages/extension/dist/manifest.json` aligned.
+
 ## Server-Backed Workflow
 
 Use this path when you want MCP access, guided traces, or one shared local root for the CLI and extension.

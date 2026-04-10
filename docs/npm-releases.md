@@ -1,80 +1,121 @@
-# npm Releases
+# Package and Extension Releases
 
-WraithWalker publishes four workspace packages to the public npm registry:
+WraithWalker uses workspace-scoped versioning. The npm packages and the Chrome extension no longer share one lockstep release number.
+
+## Published npm Packages
+
+These workspace packages publish to npm:
 
 - `@wraithwalker/core`
 - `@wraithwalker/mcp-server`
 - `@wraithwalker/native-host`
 - `@wraithwalker/cli`
 
-The Chrome extension package stays private and is never published to npm.
+The Chrome extension package stays private and is not published to npm, but it is still versioned through the same Changesets workflow so its manifest and package metadata stay aligned.
 
-## Release Checklist
+## Sources of Truth
 
-For a normal release, the flow is:
+- The root [`package.json`](../package.json) is private workspace metadata and is **not** the release source of truth.
+- Each workspace package owns its own version in its own `package.json`.
+- The extension version is sourced from `packages/extension/package.json`.
+- `npm run sync:extension-manifest-version` copies that version into `packages/extension/static/manifest.json`.
+- `npm run build` then writes the built Chrome manifest in `packages/extension/dist/manifest.json` from the extension package version.
 
-1. Prepare the next version with `npm run release:prepare -- X.Y.Z`
-2. Review and commit the manifest and lockfile changes
-3. Validate the repo locally
-4. Push to GitHub
-5. Create a GitHub Release with tag `vX.Y.Z`
-6. Let the `Release` workflow publish the packages
-7. Verify npm shows the new version for all four public packages
+## Release Metadata Workflow
 
-## Prerequisites
+WraithWalker uses [Changesets](https://github.com/changesets/changesets) for release metadata and package-aware version bumps.
 
-- npm `11.10.0+` is required for `npm trust github`. This repo pins `npm@11.11.1`.
-- Your npm account needs write access to the `@wraithwalker` scope.
-- Your npm account must have 2FA enabled before configuring trusted publishers.
-- GitHub Releases should use `vX.Y.Z` tags that match the publishable package versions exactly.
+For product changes:
 
-The root [package.json](../package.json) is private and is not the release source of truth. `release:prepare` updates the publishable workspace packages and internal workspace dependency pins. Keeping the private root version aligned is still good housekeeping, but `release:check` validates the publishable workspace packages only.
+1. make the code change
+2. add a changeset with `npm run changeset`
+3. choose the affected package or app
+4. choose the semver bump type
+5. commit both the code and the `.changeset/*.md` file
 
-## One-Time Bootstrap Publish
+If a PR changes shipped package or extension code and does not include release metadata, CI fails with the repo's `scripts/check-changeset.mjs` gate.
 
-Trusted publishing can only be configured after each package already exists on npm, so the very first release is manual.
+## Choosing Which Package to Bump
 
-1. Install dependencies and validate the repo:
+Use the package or app your users actually need to update.
+
+Examples:
+
+- CLI-only behavior change → bump `@wraithwalker/cli`
+- extension-only behavior change → bump `@wraithwalker/extension`
+- core-only API/runtime change that only npm consumers need → bump `@wraithwalker/core`
+- core change that also changes the shipped extension behavior → include both `@wraithwalker/core` and `@wraithwalker/extension`
+- MCP server change that changes the CLI's shipped behavior or required pinned dependency → include both `@wraithwalker/mcp-server` and `@wraithwalker/cli`
+
+The goal is to avoid telling CLI users or extension users to update when their surface did not actually change.
+
+## Daily Contributor Flow
+
+1. Install dependencies:
 
    ```bash
    npm ci
+   ```
+
+2. Make your code changes.
+
+3. Add release metadata when the shipped product changed:
+
+   ```bash
+   npm run changeset
+   ```
+
+4. Validate locally:
+
+   ```bash
    npm run typecheck
    npm test
    npm run build
-   npm pack --dry-run --workspace @wraithwalker/core
-   npm pack --dry-run --workspace @wraithwalker/mcp-server
-   npm pack --dry-run --workspace @wraithwalker/native-host
-   npm pack --dry-run --workspace @wraithwalker/cli
    ```
 
-2. Prepare the shared package version:
+5. Open your PR with the changeset included.
 
-   ```bash
-   npm run release:prepare -- 0.1.0
-   npm run release:check -- v0.1.0
-   ```
+## How Version Bumps Happen
 
-3. Publish the packages in dependency order:
+Version bumps are generated from the accumulated changesets, not typed manually into one shared root command anymore.
 
-   ```bash
-   npm publish --access public --workspace @wraithwalker/core
-   npm publish --access public --workspace @wraithwalker/mcp-server
-   npm publish --access public --workspace @wraithwalker/native-host
-   npm publish --access public --workspace @wraithwalker/cli
-   ```
+The repo keeps a compatibility wrapper:
 
-4. Confirm the packages exist on npm:
+```bash
+npm run release:prepare
+```
 
-   ```bash
-   npm view @wraithwalker/core version
-   npm view @wraithwalker/mcp-server version
-   npm view @wraithwalker/native-host version
-   npm view @wraithwalker/cli version
-   ```
+That command runs:
 
-## Configure Trusted Publishing
+1. `changeset version`
+2. `npm run sync:extension-manifest-version`
 
-After the bootstrap publish succeeds, register the release workflow as a trusted publisher for each package:
+It updates the affected workspace package versions, updates changelogs, and keeps the extension static manifest version aligned with the extension package version.
+
+## Automated Release Flow
+
+The `Release` GitHub Actions workflow runs on pushes to `main`.
+
+It does the following:
+
+1. installs dependencies
+2. runs `typecheck`
+3. runs `test`
+4. runs `build`
+5. runs the Changesets action
+6. either:
+   - opens/updates a version-packages PR when unreleased changesets exist, or
+   - publishes changed npm packages when a version PR has been merged
+7. uploads a zipped extension artifact when `packages/extension/package.json` changed version on `main`
+
+That means:
+
+- npm packages release only when their changesets say they should
+- the extension artifact only refreshes when the extension version changes
+
+## Trusted Publishing
+
+This repo still expects npm trusted publishing for the public packages. The one-time setup remains:
 
 ```bash
 npm trust github @wraithwalker/core --repo VictorQueiroz/WraithWalker --file release.yml -y
@@ -83,53 +124,32 @@ npm trust github @wraithwalker/native-host --repo VictorQueiroz/WraithWalker --f
 npm trust github @wraithwalker/cli --repo VictorQueiroz/WraithWalker --file release.yml -y
 ```
 
-These commands bind each package to `.github/workflows/release.yml` in `VictorQueiroz/WraithWalker`. After that, GitHub Actions can publish without an `NPM_TOKEN`.
+After that, GitHub Actions can publish public packages without an `NPM_TOKEN`.
 
-## Ongoing Release Flow
+## Extension Artifacts
 
-1. Prepare the next lockstep version:
+The extension release lane is artifact-based in GitHub Actions:
 
-   ```bash
-   npm run release:prepare -- X.Y.Z
-   ```
+- it is versioned with Changesets like the rest of the repo
+- it is not published to npm
+- when the extension version changes on `main`, the workflow uploads a zip of `packages/extension/dist`
 
-2. Review the manifest and lockfile changes. If you keep the private root version aligned for clarity, update it now too.
+Chrome Web Store upload automation is intentionally out of scope for the current setup.
 
-3. Validate the release locally. `npm test` includes the merged repo-wide coverage gate and still writes the root coverage report:
+## Local Release Dry Run
 
-   ```bash
-   npm run typecheck
-   npm test
-   npm run build
-   npm run release:check -- vX.Y.Z
-   npm pack --dry-run --workspace @wraithwalker/core
-   npm pack --dry-run --workspace @wraithwalker/mcp-server
-   npm pack --dry-run --workspace @wraithwalker/native-host
-   npm pack --dry-run --workspace @wraithwalker/cli
-   ```
+Before merging a release-sensitive PR, run:
 
-4. Commit and push the prepared release changes.
+```bash
+npm run typecheck
+npm test
+npm run build
+```
 
-5. Create a GitHub Release with tag `vX.Y.Z`.
+If you need to preview the versioning step locally:
 
-6. Wait for the `Release` workflow to finish. It will:
-   1. run `typecheck`
-   2. run `test`
-   3. run `build`
-   4. validate the tag with `release:check`
-   5. publish the packages in this order:
-      - `@wraithwalker/core`
-      - `@wraithwalker/mcp-server`
-      - `@wraithwalker/native-host`
-      - `@wraithwalker/cli`
+```bash
+npm run release:prepare
+```
 
-7. Verify the published versions:
-
-   ```bash
-   npm view @wraithwalker/core version
-   npm view @wraithwalker/mcp-server version
-   npm view @wraithwalker/native-host version
-   npm view @wraithwalker/cli version
-   ```
-
-Because publishing uses npm trusted publishing from a public GitHub repository, npm will generate provenance attestations automatically for these public packages.
+Review the resulting package version changes, changelog updates, and the synced extension manifest version before committing.
