@@ -10,7 +10,8 @@
     "tabs",
     "alarms",
     "offscreen",
-    "nativeMessaging"
+    "nativeMessaging",
+    "contextMenus"
   ],
   "optional_host_permissions": [
     "http://*/*",

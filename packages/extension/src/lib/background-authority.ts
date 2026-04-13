@@ -34,6 +34,8 @@ import type {
 } from "./types.js";
 import {
   isServerCacheFresh,
+  type ExtensionServerCommand,
+  type ExtensionServerCommandResult,
   type WraithWalkerServerClient
 } from "./wraithwalker-server.js";
 
@@ -115,6 +117,9 @@ export function createBackgroundAuthority({
   let serverRefreshPromise: Promise<BackgroundServerInfo | null> | null = null;
   let offscreenDocumentPromise: Promise<void> | null = null;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  const bufferedCommandResults = new Map<string, ExtensionServerCommandResult>();
+  const knownCommandResults = new Map<string, ExtensionServerCommandResult>();
+  const runningCommandIds = new Set<string>();
 
   function normalizeEffectiveSiteConfigs(siteConfigs: SiteConfig[]): SiteConfig[] {
     return normalizeSiteConfigs(siteConfigs as Array<Partial<SiteConfig> & { origin: string }>);
@@ -166,7 +171,7 @@ export function createBackgroundAuthority({
   }
 
   function shouldKeepHeartbeatAlive(): boolean {
-    return state.sessionActive || Boolean(state.activeTrace);
+    return state.sessionActive || Boolean(state.activeTrace) || Boolean(state.serverInfo);
   }
 
   function clearHeartbeatTimer(): void {
@@ -221,6 +226,106 @@ export function createBackgroundAuthority({
     }
   }
 
+  async function runServerCommand(command: ExtensionServerCommand): Promise<ExtensionServerCommandResult> {
+    try {
+      switch (command.type) {
+        case "refresh_config":
+          if (state.sessionActive) {
+            await reconcileTabs();
+          }
+          await persistSnapshot();
+          return {
+            commandId: command.commandId,
+            type: command.type,
+            ok: true,
+            completedAt: new Date().toISOString()
+          };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLastError(message);
+      return {
+        commandId: command.commandId,
+        type: command.type,
+        ok: false,
+        completedAt: new Date().toISOString(),
+        error: message
+      };
+    }
+  }
+
+  async function processServerCommands(commands: ExtensionServerCommand[]): Promise<boolean> {
+    let producedNewResults = false;
+
+    for (const command of commands) {
+      if (runningCommandIds.has(command.commandId)) {
+        continue;
+      }
+
+      const knownResult = knownCommandResults.get(command.commandId);
+      if (knownResult) {
+        bufferedCommandResults.set(command.commandId, knownResult);
+        continue;
+      }
+
+      runningCommandIds.add(command.commandId);
+      try {
+        const result = await runServerCommand(command);
+        knownCommandResults.set(result.commandId, result);
+        bufferedCommandResults.set(result.commandId, result);
+        producedNewResults = true;
+      } finally {
+        runningCommandIds.delete(command.commandId);
+      }
+    }
+
+    return producedNewResults;
+  }
+
+  async function performHeartbeatCycle(): Promise<BackgroundServerInfo> {
+    const completedCommands = [...bufferedCommandResults.values()];
+    const info = await serverClient.heartbeat({
+      clientId: state.extensionClientId,
+      extensionVersion: state.extensionVersion,
+      sessionActive: state.sessionActive,
+      enabledOrigins: [...state.enabledOrigins],
+      recentConsoleEntries: [...state.recentConsoleEntries],
+      ...(completedCommands.length > 0 ? { completedCommands } : {})
+    });
+
+    for (const result of completedCommands) {
+      bufferedCommandResults.delete(result.commandId);
+    }
+
+    const previousTraceId = (state.activeTrace as { traceId?: string } | null)?.traceId || null;
+    const siteConfigsChanged = applyEffectiveSiteConfigs(
+      info.siteConfigs ?? [...state.localSiteConfigsByOrigin.values()]
+    );
+    state.serverInfo = {
+      rootPath: info.rootPath,
+      sentinel: info.sentinel,
+      baseUrl: info.baseUrl,
+      mcpUrl: info.mcpUrl,
+      trpcUrl: info.trpcUrl
+    };
+    state.activeTrace = info.activeTrace;
+    state.serverCheckedAt = Date.now();
+    updateEffectiveRootState();
+    scheduleHeartbeat();
+    if (previousTraceId !== (info.activeTrace?.traceId || null)) {
+      await syncTraceBindings();
+    }
+    if (siteConfigsChanged && state.sessionActive) {
+      await reconcileTabs();
+    }
+
+    if (await processServerCommands(info.commands ?? [])) {
+      return performHeartbeatCycle();
+    }
+
+    return state.serverInfo;
+  }
+
   async function refreshServerInfo({ force = false }: { force?: boolean } = {}): Promise<BackgroundServerInfo | null> {
     if (!force && isServerCacheFresh(state.serverCheckedAt)) {
       return state.serverInfo;
@@ -235,35 +340,7 @@ export function createBackgroundAuthority({
         if (!state.extensionClientId) {
           state.extensionClientId = await getOrCreateExtensionClientId();
         }
-        const info = await serverClient.heartbeat({
-          clientId: state.extensionClientId,
-          extensionVersion: state.extensionVersion,
-          sessionActive: state.sessionActive,
-          enabledOrigins: [...state.enabledOrigins],
-          recentConsoleEntries: [...state.recentConsoleEntries]
-        });
-        const previousTraceId = (state.activeTrace as { traceId?: string } | null)?.traceId || null;
-        const siteConfigsChanged = applyEffectiveSiteConfigs(
-          info.siteConfigs ?? [...state.localSiteConfigsByOrigin.values()]
-        );
-        state.serverInfo = {
-          rootPath: info.rootPath,
-          sentinel: info.sentinel,
-          baseUrl: info.baseUrl,
-          mcpUrl: info.mcpUrl,
-          trpcUrl: info.trpcUrl
-        };
-        state.activeTrace = info.activeTrace;
-        state.serverCheckedAt = Date.now();
-        updateEffectiveRootState();
-        scheduleHeartbeat();
-        if (previousTraceId !== (info.activeTrace?.traceId || null)) {
-          await syncTraceBindings();
-        }
-        if (siteConfigsChanged && state.sessionActive) {
-          await reconcileTabs();
-        }
-        return state.serverInfo;
+        return await performHeartbeatCycle();
       } catch {
         markServerOffline();
         return null;

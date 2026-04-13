@@ -45,6 +45,8 @@ import { createBackgroundDebuggerRuntime } from "./lib/background-debugger-runti
 import type { BackgroundDebuggerRuntimeApi } from "./lib/background-debugger-runtime.js";
 import { createBackgroundNativeActions } from "./lib/background-native-actions.js";
 import type { BackgroundNativeActionsApi } from "./lib/background-native-actions.js";
+import { createBackgroundContextMenu } from "./lib/background-context-menu.js";
+import type { BackgroundContextMenuApi } from "./lib/background-context-menu.js";
 
 interface BackgroundDependencies {
   chromeApi?: ChromeApi;
@@ -146,6 +148,7 @@ export function createBackgroundRuntime({
   let requestLifecycle!: RequestLifecycleApi;
   let debuggerRuntime!: BackgroundDebuggerRuntimeApi;
   let traceService!: BackgroundTraceServiceApi;
+  let contextMenu!: BackgroundContextMenuApi;
 
   const authority: BackgroundAuthorityApi = createBackgroundAuthority({
     state,
@@ -217,7 +220,19 @@ export function createBackgroundRuntime({
     getRequiredRootId
   });
 
+  contextMenu = createBackgroundContextMenu({
+    chromeApi,
+    authority,
+    setLastError
+  });
+
   let listenersRegistered = false;
+
+  function refreshContextMenus(): void {
+    void contextMenu.registerContextMenus().catch((error: unknown) => {
+      setLastError(error instanceof Error ? error.message : String(error));
+    });
+  }
 
   function handleTabUpdated(tabId: number, _changeInfo: Record<string, unknown>, tab: { id?: number; url?: string }): void {
     sessionController.handleTabStateChange(tabId, tab).catch((error: unknown) => {
@@ -347,17 +362,24 @@ export function createBackgroundRuntime({
     chromeApi.storage.onChanged.addListener(handleStorageChanged);
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
     chromeApi.alarms?.onAlarm.addListener(handleAlarm);
+    chromeApi.contextMenus?.onClicked.addListener((info, tab) => {
+      void contextMenu.handleContextMenuClicked(info, tab).catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
+    });
     chromeApi.runtime.onStartup.addListener(() => {
       authority.refreshStoredConfig().catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
       authority.queueServerRefresh({ force: true });
+      refreshContextMenus();
     });
     chromeApi.runtime.onInstalled.addListener(() => {
       authority.refreshStoredConfig().catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
       authority.queueServerRefresh({ force: true });
+      refreshContextMenus();
     });
     listenersRegistered = true;
   }
@@ -365,6 +387,9 @@ export function createBackgroundRuntime({
   async function start(): Promise<void> {
     registerListeners();
     await authority.refreshStoredConfig();
+    await contextMenu.registerContextMenus().catch((error: unknown) => {
+      setLastError(error instanceof Error ? error.message : String(error));
+    });
     authority.queueServerRefresh({ force: true });
     authority.scheduleHeartbeat();
   }

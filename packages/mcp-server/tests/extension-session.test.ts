@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createExtensionSessionTracker, EXTENSION_HEARTBEAT_TTL_MS } from "../src/extension-session.mts";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("extension session tracker", () => {
   it("reports disconnected by default and exposes the active trace", async () => {
@@ -102,5 +106,201 @@ describe("extension session tracker", () => {
         recentConsoleEntries: []
       })
     );
+  });
+
+  it("queues commands for the connected client, redelivers them, and resolves waiters on completion", async () => {
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const command = tracker.queueCommand({ type: "refresh_config" });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+
+    const firstDelivery = await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    expect(firstDelivery.commands).toEqual([command]);
+
+    const secondDelivery = await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    expect(secondDelivery.commands).toEqual([command]);
+
+    const completedCommand = {
+      commandId: command.commandId,
+      type: "refresh_config" as const,
+      ok: true,
+      completedAt: "2026-04-08T00:00:05.000Z"
+    };
+    const afterCompletion = await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"],
+      completedCommands: [completedCommand]
+    });
+
+    await expect(resultPromise).resolves.toEqual(completedCommand);
+    expect(afterCompletion.commands).toEqual([]);
+  });
+
+  it("rejects command queueing when no connected extension client is available", async () => {
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+
+    expect(() => tracker.queueCommand({ type: "refresh_config" })).toThrow(
+      "No connected browser extension is available to receive server commands."
+    );
+  });
+
+  it("clears stale queued command state when the client heartbeat expires", async () => {
+    let now = Date.parse("2026-04-08T00:00:00.000Z");
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [],
+      now: () => now
+    });
+
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const command = tracker.queueCommand({ type: "refresh_config" });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+
+    now += EXTENSION_HEARTBEAT_TTL_MS + 1;
+    await tracker.getStatus();
+
+    await expect(resultPromise).rejects.toThrow(
+      "The browser extension heartbeat expired before the queued command completed."
+    );
+    await expect(tracker.waitForCommandResult(command.commandId)).rejects.toThrow(
+      `Unknown extension server command: ${command.commandId}`
+    );
+  });
+
+  it("clears stale queued command state when a different extension client takes over", async () => {
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const command = tracker.queueCommand({ type: "refresh_config" });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+
+    const nextHeartbeat = await tracker.heartbeat({
+      clientId: "client-2",
+      extensionVersion: "1.0.1",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+
+    await expect(resultPromise).rejects.toThrow(
+      "The active browser extension client changed from client-1 to client-2."
+    );
+    expect(nextHeartbeat.commands).toEqual([]);
+  });
+
+  it("times out waiting for a queued command result without dropping the pending command", async () => {
+    vi.useFakeTimers();
+
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const command = tracker.queueCommand({ type: "refresh_config" });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+    const timeoutExpectation = expect(resultPromise).rejects.toThrow(
+      `Timed out waiting for extension command ${command.commandId} to complete.`
+    );
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await timeoutExpectation;
+    await expect(tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    })).resolves.toEqual(expect.objectContaining({
+      commands: [command]
+    }));
+  });
+
+  it("ignores stale completion payloads for unknown commands and keeps the real command pending", async () => {
+    vi.useFakeTimers();
+
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const command = tracker.queueCommand({ type: "refresh_config" });
+
+    const afterStaleCompletion = await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"],
+      completedCommands: [{
+        commandId: "missing-command",
+        type: "refresh_config",
+        ok: false,
+        completedAt: "2026-04-08T00:00:05.000Z",
+        error: "stale completion"
+      }]
+    });
+
+    expect(afterStaleCompletion.commands).toEqual([command]);
+    const timeoutExpectation = expect(tracker.waitForCommandResult(command.commandId, { timeoutMs: 1 })).rejects.toThrow(
+      `Timed out waiting for extension command ${command.commandId} to complete.`
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    await timeoutExpectation;
   });
 });

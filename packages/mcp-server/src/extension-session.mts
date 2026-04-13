@@ -51,6 +51,25 @@ export interface ExtensionHeartbeatInput {
   sessionActive: boolean;
   enabledOrigins: string[];
   recentConsoleEntries?: ExtensionConsoleEntry[];
+  completedCommands?: ExtensionServerCommandResult[];
+}
+
+export interface ExtensionServerCommand {
+  commandId: string;
+  type: "refresh_config";
+  issuedAt: string;
+}
+
+export interface ExtensionServerCommandResult {
+  commandId: string;
+  type: "refresh_config";
+  ok: boolean;
+  completedAt: string;
+  error?: string;
+}
+
+export interface ExtensionHeartbeatStatus extends ExtensionStatus {
+  commands?: ExtensionServerCommand[];
 }
 
 interface CreateExtensionSessionTrackerDependencies {
@@ -176,6 +195,14 @@ export function createExtensionSessionTracker({
   ttlMs = EXTENSION_HEARTBEAT_TTL_MS
 }: CreateExtensionSessionTrackerDependencies) {
   let activeClient: ActiveExtensionClientState | null = null;
+  let commandSequence = 0;
+  const pendingCommands = new Map<string, { clientId: string; command: ExtensionServerCommand }>();
+  const completedCommandResults = new Map<string, ExtensionServerCommandResult>();
+  const commandWaiters = new Map<string, Array<{
+    resolve: (result: ExtensionServerCommandResult) => void;
+    reject: (error: Error) => void;
+    timeoutId?: ReturnType<typeof setTimeout>;
+  }>>();
 
   function isConnected(client: ActiveExtensionClientState | null): boolean {
     if (!client) {
@@ -185,7 +212,58 @@ export function createExtensionSessionTracker({
     return now() - Date.parse(client.lastHeartbeatAt) <= ttlMs;
   }
 
-  async function heartbeat(input: ExtensionHeartbeatInput): Promise<ExtensionStatus> {
+  function rejectAllWaiters(error: Error): void {
+    for (const [commandId, waiters] of commandWaiters.entries()) {
+      commandWaiters.delete(commandId);
+      for (const waiter of waiters) {
+        if (waiter.timeoutId) {
+          clearTimeout(waiter.timeoutId);
+        }
+        waiter.reject(error);
+      }
+    }
+  }
+
+  function clearCommandState(message: string): void {
+    pendingCommands.clear();
+    completedCommandResults.clear();
+    rejectAllWaiters(new Error(message));
+  }
+
+  function sweepExpiredCommandState(): void {
+    if (!activeClient || isConnected(activeClient)) {
+      return;
+    }
+
+    clearCommandState("The browser extension heartbeat expired before the queued command completed.");
+  }
+
+  function settleCompletedCommand(result: ExtensionServerCommandResult): void {
+    pendingCommands.delete(result.commandId);
+    completedCommandResults.set(result.commandId, result);
+
+    const waiters = commandWaiters.get(result.commandId) ?? [];
+    commandWaiters.delete(result.commandId);
+    for (const waiter of waiters) {
+      if (waiter.timeoutId) {
+        clearTimeout(waiter.timeoutId);
+      }
+      waiter.resolve(result);
+    }
+  }
+
+  function listPendingCommandsForClient(clientId: string): ExtensionServerCommand[] {
+    return [...pendingCommands.values()]
+      .filter((entry) => entry.clientId === clientId)
+      .map((entry) => entry.command);
+  }
+
+  async function heartbeat(input: ExtensionHeartbeatInput): Promise<ExtensionHeartbeatStatus> {
+    sweepExpiredCommandState();
+    if (activeClient && activeClient.clientId !== input.clientId) {
+      clearCommandState(`The active browser extension client changed from ${activeClient.clientId} to ${input.clientId}.`);
+    }
+
     const heartbeatAt = new Date(now()).toISOString();
     activeClient = {
       clientId: input.clientId,
@@ -196,10 +274,23 @@ export function createExtensionSessionTracker({
       recentConsoleEntries: [...(input.recentConsoleEntries ?? [])]
     };
 
-    return getStatus();
+    for (const result of input.completedCommands ?? []) {
+      const pending = pendingCommands.get(result.commandId);
+      if (!pending || pending.clientId !== input.clientId) {
+        continue;
+      }
+
+      settleCompletedCommand(result);
+    }
+
+    return {
+      ...(await getStatus()),
+      commands: listPendingCommandsForClient(input.clientId)
+    };
   }
 
   async function getStatus(): Promise<ExtensionStatus> {
+    sweepExpiredCommandState();
     const trace = await getActiveTrace();
     const activeTraceSummary = trace
       ? summarizeScenarioTrace(trace)
@@ -261,8 +352,64 @@ export function createExtensionSessionTracker({
     };
   }
 
+  function queueCommand(command: Pick<ExtensionServerCommand, "type">): ExtensionServerCommand {
+    sweepExpiredCommandState();
+    if (!activeClient || !isConnected(activeClient)) {
+      throw new Error("No connected browser extension is available to receive server commands.");
+    }
+
+    const queuedCommand: ExtensionServerCommand = {
+      commandId: `extension-command-${++commandSequence}`,
+      type: command.type,
+      issuedAt: new Date(now()).toISOString()
+    };
+    pendingCommands.set(queuedCommand.commandId, {
+      clientId: activeClient.clientId,
+      command: queuedCommand
+    });
+    return queuedCommand;
+  }
+
+  function waitForCommandResult(
+    commandId: string,
+    { timeoutMs = EXTENSION_HEARTBEAT_TTL_MS }: { timeoutMs?: number } = {}
+  ): Promise<ExtensionServerCommandResult> {
+    sweepExpiredCommandState();
+
+    const completed = completedCommandResults.get(commandId);
+    if (completed) {
+      return Promise.resolve(completed);
+    }
+
+    if (!pendingCommands.has(commandId)) {
+      return Promise.reject(new Error(`Unknown extension server command: ${commandId}`));
+    }
+
+    return new Promise<ExtensionServerCommandResult>((resolve, reject) => {
+      const waiters = commandWaiters.get(commandId) ?? [];
+      const waiter = {
+        resolve,
+        reject,
+        timeoutId: timeoutMs > 0
+          ? setTimeout(() => {
+              const currentWaiters = commandWaiters.get(commandId) ?? [];
+              commandWaiters.set(
+                commandId,
+                currentWaiters.filter((entry) => entry !== waiter)
+              );
+              reject(new Error(`Timed out waiting for extension command ${commandId} to complete.`));
+            }, timeoutMs)
+          : undefined
+      };
+      waiters.push(waiter);
+      commandWaiters.set(commandId, waiters);
+    });
+  }
+
   return {
     heartbeat,
-    getStatus
+    getStatus,
+    queueCommand,
+    waitForCommandResult
   };
 }

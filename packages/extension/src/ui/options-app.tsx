@@ -20,7 +20,7 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
-import { createSiteConfig, isValidDumpAllowlistPatterns } from "../lib/site-config.js";
+import { createConfiguredSiteConfig, isValidDumpAllowlistPatterns } from "../lib/site-config.js";
 import type { NativeHostConfig, RootSentinel, SessionSnapshot, SiteConfig } from "../lib/types.js";
 import {
   Alert,
@@ -105,17 +105,6 @@ function formatDumpAllowlistPatterns(patterns: string[]): string {
 
 function hasConfiguredRoot(rootState: RootState | null): boolean {
   return Boolean(rootState?.hasHandle && rootState.permission === "granted");
-}
-
-function createAddedSiteConfig(originInput: string): SiteConfig {
-  const siteConfig = createSiteConfig(originInput);
-  return {
-    ...siteConfig,
-    dumpAllowlistPatterns: [...new Set([
-      ...siteConfig.dumpAllowlistPatterns,
-      "\\.json$"
-    ])]
-  };
 }
 
 function RootStatusSummary({
@@ -391,7 +380,7 @@ export function OptionsApp({
         throw new Error(`Host access was not granted for ${permissionPattern}.`);
       }
 
-      const nextSites = [...sites, createAddedSiteConfig(origin)]
+      const nextSites = [...sites, createConfiguredSiteConfig(origin)]
         .sort((left, right) => left.origin.localeCompare(right.origin));
       await setSiteConfigs(nextSites);
       setSites(nextSites);

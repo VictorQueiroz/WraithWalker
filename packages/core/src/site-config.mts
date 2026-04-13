@@ -12,6 +12,9 @@ export const DEFAULT_DUMP_ALLOWLIST_PATTERNS: string[] = [
   "\\.css$",
   "\\.wasm$"
 ];
+export const EXPLICIT_SITE_EXTRA_DUMP_ALLOWLIST_PATTERNS: string[] = [
+  "\\.json$"
+];
 export const DISCOVERED_SITE_CREATED_AT = new Date(0).toISOString();
 
 export function isValidDumpAllowlistPattern(pattern: string): boolean {
@@ -73,6 +76,18 @@ export function createSiteConfig(originInput: string): SiteConfig {
     origin: normalizeSiteInput(originInput),
     createdAt: new Date().toISOString(),
     dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS]
+  };
+}
+
+export function createConfiguredSiteConfig(originInput: string): SiteConfig {
+  const siteConfig = createSiteConfig(originInput);
+
+  return {
+    ...siteConfig,
+    dumpAllowlistPatterns: [...new Set([
+      ...siteConfig.dumpAllowlistPatterns,
+      ...EXPLICIT_SITE_EXTRA_DUMP_ALLOWLIST_PATTERNS
+    ])]
   };
 }
 

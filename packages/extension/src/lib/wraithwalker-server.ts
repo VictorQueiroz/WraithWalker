@@ -86,6 +86,24 @@ export interface TrpcScenarioResult {
   name: string;
 }
 
+export interface ExtensionServerCommand {
+  commandId: string;
+  type: "refresh_config";
+  issuedAt: string;
+}
+
+export interface ExtensionServerCommandResult {
+  commandId: string;
+  type: "refresh_config";
+  ok: boolean;
+  completedAt: string;
+  error?: string;
+}
+
+export interface ServerHeartbeatInfo extends TrpcHeartbeatInfo {
+  commands?: ExtensionServerCommand[];
+}
+
 export interface WraithWalkerServerClient {
   getSystemInfo(): Promise<TrpcSystemInfo>;
   revealRoot(): Promise<{ ok: true; command: string }>;
@@ -98,7 +116,8 @@ export interface WraithWalkerServerClient {
     sessionActive: boolean;
     enabledOrigins: string[];
     recentConsoleEntries?: BrowserConsoleEntry[];
-  }): Promise<TrpcHeartbeatInfo>;
+    completedCommands?: ExtensionServerCommandResult[];
+  }): Promise<ServerHeartbeatInfo>;
   hasFixture(descriptor: FixtureDescriptor): Promise<{ exists: boolean; sentinel: RootSentinel }>;
   readConfiguredSiteConfigs(): Promise<TrpcSiteConfigsInfo>;
   readEffectiveSiteConfigs(): Promise<TrpcSiteConfigsInfo>;
@@ -203,7 +222,7 @@ export function createWraithWalkerServerClient(
       return trpc.scenarios.switch.mutate({ name }) as Promise<TrpcScenarioResult>;
     },
     heartbeat(payload) {
-      return trpc.extension.heartbeat.mutate(payload) as Promise<TrpcHeartbeatInfo>;
+      return trpc.extension.heartbeat.mutate(payload) as Promise<ServerHeartbeatInfo>;
     },
     hasFixture(descriptor) {
       return trpc.fixtures.has.query({ descriptor }) as Promise<{ exists: boolean; sentinel: RootSentinel }>;
