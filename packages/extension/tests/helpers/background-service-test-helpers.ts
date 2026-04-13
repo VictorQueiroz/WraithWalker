@@ -23,6 +23,8 @@ export function createChromeApi(): ChromeApi & {
   tabs: ChromeApi["tabs"] & { query: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
   offscreen: ChromeApi["offscreen"] & { createDocument: ReturnType<typeof vi.fn>; closeDocument: ReturnType<typeof vi.fn> };
   alarms: NonNullable<ChromeApi["alarms"]> & { create: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn> };
+  permissions: NonNullable<ChromeApi["permissions"]> & { request: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
+  contextMenus: NonNullable<ChromeApi["contextMenus"]> & { create: ReturnType<typeof vi.fn>; removeAll: ReturnType<typeof vi.fn> };
 } {
   return {
     runtime: {
@@ -62,6 +64,15 @@ export function createChromeApi(): ChromeApi & {
       create: vi.fn(),
       clear: vi.fn().mockResolvedValue(true),
       onAlarm: createEvent()
+    },
+    permissions: {
+      request: vi.fn().mockResolvedValue(true),
+      remove: vi.fn().mockResolvedValue(true)
+    },
+    contextMenus: {
+      create: vi.fn(),
+      removeAll: vi.fn().mockResolvedValue(undefined),
+      onClicked: createEvent()
     }
   };
 }

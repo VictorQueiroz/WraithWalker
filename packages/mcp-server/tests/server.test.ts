@@ -440,22 +440,27 @@ describe("mcp server", () => {
         "browser-status",
         "diff-snapshots",
         "list-api-routes",
+        "list-configured-sites",
         "list-files",
         "list-sites",
         "list-snapshots",
         "list-traces",
         "patch-file",
+        "prepare-site-for-capture",
         "read-api-response",
         "read-console",
         "read-file",
         "read-file-snippet",
         "read-site-manifest",
         "read-trace",
+        "remove-site",
         "restore-file",
         "search-files",
         "start-trace",
         "stop-trace",
         "trace-status",
+        "update-site-patterns",
+        "whitelist-site",
         "write-file"
       ]);
     } finally {
@@ -1682,6 +1687,94 @@ describe("mcp server", () => {
     }
   });
 
+  it("lists, whitelists, updates, and removes configured sites over MCP tools", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [{
+        origin: "https://configured.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]
+    });
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const configuredResult = await client.callTool({
+        name: "list-configured-sites",
+        arguments: {}
+      });
+      expect(JSON.parse(readTextContent(configuredResult))).toEqual([{
+        origin: "https://configured.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }]);
+
+      const whitelistResult = await client.callTool({
+        name: "whitelist-site",
+        arguments: { origin: "app.example.com" }
+      });
+      expect(JSON.parse(readTextContent(whitelistResult))).toEqual(expect.objectContaining({
+        changed: true,
+        siteConfig: expect.objectContaining({
+          origin: "https://app.example.com",
+          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+        })
+      }));
+
+      const appendPatternsResult = await client.callTool({
+        name: "update-site-patterns",
+        arguments: {
+          origin: "https://app.example.com",
+          mode: "append",
+          dumpPatterns: ["\\.svg$"]
+        }
+      });
+      expect(JSON.parse(readTextContent(appendPatternsResult))).toEqual(expect.objectContaining({
+        changed: true,
+        siteConfig: expect.objectContaining({
+          origin: "https://app.example.com",
+          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$", "\\.svg$"]
+        })
+      }));
+
+      const invalidPatternResult = await client.callTool({
+        name: "update-site-patterns",
+        arguments: {
+          origin: "https://app.example.com",
+          mode: "append",
+          dumpPatterns: ["["]
+        }
+      });
+      expect(invalidPatternResult.isError).toBe(true);
+      expect(readTextContent(invalidPatternResult)).toContain("Invalid dump allowlist pattern");
+
+      const removeResult = await client.callTool({
+        name: "remove-site",
+        arguments: { origin: "https://configured.example.com" }
+      });
+      expect(JSON.parse(readTextContent(removeResult))).toEqual(expect.objectContaining({
+        changed: true,
+        removedOrigin: "https://configured.example.com"
+      }));
+
+      await expect(root.readJson(root.projectConfigRelativePath())).resolves.toEqual({
+        schemaVersion: 1,
+        sites: [{
+          origin: "https://app.example.com",
+          createdAt: expect.any(String),
+          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$", "\\.svg$"]
+        }]
+      });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("reports that no extension is connected before guided tracing starts", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-server-",
@@ -1716,6 +1809,19 @@ describe("mcp server", () => {
       });
       expect(startResult.isError).toBe(true);
       expect(readTextContent(startResult)).toContain("No connected extension is available");
+
+      const prepareResult = await client.callTool({
+        name: "prepare-site-for-capture",
+        arguments: { origin: "https://app.example.com" }
+      });
+      expect(JSON.parse(readTextContent(prepareResult))).toEqual(expect.objectContaining({
+        changed: true,
+        origin: "https://app.example.com",
+        connected: false,
+        sessionActive: false,
+        captureReady: false,
+        nextAction: "connect_extension"
+      }));
     } finally {
       await client.close();
       await server.close();
@@ -1798,6 +1904,18 @@ describe("mcp server", () => {
           ]
         })
       );
+      const prepareResult = await client.callTool({
+        name: "prepare-site-for-capture",
+        arguments: { origin: "https://prepared.example.com" }
+      });
+      expect(JSON.parse(readTextContent(prepareResult))).toEqual(expect.objectContaining({
+        changed: true,
+        origin: "https://prepared.example.com",
+        connected: true,
+        sessionActive: true,
+        captureReady: true,
+        nextAction: "ready"
+      }));
       const idleTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
       expect(JSON.parse(readTextContent(idleTraceStatus))).toEqual(
         expect.objectContaining({
@@ -2202,6 +2320,11 @@ describe("mcp server", () => {
         "stop-trace",
         "list-traces",
         "read-trace",
+        "list-configured-sites",
+        "whitelist-site",
+        "remove-site",
+        "update-site-patterns",
+        "prepare-site-for-capture",
         "list-sites",
         "list-files",
         "list-api-routes",
@@ -2222,22 +2345,27 @@ describe("mcp server", () => {
         "browser-status",
         "diff-snapshots",
         "list-api-routes",
+        "list-configured-sites",
         "list-files",
         "list-sites",
         "list-snapshots",
         "list-traces",
         "patch-file",
+        "prepare-site-for-capture",
         "read-api-response",
         "read-console",
         "read-file",
         "read-file-snippet",
         "read-site-manifest",
         "read-trace",
+        "remove-site",
         "restore-file",
         "search-files",
         "start-trace",
         "stop-trace",
         "trace-status",
+        "update-site-patterns",
+        "whitelist-site",
         "write-file"
       ]);
 

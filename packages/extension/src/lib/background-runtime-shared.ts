@@ -72,6 +72,31 @@ export interface TabsApi {
   };
 }
 
+export interface PermissionsApi {
+  request(options: { origins: string[] }): Promise<boolean>;
+  remove?(options: { origins: string[] }): Promise<boolean>;
+}
+
+export interface ContextMenuOnClickData {
+  menuItemId?: string | number;
+  pageUrl?: string;
+  frameUrl?: string;
+  linkUrl?: string;
+}
+
+export interface ContextMenusApi {
+  create(createProperties: {
+    id: string;
+    title: string;
+    contexts: string[];
+    documentUrlPatterns?: string[];
+  }): void;
+  removeAll(): Promise<void> | void;
+  onClicked: {
+    addListener(listener: (info: ContextMenuOnClickData, tab?: BrowserTab) => void): void;
+  };
+}
+
 export interface StorageApi {
   onChanged: {
     addListener(listener: (changes: Record<string, unknown>, areaName: string) => void): void;
@@ -95,6 +120,8 @@ export interface ChromeApi {
   storage: StorageApi;
   offscreen: OffscreenApi;
   alarms?: AlarmsApi;
+  permissions?: PermissionsApi;
+  contextMenus?: ContextMenusApi;
 }
 
 export interface BackgroundServerInfo {

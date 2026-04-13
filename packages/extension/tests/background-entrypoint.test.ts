@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "../src/lib/constants.js";
+import { WHITELIST_SITE_MENU_ID } from "../src/lib/background-context-menu.js";
 
 function createEvent() {
   const listeners = [];
@@ -55,6 +56,15 @@ function createChromeApi() {
       create: vi.fn(),
       clear: vi.fn().mockResolvedValue(true),
       onAlarm: createEvent()
+    },
+    permissions: {
+      request: vi.fn().mockResolvedValue(true),
+      remove: vi.fn().mockResolvedValue(true)
+    },
+    contextMenus: {
+      create: vi.fn(),
+      removeAll: vi.fn().mockResolvedValue(undefined),
+      onClicked: createEvent()
     }
   };
 
@@ -199,8 +209,87 @@ describe("background entrypoint", () => {
     expect(chromeApi.debugger.onEvent.addListener).toHaveBeenCalled();
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
     expect(chromeApi.storage.onChanged.addListener).toHaveBeenCalled();
+    expect(chromeApi.contextMenus.onClicked.addListener).toHaveBeenCalled();
     expect(getSiteConfigs).toHaveBeenCalled();
     expect(runtime.state.enabledOrigins).toEqual(["https://app.example.com"]);
+  });
+
+  it("registers and handles the website whitelist context menu through the background runtime", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = createChromeApi();
+    const sentinel = { rootId: "server-root" };
+    const serverClient = createMockServerClient({
+      getSystemInfo: vi.fn().mockResolvedValue({
+        version: "0.6.1",
+        rootPath: "/tmp/server-root",
+        sentinel,
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: []
+      }),
+      readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
+        siteConfigs: [],
+        sentinel
+      }),
+      writeConfiguredSiteConfigs: vi.fn().mockImplementation(async (siteConfigs) => ({
+        siteConfigs,
+        sentinel
+      }))
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient as any),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+
+    expect(chromeApi.contextMenus.create).toHaveBeenCalledWith({
+      id: WHITELIST_SITE_MENU_ID,
+      title: "Whitelist this website",
+      contexts: ["all"],
+      documentUrlPatterns: ["http://*/*", "https://*/*"]
+    });
+
+    chromeApi.contextMenus.onClicked.listeners[0](
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 12,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+    await flushPromises();
+
+    expect(chromeApi.permissions.request).toHaveBeenCalledWith({
+      origins: ["https://docs.example.com/*"]
+    });
+    expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledWith([
+      expect.objectContaining({
+        origin: "https://docs.example.com",
+        dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+      })
+    ]);
+    expect(runtime.state.lastError).toBe("");
   });
 
   it("does not block session.getState while the local server probe is still pending", async () => {
@@ -1276,6 +1365,7 @@ describe("background entrypoint", () => {
     });
 
     await runtime.start();
+    await flushPromises();
     runtime.state.sessionActive = true;
     runtime.state.enabledOrigins = ["https://app.example.com"];
     runtime.state.activeTrace = activeTrace;

@@ -9,6 +9,7 @@ import {
 } from "@wraithwalker/core/fixture-layout";
 import { readSentinel } from "@wraithwalker/core/root";
 
+import { createExtensionSessionTracker } from "../src/extension-session.mts";
 import { createFixtureRepository } from "../src/fixture-repository.mts";
 import { createServerRootRuntime } from "../src/root-runtime.mts";
 import { DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES, startHttpServer } from "../src/server.mts";
@@ -1294,6 +1295,169 @@ describe("tRPC capture backend", () => {
       host: "0.0.0.0",
       port: 0
     })).rejects.toThrow('Refusing to start WraithWalker HTTP server on non-loopback host "0.0.0.0".');
+  });
+
+  it("returns queued server commands and accepts completed command acknowledgements on heartbeat", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    const sentinel = await readSentinel(root.rootPath);
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      extensionSessions: tracker,
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+
+    await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const queuedCommand = tracker.queueCommand({ type: "refresh_config" });
+    const waitingForResult = tracker.waitForCommandResult(queuedCommand.commandId, { timeoutMs: 1_000 });
+
+    const heartbeatWithCommand = await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    expect(heartbeatWithCommand.commands).toEqual([queuedCommand]);
+    expect(heartbeatWithCommand.siteConfigs).toEqual([
+      expect.objectContaining({ origin: "https://app.example.com" })
+    ]);
+    expect(heartbeatWithCommand.activeTrace).toBeNull();
+
+    const completedCommand = {
+      commandId: queuedCommand.commandId,
+      type: "refresh_config" as const,
+      ok: true,
+      completedAt: "2026-04-08T00:00:05.000Z"
+    };
+    const heartbeatAfterCompletion = await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"],
+      completedCommands: [completedCommand]
+    });
+
+    await expect(waitingForResult).resolves.toEqual(completedCommand);
+    expect(heartbeatAfterCompletion.commands).toEqual([]);
+    expect(heartbeatAfterCompletion.siteConfigs).toEqual([
+      expect.objectContaining({ origin: "https://app.example.com" })
+    ]);
+    expect(heartbeatAfterCompletion.activeTrace).toBeNull();
+  });
+
+  it("preserves active trace data while transporting queued commands and failed completions", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    const sentinel = await readSentinel(root.rootPath);
+    const rootRuntime = createServerRootRuntime({
+      rootPath: root.rootPath,
+      sentinel
+    });
+    await rootRuntime.startTrace({
+      traceId: "trace-http",
+      name: "HTTP trace",
+      goal: "Prove command transport does not hide active trace state.",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      createdAt: "2026-04-08T00:00:00.000Z"
+    });
+
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: () => rootRuntime.getActiveTrace(),
+      getEffectiveSiteConfigs: async () => [{
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z")
+    });
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      runtime: rootRuntime,
+      extensionSessions: tracker,
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+
+    await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+    const queuedCommand = tracker.queueCommand({ type: "refresh_config" });
+    const failedResultPromise = tracker.waitForCommandResult(queuedCommand.commandId, { timeoutMs: 1_000 });
+
+    const heartbeatWithTraceAndCommand = await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+
+    expect(heartbeatWithTraceAndCommand.commands).toEqual([queuedCommand]);
+    expect(heartbeatWithTraceAndCommand.activeTrace).toEqual(
+      expect.objectContaining({
+        traceId: "trace-http",
+        goal: "Prove command transport does not hide active trace state."
+      })
+    );
+
+    const failedCompletion = {
+      commandId: queuedCommand.commandId,
+      type: "refresh_config" as const,
+      ok: false,
+      completedAt: "2026-04-08T00:00:05.000Z",
+      error: "apply failed"
+    };
+    const heartbeatAfterFailedCompletion = await caller.extension.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"],
+      completedCommands: [failedCompletion]
+    });
+
+    await expect(failedResultPromise).resolves.toEqual(failedCompletion);
+    expect(heartbeatAfterFailedCompletion.commands).toEqual([]);
+    expect(heartbeatAfterFailedCompletion.activeTrace).toEqual(
+      expect.objectContaining({
+        traceId: "trace-http"
+      })
+    );
   });
 });
 import { promises as fs } from "node:fs";

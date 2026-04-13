@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_DUMP_ALLOWLIST_PATTERN, DEFAULT_DUMP_ALLOWLIST_PATTERNS } from "../src/lib/constants.js";
 import {
+  createConfiguredSiteConfig,
   createSiteConfig,
   isValidDumpAllowlistPatterns,
   normalizeDumpAllowlistPatterns,
@@ -84,6 +85,16 @@ describe("site config", () => {
         DEFAULT_DUMP_ALLOWLIST_PATTERN,
         "\\.css$",
         "\\.wasm$"
+      ]);
+    });
+
+    it("creates an explicit configured site with the shared JSON capture pattern", () => {
+      const config = createConfiguredSiteConfig("app.example.com");
+
+      expect(config.origin).toBe("https://app.example.com");
+      expect(config.dumpAllowlistPatterns).toEqual([
+        ...DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+        "\\.json$"
       ]);
     });
   });

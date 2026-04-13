@@ -11,9 +11,16 @@ import type { RootSentinel } from "@wraithwalker/core/root";
 import { listScenarios, saveScenario, switchScenario } from "@wraithwalker/core/scenarios";
 import { z } from "zod";
 
-import type { ExtensionConsoleEntry, ExtensionStatus } from "./extension-session.mjs";
+import type {
+  ExtensionConsoleEntry,
+  ExtensionHeartbeatStatus,
+  ExtensionServerCommand,
+  ExtensionServerCommandResult
+} from "./extension-session.mjs";
 import { createServerRootRuntime } from "./root-runtime.mjs";
 import { revealRootDirectory } from "./root-reveal.mjs";
+
+export type { ExtensionServerCommand, ExtensionServerCommandResult } from "./extension-session.mjs";
 
 export const HTTP_TRPC_PATH = "/trpc";
 
@@ -112,6 +119,14 @@ export const consoleEntrySchema = z.object({
   columnNumber: z.number().int().optional()
 });
 
+export const extensionServerCommandResultSchema = z.object({
+  commandId: z.string().min(1),
+  type: z.literal("refresh_config"),
+  ok: z.boolean(),
+  completedAt: z.string(),
+  error: z.string().optional()
+});
+
 export interface TrpcSystemInfo {
   serverName: string;
   serverVersion: string;
@@ -125,6 +140,7 @@ export interface TrpcSystemInfo {
 
 export interface TrpcHeartbeatInfo extends TrpcSystemInfo {
   activeTrace: ScenarioTraceRecord | null;
+  commands?: ExtensionServerCommand[];
 }
 
 export interface TrpcSiteConfigsInfo {
@@ -154,7 +170,8 @@ export interface CreateWraithwalkerRouterDependencies {
       sessionActive: boolean;
       enabledOrigins: string[];
       recentConsoleEntries?: ExtensionConsoleEntry[];
-    }): Promise<ExtensionStatus>;
+      completedCommands?: ExtensionServerCommandResult[];
+    }): Promise<ExtensionHeartbeatStatus>;
   };
   getServerUrls: () => {
     baseUrl: string;
@@ -197,7 +214,8 @@ export function createWraithwalkerRouter({
           extensionVersion: z.string().min(1),
           sessionActive: z.boolean(),
           enabledOrigins: z.array(z.string()),
-          recentConsoleEntries: z.array(consoleEntrySchema).optional()
+          recentConsoleEntries: z.array(consoleEntrySchema).optional(),
+          completedCommands: z.array(extensionServerCommandResultSchema).optional()
         }))
         .mutation(async ({ input }): Promise<TrpcHeartbeatInfo> => {
           const status = await extensionSessions.heartbeat(input);
@@ -208,7 +226,8 @@ export function createWraithwalkerRouter({
             sentinel,
             siteConfigs: status.siteConfigs,
             ...getServerUrls(),
-            activeTrace: status.activeTrace
+            activeTrace: status.activeTrace,
+            commands: status.commands ?? []
           };
         })
     }),
