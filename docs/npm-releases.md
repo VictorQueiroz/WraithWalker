@@ -106,7 +106,8 @@ It does the following:
 6. either:
    - opens/updates a version-packages PR when unreleased changesets exist, or
    - publishes changed npm packages when a version PR has been merged
-7. uploads a zipped extension artifact when `packages/extension/package.json` changed version on `main`
+7. creates or updates a dedicated extension GitHub release and attaches `WraithWalker.zip` when `packages/extension/package.json` changed version on `main`
+8. uploads the same zip as a workflow artifact for CI retrieval
 
 That means:
 
@@ -132,7 +133,9 @@ The extension release lane is artifact-based in GitHub Actions:
 
 - it is versioned with Changesets like the rest of the repo
 - it is not published to npm
-- when the extension version changes on `main`, the workflow uploads a zip of `packages/extension/dist`
+- when the extension version changes on `main`, the workflow creates or updates a GitHub release tagged `@wraithwalker/extension@<version>`
+- that release gets a downloadable `WraithWalker.zip` built from `packages/extension/dist`
+- the same zip is also uploaded as a workflow artifact for debugging or manual retrieval
 
 Chrome Web Store upload automation is intentionally out of scope for the current setup.
 

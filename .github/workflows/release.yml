@@ -52,11 +52,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - if: steps.extension_version.outputs.changed == 'true'
         run: |
-          artifact_name="wraithwalker-extension-v${{ steps.extension_version.outputs.version }}.zip"
+          artifact_name="WraithWalker.zip"
           cd packages/extension/dist
           zip -r "../../../${artifact_name}" .
       - if: steps.extension_version.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: wraithwalker-extension-v${{ steps.extension_version.outputs.version }}
-          path: wraithwalker-extension-v${{ steps.extension_version.outputs.version }}.zip
+          path: WraithWalker.zip
+      - if: steps.extension_version.outputs.changed == 'true'
+        run: >
+          node scripts/extension-release-asset.mjs
+          --asset-path WraithWalker.zip
+          --repo ${{ github.repository }}
+          --target ${{ github.sha }}
+          --version ${{ steps.extension_version.outputs.version }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

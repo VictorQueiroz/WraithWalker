@@ -10,7 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "test": "npm run coverage",
-    "test:versioning": "node --test scripts/versioning.test.mjs scripts/check-changeset.test.mjs",
+    "test:versioning": "node --test scripts/versioning.test.mjs scripts/check-changeset.test.mjs scripts/extension-release.test.mjs",
     "test:workspaces": "turbo run test",
     "coverage": "npm run test:versioning && npm run test:workspaces && npm run coverage:report",
     "coverage:report": "node scripts/coverage-report.mjs",
