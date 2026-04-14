@@ -1187,7 +1187,7 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
-    let sites = [createStoredSite()];
+    const sites = [createStoredSite()];
     const setSiteConfigs = vi.fn().mockRejectedValue(new Error("Save failed."));
     const readyRoot = createReadyRootDeps();
 
@@ -1231,7 +1231,7 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
-    let sites = [createStoredSite()];
+    const sites = [createStoredSite()];
     const permissions = {
       request: vi.fn().mockResolvedValue(true),
       remove: vi.fn().mockResolvedValue(true)

@@ -7,6 +7,7 @@ on:
       - "packages/extension/**"
       - "package.json"
       - "package-lock.json"
+      - "turbo.json"
       - ".github/workflows/eslint.yml"
   push:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - "packages/extension/**"
       - "package.json"
       - "package-lock.json"
+      - "turbo.json"
       - ".github/workflows/eslint.yml"
 
 permissions:

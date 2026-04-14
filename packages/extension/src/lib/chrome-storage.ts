@@ -1,8 +1,4 @@
-import {
-  DEFAULT_EDITOR_ID,
-  DEFAULT_NATIVE_HOST_CONFIG,
-  STORAGE_KEYS
-} from "./constants.js";
+import { DEFAULT_EDITOR_ID, STORAGE_KEYS } from "./constants.js";
 import {
   normalizeNativeHostConfig,
   normalizePreferredEditorId

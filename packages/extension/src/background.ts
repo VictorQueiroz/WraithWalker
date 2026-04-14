@@ -18,12 +18,7 @@ import type {
 import { createRequestLifecycle as defaultCreateRequestLifecycle } from "./lib/request-lifecycle.js";
 import { createSessionController as defaultCreateSessionController } from "./lib/session-controller.js";
 import { normalizeSiteConfigs as defaultNormalizeSiteConfigs } from "./lib/site-config.js";
-import type {
-  NativeHostConfig,
-  RootSentinel,
-  SessionSnapshot,
-  SiteConfig
-} from "./lib/types.js";
+import type { SiteConfig } from "./lib/types.js";
 import {
   createWraithWalkerServerClient as defaultCreateWraithWalkerServerClient,
   type WraithWalkerServerClient
@@ -156,10 +151,8 @@ export function createBackgroundRuntime({
   }
 
   let sessionController!: SessionControllerApi;
-  let requestLifecycle!: RequestLifecycleApi;
   let debuggerRuntime!: BackgroundDebuggerRuntimeApi;
   let traceService!: BackgroundTraceServiceApi;
-  let contextMenu!: BackgroundContextMenuApi;
 
   const authority: BackgroundAuthorityApi = createBackgroundAuthority({
     state,
@@ -201,7 +194,7 @@ export function createBackgroundRuntime({
     snapshotState: authority.snapshotState
   });
 
-  requestLifecycle = createRequestLifecycle({
+  const requestLifecycle: RequestLifecycleApi = createRequestLifecycle({
     state,
     sendDebuggerCommand: (tabId, method, params) =>
       debuggerRuntime.sendDebuggerCommand(tabId, method, params),
@@ -236,7 +229,7 @@ export function createBackgroundRuntime({
       getRequiredRootId
     });
 
-  contextMenu = createBackgroundContextMenu({
+  const contextMenu: BackgroundContextMenuApi = createBackgroundContextMenu({
     chromeApi,
     authority,
     setLastError

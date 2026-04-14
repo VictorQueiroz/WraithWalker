@@ -5,6 +5,19 @@ import reactPlugin from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 
+const sharedTsRules = {
+  "@typescript-eslint/no-unused-vars": [
+    "error",
+    { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
+  ],
+  "@typescript-eslint/no-explicit-any": "off",
+  "no-empty": ["error", { allowEmptyCatch: true }],
+  // Several modules declare `let x!: T` forward-refs that are captured by
+  // closures constructed before the single assignment; allow those while
+  // still flagging real single-assignment `let`s.
+  "prefer-const": ["error", { ignoreReadBeforeAssign: true }]
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -12,20 +25,19 @@ export default tseslint.config(
       "coverage/**",
       ".ts-emit/**",
       "node_modules/**",
-      "scripts/**",
       "types/**"
     ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Extension runtime code — browser + chrome only, no Node globals.
   {
-    files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
       globals: {
         ...globals.browser,
-        ...globals.node,
         chrome: "readonly"
       },
       parserOptions: {
@@ -39,19 +51,48 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }
-      ],
-      "@typescript-eslint/no-explicit-any": "off",
-      "no-empty": ["error", { allowEmptyCatch: true }],
-      "prefer-const": "warn"
+      ...sharedTsRules
     }
   },
+  // Tests run under Vitest + jsdom, so they need both browser and Node globals.
   {
     files: ["tests/**/*.{ts,tsx}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.vitest,
+        chrome: "readonly"
+      },
+      parserOptions: {
+        ecmaFeatures: { jsx: true }
+      }
+    },
+    settings: { react: { version: "detect" } },
+    plugins: {
+      react: reactPlugin,
+      "react-hooks": reactHooks
+    },
     rules: {
+      ...reactHooks.configs.recommended.rules,
+      ...sharedTsRules,
       "@typescript-eslint/no-unused-vars": "off"
+    }
+  },
+  // Build tooling — Node-only scripts executed via tsx.
+  {
+    files: ["scripts/**/*.{ts,tsx}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node
+      }
+    },
+    rules: {
+      ...sharedTsRules
     }
   }
 );

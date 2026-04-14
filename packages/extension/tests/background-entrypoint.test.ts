@@ -1369,7 +1369,7 @@ describe("background entrypoint", () => {
   it("falls back to the local root when a server-backed effective config read fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    let localEffectiveSites = [
+    const localEffectiveSites = [
       {
         origin: "https://local-effective.example.com",
         createdAt: "2026-04-08T00:00:00.000Z",
