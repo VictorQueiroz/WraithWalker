@@ -12,7 +12,6 @@ import type {
 } from "./background-runtime-shared.js";
 import {
   applyEffectiveSiteConfigs,
-  getRequiredRootId,
   restoreLocalEffectiveSiteConfigs,
   updateEffectiveRootState
 } from "./background-authority-shared.js";

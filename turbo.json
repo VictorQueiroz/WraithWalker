@@ -12,6 +12,9 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
+    "lint": {
+      "outputs": []
+    },
     "generate:icons": {
       "outputs": ["static/assets/icons/**"]
     }

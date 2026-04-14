@@ -1,0 +1,35 @@
+name: ESLint
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/extension/**"
+      - "package.json"
+      - "package-lock.json"
+      - "turbo.json"
+      - ".github/workflows/eslint.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/extension/**"
+      - "package.json"
+      - "package-lock.json"
+      - "turbo.json"
+      - ".github/workflows/eslint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  eslint:
+    name: ESLint (extension)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace @wraithwalker/extension
