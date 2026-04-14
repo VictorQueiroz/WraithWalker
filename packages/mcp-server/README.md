@@ -144,6 +144,9 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | `write-file` | `path`, `content` | Overwrite an editable human-facing projection file with UTF-8 text |
 | `patch-file` | `path`, `startLine`, `endLine`, `expectedText`, `replacement` | Apply a line-range patch to an editable projection file and fail if the expected text no longer matches |
 | `restore-file` | `path` | Regenerate the visible projection from its canonical hidden snapshot |
+| `checkout-workspace` | optional `paths`, optional `includeGlobs`, optional `excludeGlobs` | Copy selected projection-backed files into a same-machine local workspace and return its absolute path |
+| `push-workspace` | `workspaceId` | Push tracked edits from a projection workspace back into the human-facing root files, skipping conflicts and untracked changes |
+| `discard-workspace` | `workspaceId` | Remove a previously checked-out projection workspace |
 | `list-snapshots` | — | List saved scenario snapshots |
 | `diff-snapshots` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
 
@@ -196,6 +199,15 @@ When `list-files` or `search-files` marks a result as `editable: true`, agents c
 1. `write-file(path, content)` to replace it outright
 2. `patch-file(path, startLine, endLine, expectedText, replacement)` for conflict-aware line edits
 3. `restore-file(path)` to regenerate it from the canonical hidden snapshot
+
+When the agent runs on the same machine as the MCP server and needs a real working directory, use the projection-workspace flow instead:
+
+1. `checkout-workspace(paths?, includeGlobs?, excludeGlobs?)`
+2. edit the returned absolute `workspacePath` locally with the agent's own tools
+3. `push-workspace(workspaceId)` to apply tracked edits back into the human-facing root files
+4. `discard-workspace(workspaceId)` to clean up the temporary workspace
+
+Projection workspaces stay inside `.wraithwalker/agent-workspaces`, only include projection-backed files, never push into canonical hidden snapshots, and ignore new or deleted files in v1.
 
 `list-files`, `list-api-routes`, and `search-files` treat HTTP and HTTPS origins with the same host and port as one discovery group, and report the concrete origins they matched in `matchedOrigins`.
 

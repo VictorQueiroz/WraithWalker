@@ -110,6 +110,10 @@ function readTextContent(result: unknown): string {
   return entry.text;
 }
 
+function readJsonContent<T>(result: unknown): T {
+  return JSON.parse(readTextContent(result)) as T;
+}
+
 async function connectClient(rootPath: string) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({
@@ -438,7 +442,9 @@ describe("mcp server", () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
         "browser-status",
+        "checkout-workspace",
         "diff-snapshots",
+        "discard-workspace",
         "list-api-routes",
         "list-configured-sites",
         "list-files",
@@ -447,6 +453,7 @@ describe("mcp server", () => {
         "list-traces",
         "patch-file",
         "prepare-site-for-capture",
+        "push-workspace",
         "read-api-response",
         "read-console",
         "read-file",
@@ -877,6 +884,242 @@ describe("mcp server", () => {
       await server.close();
       await binaryClient.close();
       await binaryServer.close();
+    }
+  });
+
+  it("checks out projection workspaces from explicit paths and globs with selector validation", async () => {
+    const root = await createFixtureRootWithData();
+    await root.writeText("notes/ui-guidelines.txt", "Keep dropdown aligned.\n");
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const checkoutResult = await client.callTool({
+        name: "checkout-workspace",
+        arguments: {
+          paths: ["cdn.example.com/assets/chunk.js"],
+          includeGlobs: ["cdn.example.com/**/*.js"],
+          excludeGlobs: ["**/app.js"]
+        }
+      });
+      expect(checkoutResult.isError).not.toBe(true);
+      const checkout = readJsonContent<{
+        workspaceId: string;
+        workspacePath: string;
+        fileCount: number;
+        files: string[];
+        summary: string;
+      }>(checkoutResult);
+      expect(checkout.workspaceId).toMatch(/^[0-9a-f-]+$/i);
+      expect(path.isAbsolute(checkout.workspacePath)).toBe(true);
+      expect(checkout.fileCount).toBe(1);
+      expect(checkout.files).toEqual(["cdn.example.com/assets/chunk.js"]);
+      expect(checkout.summary).toBe(`1 files copied to ${checkout.workspacePath}`);
+      await expect(
+        fs.readFile(path.join(checkout.workspacePath, "cdn.example.com/assets/chunk.js"), "utf8")
+      ).resolves.toBe("function renderMenu(){if(open){return{variant:\"dark\"}}return null}");
+
+      const hiddenPathResult = await client.callTool({
+        name: "checkout-workspace",
+        arguments: {
+          paths: [".wraithwalker/root.json"]
+        }
+      });
+      expect(hiddenPathResult.isError).toBe(true);
+      expect(readTextContent(hiddenPathResult)).toContain(
+        "Hidden canonical files under .wraithwalker cannot be checked out into projection workspaces"
+      );
+
+      const arbitraryPathResult = await client.callTool({
+        name: "checkout-workspace",
+        arguments: {
+          paths: ["notes/ui-guidelines.txt"]
+        }
+      });
+      expect(arbitraryPathResult.isError).toBe(true);
+      expect(readTextContent(arbitraryPathResult)).toContain(
+        "File is not a projection-backed captured asset: notes/ui-guidelines.txt"
+      );
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("pushes tracked workspace edits while preserving canonical bodies and refreshing baselines", async () => {
+    const root = await createFixtureRootWithData();
+    const { client, server } = await connectClient(root.rootPath);
+    const canonicalPath = ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/chunk.js.__body";
+
+    try {
+      const checkoutResult = await client.callTool({
+        name: "checkout-workspace",
+        arguments: {
+          includeGlobs: ["cdn.example.com/**/*"]
+        }
+      });
+      expect(checkoutResult.isError).not.toBe(true);
+      const checkout = readJsonContent<{
+        workspaceId: string;
+        workspacePath: string;
+        fileCount: number;
+      }>(checkoutResult);
+      expect(checkout.fileCount).toBe(3);
+
+      await fs.writeFile(
+        path.join(checkout.workspacePath, "cdn.example.com/assets/chunk.js"),
+        "const seededUsers = [1];\n",
+        "utf8"
+      );
+      await fs.rm(path.join(checkout.workspacePath, "cdn.example.com/styles/dropdown.css"));
+      await fs.mkdir(path.join(checkout.workspacePath, "cdn.example.com/assets/generated"), { recursive: true });
+      await fs.writeFile(
+        path.join(checkout.workspacePath, "cdn.example.com/assets/generated/extra.js"),
+        "export const extra = true;\n",
+        "utf8"
+      );
+
+      const firstPushResult = await client.callTool({
+        name: "push-workspace",
+        arguments: {
+          workspaceId: checkout.workspaceId
+        }
+      });
+      expect(firstPushResult.isError).not.toBe(true);
+      expect(readJsonContent<{
+        updatedFiles: string[];
+        unchangedFiles: string[];
+        conflictingFiles: string[];
+        ignoredNewFiles: string[];
+        ignoredDeletedFiles: string[];
+      }>(firstPushResult)).toEqual(expect.objectContaining({
+        updatedFiles: ["cdn.example.com/assets/chunk.js"],
+        unchangedFiles: ["cdn.example.com/assets/app.js"],
+        conflictingFiles: [],
+        ignoredNewFiles: ["cdn.example.com/assets/generated/extra.js"],
+        ignoredDeletedFiles: ["cdn.example.com/styles/dropdown.css"]
+      }));
+      await expect(fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")).resolves.toBe(
+        "const seededUsers = [1];\n"
+      );
+      await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
+        "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+      );
+
+      await fs.writeFile(
+        path.join(checkout.workspacePath, "cdn.example.com/assets/chunk.js"),
+        "const seededUsers = [1, 2];\n",
+        "utf8"
+      );
+
+      const secondPushResult = await client.callTool({
+        name: "push-workspace",
+        arguments: {
+          workspaceId: checkout.workspaceId
+        }
+      });
+      expect(secondPushResult.isError).not.toBe(true);
+      expect(readJsonContent<{
+        updatedFiles: string[];
+        unchangedFiles: string[];
+        conflictingFiles: string[];
+        ignoredNewFiles: string[];
+        ignoredDeletedFiles: string[];
+      }>(secondPushResult)).toEqual(expect.objectContaining({
+        updatedFiles: ["cdn.example.com/assets/chunk.js"],
+        unchangedFiles: ["cdn.example.com/assets/app.js"],
+        conflictingFiles: [],
+        ignoredNewFiles: ["cdn.example.com/assets/generated/extra.js"],
+        ignoredDeletedFiles: ["cdn.example.com/styles/dropdown.css"]
+      }));
+      await expect(fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")).resolves.toBe(
+        "const seededUsers = [1, 2];\n"
+      );
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("reports workspace conflicts, discards workspaces, and rejects invalid workspace ids", async () => {
+    const root = await createFixtureRootWithData();
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const checkoutResult = await client.callTool({
+        name: "checkout-workspace",
+        arguments: {
+          paths: ["cdn.example.com/assets/app.js"]
+        }
+      });
+      expect(checkoutResult.isError).not.toBe(true);
+      const checkout = readJsonContent<{
+        workspaceId: string;
+        workspacePath: string;
+      }>(checkoutResult);
+
+      await fs.writeFile(root.resolve("cdn.example.com/assets/app.js"), "server changed\n", "utf8");
+      await fs.writeFile(
+        path.join(checkout.workspacePath, "cdn.example.com/assets/app.js"),
+        "agent changed\n",
+        "utf8"
+      );
+
+      const pushResult = await client.callTool({
+        name: "push-workspace",
+        arguments: {
+          workspaceId: checkout.workspaceId
+        }
+      });
+      expect(pushResult.isError).not.toBe(true);
+      expect(readJsonContent<{
+        updatedFiles: string[];
+        unchangedFiles: string[];
+        conflictingFiles: string[];
+        ignoredNewFiles: string[];
+        ignoredDeletedFiles: string[];
+      }>(pushResult)).toEqual(expect.objectContaining({
+        updatedFiles: [],
+        unchangedFiles: [],
+        conflictingFiles: ["cdn.example.com/assets/app.js"],
+        ignoredNewFiles: [],
+        ignoredDeletedFiles: []
+      }));
+      await expect(fs.readFile(root.resolve("cdn.example.com/assets/app.js"), "utf8")).resolves.toBe("server changed\n");
+
+      const invalidWorkspaceResult = await client.callTool({
+        name: "push-workspace",
+        arguments: {
+          workspaceId: "../escape"
+        }
+      });
+      expect(invalidWorkspaceResult.isError).toBe(true);
+      expect(readTextContent(invalidWorkspaceResult)).toContain("Invalid projection workspace id: ../escape");
+
+      const discardResult = await client.callTool({
+        name: "discard-workspace",
+        arguments: {
+          workspaceId: checkout.workspaceId
+        }
+      });
+      expect(discardResult.isError).not.toBe(true);
+      expect(readJsonContent<{
+        workspaceId: string;
+        workspacePath: string;
+        fileCount: number;
+        removed: boolean;
+      }>(discardResult)).toEqual(expect.objectContaining({
+        workspaceId: checkout.workspaceId,
+        workspacePath: checkout.workspacePath,
+        fileCount: 1,
+        removed: true
+      }));
+      await expect(fs.access(checkout.workspacePath)).rejects.toThrow();
+      await expect(
+        fs.access(root.resolve(`.wraithwalker/agent-workspaces/${checkout.workspaceId}/workspace.json`))
+      ).rejects.toThrow();
+    } finally {
+      await client.close();
+      await server.close();
     }
   });
 
@@ -2352,6 +2595,9 @@ describe("mcp server", () => {
         "write-file",
         "patch-file",
         "restore-file",
+        "checkout-workspace",
+        "push-workspace",
+        "discard-workspace",
         "list-snapshots",
         "diff-snapshots"
       ]);
@@ -2359,7 +2605,9 @@ describe("mcp server", () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
         "browser-status",
+        "checkout-workspace",
         "diff-snapshots",
+        "discard-workspace",
         "list-api-routes",
         "list-configured-sites",
         "list-files",
@@ -2368,6 +2616,7 @@ describe("mcp server", () => {
         "list-traces",
         "patch-file",
         "prepare-site-for-capture",
+        "push-workspace",
         "read-api-response",
         "read-console",
         "read-file",

@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import type { createServerRootRuntime } from "./root-runtime.mjs";
 import {
+  checkoutProjectionWorkspace,
+  discardProjectionWorkspace,
+  pushProjectionWorkspace
+} from "./projection-workspace.mjs";
+import {
   flattenStaticResourceManifest,
   listAssets,
   listApiEndpoints,
@@ -318,6 +323,57 @@ export function registerFixtureTools(
     async ({ path: filePath }) => {
       try {
         return renderJson(await restoreProjectionFile(rootPath, filePath));
+      } catch (error) {
+        return renderUnknownError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "checkout-workspace",
+    "Copy selected projection-backed captured files into a local projection workspace for same-machine agent editing",
+    {
+      paths: optionalStringArraySchema.describe("Optional explicit projection-backed file paths returned by list-files or search-files"),
+      includeGlobs: optionalStringArraySchema.describe("Optional root-relative glob selectors for projection-backed files"),
+      excludeGlobs: optionalStringArraySchema.describe("Optional root-relative glob selectors to exclude from the workspace")
+    },
+    async ({ paths, includeGlobs, excludeGlobs }) => {
+      try {
+        return renderJson(await checkoutProjectionWorkspace(rootPath, {
+          paths,
+          includeGlobs,
+          excludeGlobs
+        }));
+      } catch (error) {
+        return renderUnknownError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "push-workspace",
+    "Push tracked edits from a local projection workspace back into the human-facing fixture root",
+    {
+      workspaceId: z.string().trim().min(1).describe("Projection workspace id returned by checkout-workspace")
+    },
+    async ({ workspaceId }) => {
+      try {
+        return renderJson(await pushProjectionWorkspace(rootPath, workspaceId));
+      } catch (error) {
+        return renderUnknownError(error);
+      }
+    }
+  );
+
+  server.tool(
+    "discard-workspace",
+    "Remove a local projection workspace after the agent is done with it",
+    {
+      workspaceId: z.string().trim().min(1).describe("Projection workspace id returned by checkout-workspace")
+    },
+    async ({ workspaceId }) => {
+      try {
+        return renderJson(await discardProjectionWorkspace(rootPath, workspaceId));
       } catch (error) {
         return renderUnknownError(error);
       }

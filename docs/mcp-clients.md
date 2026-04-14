@@ -52,6 +52,25 @@ Projection-backed assets exposed by `list-files` and `search-files` also support
 - `write-file`
 - `patch-file`
 - `restore-file`
+- `checkout-workspace`
+- `push-workspace`
+- `discard-workspace`
+
+Use the file-by-file tools when the agent only needs a small targeted edit.
+
+Use projection workspaces when the MCP server and the agent run on the same machine and the agent benefits from a real local directory it can inspect with its own search, editor, or shell tools. That flow is:
+
+1. `checkout-workspace` to copy selected human-facing projection files into `.wraithwalker/agent-workspaces/<id>/files`
+2. edit the returned absolute `workspacePath` locally
+3. `push-workspace` to write tracked changes back into the human-facing root files
+4. `discard-workspace` when the temporary workspace is no longer needed
+
+Projection workspaces are intentionally projection-only:
+
+- they never expose `.wraithwalker` canonical snapshots as editable targets
+- pushes only affect files that were originally checked out
+- new files and deleted tracked files are ignored in v1
+- conflicting root edits are reported and skipped instead of overwritten
 
 More: [Guided scenario traces](./guided-scenario-traces.md)
 

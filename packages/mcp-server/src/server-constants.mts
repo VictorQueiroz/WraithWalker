@@ -30,6 +30,9 @@ export const MCP_TOOL_NAMES = [
   "write-file",
   "patch-file",
   "restore-file",
+  "checkout-workspace",
+  "push-workspace",
+  "discard-workspace",
   "list-snapshots",
   "diff-snapshots"
 ] as const;
