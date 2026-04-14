@@ -359,6 +359,94 @@ describe("background authority", () => {
     expect(setLastSessionSnapshot).toHaveBeenCalledTimes(1);
   });
 
+  it("reruns a recycled refresh_config command id after the earlier completion has been acknowledged", async () => {
+    const command = {
+      commandId: "command-1",
+      type: "refresh_config" as const,
+      issuedAt: "2026-04-10T00:00:00.000Z"
+    };
+    const heartbeat = vi.fn()
+      .mockResolvedValueOnce({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace: null,
+        siteConfigs: [],
+        commands: [command]
+      })
+      .mockResolvedValueOnce({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace: null,
+        siteConfigs: [],
+        commands: []
+      })
+      .mockResolvedValueOnce({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace: null,
+        siteConfigs: [],
+        commands: [command]
+      })
+      .mockResolvedValueOnce({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace: null,
+        siteConfigs: [],
+        commands: []
+      });
+    const setLastSessionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const { authority, reconcileTabs } = createAuthorityHarness({
+      stateOverrides: {
+        sessionActive: true
+      },
+      serverClientOverrides: {
+        heartbeat
+      },
+      setLastSessionSnapshot
+    });
+
+    await authority.refreshServerInfo({ force: true });
+    await authority.refreshServerInfo({ force: true });
+
+    expect(heartbeat).toHaveBeenCalledTimes(4);
+    expect(reconcileTabs).toHaveBeenCalledTimes(2);
+    expect(setLastSessionSnapshot).toHaveBeenCalledTimes(2);
+    expect(heartbeat).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      completedCommands: [
+        expect.objectContaining({
+          commandId: "command-1",
+          type: "refresh_config",
+          ok: true
+        })
+      ]
+    }));
+    expect(heartbeat).toHaveBeenNthCalledWith(4, expect.objectContaining({
+      completedCommands: [
+        expect.objectContaining({
+          commandId: "command-1",
+          type: "refresh_config",
+          ok: true
+        })
+      ]
+    }));
+  });
+
   it("reports failed refresh_config execution and acknowledges the error result", async () => {
     const command = {
       commandId: "command-1",

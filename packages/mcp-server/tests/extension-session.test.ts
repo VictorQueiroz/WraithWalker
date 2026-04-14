@@ -46,11 +46,18 @@ describe("extension session tracker", () => {
     let now = Date.parse("2026-04-08T00:00:00.000Z");
     const tracker = createExtensionSessionTracker({
       getActiveTrace: async () => null,
-      getEffectiveSiteConfigs: async () => [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }],
+      getEffectiveSiteConfigs: async () => [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://prepared.example.com",
+          createdAt: "2026-04-08T00:00:01.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ],
       now: () => now
     });
 
@@ -79,7 +86,10 @@ describe("extension session tracker", () => {
         captureDestination: "server",
         clientId: "client-1",
         enabledOrigins: ["https://app.example.com"],
-        siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })],
+        siteConfigs: [
+          expect.objectContaining({ origin: "https://app.example.com" }),
+          expect.objectContaining({ origin: "https://prepared.example.com" })
+        ],
         recentConsoleEntries: [
           expect.objectContaining({
             tabId: 7,
@@ -160,6 +170,58 @@ describe("extension session tracker", () => {
 
     await expect(resultPromise).resolves.toEqual(completedCommand);
     expect(afterCompletion.commands).toEqual([]);
+  });
+
+  it("evicts the oldest completed command results once the retention limit is exceeded", async () => {
+    const tracker = createExtensionSessionTracker({
+      getActiveTrace: async () => null,
+      getEffectiveSiteConfigs: async () => [],
+      now: () => Date.parse("2026-04-08T00:00:00.000Z"),
+      completedCommandResultLimit: 1
+    });
+
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"]
+    });
+
+    const firstCommand = tracker.queueCommand({ type: "refresh_config" });
+    const firstResult = {
+      commandId: firstCommand.commandId,
+      type: "refresh_config" as const,
+      ok: true,
+      completedAt: "2026-04-08T00:00:01.000Z"
+    };
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"],
+      completedCommands: [firstResult]
+    });
+    await expect(tracker.waitForCommandResult(firstCommand.commandId)).resolves.toEqual(firstResult);
+
+    const secondCommand = tracker.queueCommand({ type: "refresh_config" });
+    const secondResult = {
+      commandId: secondCommand.commandId,
+      type: "refresh_config" as const,
+      ok: true,
+      completedAt: "2026-04-08T00:00:02.000Z"
+    };
+    await tracker.heartbeat({
+      clientId: "client-1",
+      extensionVersion: "1.0.0",
+      sessionActive: true,
+      enabledOrigins: ["https://app.example.com"],
+      completedCommands: [secondResult]
+    });
+
+    await expect(tracker.waitForCommandResult(firstCommand.commandId)).rejects.toThrow(
+      `Unknown extension server command: ${firstCommand.commandId}`
+    );
+    await expect(tracker.waitForCommandResult(secondCommand.commandId)).resolves.toEqual(secondResult);
   });
 
   it("rejects command queueing when no connected extension client is available", async () => {
