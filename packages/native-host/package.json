@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/native-host",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Native messaging host for WraithWalker editor integration and scenario management.",
   "license": "MIT",
   "repository": {
