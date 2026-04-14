@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@trpc/client": "^11.7.1",
-    "@wraithwalker/core": "2.0.1",
+    "@wraithwalker/core": "2.1.0",
     "clsx": "^2.1.1",
     "idb": "^8.0.3",
     "react": "^19.2.0",
