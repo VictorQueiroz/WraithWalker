@@ -1,3 +1,6 @@
+import os from "node:os";
+import path from "node:path";
+import { promises as fs } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 function createNativeMessage(payload: unknown): Buffer {
@@ -260,5 +263,26 @@ describe("native host entrypoint", () => {
     await loadHostModuleWithArgv([process.argv[0] ?? "node"]);
 
     expect(stdoutWrite).not.toHaveBeenCalled();
+  });
+
+  it("treats symlinked entrypoint paths as direct execution", async () => {
+    const { host } = await loadHostModule();
+    const symlinkDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "wraithwalker-host-symlink-")
+    );
+    const symlinkPath = path.join(symlinkDir, "host-link.mts");
+
+    try {
+      await fs.symlink(
+        path.join(process.cwd(), "src", "host.mts"),
+        symlinkPath
+      );
+
+      expect(
+        host.isDirectExecution([process.argv[0] ?? "node", symlinkPath])
+      ).toBe(true);
+    } finally {
+      await fs.rm(symlinkDir, { recursive: true, force: true });
+    }
   });
 });
