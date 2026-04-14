@@ -126,10 +126,7 @@ export interface WraithWalkerServerClient {
   getSystemInfo(): Promise<TrpcSystemInfo>;
   revealRoot(): Promise<{ ok: true; command: string }>;
   listScenarios(): Promise<TrpcScenarioListInfo>;
-  saveScenario(
-    name: string,
-    description?: string
-  ): Promise<TrpcScenarioResult>;
+  saveScenario(name: string, description?: string): Promise<TrpcScenarioResult>;
   switchScenario(name: string): Promise<TrpcScenarioResult>;
   diffScenarios(
     scenarioA: string,

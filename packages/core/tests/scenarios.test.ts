@@ -94,9 +94,7 @@ describe("scenario operations", () => {
     expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toBe(
       "version 1"
     );
-    await expect(
-      fs.access(root.resolve("scenario.json"))
-    ).rejects.toThrow();
+    await expect(fs.access(root.resolve("scenario.json"))).rejects.toThrow();
   });
 
   it("validates required scenario inputs", async () => {
@@ -146,7 +144,10 @@ describe("scenario operations", () => {
       prefix: "wraithwalker-core-scenarios-"
     });
 
-    await root.writeText("cdn.example.com/assets/app.js", "console.log('trace');");
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "console.log('trace');"
+    );
 
     const sourceTrace = buildScenarioSnapshotSourceTrace({
       schemaVersion: 2,
@@ -344,12 +345,7 @@ describe("scenario operations", () => {
       }
     );
     await root.writeJson(
-      path.join(
-        ".wraithwalker",
-        "scenarios",
-        "eta_same_date",
-        "scenario.json"
-      ),
+      path.join(".wraithwalker", "scenarios", "eta_same_date", "scenario.json"),
       {
         schemaVersion: 1,
         name: "eta_same_date",
@@ -359,12 +355,7 @@ describe("scenario operations", () => {
       }
     );
     await root.writeJson(
-      path.join(
-        ".wraithwalker",
-        "scenarios",
-        "epsilon_weird",
-        "scenario.json"
-      ),
+      path.join(".wraithwalker", "scenarios", "epsilon_weird", "scenario.json"),
       {
         name: "epsilon_weird",
         source: "mystery",
@@ -377,12 +368,7 @@ describe("scenario operations", () => {
       }
     );
     await root.writeJson(
-      path.join(
-        ".wraithwalker",
-        "scenarios",
-        "trace_mixed",
-        "scenario.json"
-      ),
+      path.join(".wraithwalker", "scenarios", "trace_mixed", "scenario.json"),
       {
         schemaVersion: 1,
         name: "trace_mixed",
@@ -405,12 +391,7 @@ describe("scenario operations", () => {
       }
     );
     await root.writeJson(
-      path.join(
-        ".wraithwalker",
-        "scenarios",
-        "trace_partial",
-        "scenario.json"
-      ),
+      path.join(".wraithwalker", "scenarios", "trace_partial", "scenario.json"),
       {
         schemaVersion: 1,
         name: "trace_partial",
@@ -501,7 +482,9 @@ describe("scenario operations", () => {
       }
     });
     expect(
-      (await listScenarioSnapshots(root.rootPath)).map((snapshot) => snapshot.name)
+      (await listScenarioSnapshots(root.rootPath)).map(
+        (snapshot) => snapshot.name
+      )
     ).toEqual([
       "delta_active",
       "trace_mixed",
@@ -521,7 +504,11 @@ describe("scenario operations", () => {
     });
 
     for (const marker of [
-      { name: "../escape", rootId: root.rootId, updatedAt: "2026-04-09T00:00:00.000Z" },
+      {
+        name: "../escape",
+        rootId: root.rootId,
+        updatedAt: "2026-04-09T00:00:00.000Z"
+      },
       { name: "baseline", updatedAt: "2026-04-09T00:00:00.000Z" },
       { name: "baseline", rootId: root.rootId }
     ]) {

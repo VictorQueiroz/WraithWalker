@@ -292,23 +292,21 @@ export function createWraithwalkerRouter({
         })
     }),
     scenarios: t.router({
-      list: t.procedure.query(
-        async (): Promise<TrpcScenarioListInfo> => {
-          const [panelState, activeTrace] = await Promise.all([
-            listScenarioPanelState(rootPath),
-            runtime.getActiveTrace()
-          ]);
+      list: t.procedure.query(async (): Promise<TrpcScenarioListInfo> => {
+        const [panelState, activeTrace] = await Promise.all([
+          listScenarioPanelState(rootPath),
+          runtime.getActiveTrace()
+        ]);
 
-          return {
-            scenarios: panelState.snapshots.map((snapshot) => snapshot.name),
-            ...panelState,
-            activeTrace: activeTrace
-              ? buildScenarioSnapshotSourceTrace(activeTrace)
-              : null,
-            supportsTraceSave: true
-          };
-        }
-      ),
+        return {
+          scenarios: panelState.snapshots.map((snapshot) => snapshot.name),
+          ...panelState,
+          activeTrace: activeTrace
+            ? buildScenarioSnapshotSourceTrace(activeTrace)
+            : null,
+          supportsTraceSave: true
+        };
+      }),
       save: t.procedure
         .input(
           z.object({

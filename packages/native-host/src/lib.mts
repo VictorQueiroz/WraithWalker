@@ -158,7 +158,12 @@ export async function saveScenario({
   name,
   description
 }: ScenarioMessage): Promise<{ ok: true; name: string }> {
-  return coreSaveScenario({ path: rootPath, expectedRootId, name, description });
+  return coreSaveScenario({
+    path: rootPath,
+    expectedRootId,
+    name,
+    description
+  });
 }
 
 export async function switchScenario({
@@ -175,7 +180,9 @@ export async function listScenarios({
 }: VerifyRootMessage): Promise<{
   ok: true;
   scenarios: string[];
-  snapshots: Awaited<ReturnType<typeof coreListScenarioPanelState>>["snapshots"];
+  snapshots: Awaited<
+    ReturnType<typeof coreListScenarioPanelState>
+  >["snapshots"];
   activeScenarioName: string | null;
   activeScenarioMissing: boolean;
   activeTrace: null;

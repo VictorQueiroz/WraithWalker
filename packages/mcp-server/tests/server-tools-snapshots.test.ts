@@ -314,7 +314,9 @@ describe("snapshot tool registration", () => {
       scenarioB: "candidate"
     });
     expect(diffResult.isError).toBeFalsy();
-    expect(readText(diffResult)).toContain("# Fixture Diff: baseline vs candidate");
+    expect(readText(diffResult)).toContain(
+      "# Fixture Diff: baseline vs candidate"
+    );
     expect(readText(diffResult)).toContain("## Changed Endpoints");
     expect(readText(diffResult)).toContain("200 → 500");
 

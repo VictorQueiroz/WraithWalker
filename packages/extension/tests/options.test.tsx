@@ -120,12 +120,12 @@ function createRuntimeSendMessage({
         case "session.getState":
           return (
             sessionSnapshot ?? {
-            sessionActive: false,
-            attachedTabIds: [],
-            enabledOrigins: [],
-            rootReady: false,
-            captureDestination: "none",
-            captureRootPath: "",
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: [],
+              rootReady: false,
+              captureDestination: "none",
+              captureRootPath: "",
               lastError: ""
             }
           );
@@ -2399,7 +2399,9 @@ describe("options entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText(/missing_snapshot", but that snapshot is missing/i)
+        await screen.findByText(
+          /missing_snapshot", but that snapshot is missing/i
+        )
       ).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Switch" }));
@@ -2568,8 +2570,9 @@ describe("options entrypoint", () => {
         scenarioB: "candidate"
       });
       expect(await screen.findByText("Added")).toBeTruthy();
-      expect(screen.getByText("Changed GET /users (200 -> 500, body changed)"))
-        .toBeTruthy();
+      expect(
+        screen.getByText("Changed GET /users (200 -> 500, body changed)")
+      ).toBeTruthy();
       await user.click(screen.getByRole("button", { name: "Confirm Switch" }));
       expect(runtimeSendMessage).toHaveBeenCalledWith({
         type: "scenario.switch",

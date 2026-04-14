@@ -38,7 +38,9 @@ export function registerSnapshotTools(
     "save-trace-as-snapshot",
     "Save the current fixture workspace as a named scenario snapshot and attach trace provenance",
     {
-      traceId: z.string().describe("Trace ID returned by start-trace or list-traces"),
+      traceId: z
+        .string()
+        .describe("Trace ID returned by start-trace or list-traces"),
       name: z
         .string()
         .trim()
@@ -52,7 +54,9 @@ export function registerSnapshotTools(
         .trim()
         .min(1)
         .optional()
-        .describe("Optional human-facing description stored in the snapshot metadata")
+        .describe(
+          "Optional human-facing description stored in the snapshot metadata"
+        )
     },
     async ({ traceId, name, description }) => {
       const trace = await runtime.readTrace(traceId);

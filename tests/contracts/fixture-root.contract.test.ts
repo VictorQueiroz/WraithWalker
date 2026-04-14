@@ -109,7 +109,19 @@ describe("fixture root contracts", () => {
       })
     ).resolves.toEqual({
       ok: true,
-      scenarios: [canonical.scenarioName]
+      scenarios: [canonical.scenarioName],
+      snapshots: [
+        expect.objectContaining({
+          name: canonical.scenarioName,
+          source: "manual",
+          hasMetadata: true,
+          isActive: false
+        })
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: false
     });
 
     await expect(
@@ -186,7 +198,15 @@ describe("fixture root contracts", () => {
         arguments: {}
       });
       expect(JSON.parse(readTextContent(snapshotsResult))).toEqual({
-        scenarios: [canonical.scenarioName]
+        scenarios: [canonical.scenarioName],
+        snapshots: [
+          expect.objectContaining({
+            name: canonical.scenarioName,
+            source: "manual",
+            hasMetadata: true,
+            isActive: true
+          })
+        ]
       });
     } finally {
       await transport.close();

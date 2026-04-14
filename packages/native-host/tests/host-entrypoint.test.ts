@@ -26,7 +26,9 @@ async function loadHostModule() {
     switchScenario: vi
       .fn()
       .mockResolvedValue({ ok: true, via: "switchScenario" }),
-    listScenarios: vi.fn().mockResolvedValue({ ok: true, via: "listScenarios" }),
+    listScenarios: vi
+      .fn()
+      .mockResolvedValue({ ok: true, via: "listScenarios" }),
     diffScenarios: vi.fn().mockResolvedValue({ ok: true, via: "diffScenarios" })
   };
 

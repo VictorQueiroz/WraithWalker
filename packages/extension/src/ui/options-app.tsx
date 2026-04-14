@@ -130,12 +130,16 @@ function buildSuggestedScenarioName(
 
 function buildDiffPreview(diff: FixtureDiff): string[] {
   const previews = [
-    ...diff.added.slice(0, 2).map(
-      (entry) => `Added ${entry.method} ${entry.pathname} (${entry.status})`
-    ),
-    ...diff.removed.slice(0, 2).map(
-      (entry) => `Removed ${entry.method} ${entry.pathname} (${entry.status})`
-    ),
+    ...diff.added
+      .slice(0, 2)
+      .map(
+        (entry) => `Added ${entry.method} ${entry.pathname} (${entry.status})`
+      ),
+    ...diff.removed
+      .slice(0, 2)
+      .map(
+        (entry) => `Removed ${entry.method} ${entry.pathname} (${entry.status})`
+      ),
     ...diff.changed.slice(0, 3).map((entry) => {
       const suffix = entry.bodyChanged ? ", body changed" : "";
       return `Changed ${entry.method} ${entry.pathname} (${entry.statusBefore} -> ${entry.statusAfter}${suffix})`;
@@ -375,17 +379,20 @@ export function OptionsApp({
     React.useState<SessionSnapshot | null>(null);
   const [nativeHostConfig, setNativeHostConfigState] =
     React.useState<NativeHostConfig | null>(null);
-  const [scenarioPanel, setScenarioPanel] = React.useState(EMPTY_SCENARIO_PANEL);
+  const [scenarioPanel, setScenarioPanel] =
+    React.useState(EMPTY_SCENARIO_PANEL);
   const [manualScenarioName, setManualScenarioName] = React.useState("");
   const [manualScenarioDescription, setManualScenarioDescription] =
     React.useState("");
-  const [manualScenarioError, setManualScenarioError] =
-    React.useState<string | null>(null);
+  const [manualScenarioError, setManualScenarioError] = React.useState<
+    string | null
+  >(null);
   const [traceScenarioName, setTraceScenarioName] = React.useState("");
   const [traceScenarioDescription, setTraceScenarioDescription] =
     React.useState("");
-  const [traceScenarioError, setTraceScenarioError] =
-    React.useState<string | null>(null);
+  const [traceScenarioError, setTraceScenarioError] = React.useState<
+    string | null
+  >(null);
   const [scenarioStatus, setScenarioStatus] = React.useState<FlashState | null>(
     null
   );
@@ -1137,7 +1144,9 @@ export function OptionsApp({
                         disabled={savingManualScenario}
                         value={manualScenarioDescription}
                         onChange={(event) =>
-                          setManualScenarioDescription(event.currentTarget.value)
+                          setManualScenarioDescription(
+                            event.currentTarget.value
+                          )
                         }
                       />
                     </div>
@@ -1149,7 +1158,8 @@ export function OptionsApp({
                   </form>
                 </div>
 
-                {scenarioPanel.supportsTraceSave && scenarioPanel.activeTrace ? (
+                {scenarioPanel.supportsTraceSave &&
+                scenarioPanel.activeTrace ? (
                   <div className="grid gap-4 rounded-xl border border-border/70 bg-white/70 p-4">
                     <div className="space-y-1">
                       <h3 className="text-sm font-semibold">
@@ -1186,7 +1196,8 @@ export function OptionsApp({
                           {scenarioPanel.activeTrace.linkedFixtureCount}
                         </span>
                         <span>
-                          Origins: {scenarioPanel.activeTrace.selectedOrigins.length}
+                          Origins:{" "}
+                          {scenarioPanel.activeTrace.selectedOrigins.length}
                         </span>
                       </div>
                     </div>
@@ -1199,7 +1210,9 @@ export function OptionsApp({
                       }}
                     >
                       <div className="grid gap-2">
-                        <Label htmlFor="trace-scenario-name">Scenario name</Label>
+                        <Label htmlFor="trace-scenario-name">
+                          Scenario name
+                        </Label>
                         <Input
                           id="trace-scenario-name"
                           aria-label="Trace scenario name"
@@ -1300,9 +1313,7 @@ export function OptionsApp({
                                   <span>
                                     Trace {snapshot.sourceTrace.traceId} ·{" "}
                                     {snapshot.sourceTrace.stepCount} steps ·{" "}
-                                    {
-                                      snapshot.sourceTrace.linkedFixtureCount
-                                    }{" "}
+                                    {snapshot.sourceTrace.linkedFixtureCount}{" "}
                                     linked fixtures
                                   </span>
                                 ) : null}

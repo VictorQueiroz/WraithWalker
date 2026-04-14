@@ -810,7 +810,11 @@ describe("mcp server", () => {
       });
       const scenarios = JSON.parse(readTextContent(scenariosResult)) as {
         scenarios: string[];
-        snapshots: Array<{ name: string; source: string; hasMetadata: boolean }>;
+        snapshots: Array<{
+          name: string;
+          source: string;
+          hasMetadata: boolean;
+        }>;
       };
       expect(scenarios.scenarios.sort()).toEqual(["baseline", "candidate"]);
       expect(scenarios.snapshots).toEqual([

@@ -109,14 +109,17 @@ interface EndpointWithBody {
   bodyContent: string | null;
 }
 
-interface StoredScenarioSnapshotMetadata
-  extends Omit<ScenarioSnapshotMetadata, "source" | "sourceTrace"> {
+interface StoredScenarioSnapshotMetadata extends Omit<
+  ScenarioSnapshotMetadata,
+  "source" | "sourceTrace"
+> {
   source?: ScenarioSnapshotMetadata["source"];
   sourceTrace?: Partial<ScenarioSnapshotSourceTrace>;
 }
 
-interface StoredScenarioActiveMarker
-  extends Partial<Omit<ScenarioActiveMarker, "name" | "rootId" | "updatedAt">> {
+interface StoredScenarioActiveMarker extends Partial<
+  Omit<ScenarioActiveMarker, "name" | "rootId" | "updatedAt">
+> {
   name?: string;
   rootId?: string;
   updatedAt?: string;
@@ -382,7 +385,9 @@ function toScenarioSnapshotSummary(
     };
   }
 
-  const sourceTrace = normalizeScenarioSnapshotSourceTrace(metadata.sourceTrace);
+  const sourceTrace = normalizeScenarioSnapshotSourceTrace(
+    metadata.sourceTrace
+  );
 
   return {
     name: scenarioName,
@@ -496,7 +501,7 @@ export async function listScenarioPanelState(
     activeScenarioName,
     activeScenarioMissing: Boolean(
       activeScenarioName &&
-        !snapshots.some((snapshot) => snapshot.name === activeScenarioName)
+      !snapshots.some((snapshot) => snapshot.name === activeScenarioName)
     )
   };
 }
