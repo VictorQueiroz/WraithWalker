@@ -379,7 +379,9 @@ export function isBackgroundMessage(
     "native.revealRoot",
     "scenario.list",
     "scenario.save",
-    "scenario.switch"
+    "scenario.switch",
+    "scenario.diff",
+    "scenario.saveFromTrace"
   ].includes(type || "");
 }
 

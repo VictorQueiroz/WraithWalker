@@ -9,9 +9,16 @@ import type { SiteConfigLike } from "@wraithwalker/core/fixtures";
 import type { ScenarioTraceRecord } from "@wraithwalker/core/scenario-traces";
 import type { RootSentinel } from "@wraithwalker/core/root";
 import {
-  listScenarios,
+  buildScenarioSnapshotSourceTrace,
+  diffScenarios,
+  listScenarioPanelState,
   saveScenario,
   switchScenario
+} from "@wraithwalker/core/scenarios";
+import type {
+  FixtureDiff,
+  ScenarioSnapshotSourceTrace,
+  ScenarioSnapshotSummary
 } from "@wraithwalker/core/scenarios";
 import { z } from "zod";
 
@@ -157,11 +164,21 @@ export interface TrpcSiteConfigsInfo {
 
 export interface TrpcScenarioListInfo {
   scenarios: string[];
+  snapshots: ScenarioSnapshotSummary[];
+  activeScenarioName: string | null;
+  activeScenarioMissing: boolean;
+  activeTrace: ScenarioSnapshotSourceTrace | null;
+  supportsTraceSave: boolean;
 }
 
 export interface TrpcScenarioResult {
   ok: true;
   name: string;
+}
+
+export interface TrpcScenarioDiffInfo {
+  ok: true;
+  diff: FixtureDiff;
 }
 
 export interface CreateWraithwalkerRouterDependencies {
@@ -275,15 +292,26 @@ export function createWraithwalkerRouter({
         })
     }),
     scenarios: t.router({
-      list: t.procedure.query(
-        async (): Promise<TrpcScenarioListInfo> => ({
-          scenarios: await listScenarios(rootPath)
-        })
-      ),
+      list: t.procedure.query(async (): Promise<TrpcScenarioListInfo> => {
+        const [panelState, activeTrace] = await Promise.all([
+          listScenarioPanelState(rootPath),
+          runtime.getActiveTrace()
+        ]);
+
+        return {
+          scenarios: panelState.snapshots.map((snapshot) => snapshot.name),
+          ...panelState,
+          activeTrace: activeTrace
+            ? buildScenarioSnapshotSourceTrace(activeTrace)
+            : null,
+          supportsTraceSave: true
+        };
+      }),
       save: t.procedure
         .input(
           z.object({
-            name: z.string()
+            name: z.string(),
+            description: z.string().optional()
           })
         )
         .mutation(
@@ -291,7 +319,8 @@ export function createWraithwalkerRouter({
             saveScenario({
               path: rootPath,
               expectedRootId: sentinel.rootId,
-              name: input.name
+              name: input.name,
+              description: input.description
             })
         ),
       switch: t.procedure
@@ -307,7 +336,55 @@ export function createWraithwalkerRouter({
               expectedRootId: sentinel.rootId,
               name: input.name
             })
+        ),
+      diff: t.procedure
+        .input(
+          z.object({
+            scenarioA: z.string(),
+            scenarioB: z.string()
+          })
         )
+        .query(
+          async ({ input }): Promise<TrpcScenarioDiffInfo> => ({
+            ok: true,
+            diff: await diffScenarios(
+              rootPath,
+              input.scenarioA,
+              input.scenarioB
+            )
+          })
+        ),
+      saveFromTrace: t.procedure
+        .input(
+          z.object({
+            name: z.string(),
+            description: z.string().optional()
+          })
+        )
+        .mutation(async ({ input }): Promise<TrpcScenarioResult> => {
+          const activeTrace = await runtime.getActiveTrace();
+          if (!activeTrace) {
+            throw new Error("No active trace is available to save.");
+          }
+
+          const snapshotName = input.name.trim();
+          const snapshotDescription =
+            input.description?.trim() ||
+            activeTrace.goal ||
+            (activeTrace.name
+              ? `Saved from trace "${activeTrace.name}".`
+              : undefined);
+
+          return saveScenario({
+            path: rootPath,
+            expectedRootId: sentinel.rootId,
+            name: snapshotName,
+            ...(snapshotDescription
+              ? { description: snapshotDescription }
+              : {}),
+            sourceTrace: buildScenarioSnapshotSourceTrace(activeTrace)
+          });
+        })
     }),
     fixtures: t.router({
       has: t.procedure

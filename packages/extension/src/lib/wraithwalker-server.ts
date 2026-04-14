@@ -4,6 +4,11 @@ import type {
   TrpcHeartbeatInfo,
   TrpcSystemInfo
 } from "@wraithwalker/mcp-server/trpc";
+import type {
+  FixtureDiff,
+  ScenarioSnapshotSourceTrace,
+  ScenarioSnapshotSummary
+} from "@wraithwalker/core/scenarios";
 
 import type {
   BrowserConsoleEntry,
@@ -81,12 +86,22 @@ export interface TrpcSiteConfigsInfo {
 }
 
 export interface TrpcScenarioListInfo {
-  scenarios: string[];
+  scenarios?: string[];
+  snapshots: ScenarioSnapshotSummary[];
+  activeScenarioName: string | null;
+  activeScenarioMissing: boolean;
+  activeTrace: ScenarioSnapshotSourceTrace | null;
+  supportsTraceSave: boolean;
 }
 
 export interface TrpcScenarioResult {
   ok: true;
   name: string;
+}
+
+export interface TrpcScenarioDiffInfo {
+  ok: true;
+  diff: FixtureDiff;
 }
 
 export interface ExtensionServerCommand {
@@ -111,8 +126,16 @@ export interface WraithWalkerServerClient {
   getSystemInfo(): Promise<TrpcSystemInfo>;
   revealRoot(): Promise<{ ok: true; command: string }>;
   listScenarios(): Promise<TrpcScenarioListInfo>;
-  saveScenario(name: string): Promise<TrpcScenarioResult>;
+  saveScenario(name: string, description?: string): Promise<TrpcScenarioResult>;
   switchScenario(name: string): Promise<TrpcScenarioResult>;
+  diffScenarios(
+    scenarioA: string,
+    scenarioB: string
+  ): Promise<TrpcScenarioDiffInfo>;
+  saveScenarioFromTrace(
+    name: string,
+    description?: string
+  ): Promise<TrpcScenarioResult>;
   heartbeat(payload: {
     clientId: string;
     extensionVersion: string;
@@ -237,14 +260,27 @@ export function createWraithWalkerServerClient(
     listScenarios() {
       return trpc.scenarios.list.query() as Promise<TrpcScenarioListInfo>;
     },
-    saveScenario(name) {
+    saveScenario(name, description) {
       return trpc.scenarios.save.mutate({
-        name
+        name,
+        ...(description ? { description } : {})
       }) as Promise<TrpcScenarioResult>;
     },
     switchScenario(name) {
       return trpc.scenarios.switch.mutate({
         name
+      }) as Promise<TrpcScenarioResult>;
+    },
+    diffScenarios(scenarioA, scenarioB) {
+      return trpc.scenarios.diff.query({
+        scenarioA,
+        scenarioB
+      }) as Promise<TrpcScenarioDiffInfo>;
+    },
+    saveScenarioFromTrace(name, description) {
+      return trpc.scenarios.saveFromTrace.mutate({
+        name,
+        ...(description ? { description } : {})
       }) as Promise<TrpcScenarioResult>;
     },
     heartbeat(payload) {

@@ -169,7 +169,12 @@ describe("server helper modules", () => {
     });
 
     expect([...tools.keys()]).toEqual(
-      expect.arrayContaining(["list-sites", "read-file", "list-snapshots"])
+      expect.arrayContaining([
+        "list-sites",
+        "read-file",
+        "list-snapshots",
+        "save-trace-as-snapshot"
+      ])
     );
 
     const listSitesResult = await tools.get("list-sites")?.handler({});
@@ -190,7 +195,15 @@ describe("server helper modules", () => {
 
     const listSnapshotsResult = await tools.get("list-snapshots")?.handler({});
     expect(JSON.parse(readTextContent(listSnapshotsResult))).toEqual({
-      scenarios: [canonical.scenarioName]
+      scenarios: [canonical.scenarioName],
+      snapshots: [
+        {
+          name: canonical.scenarioName,
+          source: "unknown",
+          hasMetadata: false,
+          isActive: false
+        }
+      ]
     });
   });
 

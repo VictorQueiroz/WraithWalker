@@ -106,11 +106,31 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
     revealRoot: vi
       .fn()
       .mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
-    listScenarios: vi.fn().mockResolvedValue({ scenarios: [] }),
+    listScenarios: vi.fn().mockResolvedValue({
+      scenarios: [],
+      snapshots: [],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: true
+    }),
     saveScenario: vi
       .fn()
       .mockImplementation(async (name) => ({ ok: true, name })),
     switchScenario: vi
+      .fn()
+      .mockImplementation(async (name) => ({ ok: true, name })),
+    diffScenarios: vi.fn().mockResolvedValue({
+      ok: true,
+      diff: {
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        added: [],
+        removed: [],
+        changed: []
+      }
+    }),
+    saveScenarioFromTrace: vi
       .fn()
       .mockImplementation(async (name) => ({ ok: true, name })),
     heartbeat,
@@ -4460,13 +4480,39 @@ describe("background entrypoint", () => {
     });
   });
 
-  it("forwards scenario list, save, and switch actions to the native host", async () => {
+  it("forwards scenario list, save, switch, and diff actions to the native host", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     chromeApi.runtime.sendNativeMessage
-      .mockResolvedValueOnce({ ok: true, scenarios: ["baseline"] })
+      .mockResolvedValueOnce({
+        ok: true,
+        scenarios: ["baseline"],
+        snapshots: [
+          {
+            name: "baseline",
+            createdAt: "2026-04-03T12:00:00.000Z",
+            source: "manual",
+            hasMetadata: true,
+            isActive: false
+          }
+        ],
+        activeScenarioName: null,
+        activeScenarioMissing: false,
+        activeTrace: null,
+        supportsTraceSave: false
+      })
       .mockResolvedValueOnce({ ok: true, name: "release" })
-      .mockResolvedValueOnce({ ok: true, name: "baseline" });
+      .mockResolvedValueOnce({ ok: true, name: "baseline" })
+      .mockResolvedValueOnce({
+        ok: true,
+        diff: {
+          scenarioA: "baseline",
+          scenarioB: "candidate",
+          added: [],
+          removed: [],
+          changed: []
+        }
+      });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -4510,10 +4556,27 @@ describe("background entrypoint", () => {
       runtime.handleRuntimeMessage({ type: "scenario.list" })
     ).resolves.toEqual({
       ok: true,
-      scenarios: ["baseline"]
+      scenarios: ["baseline"],
+      snapshots: [
+        {
+          name: "baseline",
+          createdAt: "2026-04-03T12:00:00.000Z",
+          source: "manual",
+          hasMetadata: true,
+          isActive: false
+        }
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: false
     });
     await expect(
-      runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })
+      runtime.handleRuntimeMessage({
+        type: "scenario.save",
+        name: "release",
+        description: "Saved from the popup."
+      })
     ).resolves.toEqual({
       ok: true,
       name: "release"
@@ -4526,6 +4589,32 @@ describe("background entrypoint", () => {
     ).resolves.toEqual({
       ok: true,
       name: "baseline"
+    });
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.diff",
+        scenarioA: "baseline",
+        scenarioB: "candidate"
+      })
+    ).resolves.toEqual({
+      ok: true,
+      diff: {
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        added: [],
+        removed: [],
+        changed: []
+      }
+    });
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.saveFromTrace",
+        name: "trace_snapshot"
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        "Saving a snapshot from an active trace is only available when connected to the local WraithWalker server."
     });
 
     expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
@@ -4544,7 +4633,8 @@ describe("background entrypoint", () => {
         type: "saveScenario",
         path: "/tmp/fixtures",
         expectedRootId: "root-scenarios",
-        name: "release"
+        name: "release",
+        description: "Saved from the popup."
       }
     );
     expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
@@ -4557,9 +4647,20 @@ describe("background entrypoint", () => {
         name: "baseline"
       }
     );
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      4,
+      "com.example.host",
+      {
+        type: "diffScenarios",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-scenarios",
+        scenarioA: "baseline",
+        scenarioB: "candidate"
+      }
+    );
   });
 
-  it("routes scenario list, save, and switch actions through the connected server root", async () => {
+  it("routes scenario list, save, switch, diff, and trace-save actions through the connected server root", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     const serverClient = createMockServerClient({
@@ -4573,9 +4674,45 @@ describe("background entrypoint", () => {
         siteConfigs: [],
         activeTrace: null
       }),
-      listScenarios: vi.fn().mockResolvedValue({ scenarios: ["baseline"] }),
+      listScenarios: vi.fn().mockResolvedValue({
+        scenarios: ["baseline"],
+        snapshots: [
+          {
+            name: "baseline",
+            createdAt: "2026-04-03T12:00:00.000Z",
+            source: "manual",
+            hasMetadata: true,
+            isActive: false
+          }
+        ],
+        activeScenarioName: null,
+        activeScenarioMissing: false,
+        activeTrace: {
+          traceId: "trace_active",
+          status: "armed",
+          createdAt: "2026-04-03T12:00:00.000Z",
+          selectedOrigins: ["https://app.example.com"],
+          extensionClientId: "client-1",
+          stepCount: 1,
+          linkedFixtureCount: 0
+        },
+        supportsTraceSave: true
+      }),
       saveScenario: vi.fn().mockResolvedValue({ ok: true, name: "release" }),
-      switchScenario: vi.fn().mockResolvedValue({ ok: true, name: "baseline" })
+      switchScenario: vi.fn().mockResolvedValue({ ok: true, name: "baseline" }),
+      diffScenarios: vi.fn().mockResolvedValue({
+        ok: true,
+        diff: {
+          scenarioA: "baseline",
+          scenarioB: "candidate",
+          added: [],
+          removed: [],
+          changed: []
+        }
+      }),
+      saveScenarioFromTrace: vi
+        .fn()
+        .mockResolvedValue({ ok: true, name: "trace_snapshot" })
     });
 
     const runtime = createBackgroundRuntime({
@@ -4611,10 +4748,35 @@ describe("background entrypoint", () => {
       runtime.handleRuntimeMessage({ type: "scenario.list" })
     ).resolves.toEqual({
       ok: true,
-      scenarios: ["baseline"]
+      scenarios: ["baseline"],
+      snapshots: [
+        {
+          name: "baseline",
+          createdAt: "2026-04-03T12:00:00.000Z",
+          source: "manual",
+          hasMetadata: true,
+          isActive: false
+        }
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: {
+        traceId: "trace_active",
+        status: "armed",
+        createdAt: "2026-04-03T12:00:00.000Z",
+        selectedOrigins: ["https://app.example.com"],
+        extensionClientId: "client-1",
+        stepCount: 1,
+        linkedFixtureCount: 0
+      },
+      supportsTraceSave: true
     });
     await expect(
-      runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })
+      runtime.handleRuntimeMessage({
+        type: "scenario.save",
+        name: "release",
+        description: "Saved on the server."
+      })
     ).resolves.toEqual({
       ok: true,
       name: "release"
@@ -4628,10 +4790,47 @@ describe("background entrypoint", () => {
       ok: true,
       name: "baseline"
     });
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.diff",
+        scenarioA: "baseline",
+        scenarioB: "candidate"
+      })
+    ).resolves.toEqual({
+      ok: true,
+      diff: {
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        added: [],
+        removed: [],
+        changed: []
+      }
+    });
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.saveFromTrace",
+        name: "trace_snapshot",
+        description: "Saved from the active trace."
+      })
+    ).resolves.toEqual({
+      ok: true,
+      name: "trace_snapshot"
+    });
 
     expect(serverClient.listScenarios).toHaveBeenCalledTimes(1);
-    expect(serverClient.saveScenario).toHaveBeenCalledWith("release");
+    expect(serverClient.saveScenario).toHaveBeenCalledWith(
+      "release",
+      "Saved on the server."
+    );
     expect(serverClient.switchScenario).toHaveBeenCalledWith("baseline");
+    expect(serverClient.diffScenarios).toHaveBeenCalledWith(
+      "baseline",
+      "candidate"
+    );
+    expect(serverClient.saveScenarioFromTrace).toHaveBeenCalledWith(
+      "trace_snapshot",
+      "Saved from the active trace."
+    );
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
   });
 

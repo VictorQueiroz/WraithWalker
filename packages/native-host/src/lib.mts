@@ -1,6 +1,7 @@
 import * as childProcess from "node:child_process";
 import {
-  listScenarios as listScenarioNames,
+  diffScenarios as coreDiffScenarios,
+  listScenarioPanelState as coreListScenarioPanelState,
   saveScenario as coreSaveScenario,
   switchScenario as coreSwitchScenario
 } from "@wraithwalker/core/scenarios";
@@ -19,6 +20,9 @@ export interface OpenDirectoryMessage extends VerifyRootMessage {
 
 export interface ScenarioMessage extends VerifyRootMessage {
   name?: string;
+  description?: string;
+  scenarioA?: string;
+  scenarioB?: string;
 }
 
 export type SpawnLike = typeof childProcess.spawn;
@@ -151,9 +155,15 @@ export async function revealDirectory(
 export async function saveScenario({
   path: rootPath,
   expectedRootId,
-  name
+  name,
+  description
 }: ScenarioMessage): Promise<{ ok: true; name: string }> {
-  return coreSaveScenario({ path: rootPath, expectedRootId, name });
+  return coreSaveScenario({
+    path: rootPath,
+    expectedRootId,
+    name,
+    description
+  });
 }
 
 export async function switchScenario({
@@ -167,7 +177,44 @@ export async function switchScenario({
 export async function listScenarios({
   path: rootPath,
   expectedRootId
-}: VerifyRootMessage): Promise<{ ok: true; scenarios: string[] }> {
+}: VerifyRootMessage): Promise<{
+  ok: true;
+  scenarios: string[];
+  snapshots: Awaited<
+    ReturnType<typeof coreListScenarioPanelState>
+  >["snapshots"];
+  activeScenarioName: string | null;
+  activeScenarioMissing: boolean;
+  activeTrace: null;
+  supportsTraceSave: false;
+}> {
   await verifyRoot({ path: rootPath, expectedRootId });
-  return { ok: true, scenarios: await listScenarioNames(rootPath as string) };
+  const panelState = await coreListScenarioPanelState(rootPath as string);
+  return {
+    ok: true,
+    scenarios: panelState.snapshots.map((snapshot) => snapshot.name),
+    ...panelState,
+    activeTrace: null,
+    supportsTraceSave: false
+  };
+}
+
+export async function diffScenarios({
+  path: rootPath,
+  expectedRootId,
+  scenarioA,
+  scenarioB
+}: ScenarioMessage): Promise<{
+  ok: true;
+  diff: Awaited<ReturnType<typeof coreDiffScenarios>>;
+}> {
+  await verifyRoot({ path: rootPath, expectedRootId });
+  return {
+    ok: true,
+    diff: await coreDiffScenarios(
+      rootPath as string,
+      scenarioA as string,
+      scenarioB as string
+    )
+  };
 }

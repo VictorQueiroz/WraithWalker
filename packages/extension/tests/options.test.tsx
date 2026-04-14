@@ -9,6 +9,7 @@ import {
   DEFAULT_NATIVE_HOST_CONFIG,
   ROOT_DIRECTORY_PICKER_ID
 } from "../src/lib/constants.js";
+import type { ScenarioListSuccess } from "../src/lib/messages.js";
 import type {
   NativeHostConfig,
   SessionSnapshot,
@@ -62,6 +63,29 @@ function createNativeHostConfig(
   };
 }
 
+function createScenarioListResult(
+  overrides: Partial<Omit<ScenarioListSuccess, "ok">> = {}
+): ScenarioListSuccess {
+  return {
+    ok: true,
+    scenarios: ["baseline"],
+    snapshots: [
+      {
+        name: "baseline",
+        createdAt: "2026-04-03T12:00:00.000Z",
+        source: "manual",
+        hasMetadata: true,
+        isActive: false
+      }
+    ],
+    activeScenarioName: null,
+    activeScenarioMissing: false,
+    activeTrace: null,
+    supportsTraceSave: false,
+    ...overrides
+  };
+}
+
 async function loadOptionsModule() {
   vi.resetModules();
   globalThis.__WRAITHWALKER_TEST__ = true;
@@ -84,32 +108,53 @@ function createRuntimeSendMessage({
 }: {
   sessionSnapshot?: SessionSnapshot;
 } = {}) {
-  return vi.fn(async (message: { type: string; name?: string }) => {
-    switch (message.type) {
-      case "session.getState":
-        return (
-          sessionSnapshot ?? {
-            sessionActive: false,
-            attachedTabIds: [],
-            enabledOrigins: [],
-            rootReady: false,
-            captureDestination: "none",
-            captureRootPath: "",
-            lastError: ""
-          }
-        );
-      case "scenario.list":
-        return { ok: true, scenarios: ["baseline"] };
-      case "scenario.switch":
-        return { ok: true, name: message.name ?? "" };
-      case "scenario.save":
-        return { ok: true, name: message.name ?? "" };
-      case "native.verify":
-        return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
-      default:
-        return { ok: true };
+  return vi.fn(
+    async (message: {
+      type: string;
+      name?: string;
+      description?: string;
+      scenarioA?: string;
+      scenarioB?: string;
+    }) => {
+      switch (message.type) {
+        case "session.getState":
+          return (
+            sessionSnapshot ?? {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: [],
+              rootReady: false,
+              captureDestination: "none",
+              captureRootPath: "",
+              lastError: ""
+            }
+          );
+        case "scenario.list":
+          return createScenarioListResult();
+        case "scenario.switch":
+          return { ok: true, name: message.name ?? "" };
+        case "scenario.save":
+          return { ok: true, name: message.name ?? "" };
+        case "scenario.diff":
+          return {
+            ok: true,
+            diff: {
+              scenarioA: message.scenarioA ?? "baseline",
+              scenarioB: message.scenarioB ?? "candidate",
+              added: [],
+              removed: [],
+              changed: []
+            }
+          };
+        case "scenario.saveFromTrace":
+          return { ok: true, name: message.name ?? "" };
+        case "native.verify":
+          return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+        default:
+          return { ok: true };
+      }
     }
-  });
+  );
 }
 
 function createLiveServerRuntimeApi({
@@ -125,6 +170,9 @@ function createLiveServerRuntimeApi({
         type: string;
         siteConfigs?: SiteConfig[];
         name?: string;
+        description?: string;
+        scenarioA?: string;
+        scenarioB?: string;
       }) => {
         switch (message.type) {
           case "session.getState":
@@ -156,10 +204,25 @@ function createLiveServerRuntimeApi({
             };
           }
           case "scenario.list":
-            return { ok: true, scenarios: ["baseline"] };
+            return createScenarioListResult({
+              supportsTraceSave: true
+            });
           case "scenario.switch":
             return { ok: true, name: message.name ?? "" };
           case "scenario.save":
+            return { ok: true, name: message.name ?? "" };
+          case "scenario.diff":
+            return {
+              ok: true,
+              diff: {
+                scenarioA: message.scenarioA ?? "baseline",
+                scenarioB: message.scenarioB ?? "candidate",
+                added: [],
+                removed: [],
+                changed: []
+              }
+            };
+          case "scenario.saveFromTrace":
             return { ok: true, name: message.name ?? "" };
           case "native.verify":
             return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
@@ -585,7 +648,9 @@ describe("options entrypoint", () => {
                 case "session.getState":
                   return sessionSnapshot;
                 case "scenario.list":
-                  return { ok: true, scenarios: ["baseline"] };
+                  return createScenarioListResult({
+                    supportsTraceSave: true
+                  });
                 case "scenario.switch":
                   return { ok: true, name: message.name ?? "" };
                 case "scenario.save":
@@ -1818,7 +1883,7 @@ describe("options entrypoint", () => {
     const runtimeSendMessage = vi.fn(async (message: { type: string }) => {
       switch (message.type) {
         case "scenario.list":
-          return { ok: true, scenarios: ["baseline"] };
+          return createScenarioListResult();
         case "native.revealRoot":
           return { ok: true };
         default:
@@ -1943,7 +2008,9 @@ describe("options entrypoint", () => {
               lastError: ""
             };
           case "scenario.list":
-            return { ok: true, scenarios: ["baseline"] };
+            return createScenarioListResult({
+              supportsTraceSave: true
+            });
           case "scenario.switch":
             return { ok: true, name: message.name ?? "" };
           case "scenario.save":
@@ -2039,7 +2106,7 @@ describe("options entrypoint", () => {
                     lastError: ""
                   };
                 case "scenario.list":
-                  return { ok: true, scenarios: ["baseline"] };
+                  return createScenarioListResult();
                 case "scenario.switch":
                   return { ok: true, name: message.name ?? "" };
                 case "scenario.save":
@@ -2087,7 +2154,7 @@ describe("options entrypoint", () => {
     const runtimeSendMessage = vi.fn(async (message: { type: string }) => {
       switch (message.type) {
         case "scenario.list":
-          return { ok: true, scenarios: ["baseline"] };
+          return createScenarioListResult();
         case "native.revealRoot":
           return { ok: false, error: "Reveal failed." };
         default:
@@ -2142,7 +2209,7 @@ describe("options entrypoint", () => {
     }
   });
 
-  it("moves scenario save and switch controls into settings", async () => {
+  it("renders the snapshot manager, confirms switches, and saves descriptions", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
@@ -2179,6 +2246,10 @@ describe("options entrypoint", () => {
     try {
       expect(await screen.findByText("baseline")).toBeTruthy();
       await user.click(screen.getByRole("button", { name: "Switch" }));
+      expect(
+        await screen.findByRole("dialog", { name: "Switch to baseline" })
+      ).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Confirm Switch" }));
       expect(runtimeSendMessage).toHaveBeenCalledWith({
         type: "scenario.switch",
         name: "baseline"
@@ -2186,10 +2257,15 @@ describe("options entrypoint", () => {
       expect(await screen.findByText('Switched to "baseline".')).toBeTruthy();
 
       await user.type(screen.getByLabelText("Scenario name"), "release");
-      await user.click(screen.getByRole("button", { name: "Save Scenario" }));
+      await user.type(
+        screen.getByLabelText("Scenario description"),
+        "Saved before release testing."
+      );
+      await user.click(screen.getByRole("button", { name: "Save Snapshot" }));
       expect(runtimeSendMessage).toHaveBeenCalledWith({
         type: "scenario.save",
-        name: "release"
+        name: "release",
+        description: "Saved before release testing."
       });
       expect(await screen.findByText('Scenario "release" saved.')).toBeTruthy();
     } finally {
@@ -2233,7 +2309,7 @@ describe("options entrypoint", () => {
 
     try {
       await user.type(await screen.findByLabelText("Scenario name"), "   ");
-      await user.click(screen.getByRole("button", { name: "Save Scenario" }));
+      await user.click(screen.getByRole("button", { name: "Save Snapshot" }));
       expect(runtimeSendMessage).toHaveBeenCalledTimes(2);
       expect(runtimeSendMessage).toHaveBeenNthCalledWith(1, {
         type: "session.getState"
@@ -2241,6 +2317,281 @@ describe("options entrypoint", () => {
       expect(runtimeSendMessage).toHaveBeenCalledWith({
         type: "scenario.list"
       });
+      expect(screen.getByText("Enter a scenario name.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("shows stale marker warnings and falls back to a plain switch confirmation", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: [],
+              rootReady: false,
+              captureDestination: "none",
+              captureRootPath: "",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: false
+                }
+              ],
+              activeScenarioName: "missing_snapshot",
+              activeScenarioMissing: true
+            });
+          case "scenario.switch":
+            return { ok: true, name: message.name ?? "" };
+          case "scenario.diff":
+            throw new Error("Diff should not be requested without a baseline.");
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(
+        await screen.findByText(
+          /missing_snapshot", but that snapshot is missing/i
+        )
+      ).toBeTruthy();
+
+      await user.click(screen.getByRole("button", { name: "Switch" }));
+      expect(
+        await screen.findByText(
+          "No active snapshot baseline is available, so this switch will proceed without a diff preview."
+        )
+      ).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Confirm Switch" }));
+      expect(runtimeSendMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "scenario.diff" })
+      );
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.switch",
+        name: "baseline"
+      });
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("renders trace save details, prepopulates the form, and shows diff previews before switching", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: true
+                },
+                {
+                  name: "candidate",
+                  createdAt: "2026-04-03T12:05:00.000Z",
+                  source: "trace",
+                  hasMetadata: true,
+                  description: "Saved from a checkout trace.",
+                  isActive: false,
+                  sourceTrace: {
+                    traceId: "trace_candidate",
+                    status: "completed",
+                    createdAt: "2026-04-03T12:04:00.000Z",
+                    selectedOrigins: ["https://app.example.com"],
+                    extensionClientId: "client-1",
+                    stepCount: 2,
+                    linkedFixtureCount: 1
+                  }
+                }
+              ],
+              activeScenarioName: "baseline",
+              activeScenarioMissing: false,
+              activeTrace: {
+                traceId: "trace_active",
+                name: "trace_active",
+                goal: "Capture checkout state.",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.diff":
+            return {
+              ok: true,
+              diff: {
+                scenarioA: message.scenarioA ?? "baseline",
+                scenarioB: message.scenarioB ?? "candidate",
+                added: [
+                  {
+                    method: "POST",
+                    pathname: "/orders",
+                    status: 201,
+                    mimeType: "application/json"
+                  }
+                ],
+                removed: [],
+                changed: [
+                  {
+                    method: "GET",
+                    pathname: "/users",
+                    statusBefore: 200,
+                    statusAfter: 500,
+                    bodyChanged: true
+                  }
+                ]
+              }
+            };
+          case "scenario.switch":
+            return { ok: true, name: message.name ?? "" };
+          case "scenario.saveFromTrace":
+            return { ok: true, name: message.name ?? "" };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByText("Save From Active Trace")).toBeTruthy();
+      expect(await screen.findByDisplayValue("trace_active")).toBeTruthy();
+      expect(
+        await screen.findByDisplayValue("Capture checkout state.")
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Active" }).getAttribute("disabled")
+      ).not.toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Switch" }));
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.diff",
+        scenarioA: "baseline",
+        scenarioB: "candidate"
+      });
+      expect(await screen.findByText("Added")).toBeTruthy();
+      expect(
+        screen.getByText("Changed GET /users (200 -> 500, body changed)")
+      ).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Confirm Switch" }));
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.switch",
+        name: "candidate"
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.saveFromTrace",
+        name: "trace_active",
+        description: "Capture checkout state."
+      });
+      expect(
+        await screen.findByText(
+          'Scenario "trace_active" saved from the active trace.'
+        )
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -2286,7 +2637,66 @@ describe("options entrypoint", () => {
 
     try {
       expect(await screen.findByText("Scenario listing failed.")).toBeTruthy();
-      expect(screen.getByText("No scenarios saved yet.")).toBeTruthy();
+      expect(screen.getByText("No snapshots saved yet.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("normalizes legacy scenario lists without crashing the page", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const runtimeSendMessage = vi.fn(async (message: { type: string }) => {
+      switch (message.type) {
+        case "session.getState":
+          return {
+            sessionActive: false,
+            attachedTabIds: [],
+            enabledOrigins: [],
+            rootReady: false,
+            captureDestination: "none",
+            captureRootPath: "",
+            lastError: ""
+          };
+        case "scenario.list":
+          return { ok: true, scenarios: ["legacy_snapshot"] };
+        default:
+          return { ok: true };
+      }
+    });
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByText("legacy_snapshot")).toBeTruthy();
+      expect(screen.getByText("Legacy")).toBeTruthy();
+      expect(screen.getByText("1 saved")).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -2300,7 +2710,7 @@ describe("options entrypoint", () => {
       async (message: { type: string; name?: string }) => {
         switch (message.type) {
           case "scenario.list":
-            return { ok: true, scenarios: ["baseline"] };
+            return createScenarioListResult();
           case "native.verify":
             return { ok: false, error: "Helper unavailable." };
           case "scenario.switch":
@@ -2347,10 +2757,13 @@ describe("options entrypoint", () => {
       expect(await screen.findByText("Helper unavailable.")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Switch" }));
+      await user.click(
+        await screen.findByRole("button", { name: "Confirm Switch" })
+      );
       expect(await screen.findByText("Switch failed.")).toBeTruthy();
 
       await user.type(screen.getByLabelText("Scenario name"), "release");
-      await user.click(screen.getByRole("button", { name: "Save Scenario" }));
+      await user.click(screen.getByRole("button", { name: "Save Snapshot" }));
       expect(await screen.findByText("Save failed.")).toBeTruthy();
     } finally {
       options.unmount();
@@ -2384,7 +2797,7 @@ describe("options entrypoint", () => {
       runtime: {
         sendMessage: vi.fn(async (message: { type: string }) => {
           if (message.type === "scenario.list") {
-            return { ok: true, scenarios: [] };
+            return createScenarioListResult({ snapshots: [] });
           }
           if (message.type === "native.verify") {
             return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };

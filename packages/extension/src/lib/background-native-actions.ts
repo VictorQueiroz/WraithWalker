@@ -11,6 +11,7 @@ import type {
   NativeVerifyResult,
   RootReadyResult,
   RootReadySuccess,
+  ScenarioDiffResult,
   ScenarioListResult,
   ScenarioResult
 } from "./messages.js";
@@ -53,8 +54,19 @@ export interface BackgroundNativeActionsApi {
   ): Promise<NativeOpenResult>;
   revealRootInOs(): Promise<NativeOpenResult>;
   listScenariosForActiveTarget(): Promise<ScenarioListResult>;
-  saveScenarioForActiveTarget(name: string): Promise<ScenarioResult>;
+  saveScenarioForActiveTarget(
+    name: string,
+    description?: string
+  ): Promise<ScenarioResult>;
   switchScenarioForActiveTarget(name: string): Promise<ScenarioResult>;
+  diffScenariosForActiveTarget(
+    scenarioA: string,
+    scenarioB: string
+  ): Promise<ScenarioDiffResult>;
+  saveScenarioFromTraceForActiveTarget(
+    name: string,
+    description?: string
+  ): Promise<ScenarioResult>;
 }
 
 export function createBackgroundNativeActions({
@@ -416,8 +428,10 @@ export function createBackgroundNativeActions({
 
     if (target.source === "server") {
       try {
-        const result = await serverClient.listScenarios();
-        return { ok: true, scenarios: result.scenarios };
+        return {
+          ok: true,
+          ...(await serverClient.listScenarios())
+        };
       } catch (error) {
         return {
           ok: false,
@@ -441,11 +455,12 @@ export function createBackgroundNativeActions({
         path: target.launchPath,
         expectedRootId: target.rootId
       }
-    ) as Promise<ScenarioListResult>;
+    ) as unknown as Promise<ScenarioListResult>;
   }
 
   async function saveScenarioForActiveTarget(
-    name: string
+    name: string,
+    description?: string
   ): Promise<ScenarioResult> {
     await authority.refreshStoredConfig();
     const target = await resolveActiveLaunchTarget({
@@ -457,7 +472,7 @@ export function createBackgroundNativeActions({
 
     if (target.source === "server") {
       try {
-        return await serverClient.saveScenario(name);
+        return await serverClient.saveScenario(name, description);
       } catch (error) {
         return {
           ok: false,
@@ -480,9 +495,10 @@ export function createBackgroundNativeActions({
         type: "saveScenario",
         path: target.launchPath,
         expectedRootId: target.rootId,
-        name
+        name,
+        ...(description ? { description } : {})
       }
-    ) as Promise<ScenarioResult>;
+    ) as unknown as Promise<ScenarioResult>;
   }
 
   async function switchScenarioForActiveTarget(
@@ -523,7 +539,80 @@ export function createBackgroundNativeActions({
         expectedRootId: target.rootId,
         name
       }
-    ) as Promise<ScenarioResult>;
+    ) as unknown as Promise<ScenarioResult>;
+  }
+
+  async function diffScenariosForActiveTarget(
+    scenarioA: string,
+    scenarioB: string
+  ): Promise<ScenarioDiffResult> {
+    await authority.refreshStoredConfig();
+    const target = await resolveActiveLaunchTarget({
+      requestPermission: false
+    });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
+    }
+
+    if (target.source === "server") {
+      try {
+        return await serverClient.diffScenarios(scenarioA, scenarioB);
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
+    }
+
+    if (!state.nativeHostConfig.hostName.trim()) {
+      return {
+        ok: false,
+        error:
+          "Configure the native host name and shared editor launch path in the options page first."
+      };
+    }
+
+    return chromeApi.runtime.sendNativeMessage(
+      state.nativeHostConfig.hostName,
+      {
+        type: "diffScenarios",
+        path: target.launchPath,
+        expectedRootId: target.rootId,
+        scenarioA,
+        scenarioB
+      }
+    ) as unknown as Promise<ScenarioDiffResult>;
+  }
+
+  async function saveScenarioFromTraceForActiveTarget(
+    name: string,
+    description?: string
+  ): Promise<ScenarioResult> {
+    await authority.refreshStoredConfig();
+    const target = await resolveActiveLaunchTarget({
+      requestPermission: false
+    });
+    if (target.ok === false) {
+      return { ok: false, error: target.error };
+    }
+
+    if (target.source !== "server") {
+      return {
+        ok: false,
+        error:
+          "Saving a snapshot from an active trace is only available when connected to the local WraithWalker server."
+      };
+    }
+
+    try {
+      return await serverClient.saveScenarioFromTrace(name, description);
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
   }
 
   return {
@@ -532,6 +621,8 @@ export function createBackgroundNativeActions({
     revealRootInOs,
     listScenariosForActiveTarget,
     saveScenarioForActiveTarget,
-    switchScenarioForActiveTarget
+    switchScenarioForActiveTarget,
+    diffScenariosForActiveTarget,
+    saveScenarioFromTraceForActiveTarget
   };
 }

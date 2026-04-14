@@ -81,6 +81,8 @@ function createUnavailableServerClient(): WraithWalkerServerClient {
     listScenarios: unavailable,
     saveScenario: unavailable,
     switchScenario: unavailable,
+    diffScenarios: unavailable,
+    saveScenarioFromTrace: unavailable,
     heartbeat: unavailable,
     hasFixture: unavailable,
     readConfiguredSiteConfigs: unavailable,
@@ -358,9 +360,22 @@ export function createBackgroundRuntime({
       case "scenario.list":
         return nativeActions.listScenariosForActiveTarget();
       case "scenario.save":
-        return nativeActions.saveScenarioForActiveTarget(message.name);
+        return nativeActions.saveScenarioForActiveTarget(
+          message.name,
+          message.description
+        );
       case "scenario.switch":
         return nativeActions.switchScenarioForActiveTarget(message.name);
+      case "scenario.diff":
+        return nativeActions.diffScenariosForActiveTarget(
+          message.scenarioA,
+          message.scenarioB
+        );
+      case "scenario.saveFromTrace":
+        return nativeActions.saveScenarioFromTraceForActiveTarget(
+          message.name,
+          message.description
+        );
     }
   }
 

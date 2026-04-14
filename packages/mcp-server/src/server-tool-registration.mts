@@ -24,7 +24,7 @@ export function registerTools(
   registerTraceTools(server, { runtime, extensionSessions });
   registerSiteConfigTools(server, { runtime, extensionSessions });
   registerFixtureTools(server, rootPath, { runtime });
-  registerSnapshotTools(server, rootPath);
+  registerSnapshotTools(server, rootPath, { runtime });
 }
 
 export function createConnectedServer(

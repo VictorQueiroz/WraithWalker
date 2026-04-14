@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  diffScenarios,
   getRevealDirectoryCommand,
   getRevealDirectoryLaunch,
   listScenarios,
@@ -175,7 +176,8 @@ describe("scenario management", () => {
     const result = await saveScenario({
       path: root.rootPath,
       expectedRootId: "root-123",
-      name: "baseline"
+      name: "baseline",
+      description: "Primary baseline snapshot."
     });
 
     expect(result).toEqual({ ok: true, name: "baseline" });
@@ -201,7 +203,15 @@ describe("scenario management", () => {
       path: root.rootPath,
       expectedRootId: "root-123"
     });
-    expect(empty).toEqual({ ok: true, scenarios: [] });
+    expect(empty).toEqual({
+      ok: true,
+      scenarios: [],
+      snapshots: [],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: false
+    });
 
     // Save two scenarios
     await saveScenario({
@@ -219,7 +229,28 @@ describe("scenario management", () => {
       path: root.rootPath,
       expectedRootId: "root-123"
     });
-    expect(result).toEqual({ ok: true, scenarios: ["alpha", "beta"] });
+    expect(result).toEqual({
+      ok: true,
+      scenarios: ["beta", "alpha"],
+      snapshots: [
+        expect.objectContaining({
+          name: "beta",
+          source: "manual",
+          hasMetadata: true,
+          isActive: false
+        }),
+        expect.objectContaining({
+          name: "alpha",
+          source: "manual",
+          hasMetadata: true,
+          isActive: false
+        })
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: false
+    });
   });
 
   it("switches to a saved scenario", async () => {
@@ -292,6 +323,66 @@ describe("scenario management", () => {
       path: root.rootPath,
       expectedRootId: "root-123"
     });
-    expect(result.scenarios).toContain("test");
+    expect(result.snapshots).toContainEqual(
+      expect.objectContaining({
+        name: "test",
+        isActive: true
+      })
+    );
+    expect(result.activeScenarioName).toBe("test");
+  });
+
+  it("returns structured scenario diffs for local roots", async () => {
+    const root = await createFixtureRoot();
+    await root.writeApiFixture({
+      scenario: "baseline",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
+        status: 200,
+        mimeType: "application/json",
+        url: "https://api.example.com/users",
+        method: "GET"
+      },
+      body: '{"users":[]}'
+    });
+    await root.writeApiFixture({
+      scenario: "candidate",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
+        status: 500,
+        mimeType: "application/json",
+        url: "https://api.example.com/users",
+        method: "GET"
+      },
+      body: '{"error":true}'
+    });
+
+    const result = await diffScenarios({
+      path: root.rootPath,
+      expectedRootId: "root-123",
+      scenarioA: "baseline",
+      scenarioB: "candidate"
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      diff: expect.objectContaining({
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        changed: [
+          expect.objectContaining({
+            method: "GET",
+            pathname: "/users",
+            statusBefore: 200,
+            statusAfter: 500,
+            bodyChanged: true
+          })
+        ]
+      })
+    });
   });
 });
