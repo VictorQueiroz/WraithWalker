@@ -22,6 +22,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install --global npm@11.11.1
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - id: extension_version
         shell: bash
         run: |

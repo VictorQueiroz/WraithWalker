@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   listScenarios,
   openDirectory,
@@ -102,13 +103,24 @@ export async function runEntrypoint(
   }
 }
 
-function isDirectExecution(argv = process.argv): boolean {
+function resolveExecutionPath(filePath: string): string | null {
+  try {
+    return realpathSync(path.resolve(filePath));
+  } catch {
+    return null;
+  }
+}
+
+export function isDirectExecution(argv = process.argv): boolean {
   const entrypointPath = argv[1];
   if (!entrypointPath) {
     return false;
   }
 
-  return pathToFileURL(path.resolve(entrypointPath)).href === import.meta.url;
+  return (
+    resolveExecutionPath(entrypointPath) ===
+    resolveExecutionPath(fileURLToPath(import.meta.url))
+  );
 }
 
 if (isDirectExecution()) {

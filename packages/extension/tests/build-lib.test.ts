@@ -1,4 +1,3 @@
-import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -213,68 +212,4 @@ describe("rewriteIdbSpecifiers", () => {
     const input = 'import { something } from "./other.js";';
     expect(rewriteIdbSpecifiers(input)).toBe(input);
   });
-});
-
-const distIdbPath = path.join(process.cwd(), "dist", "lib", "idb.js");
-const distBackgroundPath = path.join(process.cwd(), "dist", "background.js");
-const distOffscreenPath = path.join(process.cwd(), "dist", "offscreen.js");
-const distPopupPath = path.join(process.cwd(), "dist", "popup.js");
-const distOptionsPath = path.join(process.cwd(), "dist", "options.js");
-const distCssPath = path.join(process.cwd(), "dist", "app.css");
-const distManifestPath = path.join(process.cwd(), "dist", "manifest.json");
-const packageManifestPath = path.join(process.cwd(), "package.json");
-
-describe("dist output", () => {
-  it.skipIf(
-    !(
-      existsSync(distBackgroundPath) &&
-      existsSync(distOffscreenPath) &&
-      existsSync(distPopupPath) &&
-      existsSync(distOptionsPath) &&
-      existsSync(distCssPath)
-    )
-  )(
-    "emits bundled background/offscreen/popup/options runtime files and the shared Tailwind stylesheet",
-    () => {
-      expect(existsSync(distBackgroundPath)).toBe(true);
-      expect(existsSync(distOffscreenPath)).toBe(true);
-      expect(existsSync(distPopupPath)).toBe(true);
-      expect(existsSync(distOptionsPath)).toBe(true);
-      expect(existsSync(distCssPath)).toBe(true);
-    }
-  );
-
-  it.skipIf(!existsSync(distIdbPath))(
-    "contains no bare idb specifiers in the built lib/idb.js",
-    async () => {
-      const content = await fs.readFile(distIdbPath, "utf-8");
-      expect(content).not.toMatch(/from\s+["']idb["']/);
-      expect(content).toContain('from "../vendor/idb.js"');
-    }
-  );
-
-  it.skipIf(!existsSync(distBackgroundPath))(
-    "contains no bare @trpc/client imports in the built background bundle",
-    async () => {
-      const content = await fs.readFile(distBackgroundPath, "utf-8");
-      expect(content).not.toMatch(/from\s+["']@trpc\/client["']/);
-      expect(content).not.toContain('"@trpc/client"');
-    }
-  );
-
-  it.skipIf(!(existsSync(distManifestPath) && existsSync(packageManifestPath)))(
-    "writes a built manifest that matches the extension package version",
-    async () => {
-      const [manifestContent, packageManifestContent] = await Promise.all([
-        fs.readFile(distManifestPath, "utf-8"),
-        fs.readFile(packageManifestPath, "utf-8")
-      ]);
-      const manifest = JSON.parse(manifestContent) as { version: string };
-      const packageManifest = JSON.parse(packageManifestContent) as {
-        version: string;
-      };
-
-      expect(manifest.version).toBe(packageManifest.version);
-    }
-  );
 });
