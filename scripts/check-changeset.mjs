@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import process from "node:process";
 
 import {
-  getDeclaredChangesetPackages,
+  getChangedChangesetFiles,
+  getDeclaredChangesetPackagesFromFiles,
   getVersionedPackagesFromChangedFiles
 } from "./versioning-lib.mjs";
 
@@ -13,7 +14,7 @@ function main() {
   const sinceRef = sinceArg ? sinceArg.slice("--since=".length) : "origin/main";
   const changedFilesOutput = execFileSync(
     "git",
-    ["diff", "--name-only", "--diff-filter=ACMRTUXB", `${sinceRef}...HEAD`],
+    ["diff", "--name-only", "--diff-filter=ACDMRTUXB", `${sinceRef}...HEAD`],
     {
       cwd: process.cwd(),
       encoding: "utf8"
@@ -27,7 +28,11 @@ function main() {
     return;
   }
 
-  const declaredPackages = new Set(getDeclaredChangesetPackages(process.cwd()));
+  const declaredPackages = new Set(
+    getDeclaredChangesetPackagesFromFiles(
+      getChangedChangesetFiles(changedFiles, process.cwd())
+    )
+  );
   const missingPackages = changedPackages.filter((packageName) => !declaredPackages.has(packageName));
 
   if (missingPackages.length > 0) {

@@ -5,9 +5,11 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  getChangedChangesetFiles,
   EXTENSION_PACKAGE_MANIFEST_RELATIVE_PATH,
   EXTENSION_STATIC_MANIFEST_RELATIVE_PATH,
   getDeclaredChangesetPackages,
+  getDeclaredChangesetPackagesFromFiles,
   getVersionedPackagesFromChangedFiles,
   parseChangesetPackages,
   readJson,
@@ -92,6 +94,60 @@ test("parseChangesetPackages reads all declared package names from changeset fro
 
 Test release metadata.
 `),
+    ["@wraithwalker/cli", "@wraithwalker/extension"]
+  );
+});
+
+test("getChangedChangesetFiles keeps only changed changeset markdown files that still exist", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-changesets-"));
+  const changesetDir = path.join(rootDir, ".changeset");
+  const keptChangesetPath = path.join(changesetDir, "kept.md");
+
+  fs.mkdirSync(changesetDir, { recursive: true });
+  fs.writeFileSync(keptChangesetPath, "---\n\"@wraithwalker/cli\": patch\n---\n");
+
+  assert.deepEqual(
+    getChangedChangesetFiles(
+      [
+        ".changeset/README.md",
+        ".changeset/kept.md",
+        ".changeset/deleted.md",
+        "packages/cli/src/cli.mts"
+      ],
+      rootDir
+    ),
+    [keptChangesetPath]
+  );
+});
+
+test("getDeclaredChangesetPackagesFromFiles unions packages across provided changeset files", () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-changesets-"));
+  const changesetDir = path.join(rootDir, ".changeset");
+  const firstChangesetPath = path.join(changesetDir, "one.md");
+  const secondChangesetPath = path.join(changesetDir, "two.md");
+
+  fs.mkdirSync(changesetDir, { recursive: true });
+  fs.writeFileSync(
+    firstChangesetPath,
+    `---
+"@wraithwalker/cli": patch
+---
+
+CLI update.
+`
+  );
+  fs.writeFileSync(
+    secondChangesetPath,
+    `---
+"@wraithwalker/extension": patch
+---
+
+Extension update.
+`
+  );
+
+  assert.deepEqual(
+    getDeclaredChangesetPackagesFromFiles([firstChangesetPath, secondChangesetPath]),
     ["@wraithwalker/cli", "@wraithwalker/extension"]
   );
 });

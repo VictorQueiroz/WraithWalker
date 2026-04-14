@@ -4,6 +4,7 @@ import process from "node:process";
 
 export const EXTENSION_PACKAGE_MANIFEST_RELATIVE_PATH = "packages/extension/package.json";
 export const EXTENSION_STATIC_MANIFEST_RELATIVE_PATH = "packages/extension/static/manifest.json";
+export const CHANGESET_MARKDOWN_RELATIVE_PATH_PATTERN = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 export const VERSIONED_PACKAGE_FILE_PATTERNS = [
   /^packages\/([^/]+)\/src\//,
   /^packages\/([^/]+)\/scripts\//,
@@ -79,6 +80,15 @@ export function getVersionedPackagesFromChangedFiles(
   return [...packageNames].sort();
 }
 
+export function getChangedChangesetFiles(filePaths, rootDir = process.cwd()) {
+  return filePaths
+    .map((filePath) => filePath.replaceAll(path.sep, "/"))
+    .filter((filePath) => CHANGESET_MARKDOWN_RELATIVE_PATH_PATTERN.test(filePath))
+    .map((filePath) => path.join(rootDir, filePath))
+    .filter((filePath) => fs.existsSync(filePath))
+    .sort();
+}
+
 export function parseChangesetPackages(markdown) {
   const frontmatterMatch = /^---\n([\s\S]*?)\n---/m.exec(markdown);
   if (!frontmatterMatch) {
@@ -102,14 +112,18 @@ export function listChangesetFiles(rootDir = process.cwd()) {
     .map((entry) => path.join(changesetDir, entry));
 }
 
-export function getDeclaredChangesetPackages(rootDir = process.cwd()) {
+export function getDeclaredChangesetPackagesFromFiles(filePaths) {
   const packageNames = new Set();
 
-  for (const filePath of listChangesetFiles(rootDir)) {
+  for (const filePath of filePaths) {
     for (const packageName of parseChangesetPackages(fs.readFileSync(filePath, "utf8"))) {
       packageNames.add(packageName);
     }
   }
 
   return [...packageNames].sort();
+}
+
+export function getDeclaredChangesetPackages(rootDir = process.cwd()) {
+  return getDeclaredChangesetPackagesFromFiles(listChangesetFiles(rootDir));
 }
