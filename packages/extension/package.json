@@ -8,6 +8,8 @@
     "test": "npm run build && vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "generate:icons": "node --import tsx scripts/generate-icons.ts",
     "check:background": "npm run build && node --check dist/background.js",
     "check:popup": "npm run build && node --check dist/popup.js",
@@ -32,13 +34,19 @@
     "@resvg/resvg-js": "^2.6.2",
     "@types/chrome": "^0.1.38",
     "@types/node": "^25.5.0",
+    "@eslint/js": "^9.38.0",
     "@vitest/coverage-v8": "^3.2.4",
     "esbuild": "^0.25.9",
+    "eslint": "^9.38.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "fake-indexeddb": "^6.2.5",
+    "globals": "^15.15.0",
     "jsdom": "^29.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
+    "typescript-eslint": "^8.47.0",
     "vitest": "^3.2.4"
   }
 }
