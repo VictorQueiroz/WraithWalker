@@ -517,6 +517,33 @@ describe("scenario operations", () => {
     }
   });
 
+  it("ignores active markers copied from a different root", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-scenarios-"
+    });
+
+    await root.ensureScenario("baseline");
+    await root.writeJson(".wraithwalker/scenarios/active.json", {
+      name: "baseline",
+      rootId: "copied-root-id",
+      updatedAt: "2026-04-09T00:00:00.000Z"
+    });
+
+    expect(await readActiveScenarioMarker(root.rootPath)).toBeNull();
+    expect(await listScenarioPanelState(root.rootPath)).toEqual({
+      snapshots: [
+        {
+          name: "baseline",
+          source: "unknown",
+          hasMetadata: false,
+          isActive: false
+        }
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false
+    });
+  });
+
   it("writes an active marker timestamp when createdAt is omitted", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-scenarios-"

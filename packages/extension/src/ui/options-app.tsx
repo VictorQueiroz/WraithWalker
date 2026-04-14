@@ -89,7 +89,11 @@ interface ScenarioSwitchDialogState {
   diff: FixtureDiff | null;
 }
 
-const EMPTY_SCENARIO_PANEL: Omit<ScenarioListSuccess, "ok"> = {
+type ScenarioPanelState = Omit<ScenarioListSuccess, "ok">;
+type ScenarioListRuntimeSuccess = Pick<ScenarioListSuccess, "ok"> &
+  Partial<ScenarioPanelState>;
+
+const EMPTY_SCENARIO_PANEL: ScenarioPanelState = {
   scenarios: [],
   snapshots: [],
   activeScenarioName: null,
@@ -97,6 +101,99 @@ const EMPTY_SCENARIO_PANEL: Omit<ScenarioListSuccess, "ok"> = {
   activeTrace: null,
   supportsTraceSave: false
 };
+
+function normalizeScenarioSnapshotSource(
+  value: unknown
+): ScenarioPanelState["snapshots"][number]["source"] {
+  return value === "manual" || value === "trace" ? value : "unknown";
+}
+
+function normalizeScenarioSnapshot(
+  value: unknown,
+  activeScenarioName: string | null
+): ScenarioPanelState["snapshots"][number] | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const snapshot = value as Partial<ScenarioPanelState["snapshots"][number]>;
+  if (typeof snapshot.name !== "string") {
+    return null;
+  }
+
+  return {
+    name: snapshot.name,
+    ...(typeof snapshot.schemaVersion === "number"
+      ? { schemaVersion: snapshot.schemaVersion }
+      : {}),
+    ...(typeof snapshot.createdAt === "string"
+      ? { createdAt: snapshot.createdAt }
+      : {}),
+    ...(typeof snapshot.rootId === "string" ? { rootId: snapshot.rootId } : {}),
+    source: normalizeScenarioSnapshotSource(snapshot.source),
+    ...(typeof snapshot.description === "string" && snapshot.description.trim()
+      ? { description: snapshot.description.trim() }
+      : {}),
+    ...(snapshot.sourceTrace && typeof snapshot.sourceTrace === "object"
+      ? { sourceTrace: snapshot.sourceTrace }
+      : {}),
+    hasMetadata:
+      typeof snapshot.hasMetadata === "boolean" ? snapshot.hasMetadata : false,
+    isActive:
+      typeof snapshot.isActive === "boolean"
+        ? snapshot.isActive
+        : activeScenarioName === snapshot.name
+  };
+}
+
+function normalizeScenarioPanelState(
+  result: ScenarioListRuntimeSuccess
+): ScenarioPanelState {
+  const activeScenarioName =
+    typeof result.activeScenarioName === "string"
+      ? result.activeScenarioName
+      : null;
+  const scenarios = Array.isArray(result.scenarios)
+    ? result.scenarios.filter(
+        (scenarioName): scenarioName is string =>
+          typeof scenarioName === "string"
+      )
+    : [];
+  const normalizedSnapshots = Array.isArray(result.snapshots)
+    ? result.snapshots
+        .map((snapshot) =>
+          normalizeScenarioSnapshot(snapshot, activeScenarioName)
+        )
+        .filter(
+          (snapshot): snapshot is ScenarioPanelState["snapshots"][number] =>
+            snapshot !== null
+        )
+    : [];
+  const snapshots =
+    normalizedSnapshots.length > 0 || !Array.isArray(result.scenarios)
+      ? normalizedSnapshots
+      : scenarios.map((scenarioName) => ({
+          name: scenarioName,
+          source: "unknown" as const,
+          hasMetadata: false,
+          isActive: activeScenarioName === scenarioName
+        }));
+
+  return {
+    scenarios:
+      scenarios.length > 0
+        ? scenarios
+        : snapshots.map((snapshot) => snapshot.name),
+    snapshots,
+    activeScenarioName,
+    activeScenarioMissing: Boolean(result.activeScenarioMissing),
+    activeTrace:
+      result.activeTrace && typeof result.activeTrace === "object"
+        ? result.activeTrace
+        : null,
+    supportsTraceSave: Boolean(result.supportsTraceSave)
+  };
+}
 
 function isValidScenarioName(value: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value.trim());
@@ -463,13 +560,9 @@ export function OptionsApp({
       }
 
       setScenarioStatus(null);
-      setScenarioPanel({
-        snapshots: result.snapshots,
-        activeScenarioName: result.activeScenarioName,
-        activeScenarioMissing: result.activeScenarioMissing,
-        activeTrace: result.activeTrace,
-        supportsTraceSave: result.supportsTraceSave
-      });
+      setScenarioPanel(
+        normalizeScenarioPanelState(result as ScenarioListRuntimeSuccess)
+      );
     } catch (error) {
       setScenarioStatus({
         variant: "destructive",

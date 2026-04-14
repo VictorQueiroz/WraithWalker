@@ -443,8 +443,19 @@ export async function readActiveScenarioMarker(
     await rootFs.readOptionalJson<StoredScenarioActiveMarker>(
       SCENARIO_ACTIVE_FILE
     );
+  const normalizedMarker = normalizeScenarioActiveMarker(marker);
+  if (!normalizedMarker) {
+    return null;
+  }
 
-  return normalizeScenarioActiveMarker(marker);
+  try {
+    const sentinel = await readSentinel(rootPath);
+    return sentinel.rootId === normalizedMarker.rootId
+      ? normalizedMarker
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function writeActiveScenarioMarker({

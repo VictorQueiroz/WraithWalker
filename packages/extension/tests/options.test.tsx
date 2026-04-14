@@ -2643,6 +2643,65 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("normalizes legacy scenario lists without crashing the page", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const runtimeSendMessage = vi.fn(async (message: { type: string }) => {
+      switch (message.type) {
+        case "session.getState":
+          return {
+            sessionActive: false,
+            attachedTabIds: [],
+            enabledOrigins: [],
+            rootReady: false,
+            captureDestination: "none",
+            captureRootPath: "",
+            lastError: ""
+          };
+        case "scenario.list":
+          return { ok: true, scenarios: ["legacy_snapshot"] };
+        default:
+          return { ok: true };
+      }
+    });
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByText("legacy_snapshot")).toBeTruthy();
+      expect(screen.getByText("Legacy")).toBeTruthy();
+      expect(screen.getByText("1 saved")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("surfaces helper verification and scenario action failures", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
