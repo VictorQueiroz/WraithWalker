@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths:
       - "packages/extension/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/eslint.yml"
   push:
     branches: [main]
     paths:
       - "packages/extension/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/eslint.yml"
 
 permissions:
