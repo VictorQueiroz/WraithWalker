@@ -1,5 +1,13 @@
 # @wraithwalker/cli
 
+## 2.1.1
+
+### Patch Changes
+
+- Updated dependencies [95a8088]
+  - @wraithwalker/core@2.2.0
+  - @wraithwalker/mcp-server@2.3.0
+
 ## 2.1.0
 
 ### Minor Changes
