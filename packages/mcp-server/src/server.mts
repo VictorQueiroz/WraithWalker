@@ -4,6 +4,7 @@ import type { Server as HttpServer } from "node:http";
 
 import * as trpcExpress from "@trpc/server/adapters/express";
 import express from "express";
+import { normalizeSiteInput } from "@wraithwalker/core/fixture-layout";
 import { createRoot } from "@wraithwalker/core/root";
 import {
   createConfiguredSiteConfig,
@@ -29,7 +30,6 @@ import {
 
 import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import {
-  normalizeSiteInput,
   listAssets,
   listApiEndpoints,
   listScenarios,
