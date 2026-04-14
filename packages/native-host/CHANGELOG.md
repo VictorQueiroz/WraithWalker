@@ -1,5 +1,11 @@
 # @wraithwalker/native-host
 
+## 2.0.3
+
+### Patch Changes
+
+- 2c49ad0: Fix direct-execution detection so the installed host entrypoint runs correctly through symlinked paths.
+
 ## 2.0.2
 
 ### Patch Changes
