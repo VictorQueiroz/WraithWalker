@@ -5,7 +5,10 @@ import { diffScenarios, renderDiffMarkdown } from "./fixture-diff.mjs";
 import { listScenarios } from "./fixture-reader.mjs";
 import { renderJson } from "./server-responses.mjs";
 
-export function registerSnapshotTools(server: McpServer, rootPath: string): void {
+export function registerSnapshotTools(
+  server: McpServer,
+  rootPath: string
+): void {
   server.tool(
     "list-snapshots",
     "List all saved fixture scenarios",
@@ -40,7 +43,12 @@ export function registerSnapshotTools(server: McpServer, rootPath: string): void
             : " No saved scenarios are available."
           : "";
         return {
-          content: [{ type: "text" as const, text: `Error: ${message}${availableSuffix}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: ${message}${availableSuffix}`
+            }
+          ],
           isError: true
         };
       }

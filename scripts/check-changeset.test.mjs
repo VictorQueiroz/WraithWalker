@@ -22,7 +22,9 @@ function writeFile(rootDir, relativePath, contents) {
 }
 
 function createFixtureRepository() {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-check-changeset-"));
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wraithwalker-check-changeset-")
+  );
 
   git(rootDir, "init", "-b", "main");
   git(rootDir, "config", "user.name", "Codex");
@@ -47,10 +49,14 @@ function createFixtureRepository() {
 }
 
 function runCheckChangeset(rootDir, sinceRef) {
-  return spawnSync(process.execPath, [CHECK_CHANGESET_SCRIPT_PATH, `--since=${sinceRef}`], {
-    cwd: rootDir,
-    encoding: "utf8"
-  });
+  return spawnSync(
+    process.execPath,
+    [CHECK_CHANGESET_SCRIPT_PATH, `--since=${sinceRef}`],
+    {
+      cwd: rootDir,
+      encoding: "utf8"
+    }
+  );
 }
 
 test("check-changeset ignores unrelated existing changesets already on main", () => {
@@ -70,7 +76,11 @@ Old unreleased CLI change.
   git(rootDir, "commit", "-m", "Add existing CLI changeset");
   const sinceRef = git(rootDir, "rev-parse", "HEAD");
 
-  writeFile(rootDir, "packages/cli/src/feature.mts", "export const feature = true;\n");
+  writeFile(
+    rootDir,
+    "packages/cli/src/feature.mts",
+    "export const feature = true;\n"
+  );
   git(rootDir, "add", ".");
   git(rootDir, "commit", "-m", "Change CLI without new changeset");
 
@@ -86,7 +96,11 @@ Old unreleased CLI change.
 test("check-changeset treats deletions in versioned package surfaces as releasable changes", () => {
   const rootDir = createFixtureRepository();
 
-  writeFile(rootDir, "packages/cli/src/deleted.mts", "export const deleted = true;\n");
+  writeFile(
+    rootDir,
+    "packages/cli/src/deleted.mts",
+    "export const deleted = true;\n"
+  );
   git(rootDir, "add", ".");
   git(rootDir, "commit", "-m", "Add deletable CLI file");
   const sinceRef = git(rootDir, "rev-parse", "HEAD");
@@ -108,7 +122,11 @@ test("check-changeset accepts package coverage from changeset files introduced b
   const rootDir = createFixtureRepository();
   const sinceRef = git(rootDir, "rev-parse", "HEAD");
 
-  writeFile(rootDir, "packages/cli/src/feature.mts", "export const feature = true;\n");
+  writeFile(
+    rootDir,
+    "packages/cli/src/feature.mts",
+    "export const feature = true;\n"
+  );
   writeFile(
     rootDir,
     ".changeset/fresh-cli.md",

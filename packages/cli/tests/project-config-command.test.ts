@@ -66,18 +66,22 @@ describe("config command", () => {
     const homeDir = await tmpdir();
     const defaultRoot = path.join(homeDir, ".local", "share", "wraithwalker");
 
-    expect(await runCli(["config", "add", 'site."https://app.example.com"'], {
-      cwd,
-      env: {},
-      homeDir,
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["config", "add", 'site."https://app.example.com"'], {
+        cwd,
+        env: {},
+        homeDir,
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
-    await expect(fs.readFile(path.join(defaultRoot, ".wraithwalker", "root.json"), "utf8")).resolves.toContain("\"rootId\"");
-    await expect(fs.readFile(path.join(defaultRoot, PROJECT_CONFIG_RELATIVE_PATH), "utf8")).resolves.toContain(
-      "\"https://app.example.com\""
-    );
+    await expect(
+      fs.readFile(path.join(defaultRoot, ".wraithwalker", "root.json"), "utf8")
+    ).resolves.toContain('"rootId"');
+    await expect(
+      fs.readFile(path.join(defaultRoot, PROJECT_CONFIG_RELATIVE_PATH), "utf8")
+    ).resolves.toContain('"https://app.example.com"');
   });
 
   it("adds and updates nearest-root explicit site config from a nested cwd", async () => {
@@ -88,28 +92,42 @@ describe("config command", () => {
     const nestedCwd = root.resolve("deep/nested");
     await fs.mkdir(nestedCwd, { recursive: true });
 
-    expect(await runCli(["config", "add", 'site."https://app.example.com"'], {
-      cwd: nestedCwd,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["config", "add", 'site."https://app.example.com"'], {
+        cwd: nestedCwd,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
-    expect(await runCli(["config", "add", 'site."https://app.example.com".dumpAllowlistPatterns', "\\.svg$"], {
-      cwd: nestedCwd,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(
+        [
+          "config",
+          "add",
+          'site."https://app.example.com".dumpAllowlistPatterns',
+          "\\.svg$"
+        ],
+        {
+          cwd: nestedCwd,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(0);
 
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: 1,
-      sites: [expect.objectContaining({
-        origin: "https://app.example.com",
-        dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS, "\\.svg$"]
-      })]
+      sites: [
+        expect.objectContaining({
+          origin: "https://app.example.com",
+          dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS, "\\.svg$"]
+        })
+      ]
     });
   });
 
@@ -120,48 +138,74 @@ describe("config command", () => {
     });
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.json$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        }
+      ]
     });
 
     let capture = consoleCapture();
-    expect(await runCli(["config", "get", 'site."https://app.example.com".dumpAllowlistPatterns'], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(
+        [
+          "config",
+          "get",
+          'site."https://app.example.com".dumpAllowlistPatterns'
+        ],
+        {
+          cwd: root.rootPath,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(0);
     expect(capture.logs.join("\n")).toContain('["\\\\.json$"]');
 
     vi.restoreAllMocks();
     capture = consoleCapture();
-    expect(await runCli(["config", "list"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
-    expect(capture.logs.join("\n")).toContain('site."https://app.example.com".dumpAllowlistPatterns=["\\\\.json$"]');
+    expect(
+      await runCli(["config", "list"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
+    expect(capture.logs.join("\n")).toContain(
+      'site."https://app.example.com".dumpAllowlistPatterns=["\\\\.json$"]'
+    );
 
-    expect(await runCli(["config", "unset", 'site."https://app.example.com".dumpAllowlistPatterns'], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(
+        [
+          "config",
+          "unset",
+          'site."https://app.example.com".dumpAllowlistPatterns'
+        ],
+        {
+          cwd: root.rootPath,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(0);
 
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: 1,
-      sites: [expect.objectContaining({
-        origin: "https://app.example.com",
-        dumpAllowlistPatterns: DEFAULT_DUMP_ALLOWLIST_PATTERNS
-      })]
+      sites: [
+        expect.objectContaining({
+          origin: "https://app.example.com",
+          dumpAllowlistPatterns: DEFAULT_DUMP_ALLOWLIST_PATTERNS
+        })
+      ]
     });
   });
 
@@ -171,83 +215,112 @@ describe("config command", () => {
       prefix: "wraithwalker-cli-project-config-"
     });
 
-    expect(await runCli(["config", "set", "sites", JSON.stringify([{
-      origin: "https://alpha.example.com",
-      dumpAllowlistPatterns: ["\\.json$"]
-    }])], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(
+        [
+          "config",
+          "set",
+          "sites",
+          JSON.stringify([
+            {
+              origin: "https://alpha.example.com",
+              dumpAllowlistPatterns: ["\\.json$"]
+            }
+          ])
+        ],
+        {
+          cwd: root.rootPath,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(0);
 
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: 1,
-      sites: [expect.objectContaining({
-        origin: "https://alpha.example.com",
-        dumpAllowlistPatterns: ["\\.json$"]
-      })]
+      sites: [
+        expect.objectContaining({
+          origin: "https://alpha.example.com",
+          dumpAllowlistPatterns: ["\\.json$"]
+        })
+      ]
     });
 
     let capture = consoleCapture();
-    expect(await runCli(["config", "get", "sites"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["config", "get", "sites"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
     expect(capture.logs.join("\n")).toContain("https://alpha.example.com");
 
     vi.restoreAllMocks();
-    expect(await runCli([
-      "config",
-      "set",
-      'site."https://beta.example.com"',
-      JSON.stringify({ dumpAllowlistPatterns: ["\\.svg$"] })
-    ], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(
+        [
+          "config",
+          "set",
+          'site."https://beta.example.com"',
+          JSON.stringify({ dumpAllowlistPatterns: ["\\.svg$"] })
+        ],
+        {
+          cwd: root.rootPath,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(0);
 
     capture = consoleCapture();
-    expect(await runCli(["config", "get", 'site."https://beta.example.com"'], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["config", "get", 'site."https://beta.example.com"'], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
     expect(capture.logs.join("\n")).toContain("https://beta.example.com");
     expect(capture.logs.join("\n")).toContain("\\.svg$");
 
-    expect(await runCli(["config", "unset", 'site."https://beta.example.com"'], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["config", "unset", 'site."https://beta.example.com"'], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: 1,
-      sites: [expect.objectContaining({
-        origin: "https://alpha.example.com",
-        dumpAllowlistPatterns: ["\\.json$"]
-      })]
+      sites: [
+        expect.objectContaining({
+          origin: "https://alpha.example.com",
+          dumpAllowlistPatterns: ["\\.json$"]
+        })
+      ]
     });
 
-    expect(await runCli(["config", "unset", "sites"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["config", "unset", "sites"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: 1,
@@ -262,25 +335,46 @@ describe("config command", () => {
     });
     const capture = consoleCapture();
 
-    expect(await runCli(["config", "get", 'site."https://missing.example.com".dumpAllowlistPatterns'], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(1);
+    expect(
+      await runCli(
+        [
+          "config",
+          "get",
+          'site."https://missing.example.com".dumpAllowlistPatterns'
+        ],
+        {
+          cwd: root.rootPath,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(1);
     expect(capture.errors.join("\n")).toContain("No config entry found");
 
     vi.restoreAllMocks();
     const invalidCapture = consoleCapture();
-    expect(await runCli(["config", "add", 'site."https://app.example.com".dumpAllowlistPatterns', "["], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(1);
-    expect(invalidCapture.errors.join("\n")).toContain("Invalid regular expression");
+    expect(
+      await runCli(
+        [
+          "config",
+          "add",
+          'site."https://app.example.com".dumpAllowlistPatterns',
+          "["
+        ],
+        {
+          cwd: root.rootPath,
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(1);
+    expect(invalidCapture.errors.join("\n")).toContain(
+      "Invalid regular expression"
+    );
   });
 
   it("covers usage and parsing failures across config branches", async () => {
@@ -311,7 +405,8 @@ describe("config command", () => {
       },
       {
         argv: ["config", "add", "sites"],
-        message: "Use `wraithwalker config set sites '<json-array>'` to replace all sites.",
+        message:
+          "Use `wraithwalker config set sites '<json-array>'` to replace all sites.",
         cwd: root.rootPath
       },
       {
@@ -338,13 +433,15 @@ describe("config command", () => {
 
     for (const { argv, message, cwd } of cases) {
       const capture = consoleCapture();
-      expect(await runCli(argv, {
-        cwd: cwd ?? await tmpdir(),
-        env: {},
-        homeDir: await tmpdir(),
-        platform: "linux",
-        isTTY: false
-      })).toBe(1);
+      expect(
+        await runCli(argv, {
+          cwd: cwd ?? (await tmpdir()),
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        })
+      ).toBe(1);
       expect(capture.errors.join("\n")).toContain(message);
       vi.restoreAllMocks();
     }

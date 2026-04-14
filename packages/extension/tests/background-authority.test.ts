@@ -34,7 +34,11 @@ describe("background authority facade", () => {
         chromeApi.runtime.getContexts.mockResolvedValue([{}]);
         chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
           if (message?.type === "fs.ensureRoot") {
-            return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              permission: "granted"
+            };
           }
           return { ok: true };
         });
@@ -50,15 +54,19 @@ describe("background authority facade", () => {
   });
 
   it("re-exports getRequiredRootId", () => {
-    expect(getRequiredRootId({
-      ok: true,
-      permission: "granted",
-      sentinel: { rootId: "root-1" }
-    })).toBe("root-1");
-    expect(getRequiredRootId({
-      ok: true,
-      permission: "granted",
-      sentinel: { rootId: "   " }
-    })).toBeNull();
+    expect(
+      getRequiredRootId({
+        ok: true,
+        permission: "granted",
+        sentinel: { rootId: "root-1" }
+      })
+    ).toBe("root-1");
+    expect(
+      getRequiredRootId({
+        ok: true,
+        permission: "granted",
+        sentinel: { rootId: "   " }
+      })
+    ).toBeNull();
   });
 });

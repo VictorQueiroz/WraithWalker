@@ -16,7 +16,10 @@ interface StorageLayoutDependencies {
 export function createStorageLayoutResolver({
   createFixtureDescriptor = defaultCreateFixtureDescriptor
 }: StorageLayoutDependencies = {}) {
-  async function describeRequest(context: RequestContext, _siteConfig?: Pick<SiteConfig, never>): Promise<FixtureDescriptor> {
+  async function describeRequest(
+    context: RequestContext,
+    _siteConfig?: Pick<SiteConfig, never>
+  ): Promise<FixtureDescriptor> {
     return createFixtureDescriptor({
       topOrigin: context.topOrigin,
       method: context.method,

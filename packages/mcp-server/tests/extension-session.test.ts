@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createExtensionSessionTracker, EXTENSION_HEARTBEAT_TTL_MS } from "../src/extension-session.mts";
+import {
+  createExtensionSessionTracker,
+  EXTENSION_HEARTBEAT_TTL_MS
+} from "../src/extension-session.mts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -66,17 +69,19 @@ describe("extension session tracker", () => {
       extensionVersion: "1.0.0",
       sessionActive: true,
       enabledOrigins: ["https://app.example.com"],
-      recentConsoleEntries: [{
-        tabId: 7,
-        topOrigin: "https://app.example.com",
-        source: "javascript",
-        level: "error",
-        text: "Unhandled exception: boom",
-        timestamp: "2026-04-08T00:00:00.000Z",
-        url: "https://app.example.com/assets/app.js",
-        lineNumber: 42,
-        columnNumber: 7
-      }]
+      recentConsoleEntries: [
+        {
+          tabId: 7,
+          topOrigin: "https://app.example.com",
+          source: "javascript",
+          level: "error",
+          text: "Unhandled exception: boom",
+          timestamp: "2026-04-08T00:00:00.000Z",
+          url: "https://app.example.com/assets/app.js",
+          lineNumber: 42,
+          columnNumber: 7
+        }
+      ]
     });
     expect(ready).toEqual(
       expect.objectContaining({
@@ -121,11 +126,13 @@ describe("extension session tracker", () => {
   it("queues commands for the connected client, redelivers them, and resolves waiters on completion", async () => {
     const tracker = createExtensionSessionTracker({
       getActiveTrace: async () => null,
-      getEffectiveSiteConfigs: async () => [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }],
+      getEffectiveSiteConfigs: async () => [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ],
       now: () => Date.parse("2026-04-08T00:00:00.000Z")
     });
 
@@ -136,7 +143,9 @@ describe("extension session tracker", () => {
       enabledOrigins: ["https://app.example.com"]
     });
     const command = tracker.queueCommand({ type: "refresh_config" });
-    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, {
+      timeoutMs: 1_000
+    });
 
     const firstDelivery = await tracker.heartbeat({
       clientId: "client-1",
@@ -201,7 +210,9 @@ describe("extension session tracker", () => {
       enabledOrigins: ["https://app.example.com"],
       completedCommands: [firstResult]
     });
-    await expect(tracker.waitForCommandResult(firstCommand.commandId)).resolves.toEqual(firstResult);
+    await expect(
+      tracker.waitForCommandResult(firstCommand.commandId)
+    ).resolves.toEqual(firstResult);
 
     const secondCommand = tracker.queueCommand({ type: "refresh_config" });
     const secondResult = {
@@ -218,10 +229,14 @@ describe("extension session tracker", () => {
       completedCommands: [secondResult]
     });
 
-    await expect(tracker.waitForCommandResult(firstCommand.commandId)).rejects.toThrow(
+    await expect(
+      tracker.waitForCommandResult(firstCommand.commandId)
+    ).rejects.toThrow(
       `Unknown extension server command: ${firstCommand.commandId}`
     );
-    await expect(tracker.waitForCommandResult(secondCommand.commandId)).resolves.toEqual(secondResult);
+    await expect(
+      tracker.waitForCommandResult(secondCommand.commandId)
+    ).resolves.toEqual(secondResult);
   });
 
   it("rejects command queueing when no connected extension client is available", async () => {
@@ -251,7 +266,9 @@ describe("extension session tracker", () => {
       enabledOrigins: ["https://app.example.com"]
     });
     const command = tracker.queueCommand({ type: "refresh_config" });
-    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, {
+      timeoutMs: 1_000
+    });
 
     now += EXTENSION_HEARTBEAT_TTL_MS + 1;
     await tracker.getStatus();
@@ -259,9 +276,9 @@ describe("extension session tracker", () => {
     await expect(resultPromise).rejects.toThrow(
       "The browser extension heartbeat expired before the queued command completed."
     );
-    await expect(tracker.waitForCommandResult(command.commandId)).rejects.toThrow(
-      `Unknown extension server command: ${command.commandId}`
-    );
+    await expect(
+      tracker.waitForCommandResult(command.commandId)
+    ).rejects.toThrow(`Unknown extension server command: ${command.commandId}`);
   });
 
   it("clears stale queued command state when a different extension client takes over", async () => {
@@ -278,7 +295,9 @@ describe("extension session tracker", () => {
       enabledOrigins: ["https://app.example.com"]
     });
     const command = tracker.queueCommand({ type: "refresh_config" });
-    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, {
+      timeoutMs: 1_000
+    });
 
     const nextHeartbeat = await tracker.heartbeat({
       clientId: "client-2",
@@ -309,7 +328,9 @@ describe("extension session tracker", () => {
       enabledOrigins: ["https://app.example.com"]
     });
     const command = tracker.queueCommand({ type: "refresh_config" });
-    const resultPromise = tracker.waitForCommandResult(command.commandId, { timeoutMs: 1_000 });
+    const resultPromise = tracker.waitForCommandResult(command.commandId, {
+      timeoutMs: 1_000
+    });
     const timeoutExpectation = expect(resultPromise).rejects.toThrow(
       `Timed out waiting for extension command ${command.commandId} to complete.`
     );
@@ -317,14 +338,18 @@ describe("extension session tracker", () => {
     await vi.advanceTimersByTimeAsync(1_000);
 
     await timeoutExpectation;
-    await expect(tracker.heartbeat({
-      clientId: "client-1",
-      extensionVersion: "1.0.0",
-      sessionActive: true,
-      enabledOrigins: ["https://app.example.com"]
-    })).resolves.toEqual(expect.objectContaining({
-      commands: [command]
-    }));
+    await expect(
+      tracker.heartbeat({
+        clientId: "client-1",
+        extensionVersion: "1.0.0",
+        sessionActive: true,
+        enabledOrigins: ["https://app.example.com"]
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        commands: [command]
+      })
+    );
   });
 
   it("ignores stale completion payloads for unknown commands and keeps the real command pending", async () => {
@@ -349,17 +374,21 @@ describe("extension session tracker", () => {
       extensionVersion: "1.0.0",
       sessionActive: true,
       enabledOrigins: ["https://app.example.com"],
-      completedCommands: [{
-        commandId: "missing-command",
-        type: "refresh_config",
-        ok: false,
-        completedAt: "2026-04-08T00:00:05.000Z",
-        error: "stale completion"
-      }]
+      completedCommands: [
+        {
+          commandId: "missing-command",
+          type: "refresh_config",
+          ok: false,
+          completedAt: "2026-04-08T00:00:05.000Z",
+          error: "stale completion"
+        }
+      ]
     });
 
     expect(afterStaleCompletion.commands).toEqual([command]);
-    const timeoutExpectation = expect(tracker.waitForCommandResult(command.commandId, { timeoutMs: 1 })).rejects.toThrow(
+    const timeoutExpectation = expect(
+      tracker.waitForCommandResult(command.commandId, { timeoutMs: 1 })
+    ).rejects.toThrow(
       `Timed out waiting for extension command ${command.commandId} to complete.`
     );
     await vi.advanceTimersByTimeAsync(1);

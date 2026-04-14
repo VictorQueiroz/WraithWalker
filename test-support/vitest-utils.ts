@@ -11,7 +11,9 @@ export function preferMtsSourcePlugin(): Plugin {
         return null;
       }
 
-      const candidate = path.resolve(path.dirname(importer), source).replace(/\.mjs$/, ".mts");
+      const candidate = path
+        .resolve(path.dirname(importer), source)
+        .replace(/\.mjs$/, ".mts");
       return existsSync(candidate) ? candidate : null;
     }
   };

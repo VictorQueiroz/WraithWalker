@@ -22,7 +22,7 @@ export function openDatabase(): Promise<IDBPDatabase<ExtensionDatabaseSchema>> {
 export async function idbGet<T = unknown>(key: string): Promise<T | undefined> {
   const database = await openDatabase();
   try {
-    return await database.get(IDB_STORE, key) as T | undefined;
+    return (await database.get(IDB_STORE, key)) as T | undefined;
   } finally {
     database.close();
   }

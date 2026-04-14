@@ -59,7 +59,9 @@ function createHostHeaderValidationMiddleware(
 
 export function createLoopbackHttpApp() {
   const app = express();
-  app.use(createHostHeaderValidationMiddleware(["localhost", "127.0.0.1", "[::1]"]));
+  app.use(
+    createHostHeaderValidationMiddleware(["localhost", "127.0.0.1", "[::1]"])
+  );
   return app;
 }
 
@@ -71,7 +73,9 @@ export function createJsonRpcError(code: number, message: string) {
   };
 }
 
-export function getSessionId(header: string | string[] | undefined): string | undefined {
+export function getSessionId(
+  header: string | string[] | undefined
+): string | undefined {
   if (Array.isArray(header)) {
     return header[0];
   }
@@ -80,28 +84,25 @@ export function getSessionId(header: string | string[] | undefined): string | un
 }
 
 export function formatUrlHost(host: string): string {
-  const normalized = host.startsWith("[") && host.endsWith("]")
-    ? host.slice(1, -1)
-    : host;
+  const normalized =
+    host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 
-  return normalized.includes(":")
-    ? `[${normalized}]`
-    : normalized;
+  return normalized.includes(":") ? `[${normalized}]` : normalized;
 }
 
 export function isLoopbackHost(host: string): boolean {
-  const normalized = host.startsWith("[") && host.endsWith("]")
-    ? host.slice(1, -1)
-    : host;
+  const normalized =
+    host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 
-  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+  return (
+    normalized === "127.0.0.1" ||
+    normalized === "localhost" ||
+    normalized === "::1"
+  );
 }
 
 export async function closeHttpSession(session: HttpSession): Promise<void> {
-  await Promise.allSettled([
-    session.transport.close(),
-    session.server.close()
-  ]);
+  await Promise.allSettled([session.transport.close(), session.server.close()]);
 }
 
 export async function closeHttpListener(listener: HttpServer): Promise<void> {

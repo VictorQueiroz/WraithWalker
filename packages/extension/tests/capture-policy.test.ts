@@ -11,7 +11,8 @@ describe("capture policy", () => {
       dumpAllowlistPatterns: ["\\.m?(js|ts)x?$"]
     };
     const policy = createCapturePolicy({
-      getSiteConfigForOrigin: (topOrigin) => (topOrigin === siteConfig.origin ? siteConfig : undefined)
+      getSiteConfigForOrigin: (topOrigin) =>
+        topOrigin === siteConfig.origin ? siteConfig : undefined
     });
 
     expect(policy.getSiteConfig("https://app.example.com")).toEqual(siteConfig);
@@ -28,16 +29,20 @@ describe("capture policy", () => {
       getSiteConfigForOrigin: () => siteConfig
     });
 
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/app.css"
-    })).toBe(true);
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/app.js"
-    })).toBe(false);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/app.css"
+      })
+    ).toBe(true);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/app.js"
+      })
+    ).toBe(false);
   });
 
   it("matches when any of multiple allowlist patterns match", () => {
@@ -50,26 +55,34 @@ describe("capture policy", () => {
       getSiteConfigForOrigin: () => siteConfig
     });
 
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/app.css"
-    })).toBe(true);
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/app.js"
-    })).toBe(true);
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/runtime.wasm"
-    })).toBe(true);
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/image.png"
-    })).toBe(false);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/app.css"
+      })
+    ).toBe(true);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/app.js"
+      })
+    ).toBe(true);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/runtime.wasm"
+      })
+    ).toBe(true);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/image.png"
+      })
+    ).toBe(false);
   });
 
   it("rejects when no allowlist patterns match", () => {
@@ -82,20 +95,24 @@ describe("capture policy", () => {
       getSiteConfigForOrigin: () => siteConfig
     });
 
-    expect(policy.shouldPersist({
-      topOrigin: "https://app.example.com",
-      method: "GET",
-      url: "https://cdn.example.com/app.js"
-    })).toBe(false);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://app.example.com",
+        method: "GET",
+        url: "https://cdn.example.com/app.js"
+      })
+    ).toBe(false);
   });
 
   it("defaults to persisting when no site config is available", () => {
     const policy = createCapturePolicy();
 
-    expect(policy.shouldPersist({
-      topOrigin: "https://unknown.example.com",
-      method: "POST",
-      url: "https://api.example.com/graphql"
-    })).toBe(true);
+    expect(
+      policy.shouldPersist({
+        topOrigin: "https://unknown.example.com",
+        method: "POST",
+        url: "https://api.example.com/graphql"
+      })
+    ).toBe(true);
   });
 });

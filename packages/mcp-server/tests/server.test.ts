@@ -9,7 +9,11 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import type { AppRouter } from "../src/trpc.mts";
-import { isLoopbackHost, startHttpServer, startServer } from "../src/server.mts";
+import {
+  isLoopbackHost,
+  startHttpServer,
+  startServer
+} from "../src/server.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 async function loadServerModuleWithMockedExpress({
@@ -19,7 +23,11 @@ async function loadServerModuleWithMockedExpress({
 }: {
   address?: AddressInfo | string | null;
   closeError?: Error;
-  transportHandleRequest?: (req: unknown, res: unknown, body: unknown) => Promise<unknown> | unknown;
+  transportHandleRequest?: (
+    req: unknown,
+    res: unknown,
+    body: unknown
+  ) => Promise<unknown> | unknown;
 } = {}) {
   vi.resetModules();
 
@@ -31,18 +39,25 @@ async function loadServerModuleWithMockedExpress({
   const fakeListener = {
     once: vi.fn(),
     address: vi.fn(() => address as never),
-    close: vi.fn((callback?: (error?: Error | null) => void) => callback?.(closeError ?? null))
+    close: vi.fn((callback?: (error?: Error | null) => void) =>
+      callback?.(closeError ?? null)
+    )
   };
-  fakeApp.listen.mockImplementation((_port: number, _host: string, callback?: () => void) => {
-    if (callback) {
-      queueMicrotask(callback);
+  fakeApp.listen.mockImplementation(
+    (_port: number, _host: string, callback?: () => void) => {
+      if (callback) {
+        queueMicrotask(callback);
+      }
+      return fakeListener;
     }
-    return fakeListener;
-  });
+  );
 
-  const expressMock = Object.assign(vi.fn(() => fakeApp), {
-    json: vi.fn(() => "json-middleware")
-  });
+  const expressMock = Object.assign(
+    vi.fn(() => fakeApp),
+    {
+      json: vi.fn(() => "json-middleware")
+    }
+  );
   const fakeMcpServerInstances: Array<{
     tool: ReturnType<typeof vi.fn>;
     connect: ReturnType<typeof vi.fn>;
@@ -64,10 +79,14 @@ async function loadServerModuleWithMockedExpress({
   }> = [];
   class FakeStreamableHTTPServerTransport {
     close = vi.fn().mockResolvedValue(undefined);
-    handleRequest = vi.fn(async (req: unknown, res: unknown, body: unknown) => transportHandleRequest?.(req, res, body));
+    handleRequest = vi.fn(async (req: unknown, res: unknown, body: unknown) =>
+      transportHandleRequest?.(req, res, body)
+    );
     onclose?: () => void;
 
-    constructor(options: { onsessioninitialized?: (sessionId: string) => void }) {
+    constructor(options: {
+      onsessioninitialized?: (sessionId: string) => void;
+    }) {
       fakeTransportInstances.push(this);
       queueMicrotask(() => options.onsessioninitialized?.("session-1"));
     }
@@ -84,7 +103,14 @@ async function loadServerModuleWithMockedExpress({
 
   try {
     const module = await import("../src/server.mts");
-    return { module, fakeApp, fakeListener, expressMock, fakeMcpServerInstances, fakeTransportInstances };
+    return {
+      module,
+      fakeApp,
+      fakeListener,
+      expressMock,
+      fakeMcpServerInstances,
+      fakeTransportInstances
+    };
   } finally {
     vi.doUnmock("express");
     vi.doUnmock("@modelcontextprotocol/sdk/server/mcp.js");
@@ -93,16 +119,22 @@ async function loadServerModuleWithMockedExpress({
 }
 
 function readTextContent(result: unknown): string {
-  if (!result || typeof result !== "object" || !("content" in result) || !Array.isArray(result.content)) {
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("content" in result) ||
+    !Array.isArray(result.content)
+  ) {
     throw new Error("Expected a CallTool content result.");
   }
 
-  const entry = result.content.find((item): item is { type: string; text?: string } => (
-    Boolean(item)
-    && typeof item === "object"
-    && "type" in item
-    && typeof item.type === "string"
-  ));
+  const entry = result.content.find(
+    (item): item is { type: string; text?: string } =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      "type" in item &&
+      typeof item.type === "string"
+  );
   if (!entry?.text) {
     throw new Error("Expected text content.");
   }
@@ -115,7 +147,8 @@ function readJsonContent<T>(result: unknown): T {
 }
 
 async function connectClient(rootPath: string) {
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   const client = new Client({
     name: "wraithwalker-mcp-test-client",
     version: "1.0.0"
@@ -233,10 +266,13 @@ async function createFixtureRootWithData() {
       method: "GET",
       capturedAt: "2026-04-05T00:00:00.000Z"
     },
-    body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
+    body: '{"users":[{"id":1}],"dropdownTheme":"dark"}'
   });
 
-  await root.writeText(appAsset.bodyPath, "renderDropdown({ animated: true });");
+  await root.writeText(
+    appAsset.bodyPath,
+    "renderDropdown({ animated: true });"
+  );
   await root.writeJson(appAsset.requestPath, {
     topOrigin: "https://app.example.com",
     url: appAsset.requestUrl,
@@ -260,10 +296,13 @@ async function createFixtureRootWithData() {
     bodyEncoding: "utf8",
     bodySuggestedExtension: "js"
   });
-  await root.writeText(appAsset.projectionPath, "renderDropdown({ animated: true });");
+  await root.writeText(
+    appAsset.projectionPath,
+    "renderDropdown({ animated: true });"
+  );
   await root.writeText(
     chunkAsset.bodyPath,
-    "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+    'function renderMenu(){if(open){return{variant:"dark"}}return null}'
   );
   await root.writeJson(chunkAsset.requestPath, {
     topOrigin: "https://app.example.com",
@@ -290,7 +329,7 @@ async function createFixtureRootWithData() {
   });
   await root.writeText(
     chunkAsset.projectionPath,
-    "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+    'function renderMenu(){if(open){return{variant:"dark"}}return null}'
   );
   await root.writeText(stylesheetAsset.bodyPath, ".dropdown { color: #111; }");
   await root.writeJson(stylesheetAsset.requestPath, {
@@ -316,9 +355,17 @@ async function createFixtureRootWithData() {
     bodyEncoding: "utf8",
     bodySuggestedExtension: "css"
   });
-  await root.writeText(stylesheetAsset.projectionPath, ".dropdown { color: #111; }");
-  await root.writeText("notes/ui-guidelines.txt", "Dropdown styling reference for agents.");
-  await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
+  await root.writeText(
+    stylesheetAsset.projectionPath,
+    ".dropdown { color: #111; }"
+  );
+  await root.writeText(
+    "notes/ui-guidelines.txt",
+    "Dropdown styling reference for agents."
+  );
+  await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), {
+    recursive: true
+  });
   await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
 
   await root.ensureScenario("baseline");
@@ -335,7 +382,7 @@ async function createFixtureRootWithData() {
       url: "https://api.example.com/users",
       method: "GET"
     },
-    body: "{\"error\":true}"
+    body: '{"error":true}'
   });
   await root.writeApiFixture({
     scenario: "baseline",
@@ -349,7 +396,7 @@ async function createFixtureRootWithData() {
       url: "https://api.example.com/users",
       method: "GET"
     },
-    body: "{\"users\":[]}"
+    body: '{"users":[]}'
   });
 
   return root;
@@ -374,26 +421,32 @@ async function createBinaryProjectionRoot() {
       topOriginKey,
       generatedAt: "2026-04-09T00:00:00.000Z",
       resourcesByPathname: {
-        "/assets/logo.png": [{
-          requestUrl: "https://cdn.example.com/assets/logo.png",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/assets/logo.png",
-          search: "",
-          bodyPath: canonicalPath,
-          projectionPath,
-          requestPath,
-          metaPath,
-          mimeType: "image/png",
-          resourceType: "Image",
-          capturedAt: "2026-04-09T00:00:00.000Z"
-        }]
+        "/assets/logo.png": [
+          {
+            requestUrl: "https://cdn.example.com/assets/logo.png",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/logo.png",
+            search: "",
+            bodyPath: canonicalPath,
+            projectionPath,
+            requestPath,
+            metaPath,
+            mimeType: "image/png",
+            resourceType: "Image",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          }
+        ]
       }
     }
   });
 
-  await fs.mkdir(path.dirname(root.resolve(canonicalPath)), { recursive: true });
+  await fs.mkdir(path.dirname(root.resolve(canonicalPath)), {
+    recursive: true
+  });
   await fs.writeFile(root.resolve(canonicalPath), Buffer.from([0, 1, 2, 3]));
-  await fs.mkdir(path.dirname(root.resolve(projectionPath)), { recursive: true });
+  await fs.mkdir(path.dirname(root.resolve(projectionPath)), {
+    recursive: true
+  });
   await fs.writeFile(root.resolve(projectionPath), Buffer.from([0, 1, 2, 3]));
   await root.writeJson(requestPath, {
     topOrigin: "https://app.example.com",
@@ -495,7 +548,8 @@ describe("mcp server", () => {
       expect(origins).toEqual([
         expect.objectContaining({
           origin: "https://app.example.com",
-          manifestPath: ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json",
+          manifestPath:
+            ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json",
           apiEndpoints: 1,
           staticAssets: 3
         })
@@ -534,11 +588,16 @@ describe("mcp server", () => {
             path: "cdn.example.com/assets/app.js",
             pathname: "/app.js",
             mimeType: "application/javascript",
-            bodyPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
+            bodyPath:
+              ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
             hasBody: true,
-            bodySize: Buffer.byteLength("renderDropdown({ animated: true });", "utf8"),
+            bodySize: Buffer.byteLength(
+              "renderDropdown({ animated: true });",
+              "utf8"
+            ),
             editable: true,
-            canonicalPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body"
+            canonicalPath:
+              ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body"
           })
         ],
         totalMatched: 1,
@@ -569,9 +628,12 @@ describe("mcp server", () => {
             method: "GET",
             pathname: "/users",
             status: 200,
-            fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
-            metaPath: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
-            bodyPath: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
+            fixtureDir:
+              ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+            metaPath:
+              ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
+            bodyPath:
+              ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
           })
         ]
       });
@@ -580,19 +642,23 @@ describe("mcp server", () => {
         name: "read-api-response",
         arguments: { fixtureDir: endpoints.items[0].fixtureDir }
       });
-      const endpointFixture = JSON.parse(readTextContent(endpointFixtureResult)) as {
+      const endpointFixture = JSON.parse(
+        readTextContent(endpointFixtureResult)
+      ) as {
         fixtureDir: string;
         meta: { status: number; url: string };
         body: string | null;
       };
-      expect(endpointFixture).toEqual(expect.objectContaining({
-        fixtureDir: endpoints.items[0].fixtureDir,
-        meta: expect.objectContaining({
-          status: 200,
-          url: "https://api.example.com/users"
-        }),
-        body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
-      }));
+      expect(endpointFixture).toEqual(
+        expect.objectContaining({
+          fixtureDir: endpoints.items[0].fixtureDir,
+          meta: expect.objectContaining({
+            status: 200,
+            url: "https://api.example.com/users"
+          }),
+          body: '{"users":[{"id":1}],"dropdownTheme":"dark"}'
+        })
+      );
 
       const prettyEndpointFixtureResult = await client.callTool({
         name: "read-api-response",
@@ -601,10 +667,14 @@ describe("mcp server", () => {
           pretty: true
         }
       });
-      const prettyEndpointFixture = JSON.parse(readTextContent(prettyEndpointFixtureResult)) as {
+      const prettyEndpointFixture = JSON.parse(
+        readTextContent(prettyEndpointFixtureResult)
+      ) as {
         body: string | null;
       };
-      expect(prettyEndpointFixture.body).toBe('{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }');
+      expect(prettyEndpointFixture.body).toBe(
+        '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+      );
 
       const searchResult = await client.callTool({
         name: "search-files",
@@ -638,11 +708,18 @@ describe("mcp server", () => {
         "body",
         "body"
       ]);
-      expect(searchMatches.items.map((item) => item.matchCount)).toEqual([1, 1, 1, 1]);
-      expect(searchMatches.items.find((item) => item.path === "cdn.example.com/assets/app.js")).toEqual(
+      expect(searchMatches.items.map((item) => item.matchCount)).toEqual([
+        1, 1, 1, 1
+      ]);
+      expect(
+        searchMatches.items.find(
+          (item) => item.path === "cdn.example.com/assets/app.js"
+        )
+      ).toEqual(
         expect.objectContaining({
           editable: true,
-          canonicalPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body"
+          canonicalPath:
+            ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body"
         })
       );
 
@@ -673,7 +750,9 @@ describe("mcp server", () => {
         name: "read-file",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
-      expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
+      expect(readTextContent(fixtureResult)).toBe(
+        "renderDropdown({ animated: true });"
+      );
 
       const prettyFixtureResult = await client.callTool({
         name: "read-file",
@@ -683,7 +762,7 @@ describe("mcp server", () => {
         }
       });
       expect(readTextContent(prettyFixtureResult)).toBe(
-        "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
+        'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}'
       );
 
       const prettySnippetResult = await client.callTool({
@@ -695,7 +774,9 @@ describe("mcp server", () => {
           lineCount: 3
         }
       });
-      const prettySnippet = JSON.parse(readTextContent(prettySnippetResult)) as {
+      const prettySnippet = JSON.parse(
+        readTextContent(prettySnippetResult)
+      ) as {
         path: string;
         startLine: number;
         endLine: number;
@@ -707,7 +788,7 @@ describe("mcp server", () => {
         startLine: 2,
         endLine: 4,
         truncated: false,
-        text: "  if (open) {\n    return { variant: \"dark\" };\n  }"
+        text: '  if (open) {\n    return { variant: "dark" };\n  }'
       });
 
       const manifestResult = await client.callTool({
@@ -718,13 +799,17 @@ describe("mcp server", () => {
         resourcesByPathname: Record<string, unknown[]>;
       };
       expect(manifest.resourcesByPathname["/app.js"]).toHaveLength(1);
-      expect(manifest.resourcesByPathname["/styles/dropdown.css"]).toHaveLength(1);
+      expect(manifest.resourcesByPathname["/styles/dropdown.css"]).toHaveLength(
+        1
+      );
 
       const scenariosResult = await client.callTool({
         name: "list-snapshots",
         arguments: {}
       });
-      const scenarios = JSON.parse(readTextContent(scenariosResult)) as { scenarios: string[] };
+      const scenarios = JSON.parse(readTextContent(scenariosResult)) as {
+        scenarios: string[];
+      };
       expect(scenarios.scenarios.sort()).toEqual(["baseline", "candidate"]);
 
       const diffResult = await client.callTool({
@@ -744,7 +829,8 @@ describe("mcp server", () => {
   it("writes, patches, and restores editable projection files without mutating canonical bodies", async () => {
     const root = await createFixtureRootWithData();
     const { client, server } = await connectClient(root.rootPath);
-    const canonicalPath = ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/chunk.js.__body";
+    const canonicalPath =
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/chunk.js.__body";
     const projectionPath = "cdn.example.com/assets/chunk.js";
 
     try {
@@ -752,21 +838,28 @@ describe("mcp server", () => {
         name: "write-file",
         arguments: {
           path: projectionPath,
-          content: "const seededUsers = [{ id: 1 }];\nconst theme = \"dark\";\n"
+          content: 'const seededUsers = [{ id: 1 }];\nconst theme = "dark";\n'
         }
       });
       expect(writeResult.isError).not.toBe(true);
-      expect(JSON.parse(readTextContent(writeResult))).toEqual(expect.objectContaining({
-        path: projectionPath,
-        canonicalPath,
-        editable: true,
-        currentText: "const seededUsers = [{ id: 1 }];\nconst theme = \"dark\";\n"
-      }));
-      await expect(fs.readFile(root.resolve(projectionPath), "utf8")).resolves.toBe(
-        "const seededUsers = [{ id: 1 }];\nconst theme = \"dark\";\n"
+      expect(JSON.parse(readTextContent(writeResult))).toEqual(
+        expect.objectContaining({
+          path: projectionPath,
+          canonicalPath,
+          editable: true,
+          currentText:
+            'const seededUsers = [{ id: 1 }];\nconst theme = "dark";\n'
+        })
       );
-      await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
-        "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+      await expect(
+        fs.readFile(root.resolve(projectionPath), "utf8")
+      ).resolves.toBe(
+        'const seededUsers = [{ id: 1 }];\nconst theme = "dark";\n'
+      );
+      await expect(
+        fs.readFile(root.resolve(canonicalPath), "utf8")
+      ).resolves.toBe(
+        'function renderMenu(){if(open){return{variant:"dark"}}return null}'
       );
 
       const patchResult = await client.callTool({
@@ -780,9 +873,12 @@ describe("mcp server", () => {
         }
       });
       expect(patchResult.isError).not.toBe(true);
-      expect(JSON.parse(readTextContent(patchResult))).toEqual(expect.objectContaining({
-        currentText: "const seededUsers = [{ id: 1 }, { id: 2 }];\nconst theme = \"dark\";\n"
-      }));
+      expect(JSON.parse(readTextContent(patchResult))).toEqual(
+        expect.objectContaining({
+          currentText:
+            'const seededUsers = [{ id: 1 }, { id: 2 }];\nconst theme = "dark";\n'
+        })
+      );
 
       const conflictResult = await client.callTool({
         name: "patch-file",
@@ -802,17 +898,24 @@ describe("mcp server", () => {
         arguments: { path: projectionPath }
       });
       expect(restoreResult.isError).not.toBe(true);
-      expect(JSON.parse(readTextContent(restoreResult))).toEqual(expect.objectContaining({
-        path: projectionPath,
-        canonicalPath,
-        editable: true,
-        currentText: "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
-      }));
-      await expect(fs.readFile(root.resolve(projectionPath), "utf8")).resolves.toBe(
-        "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
+      expect(JSON.parse(readTextContent(restoreResult))).toEqual(
+        expect.objectContaining({
+          path: projectionPath,
+          canonicalPath,
+          editable: true,
+          currentText:
+            'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}'
+        })
       );
-      await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
-        "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+      await expect(
+        fs.readFile(root.resolve(projectionPath), "utf8")
+      ).resolves.toBe(
+        'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}'
+      );
+      await expect(
+        fs.readFile(root.resolve(canonicalPath), "utf8")
+      ).resolves.toBe(
+        'function renderMenu(){if(open){return{variant:"dark"}}return null}'
       );
 
       const hiddenPathResult = await client.callTool({
@@ -823,17 +926,21 @@ describe("mcp server", () => {
         }
       });
       expect(hiddenPathResult.isError).toBe(true);
-      expect(readTextContent(hiddenPathResult)).toContain("Hidden canonical files under .wraithwalker cannot be edited");
+      expect(readTextContent(hiddenPathResult)).toContain(
+        "Hidden canonical files under .wraithwalker cannot be edited"
+      );
 
       const apiResult = await client.callTool({
         name: "write-file",
         arguments: {
           path: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body",
-          content: "{\"users\":[]}"
+          content: '{"users":[]}'
         }
       });
       expect(apiResult.isError).toBe(true);
-      expect(readTextContent(apiResult)).toContain("API response fixtures are read-only in this pass");
+      expect(readTextContent(apiResult)).toContain(
+        "API response fixtures are read-only in this pass"
+      );
     } finally {
       await client.close();
       await server.close();
@@ -844,7 +951,9 @@ describe("mcp server", () => {
     const root = await createFixtureRootWithData();
     const binaryRoot = await createBinaryProjectionRoot();
     const { client, server } = await connectClient(root.rootPath);
-    const { client: binaryClient, server: binaryServer } = await connectClient(binaryRoot.root.rootPath);
+    const { client: binaryClient, server: binaryServer } = await connectClient(
+      binaryRoot.root.rootPath
+    );
 
     try {
       const arbitraryWriteResult = await client.callTool({
@@ -913,10 +1022,17 @@ describe("mcp server", () => {
       expect(path.isAbsolute(checkout.workspacePath)).toBe(true);
       expect(checkout.fileCount).toBe(1);
       expect(checkout.files).toEqual(["cdn.example.com/assets/chunk.js"]);
-      expect(checkout.summary).toBe(`1 files copied to ${checkout.workspacePath}`);
+      expect(checkout.summary).toBe(
+        `1 files copied to ${checkout.workspacePath}`
+      );
       await expect(
-        fs.readFile(path.join(checkout.workspacePath, "cdn.example.com/assets/chunk.js"), "utf8")
-      ).resolves.toBe("function renderMenu(){if(open){return{variant:\"dark\"}}return null}");
+        fs.readFile(
+          path.join(checkout.workspacePath, "cdn.example.com/assets/chunk.js"),
+          "utf8"
+        )
+      ).resolves.toBe(
+        'function renderMenu(){if(open){return{variant:"dark"}}return null}'
+      );
 
       const hiddenPathResult = await client.callTool({
         name: "checkout-workspace",
@@ -948,7 +1064,8 @@ describe("mcp server", () => {
   it("pushes tracked workspace edits while preserving canonical bodies and refreshing baselines", async () => {
     const root = await createFixtureRootWithData();
     const { client, server } = await connectClient(root.rootPath);
-    const canonicalPath = ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/chunk.js.__body";
+    const canonicalPath =
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/chunk.js.__body";
 
     try {
       const checkoutResult = await client.callTool({
@@ -970,10 +1087,18 @@ describe("mcp server", () => {
         "const seededUsers = [1];\n",
         "utf8"
       );
-      await fs.rm(path.join(checkout.workspacePath, "cdn.example.com/styles/dropdown.css"));
-      await fs.mkdir(path.join(checkout.workspacePath, "cdn.example.com/assets/generated"), { recursive: true });
+      await fs.rm(
+        path.join(checkout.workspacePath, "cdn.example.com/styles/dropdown.css")
+      );
+      await fs.mkdir(
+        path.join(checkout.workspacePath, "cdn.example.com/assets/generated"),
+        { recursive: true }
+      );
       await fs.writeFile(
-        path.join(checkout.workspacePath, "cdn.example.com/assets/generated/extra.js"),
+        path.join(
+          checkout.workspacePath,
+          "cdn.example.com/assets/generated/extra.js"
+        ),
         "export const extra = true;\n",
         "utf8"
       );
@@ -985,24 +1110,30 @@ describe("mcp server", () => {
         }
       });
       expect(firstPushResult.isError).not.toBe(true);
-      expect(readJsonContent<{
-        updatedFiles: string[];
-        unchangedFiles: string[];
-        conflictingFiles: string[];
-        ignoredNewFiles: string[];
-        ignoredDeletedFiles: string[];
-      }>(firstPushResult)).toEqual(expect.objectContaining({
-        updatedFiles: ["cdn.example.com/assets/chunk.js"],
-        unchangedFiles: ["cdn.example.com/assets/app.js"],
-        conflictingFiles: [],
-        ignoredNewFiles: ["cdn.example.com/assets/generated/extra.js"],
-        ignoredDeletedFiles: ["cdn.example.com/styles/dropdown.css"]
-      }));
-      await expect(fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")).resolves.toBe(
-        "const seededUsers = [1];\n"
+      expect(
+        readJsonContent<{
+          updatedFiles: string[];
+          unchangedFiles: string[];
+          conflictingFiles: string[];
+          ignoredNewFiles: string[];
+          ignoredDeletedFiles: string[];
+        }>(firstPushResult)
+      ).toEqual(
+        expect.objectContaining({
+          updatedFiles: ["cdn.example.com/assets/chunk.js"],
+          unchangedFiles: ["cdn.example.com/assets/app.js"],
+          conflictingFiles: [],
+          ignoredNewFiles: ["cdn.example.com/assets/generated/extra.js"],
+          ignoredDeletedFiles: ["cdn.example.com/styles/dropdown.css"]
+        })
       );
-      await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
-        "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+      await expect(
+        fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")
+      ).resolves.toBe("const seededUsers = [1];\n");
+      await expect(
+        fs.readFile(root.resolve(canonicalPath), "utf8")
+      ).resolves.toBe(
+        'function renderMenu(){if(open){return{variant:"dark"}}return null}'
       );
 
       await fs.writeFile(
@@ -1018,22 +1149,26 @@ describe("mcp server", () => {
         }
       });
       expect(secondPushResult.isError).not.toBe(true);
-      expect(readJsonContent<{
-        updatedFiles: string[];
-        unchangedFiles: string[];
-        conflictingFiles: string[];
-        ignoredNewFiles: string[];
-        ignoredDeletedFiles: string[];
-      }>(secondPushResult)).toEqual(expect.objectContaining({
-        updatedFiles: ["cdn.example.com/assets/chunk.js"],
-        unchangedFiles: ["cdn.example.com/assets/app.js"],
-        conflictingFiles: [],
-        ignoredNewFiles: ["cdn.example.com/assets/generated/extra.js"],
-        ignoredDeletedFiles: ["cdn.example.com/styles/dropdown.css"]
-      }));
-      await expect(fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")).resolves.toBe(
-        "const seededUsers = [1, 2];\n"
+      expect(
+        readJsonContent<{
+          updatedFiles: string[];
+          unchangedFiles: string[];
+          conflictingFiles: string[];
+          ignoredNewFiles: string[];
+          ignoredDeletedFiles: string[];
+        }>(secondPushResult)
+      ).toEqual(
+        expect.objectContaining({
+          updatedFiles: ["cdn.example.com/assets/chunk.js"],
+          unchangedFiles: ["cdn.example.com/assets/app.js"],
+          conflictingFiles: [],
+          ignoredNewFiles: ["cdn.example.com/assets/generated/extra.js"],
+          ignoredDeletedFiles: ["cdn.example.com/styles/dropdown.css"]
+        })
       );
+      await expect(
+        fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")
+      ).resolves.toBe("const seededUsers = [1, 2];\n");
     } finally {
       await client.close();
       await server.close();
@@ -1057,7 +1192,11 @@ describe("mcp server", () => {
         workspacePath: string;
       }>(checkoutResult);
 
-      await fs.writeFile(root.resolve("cdn.example.com/assets/app.js"), "server changed\n", "utf8");
+      await fs.writeFile(
+        root.resolve("cdn.example.com/assets/app.js"),
+        "server changed\n",
+        "utf8"
+      );
       await fs.writeFile(
         path.join(checkout.workspacePath, "cdn.example.com/assets/app.js"),
         "agent changed\n",
@@ -1071,20 +1210,26 @@ describe("mcp server", () => {
         }
       });
       expect(pushResult.isError).not.toBe(true);
-      expect(readJsonContent<{
-        updatedFiles: string[];
-        unchangedFiles: string[];
-        conflictingFiles: string[];
-        ignoredNewFiles: string[];
-        ignoredDeletedFiles: string[];
-      }>(pushResult)).toEqual(expect.objectContaining({
-        updatedFiles: [],
-        unchangedFiles: [],
-        conflictingFiles: ["cdn.example.com/assets/app.js"],
-        ignoredNewFiles: [],
-        ignoredDeletedFiles: []
-      }));
-      await expect(fs.readFile(root.resolve("cdn.example.com/assets/app.js"), "utf8")).resolves.toBe("server changed\n");
+      expect(
+        readJsonContent<{
+          updatedFiles: string[];
+          unchangedFiles: string[];
+          conflictingFiles: string[];
+          ignoredNewFiles: string[];
+          ignoredDeletedFiles: string[];
+        }>(pushResult)
+      ).toEqual(
+        expect.objectContaining({
+          updatedFiles: [],
+          unchangedFiles: [],
+          conflictingFiles: ["cdn.example.com/assets/app.js"],
+          ignoredNewFiles: [],
+          ignoredDeletedFiles: []
+        })
+      );
+      await expect(
+        fs.readFile(root.resolve("cdn.example.com/assets/app.js"), "utf8")
+      ).resolves.toBe("server changed\n");
 
       const invalidWorkspaceResult = await client.callTool({
         name: "push-workspace",
@@ -1093,7 +1238,9 @@ describe("mcp server", () => {
         }
       });
       expect(invalidWorkspaceResult.isError).toBe(true);
-      expect(readTextContent(invalidWorkspaceResult)).toContain("Invalid projection workspace id: ../escape");
+      expect(readTextContent(invalidWorkspaceResult)).toContain(
+        "Invalid projection workspace id: ../escape"
+      );
 
       const discardResult = await client.callTool({
         name: "discard-workspace",
@@ -1102,20 +1249,28 @@ describe("mcp server", () => {
         }
       });
       expect(discardResult.isError).not.toBe(true);
-      expect(readJsonContent<{
-        workspaceId: string;
-        workspacePath: string;
-        fileCount: number;
-        removed: boolean;
-      }>(discardResult)).toEqual(expect.objectContaining({
-        workspaceId: checkout.workspaceId,
-        workspacePath: checkout.workspacePath,
-        fileCount: 1,
-        removed: true
-      }));
+      expect(
+        readJsonContent<{
+          workspaceId: string;
+          workspacePath: string;
+          fileCount: number;
+          removed: boolean;
+        }>(discardResult)
+      ).toEqual(
+        expect.objectContaining({
+          workspaceId: checkout.workspaceId,
+          workspacePath: checkout.workspacePath,
+          fileCount: 1,
+          removed: true
+        })
+      );
       await expect(fs.access(checkout.workspacePath)).rejects.toThrow();
       await expect(
-        fs.access(root.resolve(`.wraithwalker/agent-workspaces/${checkout.workspaceId}/workspace.json`))
+        fs.access(
+          root.resolve(
+            `.wraithwalker/agent-workspaces/${checkout.workspaceId}/workspace.json`
+          )
+        )
       ).rejects.toThrow();
     } finally {
       await client.close();
@@ -1137,56 +1292,72 @@ describe("mcp server", () => {
         arguments: { origin: "https://missing.example.com" }
       });
       expect(assetResult.isError).toBe(true);
-      expect(readTextContent(assetResult)).toContain("Origin \"https://missing.example.com\" not found.");
+      expect(readTextContent(assetResult)).toContain(
+        'Origin "https://missing.example.com" not found.'
+      );
 
       const endpointResult = await client.callTool({
         name: "list-api-routes",
         arguments: { origin: "https://missing.example.com" }
       });
       expect(endpointResult.isError).toBe(true);
-      expect(readTextContent(endpointResult)).toContain("Origin \"https://missing.example.com\" not found.");
+      expect(readTextContent(endpointResult)).toContain(
+        'Origin "https://missing.example.com" not found.'
+      );
 
       const fixtureResult = await client.callTool({
         name: "read-file",
         arguments: { path: "missing.txt" }
       });
       expect(fixtureResult.isError).toBe(true);
-      expect(readTextContent(fixtureResult)).toBe("File not found: missing.txt");
+      expect(readTextContent(fixtureResult)).toBe(
+        "File not found: missing.txt"
+      );
 
       const invalidFixturePathResult = await client.callTool({
         name: "read-file",
         arguments: { path: "../package.json" }
       });
       expect(invalidFixturePathResult.isError).toBe(true);
-      expect(readTextContent(invalidFixturePathResult)).toContain("Invalid fixture path: ../package.json");
+      expect(readTextContent(invalidFixturePathResult)).toContain(
+        "Invalid fixture path: ../package.json"
+      );
 
       const snippetMissingResult = await client.callTool({
         name: "read-file-snippet",
         arguments: { path: "missing.txt" }
       });
       expect(snippetMissingResult.isError).toBe(true);
-      expect(readTextContent(snippetMissingResult)).toContain("File not found: missing.txt");
+      expect(readTextContent(snippetMissingResult)).toContain(
+        "File not found: missing.txt"
+      );
 
       const snippetInvalidPathResult = await client.callTool({
         name: "read-file-snippet",
         arguments: { path: "../package.json" }
       });
       expect(snippetInvalidPathResult.isError).toBe(true);
-      expect(readTextContent(snippetInvalidPathResult)).toContain("Invalid fixture path: ../package.json");
+      expect(readTextContent(snippetInvalidPathResult)).toContain(
+        "Invalid fixture path: ../package.json"
+      );
 
       const invalidEndpointFixtureResult = await client.callTool({
         name: "read-api-response",
         arguments: { fixtureDir: "../escape" }
       });
       expect(invalidEndpointFixtureResult.isError).toBe(true);
-      expect(readTextContent(invalidEndpointFixtureResult)).toContain("Invalid fixture directory: ../escape");
+      expect(readTextContent(invalidEndpointFixtureResult)).toContain(
+        "Invalid fixture directory: ../escape"
+      );
 
       const manifestResult = await client.callTool({
         name: "read-site-manifest",
         arguments: { origin: "https://missing.example.com" }
       });
       expect(manifestResult.isError).toBe(true);
-      expect(readTextContent(manifestResult)).toContain("Origin \"https://missing.example.com\" not found.");
+      expect(readTextContent(manifestResult)).toContain(
+        'Origin "https://missing.example.com" not found.'
+      );
 
       const searchResult = await client.callTool({
         name: "search-files",
@@ -1196,7 +1367,9 @@ describe("mcp server", () => {
         }
       });
       expect(searchResult.isError).toBe(true);
-      expect(readTextContent(searchResult)).toContain("Origin \"https://missing.example.com\" not found.");
+      expect(readTextContent(searchResult)).toContain(
+        'Origin "https://missing.example.com" not found.'
+      );
 
       await root.ensureOrigin({ topOrigin: "https://empty.example.com" });
       const emptyManifestResult = await client.callTool({
@@ -1204,7 +1377,9 @@ describe("mcp server", () => {
         arguments: { origin: "https://empty.example.com" }
       });
       expect(emptyManifestResult.isError).toBe(true);
-      expect(readTextContent(emptyManifestResult)).toContain("No manifest found for \"https://empty.example.com\".");
+      expect(readTextContent(emptyManifestResult)).toContain(
+        'No manifest found for "https://empty.example.com".'
+      );
 
       const invalidCursorResult = await client.callTool({
         name: "list-files",
@@ -1216,30 +1391,45 @@ describe("mcp server", () => {
       expect(invalidCursorResult.isError).toBe(true);
       expect(readTextContent(invalidCursorResult)).toContain("Invalid cursor");
 
-      await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
-      await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
+      await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), {
+        recursive: true
+      });
+      await fs.writeFile(
+        root.resolve("bin/blob.bin"),
+        Buffer.from([0, 1, 2, 3])
+      );
       const binarySnippetResult = await client.callTool({
         name: "read-file-snippet",
         arguments: { path: "bin/blob.bin" }
       });
       expect(binarySnippetResult.isError).toBe(true);
-      expect(readTextContent(binarySnippetResult)).toContain("Fixture is not a text file");
+      expect(readTextContent(binarySnippetResult)).toContain(
+        "Fixture is not a text file"
+      );
 
       const diffResult = await client.callTool({
         name: "diff-snapshots",
         arguments: { scenarioA: "missing-a", scenarioB: "missing-b" }
       });
       expect(diffResult.isError).toBe(true);
-      expect(readTextContent(diffResult)).toContain('Scenario "missing-a" does not exist.');
-      expect(readTextContent(diffResult)).toContain("Available scenarios: baseline");
+      expect(readTextContent(diffResult)).toContain(
+        'Scenario "missing-a" does not exist.'
+      );
+      expect(readTextContent(diffResult)).toContain(
+        "Available scenarios: baseline"
+      );
 
       const invalidScenarioResult = await client.callTool({
         name: "diff-snapshots",
         arguments: { scenarioA: "../escape", scenarioB: "baseline" }
       });
       expect(invalidScenarioResult.isError).toBe(true);
-      expect(readTextContent(invalidScenarioResult)).toContain("Scenario name must be 1-64 alphanumeric");
-      expect(readTextContent(invalidScenarioResult)).not.toContain("Available scenarios:");
+      expect(readTextContent(invalidScenarioResult)).toContain(
+        "Scenario name must be 1-64 alphanumeric"
+      );
+      expect(readTextContent(invalidScenarioResult)).not.toContain(
+        "Available scenarios:"
+      );
     } finally {
       await client.close();
       await server.close();
@@ -1265,7 +1455,9 @@ describe("mcp server", () => {
         arguments: { fixtureDir: missingFixtureDir }
       });
       expect(result.isError).toBe(true);
-      expect(readTextContent(result)).toContain(`Endpoint fixture not found: ${missingFixtureDir}`);
+      expect(readTextContent(result)).toContain(
+        `Endpoint fixture not found: ${missingFixtureDir}`
+      );
     } finally {
       await client.close();
       await server.close();
@@ -1285,18 +1477,22 @@ describe("mcp server", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/hierarchy.chunk.js": [{
-            requestUrl: "https://cdn.example.com/assets/hierarchy.chunk.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/hierarchy.chunk.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/hierarchy.chunk.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/hierarchy.chunk.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/hierarchy.chunk.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1309,7 +1505,9 @@ describe("mcp server", () => {
         name: "list-sites",
         arguments: { search: "ADMIN" }
       });
-      const filteredOrigins = JSON.parse(readTextContent(filteredOriginsResult)) as Array<{ origin: string }>;
+      const filteredOrigins = JSON.parse(
+        readTextContent(filteredOriginsResult)
+      ) as Array<{ origin: string }>;
       expect(filteredOrigins).toEqual([
         expect.objectContaining({
           origin: "https://admin.example.com"
@@ -1386,7 +1584,9 @@ describe("mcp server", () => {
         name: "list-sites",
         arguments: { search: "ADMIN" }
       });
-      const adminOrigins = JSON.parse(readTextContent(adminOriginsResult)) as Array<{ origin: string }>;
+      const adminOrigins = JSON.parse(
+        readTextContent(adminOriginsResult)
+      ) as Array<{ origin: string }>;
       expect(adminOrigins.map((origin) => origin.origin).sort()).toEqual([
         "http://admin.example.com",
         "https://admin.example.com"
@@ -1416,18 +1616,22 @@ describe("mcp server", () => {
         topOriginKey: "http__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/http-only.js": [{
-            requestUrl: "http://cdn.example.com/assets/http-only.js",
-            requestOrigin: "http://cdn.example.com",
-            pathname: "/assets/http-only.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/http-only.js",
-            requestPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http-only.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http-only.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/http-only.js": [
+            {
+              requestUrl: "http://cdn.example.com/assets/http-only.js",
+              requestOrigin: "http://cdn.example.com",
+              pathname: "/assets/http-only.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/http-only.js",
+              requestPath:
+                ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http-only.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http-only.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1439,23 +1643,33 @@ describe("mcp server", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/repeat.js": [{
-            requestUrl: "https://cdn.example.com/assets/repeat.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/repeat.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/repeat.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/repeat.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/repeat.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/repeat.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/repeat.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/repeat.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/repeat.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/repeat.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/repeat.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
-    await root.writeText("cdn.example.com/assets/repeat.js", "dropdown();\nshowDropdown();\ndropdown();");
-    await root.writeText("cdn.example.com/assets/http-only.js", "console.log('http only');");
+    await root.writeText(
+      "cdn.example.com/assets/repeat.js",
+      "dropdown();\nshowDropdown();\ndropdown();"
+    );
+    await root.writeText(
+      "cdn.example.com/assets/http-only.js",
+      "console.log('http only');"
+    );
 
     const { client, server } = await connectClient(root.rootPath);
 
@@ -1493,12 +1707,16 @@ describe("mcp server", () => {
         name: "read-site-manifest",
         arguments: { origin: "https://app.example.com" }
       });
-      const httpsManifest = JSON.parse(readTextContent(httpsManifestResult)) as {
+      const httpsManifest = JSON.parse(
+        readTextContent(httpsManifestResult)
+      ) as {
         topOrigin: string;
         resourcesByPathname: Record<string, unknown[]>;
       };
       expect(httpsManifest.topOrigin).toBe("https://app.example.com");
-      expect(Object.keys(httpsManifest.resourcesByPathname)).toEqual(["/assets/repeat.js"]);
+      expect(Object.keys(httpsManifest.resourcesByPathname)).toEqual([
+        "/assets/repeat.js"
+      ]);
 
       const httpManifestResult = await client.callTool({
         name: "read-site-manifest",
@@ -1509,7 +1727,9 @@ describe("mcp server", () => {
         resourcesByPathname: Record<string, unknown[]>;
       };
       expect(httpManifest.topOrigin).toBe("http://app.example.com");
-      expect(Object.keys(httpManifest.resourcesByPathname)).toEqual(["/assets/http-only.js"]);
+      expect(Object.keys(httpManifest.resourcesByPathname)).toEqual([
+        "/assets/http-only.js"
+      ]);
     } finally {
       await client.close();
       await server.close();
@@ -1529,18 +1749,22 @@ describe("mcp server", () => {
         topOriginKey: "http__app.example.com__8443",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/http-port.js": [{
-            requestUrl: "http://cdn.example.com:8443/assets/http-port.js",
-            requestOrigin: "http://cdn.example.com:8443",
-            pathname: "/assets/http-port.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/http-port.js",
-            requestPath: ".wraithwalker/captures/assets/http__app.example.com__8443/cdn.example.com/http-port.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/http__app.example.com__8443/cdn.example.com/http-port.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/http-port.js": [
+            {
+              requestUrl: "http://cdn.example.com:8443/assets/http-port.js",
+              requestOrigin: "http://cdn.example.com:8443",
+              pathname: "/assets/http-port.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/http-port.js",
+              requestPath:
+                ".wraithwalker/captures/assets/http__app.example.com__8443/cdn.example.com/http-port.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/http__app.example.com__8443/cdn.example.com/http-port.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1552,18 +1776,22 @@ describe("mcp server", () => {
         topOriginKey: "https__app.example.com__8443",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/https-port.js": [{
-            requestUrl: "https://cdn.example.com:8443/assets/https-port.js",
-            requestOrigin: "https://cdn.example.com:8443",
-            pathname: "/assets/https-port.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/https-port.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com__8443/cdn.example.com/https-port.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com__8443/cdn.example.com/https-port.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/https-port.js": [
+            {
+              requestUrl: "https://cdn.example.com:8443/assets/https-port.js",
+              requestOrigin: "https://cdn.example.com:8443",
+              pathname: "/assets/https-port.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/https-port.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com__8443/cdn.example.com/https-port.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com__8443/cdn.example.com/https-port.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1575,24 +1803,37 @@ describe("mcp server", () => {
         topOriginKey: "https__app.example.com__9443",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/other-port.js": [{
-            requestUrl: "https://cdn.example.com:9443/assets/other-port.js",
-            requestOrigin: "https://cdn.example.com:9443",
-            pathname: "/assets/other-port.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/other-port.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com__9443/cdn.example.com/other-port.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com__9443/cdn.example.com/other-port.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/other-port.js": [
+            {
+              requestUrl: "https://cdn.example.com:9443/assets/other-port.js",
+              requestOrigin: "https://cdn.example.com:9443",
+              pathname: "/assets/other-port.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/other-port.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com__9443/cdn.example.com/other-port.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com__9443/cdn.example.com/other-port.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
-    await root.writeText("cdn.example.com/assets/http-port.js", "console.log('http port');");
-    await root.writeText("cdn.example.com/assets/https-port.js", "console.log('https port');");
-    await root.writeText("cdn.example.com/assets/other-port.js", "console.log('other port');");
+    await root.writeText(
+      "cdn.example.com/assets/http-port.js",
+      "console.log('http port');"
+    );
+    await root.writeText(
+      "cdn.example.com/assets/https-port.js",
+      "console.log('https port');"
+    );
+    await root.writeText(
+      "cdn.example.com/assets/other-port.js",
+      "console.log('other port');"
+    );
 
     const { client, server } = await connectClient(root.rootPath);
 
@@ -1638,18 +1879,22 @@ describe("mcp server", () => {
         topOriginKey: "http__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/http.js": [{
-            requestUrl: "http://cdn.example.com/assets/http.js",
-            requestOrigin: "http://cdn.example.com",
-            pathname: "/assets/http.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/http.js",
-            requestPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/http.js": [
+            {
+              requestUrl: "http://cdn.example.com/assets/http.js",
+              requestOrigin: "http://cdn.example.com",
+              pathname: "/assets/http.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/http.js",
+              requestPath:
+                ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1661,18 +1906,22 @@ describe("mcp server", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/huge.js": [{
-            requestUrl: "https://cdn.example.com/assets/huge.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/huge.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/huge.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/huge.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/huge.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/huge.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/huge.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/huge.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/huge.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/huge.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/huge.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1688,7 +1937,7 @@ describe("mcp server", () => {
         url: "http://api.example.com/status",
         method: "GET"
       },
-      body: "{\"scheme\":\"http\"}"
+      body: '{"scheme":"http"}'
     });
     const largeEndpoint = await root.writeApiFixture({
       topOrigin: "https://app.example.com",
@@ -1704,7 +1953,10 @@ describe("mcp server", () => {
       },
       body: largeBody
     });
-    await root.writeText("cdn.example.com/assets/http.js", "console.log('http');");
+    await root.writeText(
+      "cdn.example.com/assets/http.js",
+      "console.log('http');"
+    );
     await root.writeText("cdn.example.com/assets/huge.js", largeBody);
 
     const { client, server } = await connectClient(root.rootPath);
@@ -1771,15 +2023,21 @@ describe("mcp server", () => {
         arguments: { path: "cdn.example.com/assets/huge.js" }
       });
       expect(largeFixtureRead.isError).toBe(true);
-      expect(readTextContent(largeFixtureRead)).toContain("File is too large to read in full: cdn.example.com/assets/huge.js");
-      expect(readTextContent(largeFixtureRead)).toContain("Use read-file-snippet with this path and specify startLine and lineCount.");
+      expect(readTextContent(largeFixtureRead)).toContain(
+        "File is too large to read in full: cdn.example.com/assets/huge.js"
+      );
+      expect(readTextContent(largeFixtureRead)).toContain(
+        "Use read-file-snippet with this path and specify startLine and lineCount."
+      );
 
       const largeEndpointRead = await client.callTool({
         name: "read-api-response",
         arguments: { fixtureDir: largeEndpoint.fixtureDir }
       });
       expect(largeEndpointRead.isError).toBe(true);
-      expect(readTextContent(largeEndpointRead)).toContain(`Endpoint fixture body is too large to read in full: ${largeEndpoint.bodyPath}`);
+      expect(readTextContent(largeEndpointRead)).toContain(
+        `Endpoint fixture body is too large to read in full: ${largeEndpoint.bodyPath}`
+      );
       expect(readTextContent(largeEndpointRead)).toContain(
         `Use read-file-snippet with path "${largeEndpoint.bodyPath}" and specify startLine and lineCount.`
       );
@@ -1805,30 +2063,38 @@ describe("mcp server", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/exact.js": [{
-            requestUrl: "https://cdn.example.com/assets/exact.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/exact.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/exact.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/exact.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/exact.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }],
-          "/assets/over.js": [{
-            requestUrl: "https://cdn.example.com/assets/over.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/over.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/over.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/over.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/over.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/exact.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/exact.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/exact.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/exact.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/exact.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/exact.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ],
+          "/assets/over.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/over.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/over.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/over.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/over.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/over.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -1881,13 +2147,17 @@ describe("mcp server", () => {
         }
       });
       expect(overLimitFixtureResult.isError).toBe(true);
-      expect(readTextContent(overLimitFixtureResult)).toContain("File is too large to read in full: cdn.example.com/assets/over.js");
+      expect(readTextContent(overLimitFixtureResult)).toContain(
+        "File is too large to read in full: cdn.example.com/assets/over.js"
+      );
 
       const exactEndpointResult = await client.callTool({
         name: "read-api-response",
         arguments: { fixtureDir: exactEndpoint.fixtureDir }
       });
-      const exactEndpointFixture = JSON.parse(readTextContent(exactEndpointResult)) as {
+      const exactEndpointFixture = JSON.parse(
+        readTextContent(exactEndpointResult)
+      ) as {
         body: string | null;
       };
       expect(exactEndpointFixture.body).toHaveLength(65_536);
@@ -1922,8 +2192,12 @@ describe("mcp server", () => {
         arguments: { scenarioA: "missing-a", scenarioB: "missing-b" }
       });
       expect(diffResult.isError).toBe(true);
-      expect(readTextContent(diffResult)).toContain('Scenario "missing-a" does not exist.');
-      expect(readTextContent(diffResult)).toContain("No saved scenarios are available.");
+      expect(readTextContent(diffResult)).toContain(
+        'Scenario "missing-a" does not exist.'
+      );
+      expect(readTextContent(diffResult)).toContain(
+        "No saved scenarios are available."
+      );
     } finally {
       await client.close();
       await server.close();
@@ -1937,11 +2211,13 @@ describe("mcp server", () => {
     });
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://configured.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]
+      sites: [
+        {
+          origin: "https://configured.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
     });
     const { client, server } = await connectClient(root.rootPath);
 
@@ -1950,23 +2226,32 @@ describe("mcp server", () => {
         name: "list-configured-sites",
         arguments: {}
       });
-      expect(JSON.parse(readTextContent(configuredResult))).toEqual([{
-        origin: "https://configured.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]);
+      expect(JSON.parse(readTextContent(configuredResult))).toEqual([
+        {
+          origin: "https://configured.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]);
 
       const whitelistResult = await client.callTool({
         name: "whitelist-site",
         arguments: { origin: "app.example.com" }
       });
-      expect(JSON.parse(readTextContent(whitelistResult))).toEqual(expect.objectContaining({
-        changed: true,
-        siteConfig: expect.objectContaining({
-          origin: "https://app.example.com",
-          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+      expect(JSON.parse(readTextContent(whitelistResult))).toEqual(
+        expect.objectContaining({
+          changed: true,
+          siteConfig: expect.objectContaining({
+            origin: "https://app.example.com",
+            dumpAllowlistPatterns: [
+              "\\.m?(js|ts)x?$",
+              "\\.css$",
+              "\\.wasm$",
+              "\\.json$"
+            ]
+          })
         })
-      }));
+      );
 
       const appendPatternsResult = await client.callTool({
         name: "update-site-patterns",
@@ -1976,13 +2261,21 @@ describe("mcp server", () => {
           dumpPatterns: ["\\.svg$"]
         }
       });
-      expect(JSON.parse(readTextContent(appendPatternsResult))).toEqual(expect.objectContaining({
-        changed: true,
-        siteConfig: expect.objectContaining({
-          origin: "https://app.example.com",
-          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$", "\\.svg$"]
+      expect(JSON.parse(readTextContent(appendPatternsResult))).toEqual(
+        expect.objectContaining({
+          changed: true,
+          siteConfig: expect.objectContaining({
+            origin: "https://app.example.com",
+            dumpAllowlistPatterns: [
+              "\\.m?(js|ts)x?$",
+              "\\.css$",
+              "\\.wasm$",
+              "\\.json$",
+              "\\.svg$"
+            ]
+          })
         })
-      }));
+      );
 
       const resetPatternsResult = await client.callTool({
         name: "update-site-patterns",
@@ -1991,13 +2284,20 @@ describe("mcp server", () => {
           mode: "reset"
         }
       });
-      expect(JSON.parse(readTextContent(resetPatternsResult))).toEqual(expect.objectContaining({
-        changed: true,
-        siteConfig: expect.objectContaining({
-          origin: "https://app.example.com",
-          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+      expect(JSON.parse(readTextContent(resetPatternsResult))).toEqual(
+        expect.objectContaining({
+          changed: true,
+          siteConfig: expect.objectContaining({
+            origin: "https://app.example.com",
+            dumpAllowlistPatterns: [
+              "\\.m?(js|ts)x?$",
+              "\\.css$",
+              "\\.wasm$",
+              "\\.json$"
+            ]
+          })
         })
-      }));
+      );
 
       const invalidPatternResult = await client.callTool({
         name: "update-site-patterns",
@@ -2008,24 +2308,37 @@ describe("mcp server", () => {
         }
       });
       expect(invalidPatternResult.isError).toBe(true);
-      expect(readTextContent(invalidPatternResult)).toContain("Invalid dump allowlist pattern");
+      expect(readTextContent(invalidPatternResult)).toContain(
+        "Invalid dump allowlist pattern"
+      );
 
       const removeResult = await client.callTool({
         name: "remove-site",
         arguments: { origin: "https://configured.example.com" }
       });
-      expect(JSON.parse(readTextContent(removeResult))).toEqual(expect.objectContaining({
-        changed: true,
-        removedOrigin: "https://configured.example.com"
-      }));
+      expect(JSON.parse(readTextContent(removeResult))).toEqual(
+        expect.objectContaining({
+          changed: true,
+          removedOrigin: "https://configured.example.com"
+        })
+      );
 
-      await expect(root.readJson(root.projectConfigRelativePath())).resolves.toEqual({
+      await expect(
+        root.readJson(root.projectConfigRelativePath())
+      ).resolves.toEqual({
         schemaVersion: 1,
-        sites: [{
-          origin: "https://app.example.com",
-          createdAt: expect.any(String),
-          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
-        }]
+        sites: [
+          {
+            origin: "https://app.example.com",
+            createdAt: expect.any(String),
+            dumpAllowlistPatterns: [
+              "\\.m?(js|ts)x?$",
+              "\\.css$",
+              "\\.wasm$",
+              "\\.json$"
+            ]
+          }
+        ]
       });
     } finally {
       await client.close();
@@ -2041,7 +2354,10 @@ describe("mcp server", () => {
     const { client, server } = await connectClient(root.rootPath);
 
     try {
-      const statusResult = await client.callTool({ name: "browser-status", arguments: {} });
+      const statusResult = await client.callTool({
+        name: "browser-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(statusResult))).toEqual(
         expect.objectContaining({
           connected: false,
@@ -2051,7 +2367,10 @@ describe("mcp server", () => {
           activeTraceSummary: null
         })
       );
-      const traceStatusResult = await client.callTool({ name: "trace-status", arguments: {} });
+      const traceStatusResult = await client.callTool({
+        name: "trace-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(traceStatusResult))).toEqual(
         expect.objectContaining({
           phase: "disconnected",
@@ -2066,20 +2385,24 @@ describe("mcp server", () => {
         arguments: { name: "Trace without extension" }
       });
       expect(startResult.isError).toBe(true);
-      expect(readTextContent(startResult)).toContain("No connected extension is available");
+      expect(readTextContent(startResult)).toContain(
+        "No connected extension is available"
+      );
 
       const prepareResult = await client.callTool({
         name: "prepare-site-for-capture",
         arguments: { origin: "https://app.example.com" }
       });
-      expect(JSON.parse(readTextContent(prepareResult))).toEqual(expect.objectContaining({
-        changed: true,
-        origin: "https://app.example.com",
-        connected: false,
-        sessionActive: false,
-        captureReady: false,
-        nextAction: "connect_extension"
-      }));
+      expect(JSON.parse(readTextContent(prepareResult))).toEqual(
+        expect.objectContaining({
+          changed: true,
+          origin: "https://app.example.com",
+          connected: false,
+          sessionActive: false,
+          captureReady: false,
+          nextAction: "connect_extension"
+        })
+      );
     } finally {
       await client.close();
       await server.close();
@@ -2091,15 +2414,19 @@ describe("mcp server", () => {
       prefix: "wraithwalker-mcp-server-",
       rootId: "root-mcp-server"
     });
-    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const { client, server, transport } = await connectHttpClient(
+      root.rootPath
+    );
     const trpcClient = createTrpcClient(server.trpcUrl);
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
 
     try {
@@ -2108,21 +2435,26 @@ describe("mcp server", () => {
         extensionVersion: "1.0.0",
         sessionActive: true,
         enabledOrigins: ["https://app.example.com"],
-        recentConsoleEntries: [{
-          tabId: 7,
-          topOrigin: "https://app.example.com",
-          source: "javascript",
-          level: "error",
-          text: "Unhandled exception: boom",
-          timestamp: "2026-04-08T00:00:00.000Z",
-          url: "https://app.example.com/assets/app.js",
-          lineNumber: 42,
-          columnNumber: 7
-        }]
+        recentConsoleEntries: [
+          {
+            tabId: 7,
+            topOrigin: "https://app.example.com",
+            source: "javascript",
+            level: "error",
+            text: "Unhandled exception: boom",
+            timestamp: "2026-04-08T00:00:00.000Z",
+            url: "https://app.example.com/assets/app.js",
+            lineNumber: 42,
+            columnNumber: 7
+          }
+        ]
       });
       expect(heartbeat.activeTrace).toBeNull();
 
-      const statusResult = await client.callTool({ name: "browser-status", arguments: {} });
+      const statusResult = await client.callTool({
+        name: "browser-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(statusResult))).toEqual(
         expect.objectContaining({
           connected: true,
@@ -2130,7 +2462,9 @@ describe("mcp server", () => {
           tracePhase: "idle",
           clientId: "client-1",
           enabledOrigins: ["https://app.example.com"],
-          siteConfigs: [expect.objectContaining({ origin: "https://app.example.com" })],
+          siteConfigs: [
+            expect.objectContaining({ origin: "https://app.example.com" })
+          ],
           recentConsoleEntries: [
             expect.objectContaining({
               tabId: 7,
@@ -2166,16 +2500,21 @@ describe("mcp server", () => {
         name: "prepare-site-for-capture",
         arguments: { origin: "https://prepared.example.com" }
       });
-      expect(JSON.parse(readTextContent(prepareResult))).toEqual(expect.objectContaining({
-        changed: true,
-        origin: "https://prepared.example.com",
-        connected: true,
-        sessionActive: true,
-        captureReady: false,
-        enabledOrigins: ["https://app.example.com"],
-        nextAction: "wait_for_extension_refresh"
-      }));
-      const idleTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      expect(JSON.parse(readTextContent(prepareResult))).toEqual(
+        expect.objectContaining({
+          changed: true,
+          origin: "https://prepared.example.com",
+          connected: true,
+          sessionActive: true,
+          captureReady: false,
+          enabledOrigins: ["https://app.example.com"],
+          nextAction: "wait_for_extension_refresh"
+        })
+      );
+      const idleTraceStatus = await client.callTool({
+        name: "trace-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(idleTraceStatus))).toEqual(
         expect.objectContaining({
           phase: "idle",
@@ -2212,7 +2551,10 @@ describe("mcp server", () => {
         })
       );
 
-      const armedTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      const armedTraceStatus = await client.callTool({
+        name: "trace-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(armedTraceStatus))).toEqual(
         expect.objectContaining({
           phase: "armed",
@@ -2240,7 +2582,10 @@ describe("mcp server", () => {
       });
       expect(recorded.recorded).toBe(true);
 
-      const recordingTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      const recordingTraceStatus = await client.callTool({
+        name: "trace-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(recordingTraceStatus))).toEqual(
         expect.objectContaining({
           phase: "recording",
@@ -2262,7 +2607,10 @@ describe("mcp server", () => {
         })
       );
 
-      const listResult = await client.callTool({ name: "list-traces", arguments: {} });
+      const listResult = await client.callTool({
+        name: "list-traces",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(listResult))).toEqual([
         expect.objectContaining({
           traceId: startedTrace.trace.traceId,
@@ -2310,7 +2658,16 @@ describe("mcp server", () => {
       );
 
       await expect(
-        fs.readFile(path.join(root.rootPath, ".wraithwalker", "scenario-traces", startedTrace.trace.traceId, "trace.json"), "utf8")
+        fs.readFile(
+          path.join(
+            root.rootPath,
+            ".wraithwalker",
+            "scenario-traces",
+            startedTrace.trace.traceId,
+            "trace.json"
+          ),
+          "utf8"
+        )
       ).resolves.toContain(`"traceId": "${startedTrace.trace.traceId}"`);
     } finally {
       await transport.close();
@@ -2324,15 +2681,19 @@ describe("mcp server", () => {
       prefix: "wraithwalker-mcp-server-console-",
       rootId: "root-mcp-server-console"
     });
-    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const { client, server, transport } = await connectHttpClient(
+      root.rootPath
+    );
     const trpcClient = createTrpcClient(server.trpcUrl);
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
 
     try {
@@ -2391,60 +2752,78 @@ describe("mcp server", () => {
         name: "read-console",
         arguments: { limit: 2 }
       });
-      expect(JSON.parse(readTextContent(limitedResult))).toEqual(expect.objectContaining({
-        totalEntries: 4,
-        returnedEntries: 2,
-        entries: [
-          expect.objectContaining({ text: "Boom recovered" }),
-          expect.objectContaining({ text: "Boot complete" })
-        ]
-      }));
+      expect(JSON.parse(readTextContent(limitedResult))).toEqual(
+        expect.objectContaining({
+          totalEntries: 4,
+          returnedEntries: 2,
+          entries: [
+            expect.objectContaining({ text: "Boom recovered" }),
+            expect.objectContaining({ text: "Boot complete" })
+          ]
+        })
+      );
 
       const tabResult = await client.callTool({
         name: "read-console",
         arguments: { tabId: 7 }
       });
-      expect(JSON.parse(readTextContent(tabResult))).toEqual(expect.objectContaining({
-        returnedEntries: 3,
-        entries: [
-          expect.objectContaining({ text: "Boom render failed" }),
-          expect.objectContaining({ text: "Request timeout" }),
-          expect.objectContaining({ text: "Boot complete" })
-        ]
-      }));
+      expect(JSON.parse(readTextContent(tabResult))).toEqual(
+        expect.objectContaining({
+          returnedEntries: 3,
+          entries: [
+            expect.objectContaining({ text: "Boom render failed" }),
+            expect.objectContaining({ text: "Request timeout" }),
+            expect.objectContaining({ text: "Boot complete" })
+          ]
+        })
+      );
 
       const searchResult = await client.callTool({
         name: "read-console",
         arguments: { search: "BOOM" }
       });
-      expect(JSON.parse(readTextContent(searchResult))).toEqual(expect.objectContaining({
-        returnedEntries: 2,
-        entries: [
-          expect.objectContaining({ text: "Boom render failed" }),
-          expect.objectContaining({ text: "Boom recovered" })
-        ]
-      }));
+      expect(JSON.parse(readTextContent(searchResult))).toEqual(
+        expect.objectContaining({
+          returnedEntries: 2,
+          entries: [
+            expect.objectContaining({ text: "Boom render failed" }),
+            expect.objectContaining({ text: "Boom recovered" })
+          ]
+        })
+      );
 
       const sourceResult = await client.callTool({
         name: "read-console",
         arguments: { sources: ["NETWORK"] }
       });
-      expect(JSON.parse(readTextContent(sourceResult))).toEqual(expect.objectContaining({
-        returnedEntries: 1,
-        entries: [expect.objectContaining({ source: "network", text: "Request timeout" })]
-      }));
+      expect(JSON.parse(readTextContent(sourceResult))).toEqual(
+        expect.objectContaining({
+          returnedEntries: 1,
+          entries: [
+            expect.objectContaining({
+              source: "network",
+              text: "Request timeout"
+            })
+          ]
+        })
+      );
 
       const levelResult = await client.callTool({
         name: "read-console",
         arguments: { levels: ["ERROR", "WARN"] }
       });
-      expect(JSON.parse(readTextContent(levelResult))).toEqual(expect.objectContaining({
-        returnedEntries: 2,
-        entries: [
-          expect.objectContaining({ level: "error", text: "Boom render failed" }),
-          expect.objectContaining({ level: "warn", text: "Request timeout" })
-        ]
-      }));
+      expect(JSON.parse(readTextContent(levelResult))).toEqual(
+        expect.objectContaining({
+          returnedEntries: 2,
+          entries: [
+            expect.objectContaining({
+              level: "error",
+              text: "Boom render failed"
+            }),
+            expect.objectContaining({ level: "warn", text: "Request timeout" })
+          ]
+        })
+      );
     } finally {
       await transport.close();
       await client.close();
@@ -2457,15 +2836,19 @@ describe("mcp server", () => {
       prefix: "wraithwalker-mcp-server-",
       rootId: "root-mcp-server"
     });
-    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const { client, server, transport } = await connectHttpClient(
+      root.rootPath
+    );
     const trpcClient = createTrpcClient(server.trpcUrl);
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
 
     try {
@@ -2476,7 +2859,10 @@ describe("mcp server", () => {
         enabledOrigins: ["https://app.example.com"]
       });
 
-      const traceStatus = await client.callTool({ name: "trace-status", arguments: {} });
+      const traceStatus = await client.callTool({
+        name: "trace-status",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(traceStatus))).toEqual(
         expect.objectContaining({
           phase: "not_ready",
@@ -2498,39 +2884,51 @@ describe("mcp server", () => {
       prefix: "wraithwalker-mcp-server-",
       rootId: "root-mcp-server"
     });
-    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const { client, server, transport } = await connectHttpClient(
+      root.rootPath
+    );
 
-    await root.writeJson(".wraithwalker/scenario-traces/legacy-trace/trace.json", {
-      schemaVersion: 1,
-      traceId: "legacy-trace",
-      name: "Legacy trace",
-      status: "completed",
-      createdAt: "2026-04-08T00:00:00.000Z",
-      startedAt: "2026-04-08T00:00:01.000Z",
-      endedAt: "2026-04-08T00:00:02.000Z",
-      rootId: "root-mcp-server",
-      selectedOrigins: ["https://app.example.com"],
-      extensionClientId: "client-1",
-      steps: [{
-        stepId: "legacy-step-1",
-        tabId: 3,
-        recordedAt: "2026-04-08T00:00:01.000Z",
-        pageUrl: "https://app.example.com/settings",
-        topOrigin: "https://app.example.com",
-        selector: "#legacy",
-        tagName: "button",
-        textSnippet: "Legacy",
-        linkedFixtures: [{
-          bodyPath: "cdn.example.com/assets/legacy.js",
-          requestUrl: "https://cdn.example.com/assets/legacy.js",
-          resourceType: "Script",
-          capturedAt: "2026-04-08T00:00:01.500Z"
-        }]
-      }]
-    });
+    await root.writeJson(
+      ".wraithwalker/scenario-traces/legacy-trace/trace.json",
+      {
+        schemaVersion: 1,
+        traceId: "legacy-trace",
+        name: "Legacy trace",
+        status: "completed",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        startedAt: "2026-04-08T00:00:01.000Z",
+        endedAt: "2026-04-08T00:00:02.000Z",
+        rootId: "root-mcp-server",
+        selectedOrigins: ["https://app.example.com"],
+        extensionClientId: "client-1",
+        steps: [
+          {
+            stepId: "legacy-step-1",
+            tabId: 3,
+            recordedAt: "2026-04-08T00:00:01.000Z",
+            pageUrl: "https://app.example.com/settings",
+            topOrigin: "https://app.example.com",
+            selector: "#legacy",
+            tagName: "button",
+            textSnippet: "Legacy",
+            linkedFixtures: [
+              {
+                bodyPath: "cdn.example.com/assets/legacy.js",
+                requestUrl: "https://cdn.example.com/assets/legacy.js",
+                resourceType: "Script",
+                capturedAt: "2026-04-08T00:00:01.500Z"
+              }
+            ]
+          }
+        ]
+      }
+    );
 
     try {
-      const listResult = await client.callTool({ name: "list-traces", arguments: {} });
+      const listResult = await client.callTool({
+        name: "list-traces",
+        arguments: {}
+      });
       expect(JSON.parse(readTextContent(listResult))).toEqual([
         expect.objectContaining({
           traceId: "legacy-trace",
@@ -2566,7 +2964,9 @@ describe("mcp server", () => {
 
   it("serves the same tools over Streamable HTTP", async () => {
     const root = await createFixtureRootWithData();
-    const { client, server, transport } = await connectHttpClient(root.rootPath);
+    const { client, server, transport } = await connectHttpClient(
+      root.rootPath
+    );
 
     try {
       expect(server.port).toBeGreaterThan(0);
@@ -2638,30 +3038,37 @@ describe("mcp server", () => {
         name: "read-file",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
-      expect(readTextContent(fixtureResult)).toBe("renderDropdown({ animated: true });");
+      expect(readTextContent(fixtureResult)).toBe(
+        "renderDropdown({ animated: true });"
+      );
 
       const assetResult = await client.callTool({
         name: "list-files",
         arguments: { origin: "https://app.example.com" }
       });
-      expect(readTextContent(assetResult)).toContain("\"totalMatched\": 3");
+      expect(readTextContent(assetResult)).toContain('"totalMatched": 3');
 
       const endpointResult = await client.callTool({
         name: "read-api-response",
         arguments: {
-          fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+          fixtureDir:
+            ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
           pretty: true
         }
       });
-      expect(JSON.parse(readTextContent(endpointResult))).toEqual(expect.objectContaining({
-        body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
-      }));
+      expect(JSON.parse(readTextContent(endpointResult))).toEqual(
+        expect.objectContaining({
+          body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+        })
+      );
 
       const searchResult = await client.callTool({
         name: "search-files",
         arguments: { query: "dropdown" }
       });
-      expect(readTextContent(searchResult)).toContain("\"sourceKind\": \"endpoint\"");
+      expect(readTextContent(searchResult)).toContain(
+        '"sourceKind": "endpoint"'
+      );
 
       const snippetResult = await client.callTool({
         name: "read-file-snippet",
@@ -2677,14 +3084,16 @@ describe("mcp server", () => {
         startLine: 2,
         endLine: 3,
         truncated: false,
-        text: "  if (open) {\n    return { variant: \"dark\" };"
+        text: '  if (open) {\n    return { variant: "dark" };'
       });
 
       const listOriginsResult = await client.callTool({
         name: "list-sites",
         arguments: {}
       });
-      expect(readTextContent(listOriginsResult)).toContain("https://app.example.com");
+      expect(readTextContent(listOriginsResult)).toContain(
+        "https://app.example.com"
+      );
 
       const scenariosResult = await client.callTool({
         name: "list-snapshots",
@@ -2703,11 +3112,15 @@ describe("mcp server", () => {
         arguments: { path: "../escape" }
       });
       expect(invalidFixtureResult.isError).toBe(true);
-      expect(readTextContent(invalidFixtureResult)).toContain("Invalid fixture path: ../escape");
+      expect(readTextContent(invalidFixtureResult)).toContain(
+        "Invalid fixture path: ../escape"
+      );
 
       const invalidSessionResponse = await fetch(server.url, { method: "GET" });
       expect(invalidSessionResponse.status).toBe(400);
-      expect(await invalidSessionResponse.text()).toContain("No valid session ID provided");
+      expect(await invalidSessionResponse.text()).toContain(
+        "No valid session ID provided"
+      );
     } finally {
       await transport.terminateSession();
       await client.close();
@@ -2738,8 +3151,10 @@ describe("mcp server", () => {
       });
 
       expect(response.status).toBe(404);
-      const payload = await response.json() as { error: { message: string } };
-      expect(payload.error.message).toBe('Session "missing-session" not found.');
+      const payload = (await response.json()) as { error: { message: string } };
+      expect(payload.error.message).toBe(
+        'Session "missing-session" not found.'
+      );
     } finally {
       await server.close();
     }
@@ -2805,7 +3220,10 @@ describe("mcp server", () => {
       closeError: new Error("Close failed.")
     });
 
-    const server = await module.startHttpServer(root.rootPath, { host: "127.0.0.1", port: 0 });
+    const server = await module.startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
     await expect(server.close()).rejects.toThrow("Close failed.");
   });
 
@@ -2815,14 +3233,20 @@ describe("mcp server", () => {
       rootId: "root-mcp-server-transport"
     });
     const transportError = new Error("Transport failed.");
-    const { module, fakeApp, fakeMcpServerInstances, fakeTransportInstances } = await loadServerModuleWithMockedExpress({
-      transportHandleRequest: async () => {
-        throw transportError;
-      }
-    });
+    const { module, fakeApp, fakeMcpServerInstances, fakeTransportInstances } =
+      await loadServerModuleWithMockedExpress({
+        transportHandleRequest: async () => {
+          throw transportError;
+        }
+      });
 
-    const server = await module.startHttpServer(root.rootPath, { host: "127.0.0.1", port: 0 });
-    const mcpHandler = fakeApp.all.mock.calls.find(([route]) => route === "/mcp")?.[1] as (
+    const server = await module.startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const mcpHandler = fakeApp.all.mock.calls.find(
+      ([route]) => route === "/mcp"
+    )?.[1] as (
       req: Record<string, unknown>,
       res: {
         headersSent: boolean;
@@ -2856,11 +3280,13 @@ describe("mcp server", () => {
       );
 
       expect(response.status).toHaveBeenCalledWith(500);
-      expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
-        error: expect.objectContaining({
-          message: expect.stringContaining("Transport failed.")
+      expect(response.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            message: expect.stringContaining("Transport failed.")
+          })
         })
-      }));
+      );
       expect(fakeTransportInstances[0]?.close).toHaveBeenCalled();
       expect(fakeMcpServerInstances[0]?.close).toHaveBeenCalled();
     } finally {

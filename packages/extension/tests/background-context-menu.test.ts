@@ -17,11 +17,13 @@ function createAuthorityStub({
     siteConfigs: [],
     sentinel: { rootId: "root-1" }
   }),
-  writeConfiguredSiteConfigsForAuthority = vi.fn().mockImplementation(async (siteConfigs) => ({
-    ok: true,
-    siteConfigs,
-    sentinel: { rootId: "root-1" }
-  }))
+  writeConfiguredSiteConfigsForAuthority = vi
+    .fn()
+    .mockImplementation(async (siteConfigs) => ({
+      ok: true,
+      siteConfigs,
+      sentinel: { rootId: "root-1" }
+    }))
 } = {}) {
   return {
     ensureRootReady,
@@ -72,14 +74,23 @@ describe("background context menu", () => {
       }
     );
 
-    expect(authority.ensureRootReady).toHaveBeenCalledWith({ requestPermission: true });
+    expect(authority.ensureRootReady).toHaveBeenCalledWith({
+      requestPermission: true
+    });
     expect(chromeApi.permissions.request).toHaveBeenCalledWith({
       origins: ["https://docs.example.com/*"]
     });
-    expect(authority.writeConfiguredSiteConfigsForAuthority).toHaveBeenCalledWith([
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).toHaveBeenCalledWith([
       expect.objectContaining({
         origin: "https://docs.example.com",
-        dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+        dumpAllowlistPatterns: [
+          "\\.m?(js|ts)x?$",
+          "\\.css$",
+          "\\.wasm$",
+          "\\.json$"
+        ]
       })
     ]);
     expect(setLastError).toHaveBeenLastCalledWith("");
@@ -90,11 +101,13 @@ describe("background context menu", () => {
     const authority = createAuthorityStub({
       readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
         ok: true,
-        siteConfigs: [{
-          origin: "https://docs.example.com",
-          createdAt: "2026-04-10T00:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.js$"]
-        }],
+        siteConfigs: [
+          {
+            origin: "https://docs.example.com",
+            createdAt: "2026-04-10T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          }
+        ],
         sentinel: { rootId: "root-1" }
       })
     });
@@ -119,7 +132,9 @@ describe("background context menu", () => {
     expect(chromeApi.permissions.request).toHaveBeenCalledWith({
       origins: ["https://docs.example.com/*"]
     });
-    expect(authority.writeConfiguredSiteConfigsForAuthority).not.toHaveBeenCalled();
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
     expect(setLastError).toHaveBeenLastCalledWith("");
   });
 
@@ -146,7 +161,11 @@ describe("background context menu", () => {
 
     expect(authority.ensureRootReady).not.toHaveBeenCalled();
     expect(chromeApi.permissions.request).not.toHaveBeenCalled();
-    expect(authority.writeConfiguredSiteConfigsForAuthority).not.toHaveBeenCalled();
-    expect(setLastError).toHaveBeenLastCalledWith("Only http and https origins are supported.");
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+    expect(setLastError).toHaveBeenLastCalledWith(
+      "Only http and https origins are supported."
+    );
   });
 });

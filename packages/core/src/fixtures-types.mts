@@ -1,6 +1,14 @@
-import type { ResponseMeta, StaticResourceManifest, StaticResourceManifestEntry } from "./fixture-layout.mjs";
+import type {
+  ResponseMeta,
+  StaticResourceManifest,
+  StaticResourceManifestEntry
+} from "./fixture-layout.mjs";
 
-export type { ResponseMeta, StaticResourceManifest, StaticResourceManifestEntry } from "./fixture-layout.mjs";
+export type {
+  ResponseMeta,
+  StaticResourceManifest,
+  StaticResourceManifestEntry
+} from "./fixture-layout.mjs";
 
 export interface ApiEndpoint {
   origin: string;

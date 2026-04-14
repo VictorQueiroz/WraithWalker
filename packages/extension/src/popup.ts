@@ -2,8 +2,15 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 
 import { getNativeHostConfig as defaultGetNativeHostConfig } from "./lib/chrome-storage.js";
-import { EDITOR_PRESETS, POPUP_REFRESH_INTERVAL_MS, type EditorPreset } from "./lib/constants.js";
-import { loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission } from "./lib/root-handle.js";
+import {
+  EDITOR_PRESETS,
+  POPUP_REFRESH_INTERVAL_MS,
+  type EditorPreset
+} from "./lib/constants.js";
+import {
+  loadStoredRootHandle as defaultLoadStoredRootHandle,
+  queryRootPermission as defaultQueryRootPermission
+} from "./lib/root-handle.js";
 import type { BackgroundMessage } from "./lib/messages.js";
 import { PopupApp } from "./ui/popup-app.js";
 
@@ -27,7 +34,10 @@ export interface PopupDependencies {
 }
 
 function isTestMode(): boolean {
-  return Boolean((globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean }).__WRAITHWALKER_TEST__);
+  return Boolean(
+    (globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean })
+      .__WRAITHWALKER_TEST__
+  );
 }
 
 export async function initPopup({

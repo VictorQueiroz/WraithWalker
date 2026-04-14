@@ -65,13 +65,19 @@ describe("server root runtime adapter", () => {
 
     await runtime.generateContext({
       editorId: "cursor",
-      siteConfigs: [{
-        origin: "https://app.example.com"
-      }]
+      siteConfigs: [
+        {
+          origin: "https://app.example.com"
+        }
+      ]
     });
 
-    await expect(fs.readFile(path.join(root.rootPath, "CLAUDE.md"), "utf8")).resolves.toContain("WraithWalker Fixture Context");
-    await expect(fs.readFile(path.join(root.rootPath, ".cursorrules"), "utf8")).resolves.toContain("Cursor Agent Brief");
+    await expect(
+      fs.readFile(path.join(root.rootPath, "CLAUDE.md"), "utf8")
+    ).resolves.toContain("WraithWalker Fixture Context");
+    await expect(
+      fs.readFile(path.join(root.rootPath, ".cursorrules"), "utf8")
+    ).resolves.toContain("Cursor Agent Brief");
   });
 
   it("stores guided traces in the shared server root runtime", async () => {
@@ -126,7 +132,9 @@ describe("server root runtime adapter", () => {
   });
 
   it("creates a sentinel on demand and returns null when simple-mode canonical metadata is missing", async () => {
-    const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "wraithwalker-mcp-root-runtime-"));
+    const rootPath = await fs.mkdtemp(
+      path.join(os.tmpdir(), "wraithwalker-mcp-root-runtime-")
+    );
     const runtime = createServerRootRuntime({ rootPath });
 
     const sentinel = await runtime.ensureReady();

@@ -81,9 +81,10 @@ export function deriveEditorLaunchState(
   } = {}
 ): EditorLaunchState {
   const launch = resolveEditorLaunch(nativeHostConfig, editorId);
-  const launchPath = typeof nativeHostConfig.launchPath === "string"
-    ? nativeHostConfig.launchPath.trim()
-    : "";
+  const launchPath =
+    typeof nativeHostConfig.launchPath === "string"
+      ? nativeHostConfig.launchPath.trim()
+      : "";
   const appUrl = launch.appUrl.trim();
 
   if (launch.urlTemplate.trim()) {
@@ -103,10 +104,10 @@ export function deriveEditorLaunchState(
             url: appUrl
           }
         : {
-          kind: "missing_launch_path",
-          editorId: launch.editorId,
-          editorLabel: launch.preset.label
-        };
+            kind: "missing_launch_path",
+            editorId: launch.editorId,
+            editorLabel: launch.preset.label
+          };
   }
 
   if (!launch.hasCustomUrlOverride && appUrl) {
@@ -126,7 +127,12 @@ export function deriveEditorLaunchState(
     };
   }
 
-  if (!(typeof nativeHostConfig.hostName === "string" && nativeHostConfig.hostName.trim())) {
+  if (
+    !(
+      typeof nativeHostConfig.hostName === "string" &&
+      nativeHostConfig.hostName.trim()
+    )
+  ) {
     return {
       kind: "missing_native_host",
       editorId: launch.editorId,
@@ -153,14 +159,18 @@ export function deriveEditorLaunchState(
       };
 }
 
-export function createMissingLaunchPathAlert(editorLabel: string): PopupAlertState {
+export function createMissingLaunchPathAlert(
+  editorLabel: string
+): PopupAlertState {
   return {
     variant: "destructive",
     text: `Set the absolute editor launch path in Settings to open the remembered root in ${editorLabel}. Chrome does not expose local folder paths from the directory picker.`
   };
 }
 
-export function createMissingNativeHostAlert(editorLabel: string): PopupAlertState {
+export function createMissingNativeHostAlert(
+  editorLabel: string
+): PopupAlertState {
   return {
     variant: "destructive",
     text: `${editorLabel} needs a native host name or a custom URL override in Settings before it can open the root.`

@@ -10,14 +10,6 @@
     "lib": ["DOM", "ES2022"],
     "types": ["node", "vitest/globals", "chrome"]
   },
-  "include": [
-    "tests/**/*.ts",
-    "tests/**/*.tsx",
-    "types/**/*.d.ts"
-  ],
-  "exclude": [
-    "coverage",
-    "dist",
-    "node_modules"
-  ]
+  "include": ["tests/**/*.ts", "tests/**/*.tsx", "types/**/*.d.ts"],
+  "exclude": ["coverage", "dist", "node_modules"]
 }

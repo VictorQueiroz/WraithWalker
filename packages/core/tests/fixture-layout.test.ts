@@ -44,55 +44,93 @@ describe("fixture layout", () => {
   });
 
   it("normalizes origins and permission patterns", () => {
-    expect(normalizeSiteInput("app.example.com")).toBe("https://app.example.com");
-    expect(normalizeSiteInput(" https://app.example.com/path?draft=1#section ")).toBe("https://app.example.com");
-    expect(originToPermissionPattern("https://app.example.com")).toBe("https://app.example.com/*");
-    expect(originToKey("https://api.example.com:8443")).toBe("https__api.example.com__8443");
+    expect(normalizeSiteInput("app.example.com")).toBe(
+      "https://app.example.com"
+    );
+    expect(
+      normalizeSiteInput(" https://app.example.com/path?draft=1#section ")
+    ).toBe("https://app.example.com");
+    expect(originToPermissionPattern("https://app.example.com")).toBe(
+      "https://app.example.com/*"
+    );
+    expect(originToKey("https://api.example.com:8443")).toBe(
+      "https__api.example.com__8443"
+    );
     expect(sanitizeSegment(" /// ")).toBe("root");
     expect(() => normalizeSiteInput("   ")).toThrow("Origin is required.");
-    expect(() => normalizeSiteInput("file:///tmp/test")).toThrow("Only http and https origins are supported.");
+    expect(() => normalizeSiteInput("file:///tmp/test")).toThrow(
+      "Only http and https origins are supported."
+    );
   });
 
   it("splits and hashes path fragments predictably", async () => {
-    expect(splitPathSegments("/assets/Hello%20World/app.js")).toEqual(["assets", "Hello-World", "app.js"]);
+    expect(splitPathSegments("/assets/Hello%20World/app.js")).toEqual([
+      "assets",
+      "Hello-World",
+      "app.js"
+    ]);
     expect(splitSimpleModePath("/assets/")).toEqual(["assets", "index"]);
     expect(splitSimpleModePath("/assets/app.js")).toEqual(["assets", "app.js"]);
-    expect(getRequestHostKey("http://cdn.example.com:80/app.js")).toBe("cdn.example.com");
-    expect(getRequestHostKey("https://cdn.example.com/app.js")).toBe("cdn.example.com");
-    expect(getRequestHostKey("https://cdn.example.com:443/app.js")).toBe("cdn.example.com");
-    expect(getRequestHostKey("https://cdn.example.com:4443/app.js")).toBe("cdn.example.com__4443");
-    expect(getFileNameParts("archive.tar.gz")).toEqual({ stem: "archive.tar", extension: "gz" });
-    expect(getFileNameParts("LICENSE")).toEqual({ stem: "LICENSE", extension: "" });
+    expect(getRequestHostKey("http://cdn.example.com:80/app.js")).toBe(
+      "cdn.example.com"
+    );
+    expect(getRequestHostKey("https://cdn.example.com/app.js")).toBe(
+      "cdn.example.com"
+    );
+    expect(getRequestHostKey("https://cdn.example.com:443/app.js")).toBe(
+      "cdn.example.com"
+    );
+    expect(getRequestHostKey("https://cdn.example.com:4443/app.js")).toBe(
+      "cdn.example.com__4443"
+    );
+    expect(getFileNameParts("archive.tar.gz")).toEqual({
+      stem: "archive.tar",
+      extension: "gz"
+    });
+    expect(getFileNameParts("LICENSE")).toEqual({
+      stem: "LICENSE",
+      extension: ""
+    });
     expect(appendHashToFileName("app.js", "__q-abc")).toBe("app__q-abc.js");
     expect(appendHashToFileName("app", "__q-abc")).toBe("app__q-abc");
     expect(await sha256Hex("abc")).toHaveLength(64);
     expect(await sha256Hex(new Uint8Array([1, 2, 3]))).toHaveLength(64);
-    expect(await shortHash(new Uint8Array([1, 2, 3]).buffer, 8)).toHaveLength(8);
+    expect(await shortHash(new Uint8Array([1, 2, 3]).buffer, 8)).toHaveLength(
+      8
+    );
     expect(await shortHash("abc")).toHaveLength(12);
   });
 
   it("infers asset-like behavior and mime/extension fallbacks", () => {
-    expect(isAssetLikeRequest({
-      method: "GET",
-      url: "https://cdn.example.com/app.js",
-      mimeType: "application/javascript"
-    })).toBe(true);
-    expect(isAssetLikeRequest({
-      method: "GET",
-      url: "https://api.example.com/users",
-      resourceType: "Fetch",
-      mimeType: "application/json"
-    })).toBe(false);
-    expect(isAssetLikeRequest({
-      method: "GET",
-      url: "https://cdn.example.com/theme",
-      resourceType: "Stylesheet"
-    })).toBe(true);
-    expect(isAssetLikeRequest({
-      method: "POST",
-      url: "https://cdn.example.com/app.js",
-      mimeType: "application/javascript"
-    })).toBe(false);
+    expect(
+      isAssetLikeRequest({
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        mimeType: "application/javascript"
+      })
+    ).toBe(true);
+    expect(
+      isAssetLikeRequest({
+        method: "GET",
+        url: "https://api.example.com/users",
+        resourceType: "Fetch",
+        mimeType: "application/json"
+      })
+    ).toBe(false);
+    expect(
+      isAssetLikeRequest({
+        method: "GET",
+        url: "https://cdn.example.com/theme",
+        resourceType: "Stylesheet"
+      })
+    ).toBe(true);
+    expect(
+      isAssetLikeRequest({
+        method: "POST",
+        url: "https://cdn.example.com/app.js",
+        mimeType: "application/javascript"
+      })
+    ).toBe(false);
 
     expect(deriveExtensionFromMime("application/problem+json")).toBe("json");
     expect(deriveExtensionFromMime("application/soap+xml")).toBe("xml");
@@ -103,7 +141,9 @@ describe("fixture layout", () => {
     expect(deriveExtensionFromMime("")).toBe("body");
     expect(deriveExtensionFromMime("application/octet-stream")).toBe("body");
     expect(deriveMimeTypeFromPathname("/assets/app.css")).toBe("text/css");
-    expect(deriveMimeTypeFromPathname("/assets/unknown.bin")).toBe("application/octet-stream");
+    expect(deriveMimeTypeFromPathname("/assets/unknown.bin")).toBe(
+      "application/octet-stream"
+    );
   });
 
   it("creates canonical descriptors for assets and API fixtures", async () => {
@@ -180,7 +220,9 @@ describe("fixture layout", () => {
     expect(untypedTrailingSlash.bodyPath).toBe(
       ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/index.__body"
     );
-    expect(untypedTrailingSlash.projectionPath).toBe("cdn.example.com/assets/index");
+    expect(untypedTrailingSlash.projectionPath).toBe(
+      "cdn.example.com/assets/index"
+    );
     expect(getApi.storageMode).toBe("api");
     expect(getApi.bodyPath).toMatch(
       /^\.wraithwalker\/captures\/http\/https__app\.example\.com\/origins\/https__api\.example\.com\/http\/GET\/agents__q-/
@@ -204,36 +246,46 @@ describe("fixture layout", () => {
       url: "https://cdn.example.com/static/app.js?v=1"
     });
 
-    const request = buildRequestPayload({
-      topOrigin: "https://app.example.com",
-      url: "https://api.example.com/graphql",
-      method: "POST",
-      requestHeaders: [{ name: "Content-Type", value: "application/json" }],
-      requestBody: '{"query":"{viewer{id}}"}',
-      requestBodyEncoding: "utf8",
-      descriptor: { bodyHash: "body123", queryHash: "query456" }
-    }, "2026-04-06T00:00:00.000Z");
-    const requestWithoutDescriptor = buildRequestPayload({
-      topOrigin: "https://app.example.com",
-      url: "https://api.example.com/health",
-      method: "GET",
-      requestHeaders: [],
-      requestBody: "",
-      requestBodyEncoding: "utf8",
-      descriptor: null
-    }, "2026-04-06T00:00:00.000Z");
-    const response = buildResponseMeta({
-      responseStatus: 201,
-      responseStatusText: "Created",
-      responseHeaders: [
-        { name: "Content-Type", value: "application/json" },
-        { name: "content-type", value: "text/plain" }
-      ],
-      mimeType: "application/json",
-      resourceType: "Fetch",
-      url: "https://api.example.com/graphql",
-      method: "POST"
-    }, "utf8", "2026-04-06T00:00:00.000Z");
+    const request = buildRequestPayload(
+      {
+        topOrigin: "https://app.example.com",
+        url: "https://api.example.com/graphql",
+        method: "POST",
+        requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+        requestBody: '{"query":"{viewer{id}}"}',
+        requestBodyEncoding: "utf8",
+        descriptor: { bodyHash: "body123", queryHash: "query456" }
+      },
+      "2026-04-06T00:00:00.000Z"
+    );
+    const requestWithoutDescriptor = buildRequestPayload(
+      {
+        topOrigin: "https://app.example.com",
+        url: "https://api.example.com/health",
+        method: "GET",
+        requestHeaders: [],
+        requestBody: "",
+        requestBodyEncoding: "utf8",
+        descriptor: null
+      },
+      "2026-04-06T00:00:00.000Z"
+    );
+    const response = buildResponseMeta(
+      {
+        responseStatus: 201,
+        responseStatusText: "Created",
+        responseHeaders: [
+          { name: "Content-Type", value: "application/json" },
+          { name: "content-type", value: "text/plain" }
+        ],
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://api.example.com/graphql",
+        method: "POST"
+      },
+      "utf8",
+      "2026-04-06T00:00:00.000Z"
+    );
 
     expect(request).toEqual({
       topOrigin: "https://app.example.com",
@@ -280,51 +332,63 @@ describe("fixture layout", () => {
       bodyEncoding: "utf8",
       bodySuggestedExtension: "js"
     });
-    const advancedManifestEntry = createStaticResourceManifestEntry(advancedDescriptor as any, {
-      status: 200,
-      statusText: "OK",
-      headers: [],
-      mimeType: "application/javascript",
-      resourceType: "Script",
-      url: advancedDescriptor.requestUrl,
-      method: "GET",
-      capturedAt: "2026-04-06T00:00:00.000Z",
-      bodyEncoding: "utf8",
-      bodySuggestedExtension: "js"
-    });
-    const customAdvancedManifestEntry = createStaticResourceManifestEntry({
-      ...advancedDescriptor,
-      bodyPath: "assets/static/app.js",
-      requestPath: "assets/static/app.js.__request.json",
-      metaPath: "assets/static/app.js.__response.json"
-    } as any, {
-      status: 200,
-      statusText: "OK",
-      headers: [],
-      mimeType: "application/javascript",
-      resourceType: "Script",
-      url: advancedDescriptor.requestUrl,
-      method: "GET",
-      capturedAt: "2026-04-06T00:00:00.000Z",
-      bodyEncoding: "utf8",
-      bodySuggestedExtension: "js"
-    });
-    const hiddenOnlyManifestEntry = createStaticResourceManifestEntry({
-      ...advancedDescriptor,
-      projectionPath: null
-    } as any, {
-      status: 200,
-      statusText: "OK",
-      headers: [],
-      mimeType: "application/javascript",
-      resourceType: "Script",
-      url: advancedDescriptor.requestUrl,
-      method: "GET",
-      capturedAt: "2026-04-06T00:00:00.000Z",
-      bodyEncoding: "utf8",
-      bodySuggestedExtension: "js"
-    });
-    const updatedManifest = upsertStaticResourceManifest(manifest, manifestEntry);
+    const advancedManifestEntry = createStaticResourceManifestEntry(
+      advancedDescriptor as any,
+      {
+        status: 200,
+        statusText: "OK",
+        headers: [],
+        mimeType: "application/javascript",
+        resourceType: "Script",
+        url: advancedDescriptor.requestUrl,
+        method: "GET",
+        capturedAt: "2026-04-06T00:00:00.000Z",
+        bodyEncoding: "utf8",
+        bodySuggestedExtension: "js"
+      }
+    );
+    const customAdvancedManifestEntry = createStaticResourceManifestEntry(
+      {
+        ...advancedDescriptor,
+        bodyPath: "assets/static/app.js",
+        requestPath: "assets/static/app.js.__request.json",
+        metaPath: "assets/static/app.js.__response.json"
+      } as any,
+      {
+        status: 200,
+        statusText: "OK",
+        headers: [],
+        mimeType: "application/javascript",
+        resourceType: "Script",
+        url: advancedDescriptor.requestUrl,
+        method: "GET",
+        capturedAt: "2026-04-06T00:00:00.000Z",
+        bodyEncoding: "utf8",
+        bodySuggestedExtension: "js"
+      }
+    );
+    const hiddenOnlyManifestEntry = createStaticResourceManifestEntry(
+      {
+        ...advancedDescriptor,
+        projectionPath: null
+      } as any,
+      {
+        status: 200,
+        statusText: "OK",
+        headers: [],
+        mimeType: "application/javascript",
+        resourceType: "Script",
+        url: advancedDescriptor.requestUrl,
+        method: "GET",
+        capturedAt: "2026-04-06T00:00:00.000Z",
+        bodyEncoding: "utf8",
+        bodySuggestedExtension: "js"
+      }
+    );
+    const updatedManifest = upsertStaticResourceManifest(
+      manifest,
+      manifestEntry
+    );
 
     expect(manifestEntry.pathname).toBe("/static/app.js");
     expect(manifestEntry.bodyPath).toMatch(
@@ -336,11 +400,17 @@ describe("fixture layout", () => {
     );
     expect(customAdvancedManifestEntry.bodyPath).toBe("assets/static/app.js");
     expect(hiddenOnlyManifestEntry).not.toHaveProperty("projectionPath");
-    expect(getStaticResourceManifestPath({
-      assetLike: true,
-      topOriginKey: "https__app.example.com"
-    })).toBe(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
-    expect(updatedManifest.resourcesByPathname["/static/app.js"]).toEqual([manifestEntry]);
+    expect(
+      getStaticResourceManifestPath({
+        assetLike: true,
+        topOriginKey: "https__app.example.com"
+      })
+    ).toBe(
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
+    expect(updatedManifest.resourcesByPathname["/static/app.js"]).toEqual([
+      manifestEntry
+    ]);
   });
 
   it("sanitizes stored headers separately from replay headers", () => {

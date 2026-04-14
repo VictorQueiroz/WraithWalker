@@ -1,0 +1,8 @@
+coverage/
+.ts-emit/
+dist/
+out/
+.turbo/
+vendor/
+packages/*/src/**/*.mjs
+packages/*/src/**/*.d.mts

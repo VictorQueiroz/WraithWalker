@@ -6,18 +6,30 @@ interface RuntimeApi {
   sendMessage(message: BackgroundMessage): Promise<unknown>;
 }
 
-function sendMessage<T>(runtime: RuntimeApi, message: BackgroundMessage): Promise<T> {
+function sendMessage<T>(
+  runtime: RuntimeApi,
+  message: BackgroundMessage
+): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;
 }
 
 function isRootConfigUnavailable(message: string): boolean {
-  return message === "No root directory selected."
-    || message === "Root directory access is not granted.";
+  return (
+    message === "No root directory selected." ||
+    message === "Root directory access is not granted."
+  );
 }
 
 async function readSiteConfigs(
   runtime: RuntimeApi,
-  message: Extract<BackgroundMessage, { type: "config.readConfiguredSiteConfigs" | "config.readEffectiveSiteConfigs" }>
+  message: Extract<
+    BackgroundMessage,
+    {
+      type:
+        | "config.readConfiguredSiteConfigs"
+        | "config.readEffectiveSiteConfigs";
+    }
+  >
 ): Promise<SiteConfig[]> {
   const result = await sendMessage<SiteConfigsResult>(runtime, message);
   if (!result) {

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { createFixtureDescriptor, type FixtureDescriptor, type RequestPayload, type ResponseMeta } from "../src/fixture-layout.mts";
-import { createFixtureRepository, type FixtureRepositoryStorage } from "../src/fixture-repository.mts";
+import {
+  createFixtureDescriptor,
+  type FixtureDescriptor,
+  type RequestPayload,
+  type ResponseMeta
+} from "../src/fixture-layout.mts";
+import {
+  createFixtureRepository,
+  type FixtureRepositoryStorage
+} from "../src/fixture-repository.mts";
 import type { RootSentinel } from "../src/root.mts";
 
 interface MemoryRoot {
@@ -20,12 +28,16 @@ function createMemoryStorage(): FixtureRepositoryStorage<MemoryRoot> {
       return root.files.has(relativePath);
     },
     async writeJson(root, relativePath, value) {
-      root.files.set(relativePath, new TextEncoder().encode(JSON.stringify(value, null, 2)));
+      root.files.set(
+        relativePath,
+        new TextEncoder().encode(JSON.stringify(value, null, 2))
+      );
     },
     async writeBody(root, relativePath, payload) {
-      const bytes = payload.bodyEncoding === "base64"
-        ? Uint8Array.from(Buffer.from(payload.body, "base64"))
-        : new TextEncoder().encode(payload.body);
+      const bytes =
+        payload.bodyEncoding === "base64"
+          ? Uint8Array.from(Buffer.from(payload.body, "base64"))
+          : new TextEncoder().encode(payload.body);
       root.files.set(relativePath, bytes);
     },
     async readOptionalJson(root, relativePath) {
@@ -50,13 +62,15 @@ function createMemoryStorage(): FixtureRepositoryStorage<MemoryRoot> {
   };
 }
 
-async function createDescriptor(overrides: Partial<{
-  topOrigin: string;
-  method: string;
-  url: string;
-  resourceType: string;
-  mimeType: string;
-}> = {}): Promise<FixtureDescriptor> {
+async function createDescriptor(
+  overrides: Partial<{
+    topOrigin: string;
+    method: string;
+    url: string;
+    resourceType: string;
+    mimeType: string;
+  }> = {}
+): Promise<FixtureDescriptor> {
   return createFixtureDescriptor({
     topOrigin: overrides.topOrigin || "https://app.example.com",
     method: overrides.method || "GET",
@@ -145,18 +159,26 @@ describe("shared fixture repository", () => {
     expect(await repository.exists(assetDescriptor)).toBe(false);
     expect(await repository.exists(apiDescriptor)).toBe(false);
 
-    await storage.writeJson(root, assetDescriptor.metaPath, createResponseMeta(assetDescriptor, {
-      mimeType: "application/javascript",
-      resourceType: "Script",
-      bodySuggestedExtension: "js"
-    }));
+    await storage.writeJson(
+      root,
+      assetDescriptor.metaPath,
+      createResponseMeta(assetDescriptor, {
+        mimeType: "application/javascript",
+        resourceType: "Script",
+        bodySuggestedExtension: "js"
+      })
+    );
     expect(await repository.exists(assetDescriptor)).toBe(true);
 
-    await storage.writeJson(root, apiDescriptor.metaPath, createResponseMeta(apiDescriptor, {
-      mimeType: "application/json",
-      resourceType: "Fetch",
-      bodySuggestedExtension: "json"
-    }));
+    await storage.writeJson(
+      root,
+      apiDescriptor.metaPath,
+      createResponseMeta(apiDescriptor, {
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        bodySuggestedExtension: "json"
+      })
+    );
     expect(await repository.exists(apiDescriptor)).toBe(true);
   });
 
@@ -219,7 +241,9 @@ describe("shared fixture repository", () => {
         queryHash: descriptor.queryHash
       }),
       meta,
-      bodyBase64: Buffer.from(".app { color: red; }", "utf8").toString("base64"),
+      bodyBase64: Buffer.from(".app { color: red; }", "utf8").toString(
+        "base64"
+      ),
       size: Buffer.byteLength(".app { color: red; }")
     });
   });
@@ -277,22 +301,44 @@ describe("shared fixture repository", () => {
       sentinel
     });
 
-    expect(await storage.readOptionalJson<RequestPayload>(root, descriptor.requestPath)).toEqual(request);
-    expect(await storage.readOptionalJson<ResponseMeta>(root, descriptor.metaPath)).toEqual(meta);
+    expect(
+      await storage.readOptionalJson<RequestPayload>(
+        root,
+        descriptor.requestPath
+      )
+    ).toEqual(request);
+    expect(
+      await storage.readOptionalJson<ResponseMeta>(root, descriptor.metaPath)
+    ).toEqual(meta);
     expect(descriptor.projectionPath).toBe("cdn.example.com/styles/app.css");
-    expect(Buffer.from(root.files.get(descriptor.projectionPath!) || new Uint8Array()).toString("utf8")).toBe(
-      ".app {\n  color: red;\n}"
-    );
+    expect(
+      Buffer.from(
+        root.files.get(descriptor.projectionPath!) || new Uint8Array()
+      ).toString("utf8")
+    ).toBe(".app {\n  color: red;\n}");
     expect(await repository.read(descriptor)).toEqual({
       request,
       meta,
-      bodyBase64: Buffer.from(".app {\n  color: red;\n}", "utf8").toString("base64"),
+      bodyBase64: Buffer.from(".app {\n  color: red;\n}", "utf8").toString(
+        "base64"
+      ),
       size: Buffer.byteLength(".app {\n  color: red;\n}")
     });
 
     const manifest = await storage.readOptionalJson<{
-      resourcesByPathname: Record<string, Array<{ bodyPath: string; projectionPath?: string | null; requestPath: string; metaPath: string }>>;
-    }>(root, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
+      resourcesByPathname: Record<
+        string,
+        Array<{
+          bodyPath: string;
+          projectionPath?: string | null;
+          requestPath: string;
+          metaPath: string;
+        }>
+      >;
+    }>(
+      root,
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
     expect(manifest?.resourcesByPathname["/styles/app.css"]).toEqual([
       expect.objectContaining({
         bodyPath: descriptor.bodyPath,
@@ -319,7 +365,9 @@ describe("shared fixture repository", () => {
     });
 
     expect(firstDescriptor.bodyPath).not.toBe(secondDescriptor.bodyPath);
-    expect(firstDescriptor.projectionPath).toBe(secondDescriptor.projectionPath);
+    expect(firstDescriptor.projectionPath).toBe(
+      secondDescriptor.projectionPath
+    );
     expect(firstDescriptor.requestPath).not.toBe(secondDescriptor.requestPath);
     expect(firstDescriptor.metaPath).not.toBe(secondDescriptor.metaPath);
 
@@ -353,7 +401,10 @@ describe("shared fixture repository", () => {
           }),
           headers: [
             { name: "Content-Type", value: "application/javascript" },
-            { name: "Access-Control-Allow-Origin", value: "https://app.example.com" }
+            {
+              name: "Access-Control-Allow-Origin",
+              value: "https://app.example.com"
+            }
           ]
         }
       }
@@ -361,25 +412,44 @@ describe("shared fixture repository", () => {
 
     expect(firstWrite.written).toBe(true);
     expect(secondWrite.written).toBe(true);
-    expect(Buffer.from(root.files.get(firstDescriptor.bodyPath) || new Uint8Array()).toString("utf8")).toBe(
-      "console.log('shared body');"
-    );
-    expect(Buffer.from(root.files.get(secondDescriptor.bodyPath) || new Uint8Array()).toString("utf8")).toBe(
-      "console.log('new body should not overwrite');"
-    );
-    expect(Buffer.from(root.files.get(firstDescriptor.projectionPath!) || new Uint8Array()).toString("utf8")).toBe(
-      "console.log(\"shared body\");"
-    );
-    expect(await storage.readOptionalJson<ResponseMeta>(root, firstDescriptor.metaPath)).toEqual(
+    expect(
+      Buffer.from(
+        root.files.get(firstDescriptor.bodyPath) || new Uint8Array()
+      ).toString("utf8")
+    ).toBe("console.log('shared body');");
+    expect(
+      Buffer.from(
+        root.files.get(secondDescriptor.bodyPath) || new Uint8Array()
+      ).toString("utf8")
+    ).toBe("console.log('new body should not overwrite');");
+    expect(
+      Buffer.from(
+        root.files.get(firstDescriptor.projectionPath!) || new Uint8Array()
+      ).toString("utf8")
+    ).toBe('console.log("shared body");');
+    expect(
+      await storage.readOptionalJson<ResponseMeta>(
+        root,
+        firstDescriptor.metaPath
+      )
+    ).toEqual(
       expect.objectContaining({
         headers: [{ name: "Content-Type", value: "application/javascript" }]
       })
     );
-    expect(await storage.readOptionalJson<ResponseMeta>(root, secondDescriptor.metaPath)).toEqual(
+    expect(
+      await storage.readOptionalJson<ResponseMeta>(
+        root,
+        secondDescriptor.metaPath
+      )
+    ).toEqual(
       expect.objectContaining({
         headers: [
           { name: "Content-Type", value: "application/javascript" },
-          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" }
+          {
+            name: "Access-Control-Allow-Origin",
+            value: "https://app.example.com"
+          }
         ]
       })
     );
@@ -387,13 +457,27 @@ describe("shared fixture repository", () => {
       { name: "Content-Type", value: "application/javascript" },
       { name: "Access-Control-Allow-Origin", value: "https://app.example.com" }
     ]);
-    expect(Buffer.from((await repository.read(secondDescriptor))!.bodyBase64, "base64").toString("utf8")).toBe(
-      "console.log(\"shared body\");"
-    );
+    expect(
+      Buffer.from(
+        (await repository.read(secondDescriptor))!.bodyBase64,
+        "base64"
+      ).toString("utf8")
+    ).toBe('console.log("shared body");');
 
     const manifest = await storage.readOptionalJson<{
-      resourcesByPathname: Record<string, Array<{ requestUrl: string; search: string; bodyPath: string; projectionPath?: string | null }>>;
-    }>(root, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
+      resourcesByPathname: Record<
+        string,
+        Array<{
+          requestUrl: string;
+          search: string;
+          bodyPath: string;
+          projectionPath?: string | null;
+        }>
+      >;
+    }>(
+      root,
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
     expect(manifest?.resourcesByPathname["/assets/a.js"]).toEqual([
       expect.objectContaining({
         requestUrl: secondDescriptor.requestUrl,
@@ -439,9 +523,12 @@ describe("shared fixture repository", () => {
       bodyEncoding: "utf8"
     });
 
-    expect(Buffer.from((await repository.read(descriptor))!.bodyBase64, "base64").toString("utf8")).toBe(
-      "console.log('edited projection');"
-    );
+    expect(
+      Buffer.from(
+        (await repository.read(descriptor))!.bodyBase64,
+        "base64"
+      ).toString("utf8")
+    ).toBe("console.log('edited projection');");
   });
 
   it("does not replay a query-bearing simple-mode asset from a bare visible file without matching sidecars", async () => {
@@ -501,7 +588,12 @@ describe("shared fixture repository", () => {
       descriptor,
       sentinel
     });
-    expect(await storage.readOptionalJson(root, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json")).toBeNull();
+    expect(
+      await storage.readOptionalJson(
+        root,
+        ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+      )
+    ).toBeNull();
     expect(await repository.read(descriptor)).toEqual({
       request,
       meta,

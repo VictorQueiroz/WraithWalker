@@ -21,7 +21,9 @@ export interface ParsedArgs {
 export function parsePort(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-    throw new Error(`Invalid port: ${value}. Expected an integer between 1 and 65535.`);
+    throw new Error(
+      `Invalid port: ${value}. Expected an integer between 1 and 65535.`
+    );
   }
 
   return parsed;
@@ -119,6 +121,9 @@ export async function runBin({
   await startServerImpl(rootPath);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   await runBin();
 }

@@ -24,7 +24,9 @@ describe("dom helpers", () => {
     } as ParentNode;
 
     expect(queryRequired("#root", root)).toBe(expectedElement);
-    expect(() => queryRequired(".missing", root)).toThrow("Missing required element: .missing");
+    expect(() => queryRequired(".missing", root)).toThrow(
+      "Missing required element: .missing"
+    );
   });
 });
 
@@ -43,7 +45,9 @@ describe("hash helpers", () => {
   it("creates deterministic SHA-256 hashes", async () => {
     const full = await sha256Hex("wraithwalker");
 
-    expect(full).toBe("eefaea2b0179d2707e2f2adf6f6bd81c88fb9d412f6e245c88a81f4c0bfc28cc");
+    expect(full).toBe(
+      "eefaea2b0179d2707e2f2adf6f6bd81c88fb9d412f6e245c88a81f4c0bfc28cc"
+    );
     await expect(shortHash("wraithwalker", 8)).resolves.toBe(full.slice(0, 8));
   });
 });
@@ -97,8 +101,14 @@ describe("root config helpers", () => {
   it("treats missing or unavailable root configs as empty config lists", async () => {
     runtime.sendMessage
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ ok: false, error: "No root directory selected." })
-      .mockResolvedValueOnce({ ok: false, error: "Root directory access is not granted." });
+      .mockResolvedValueOnce({
+        ok: false,
+        error: "No root directory selected."
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: "Root directory access is not granted."
+      });
 
     await expect(getConfiguredSiteConfigs(runtime)).resolves.toEqual([]);
     await expect(getConfiguredSiteConfigs(runtime)).resolves.toEqual([]);
@@ -112,8 +122,12 @@ describe("root config helpers", () => {
       .mockResolvedValueOnce({ ok: false, error: "Still broken." });
 
     await expect(getConfiguredSiteConfigs(runtime)).rejects.toThrow("Boom.");
-    await expect(setConfiguredSiteConfigs([], runtime)).rejects.toThrow("Failed to update root config.");
-    await expect(setConfiguredSiteConfigs([], runtime)).rejects.toThrow("Still broken.");
+    await expect(setConfiguredSiteConfigs([], runtime)).rejects.toThrow(
+      "Failed to update root config."
+    );
+    await expect(setConfiguredSiteConfigs([], runtime)).rejects.toThrow(
+      "Still broken."
+    );
   });
 
   it("writes configured site configs through the background runtime", async () => {
@@ -123,7 +137,9 @@ describe("root config helpers", () => {
       sentinel: { rootId: "root-123" }
     });
 
-    await expect(setConfiguredSiteConfigs([], runtime)).resolves.toBeUndefined();
+    await expect(
+      setConfiguredSiteConfigs([], runtime)
+    ).resolves.toBeUndefined();
     expect(runtime.sendMessage).toHaveBeenCalledWith({
       type: "config.writeConfiguredSiteConfigs",
       siteConfigs: []

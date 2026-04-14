@@ -20,10 +20,11 @@ const STYLE_FORMATTERS: Record<StyleToken, (value: string) => string> = {
 };
 
 function compileFormatter(tokens: StyleToken[]): (value: string) => string {
-  return (value: string) => tokens.reduceRight(
-    (rendered, token) => STYLE_FORMATTERS[token](rendered),
-    value
-  );
+  return (value: string) =>
+    tokens.reduceRight(
+      (rendered, token) => STYLE_FORMATTERS[token](rendered),
+      value
+    );
 }
 
 function compileThemeFormatters(styles: ThemeStyles): ThemeFormatterMap {
@@ -39,14 +40,21 @@ function compileThemeFormatters(styles: ThemeStyles): ThemeFormatterMap {
   };
 }
 
-function renderProgressBar(current: number, total: number, width: number): string {
+function renderProgressBar(
+  current: number,
+  total: number,
+  width: number
+): string {
   const safeTotal = Math.max(total, 1);
   const ratio = Math.min(1, Math.max(0, current / safeTotal));
   const filled = Math.round(ratio * width);
   return `[${"#".repeat(filled)}${"-".repeat(width - filled)}]`;
 }
 
-export function createThemedOutput(theme: ThemeDefinition, { isTTY = false }: { isTTY?: boolean } = {}): Output {
+export function createThemedOutput(
+  theme: ThemeDefinition,
+  { isTTY = false }: { isTTY?: boolean } = {}
+): Output {
   const { icons, indent, labelWidth, banner: bannerData } = theme;
   const palette = compileThemeFormatters(theme.styles);
   const interactiveProgress = isTTY;
@@ -61,17 +69,24 @@ export function createThemedOutput(theme: ThemeDefinition, { isTTY = false }: { 
     progressLineActive = false;
   }
 
-  function writeProgressLine(event: Extract<HarImportEvent, { type: "entry-start" | "entry-progress" }>) {
-    const overallBar = renderProgressBar(event.completedEntries, event.totalEntries, 12);
+  function writeProgressLine(
+    event: Extract<HarImportEvent, { type: "entry-start" | "entry-progress" }>
+  ) {
+    const overallBar = renderProgressBar(
+      event.completedEntries,
+      event.totalEntries,
+      12
+    );
     const fileBar = renderProgressBar(event.writtenBytes, event.totalBytes, 10);
-    const requestLabel = event.requestUrl.length > 48
-      ? `${event.requestUrl.slice(0, 45)}...`
-      : event.requestUrl;
+    const requestLabel =
+      event.requestUrl.length > 48
+        ? `${event.requestUrl.slice(0, 45)}...`
+        : event.requestUrl;
 
     process.stdout.write(
-      `\r\x1b[2K${palette.accent(`${indent}${overallBar} ${event.completedEntries}/${event.totalEntries}`)}`
-        + ` ${palette.muted("|")}`
-        + ` ${palette.heading(`${fileBar} ${requestLabel}`)}`
+      `\r\x1b[2K${palette.accent(`${indent}${overallBar} ${event.completedEntries}/${event.totalEntries}`)}` +
+        ` ${palette.muted("|")}` +
+        ` ${palette.heading(`${fileBar} ${requestLabel}`)}`
     );
     progressLineActive = true;
   }
@@ -79,7 +94,10 @@ export function createThemedOutput(theme: ThemeDefinition, { isTTY = false }: { 
   return {
     banner() {
       clearProgressLine();
-      const phrase = bannerData.phrases[Math.floor(Math.random() * bannerData.phrases.length)];
+      const phrase =
+        bannerData.phrases[
+          Math.floor(Math.random() * bannerData.phrases.length)
+        ];
       console.log();
       for (const line of bannerData.art) {
         console.log(palette.heading(line));
@@ -128,11 +146,19 @@ export function createThemedOutput(theme: ThemeDefinition, { isTTY = false }: { 
     renderImportProgress(event: HarImportEvent) {
       if (!interactiveProgress) {
         if (event.type === "entry-complete") {
-          console.log(palette.success(`${indent}${icons.success} Imported ${event.bodyPath}`));
+          console.log(
+            palette.success(
+              `${indent}${icons.success} Imported ${event.bodyPath}`
+            )
+          );
         }
 
         if (event.type === "entry-skipped") {
-          console.log(palette.warn(`${indent}${icons.warn} Skipped [${event.method}] ${event.requestUrl}: ${event.reason}`));
+          console.log(
+            palette.warn(
+              `${indent}${icons.warn} Skipped [${event.method}] ${event.requestUrl}: ${event.reason}`
+            )
+          );
         }
         return;
       }
@@ -145,11 +171,19 @@ export function createThemedOutput(theme: ThemeDefinition, { isTTY = false }: { 
       clearProgressLine();
 
       if (event.type === "entry-complete") {
-        console.log(palette.success(`${indent}${icons.success} Imported ${event.bodyPath}`));
+        console.log(
+          palette.success(
+            `${indent}${icons.success} Imported ${event.bodyPath}`
+          )
+        );
       }
 
       if (event.type === "entry-skipped") {
-        console.log(palette.warn(`${indent}${icons.warn} Skipped [${event.method}] ${event.requestUrl}: ${event.reason}`));
+        console.log(
+          palette.warn(
+            `${indent}${icons.warn} Skipped [${event.method}] ${event.requestUrl}: ${event.reason}`
+          )
+        );
       }
     }
   };

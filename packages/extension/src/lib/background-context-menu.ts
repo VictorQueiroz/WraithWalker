@@ -10,10 +10,7 @@ import { createConfiguredSiteConfig } from "./site-config.js";
 
 export const WHITELIST_SITE_MENU_ID = "wraithwalker.whitelist-site";
 
-const WEB_DOCUMENT_URL_PATTERNS = [
-  "http://*/*",
-  "https://*/*"
-];
+const WEB_DOCUMENT_URL_PATTERNS = ["http://*/*", "https://*/*"];
 
 interface BackgroundContextMenuDependencies {
   chromeApi: ChromeApi;
@@ -28,11 +25,22 @@ interface BackgroundContextMenuDependencies {
 
 export interface BackgroundContextMenuApi {
   registerContextMenus(): Promise<void>;
-  handleContextMenuClicked(info: ContextMenuOnClickData, tab?: BrowserTab): Promise<void>;
+  handleContextMenuClicked(
+    info: ContextMenuOnClickData,
+    tab?: BrowserTab
+  ): Promise<void>;
 }
 
-function resolveOriginCandidate(info: ContextMenuOnClickData, tab?: BrowserTab): string | null {
-  for (const candidate of [tab?.url, info.pageUrl, info.frameUrl, info.linkUrl]) {
+function resolveOriginCandidate(
+  info: ContextMenuOnClickData,
+  tab?: BrowserTab
+): string | null {
+  for (const candidate of [
+    tab?.url,
+    info.pageUrl,
+    info.frameUrl,
+    info.linkUrl
+  ]) {
     if (typeof candidate !== "string" || !candidate.trim()) {
       continue;
     }
@@ -71,7 +79,10 @@ export function createBackgroundContextMenu({
     });
   }
 
-  async function handleContextMenuClicked(info: ContextMenuOnClickData, tab?: BrowserTab): Promise<void> {
+  async function handleContextMenuClicked(
+    info: ContextMenuOnClickData,
+    tab?: BrowserTab
+  ): Promise<void> {
     if (info.menuItemId !== WHITELIST_SITE_MENU_ID) {
       return;
     }
@@ -82,7 +93,9 @@ export function createBackgroundContextMenu({
       return;
     }
 
-    const rootResult = await authority.ensureRootReady({ requestPermission: true });
+    const rootResult = await authority.ensureRootReady({
+      requestPermission: true
+    });
     if (!rootResult.ok) {
       setLastError(getErrorMessage(rootResult));
       return;
@@ -98,13 +111,18 @@ export function createBackgroundContextMenu({
       }
     }
 
-    const configuredResult = await authority.readConfiguredSiteConfigsForAuthority();
+    const configuredResult =
+      await authority.readConfiguredSiteConfigsForAuthority();
     if (!configuredResult.ok) {
       setLastError(getErrorMessage(configuredResult));
       return;
     }
 
-    if (configuredResult.siteConfigs.some((siteConfig) => siteConfig.origin === origin)) {
+    if (
+      configuredResult.siteConfigs.some(
+        (siteConfig) => siteConfig.origin === origin
+      )
+    ) {
       setLastError("");
       return;
     }
@@ -114,7 +132,8 @@ export function createBackgroundContextMenu({
       createConfiguredSiteConfig(origin)
     ].sort((left, right) => left.origin.localeCompare(right.origin));
 
-    const writeResult = await authority.writeConfiguredSiteConfigsForAuthority(nextSiteConfigs);
+    const writeResult =
+      await authority.writeConfiguredSiteConfigsForAuthority(nextSiteConfigs);
     setLastError(writeResult.ok ? "" : getErrorMessage(writeResult));
   }
 

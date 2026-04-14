@@ -35,7 +35,8 @@ export const command: CommandSpec<StatusArgs, StatusResult> = {
       const info = await readOriginInfo(rootPath, config);
       totalEndpoints += info.apiEndpoints.length;
       if (info.manifest) {
-        totalAssets += Object.values(info.manifest.resourcesByPathname).flat().length;
+        totalAssets += Object.values(info.manifest.resourcesByPathname).flat()
+          .length;
       }
     }
 
@@ -55,6 +56,9 @@ export const command: CommandSpec<StatusArgs, StatusResult> = {
     output.keyValue("Origins", result.origins);
     output.keyValue("Endpoints", result.endpoints);
     output.keyValue("Assets", result.assets);
-    output.keyValue("Scenarios", result.scenarios.length ? result.scenarios.join(", ") : "none");
+    output.keyValue(
+      "Scenarios",
+      result.scenarios.length ? result.scenarios.join(", ") : "none"
+    );
   }
 };

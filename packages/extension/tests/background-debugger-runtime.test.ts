@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createBackgroundDebuggerRuntime } from "../src/lib/background-debugger-runtime.js";
 import type { RequestLifecycleApi } from "../src/lib/background-runtime-shared.js";
-import { createBackgroundState, createChromeApi } from "./helpers/background-service-test-helpers.js";
+import {
+  createBackgroundState,
+  createChromeApi
+} from "./helpers/background-service-test-helpers.js";
 
 describe("background debugger runtime", () => {
   it("attaches tabs with debugger domains enabled and detaches while clearing tracked requests", async () => {
@@ -34,8 +37,14 @@ describe("background debugger runtime", () => {
     await runtime.detachTab(7);
 
     expect(chromeApi.debugger.attach).toHaveBeenCalledWith({ tabId: 7 }, "1.3");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Network.enable");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Log.enable");
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Network.enable"
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Log.enable"
+    );
     expect(traceService.syncTraceBindings).toHaveBeenCalled();
     expect(traceService.disarmTraceForTab).toHaveBeenCalledWith(7);
     expect(chromeApi.debugger.detach).toHaveBeenCalledWith({ tabId: 7 });
@@ -46,7 +55,16 @@ describe("background debugger runtime", () => {
   it("swallows detached-tab debugger races from request lifecycle work", async () => {
     const state = createBackgroundState({
       sessionActive: true,
-      attachedTabs: new Map([[9, { topOrigin: "https://app.example.com", traceScriptIdentifier: null, traceArmedForTraceId: null }]])
+      attachedTabs: new Map([
+        [
+          9,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     state.requests.set("9:req-1", { requestId: "req-1" } as any);
     const chromeApi = createChromeApi();
@@ -62,7 +80,9 @@ describe("background debugger runtime", () => {
     let runtime: ReturnType<typeof createBackgroundDebuggerRuntime>;
     const lifecycle: RequestLifecycleApi = {
       handleFetchRequestPaused: vi.fn(async () => {
-        await runtime.sendDebuggerCommand(9, "Fetch.continueRequest", { requestId: "fetch-9" });
+        await runtime.sendDebuggerCommand(9, "Fetch.continueRequest", {
+          requestId: "fetch-9"
+        });
       }),
       handleNetworkRequestWillBeSent: vi.fn(),
       handleNetworkResponseReceived: vi.fn(),
@@ -81,7 +101,9 @@ describe("background debugger runtime", () => {
       traceService
     });
 
-    await runtime.handleDebuggerEvent({ tabId: 9 }, "Fetch.requestPaused", { requestId: "fetch-9" });
+    await runtime.handleDebuggerEvent({ tabId: 9 }, "Fetch.requestPaused", {
+      requestId: "fetch-9"
+    });
 
     expect(setLastError).not.toHaveBeenCalled();
     expect(state.attachedTabs.has(9)).toBe(false);
@@ -115,17 +137,24 @@ describe("background debugger runtime", () => {
     await runtime.handleDebuggerDetach({ tabId: 5 }, "canceled_by_user");
 
     expect(stopSession).toHaveBeenCalled();
-    expect(setLastError).toHaveBeenCalledWith("Debugger session was canceled by the user. Session stopped.");
+    expect(setLastError).toHaveBeenCalledWith(
+      "Debugger session was canceled by the user. Session stopped."
+    );
     expect(persistSnapshot).toHaveBeenCalled();
   });
 
   it("captures recent console entries from debugger log events", async () => {
     const state = createBackgroundState({
-      attachedTabs: new Map([[4, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          4,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     const runtime = createBackgroundDebuggerRuntime({
       state,
@@ -147,18 +176,14 @@ describe("background debugger runtime", () => {
       }
     });
 
-    await runtime.handleDebuggerEvent(
-      { tabId: 4 },
-      "Log.entryAdded",
-      {
-        entry: {
-          source: "javascript",
-          level: "error",
-          text: "Unhandled exception: boom",
-          timestamp: 1_775_692_800
-        }
+    await runtime.handleDebuggerEvent({ tabId: 4 }, "Log.entryAdded", {
+      entry: {
+        source: "javascript",
+        level: "error",
+        text: "Unhandled exception: boom",
+        timestamp: 1_775_692_800
       }
-    );
+    });
 
     expect(state.recentConsoleEntries).toEqual([
       expect.objectContaining({
@@ -173,11 +198,16 @@ describe("background debugger runtime", () => {
 
   it("ignores malformed debugger console payloads", async () => {
     const state = createBackgroundState({
-      attachedTabs: new Map([[4, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          4,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     const runtime = createBackgroundDebuggerRuntime({
       state,
@@ -207,7 +237,9 @@ describe("background debugger runtime", () => {
   it("rethrows non-detached setup errors while attaching tabs", async () => {
     const state = createBackgroundState();
     const chromeApi = createChromeApi();
-    chromeApi.debugger.sendCommand.mockRejectedValueOnce(new Error("Network enable failed."));
+    chromeApi.debugger.sendCommand.mockRejectedValueOnce(
+      new Error("Network enable failed.")
+    );
     const runtime = createBackgroundDebuggerRuntime({
       state,
       chromeApi,
@@ -228,7 +260,9 @@ describe("background debugger runtime", () => {
       }
     });
 
-    await expect(runtime.attachTab(3, "https://app.example.com")).rejects.toThrow("Network enable failed.");
+    await expect(
+      runtime.attachTab(3, "https://app.example.com")
+    ).rejects.toThrow("Network enable failed.");
     expect(state.attachedTabs.has(3)).toBe(false);
   });
 });

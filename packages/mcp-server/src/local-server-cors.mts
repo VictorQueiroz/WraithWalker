@@ -6,7 +6,9 @@ const EXTENSION_PROTOCOLS = new Set([
 
 const DEFAULT_ALLOWED_HEADERS = "content-type, trpc-accept, x-trpc-source";
 
-export function isAllowedLocalServerOrigin(origin: string | undefined): boolean {
+export function isAllowedLocalServerOrigin(
+  origin: string | undefined
+): boolean {
   if (!origin?.trim()) {
     return false;
   }
@@ -34,7 +36,8 @@ export function buildLocalServerCorsHeaders({
   const headers: Record<string, string> = {
     "Access-Control-Allow-Origin": origin!,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": requestedHeaders?.trim() || DEFAULT_ALLOWED_HEADERS,
+    "Access-Control-Allow-Headers":
+      requestedHeaders?.trim() || DEFAULT_ALLOWED_HEADERS,
     "Access-Control-Max-Age": "600",
     Vary: "Origin"
   };

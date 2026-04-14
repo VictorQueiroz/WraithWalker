@@ -66,14 +66,18 @@ describe("doctor command", () => {
 
     for (const argv of cases) {
       const capture = consoleCapture();
-      expect(await runCli(argv, {
-        cwd: await tmpdir(),
-        env: {},
-        homeDir: await tmpdir(),
-        platform: "linux",
-        isTTY: false
-      })).toBe(1);
-      expect(capture.errors.join("\n")).toContain("Usage: wraithwalker doctor [dir] [--json]");
+      expect(
+        await runCli(argv, {
+          cwd: await tmpdir(),
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        })
+      ).toBe(1);
+      expect(capture.errors.join("\n")).toContain(
+        "Usage: wraithwalker doctor [dir] [--json]"
+      );
       vi.restoreAllMocks();
     }
   });
@@ -85,13 +89,15 @@ describe("doctor command", () => {
     });
     const capture = consoleCapture();
 
-    expect(await runCli(["doctor", "--json"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["doctor", "--json"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
     const output = capture.logs.join("\n");
     expect(output).toContain('"rootFound": true');
@@ -109,11 +115,13 @@ describe("doctor command", () => {
     });
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-09T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
     await root.writeText("CLAUDE.md", "# WraithWalker Fixture Context");
     await root.ensureScenario("smoke");
@@ -125,30 +133,36 @@ describe("doctor command", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-09T00:00:00.000Z",
         resourcesByPathname: {
-          "/app.js": [{
-            requestUrl: "https://cdn.example.com/app.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/app.js",
-            search: "",
-            bodyPath: "cdn.example.com/app.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-09T00:00:00.000Z"
-          }]
+          "/app.js": [
+            {
+              requestUrl: "https://cdn.example.com/app.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/app.js",
+              search: "",
+              bodyPath: "cdn.example.com/app.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-09T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
     const capture = consoleCapture();
 
-    expect(await runCli(["doctor"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["doctor"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
     const output = capture.logs.join("\n");
     expect(output).toContain("WraithWalker Doctor");

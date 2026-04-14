@@ -16,7 +16,11 @@ class MemoryFileHandle {
     const bytes = this.bytes;
     return {
       text: async () => new TextDecoder().decode(bytes),
-      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      arrayBuffer: async () =>
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength
+        ),
       size: bytes.byteLength
     };
   }
@@ -33,7 +37,12 @@ class MemoryFileHandle {
           return;
         }
         if (ArrayBuffer.isView(chunk)) {
-          this.bytes = new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+          this.bytes = new Uint8Array(
+            chunk.buffer.slice(
+              chunk.byteOffset,
+              chunk.byteOffset + chunk.byteLength
+            )
+          );
           return;
         }
         throw new Error(`Unsupported write chunk: ${String(chunk)}`);
@@ -52,7 +61,10 @@ class MemoryDirectoryHandle {
     this.files = new Map();
   }
 
-  async getDirectoryHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getDirectoryHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.directories.has(name)) {
       if (!create) {
         throw new Error(`Missing directory: ${name}`);
@@ -63,7 +75,10 @@ class MemoryDirectoryHandle {
     return this.directories.get(name);
   }
 
-  async getFileHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getFileHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.files.has(name)) {
       if (!create) {
         throw new Error(`Missing file: ${name}`);
@@ -75,7 +90,11 @@ class MemoryDirectoryHandle {
   }
 }
 
-async function resolveMemoryFileHandle(rootHandle: MemoryDirectoryHandle, relativePath: string, create = false) {
+async function resolveMemoryFileHandle(
+  rootHandle: MemoryDirectoryHandle,
+  relativePath: string,
+  create = false
+) {
   const parts = relativePath.split("/").filter(Boolean);
   const fileName = parts.pop();
   let current = rootHandle;
@@ -87,14 +106,21 @@ async function resolveMemoryFileHandle(rootHandle: MemoryDirectoryHandle, relati
   return current.getFileHandle(fileName, { create });
 }
 
-async function writeMemoryFile(rootHandle: MemoryDirectoryHandle, relativePath: string, value: string | ArrayBuffer | ArrayBufferView) {
+async function writeMemoryFile(
+  rootHandle: MemoryDirectoryHandle,
+  relativePath: string,
+  value: string | ArrayBuffer | ArrayBufferView
+) {
   const handle = await resolveMemoryFileHandle(rootHandle, relativePath, true);
   const writer = await handle.createWritable();
   await writer.write(value);
   await writer.close();
 }
 
-async function readMemoryText(rootHandle: MemoryDirectoryHandle, relativePath: string) {
+async function readMemoryText(
+  rootHandle: MemoryDirectoryHandle,
+  relativePath: string
+) {
   const handle = await resolveMemoryFileHandle(rootHandle, relativePath, false);
   const file = await handle.getFile();
   return file.text();
@@ -132,24 +158,33 @@ describe("capture and replay flow", () => {
       createdAt: "2026-04-03T00:00:00.000Z",
       dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
     };
-    const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
-      if (method === "Network.getResponseBody") {
-        return {
-          body: "console.log('captured');",
-          base64Encoded: false
-        };
+    const sendDebuggerCommandMock = vi.fn(
+      async (
+        _tabId: number,
+        method: string,
+        params?: Record<string, unknown>
+      ) => {
+        if (method === "Network.getResponseBody") {
+          return {
+            body: "console.log('captured');",
+            base64Encoded: false
+          };
+        }
+        return { method, params };
       }
-      return { method, params };
-    });
-    const sendDebuggerCommand: Parameters<typeof createRequestLifecycle>[0]["sendDebuggerCommand"] =
-      ((tabId, method, params) => sendDebuggerCommandMock(tabId, method, params) as Promise<any>);
-    const sendOffscreenMessage: Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"] =
-      ((type, payload = {}) =>
-        offscreen.handleMessage({
-          target: "offscreen",
-          type,
-          payload
-        }) as Promise<any>);
+    );
+    const sendDebuggerCommand: Parameters<
+      typeof createRequestLifecycle
+    >[0]["sendDebuggerCommand"] = (tabId, method, params) =>
+      sendDebuggerCommandMock(tabId, method, params) as Promise<any>;
+    const sendOffscreenMessage: Parameters<
+      typeof createRequestLifecycle
+    >[0]["sendOffscreenMessage"] = (type, payload = {}) =>
+      offscreen.handleMessage({
+        target: "offscreen",
+        type,
+        payload
+      }) as Promise<any>;
     const lifecycle = createRequestLifecycle({
       state: {
         sessionActive: true,
@@ -159,7 +194,8 @@ describe("capture and replay flow", () => {
       sendDebuggerCommand,
       sendOffscreenMessage,
       setLastError: vi.fn(),
-      getSiteConfigForOrigin: (topOrigin) => (topOrigin === siteConfig.origin ? siteConfig : undefined),
+      getSiteConfigForOrigin: (topOrigin) =>
+        topOrigin === siteConfig.origin ? siteConfig : undefined,
       createFixtureDescriptor
     });
 
@@ -188,7 +224,10 @@ describe("capture and replay flow", () => {
         type: "Script"
       }
     );
-    await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-capture" });
+    await lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-capture" }
+    );
 
     const descriptor = await createFixtureDescriptor({
       topOrigin: siteConfig.origin,
@@ -197,10 +236,18 @@ describe("capture and replay flow", () => {
       resourceType: "Script"
     });
 
-    expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe("console.log('captured');");
-    expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe("console.log(\"captured\");");
+    expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe(
+      "console.log('captured');"
+    );
+    expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe(
+      'console.log("captured");'
+    );
 
-    await writeMemoryFile(rootHandle, descriptor.projectionPath!, "console.log('edited');");
+    await writeMemoryFile(
+      rootHandle,
+      descriptor.projectionPath!,
+      "console.log('edited');"
+    );
     await offscreen.handleMessage({
       target: "offscreen",
       type: "fs.writeFixture",
@@ -223,7 +270,9 @@ describe("capture and replay flow", () => {
           meta: {
             status: 201,
             statusText: "Created",
-            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            headers: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             mimeType: "application/javascript",
             resourceType: "Script",
             url: descriptor.requestUrl,
@@ -236,8 +285,12 @@ describe("capture and replay flow", () => {
       }
     });
 
-    expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe("console.log('captured');");
-    expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe("console.log('edited');");
+    expect(await readMemoryText(rootHandle, descriptor.bodyPath)).toBe(
+      "console.log('captured');"
+    );
+    expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe(
+      "console.log('edited');"
+    );
 
     await lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -253,14 +306,22 @@ describe("capture and replay flow", () => {
       }
     );
 
-    const fulfillCall = sendDebuggerCommandMock.mock.calls.find(([, method]) => method === "Fetch.fulfillRequest");
+    const fulfillCall = sendDebuggerCommandMock.mock.calls.find(
+      ([, method]) => method === "Fetch.fulfillRequest"
+    );
     expect(fulfillCall).toBeTruthy();
-    expect(fulfillCall[2]).toEqual(expect.objectContaining({
-      requestId: "fetch-replay",
-      responseCode: 200,
-      responseHeaders: [{ name: "Content-Type", value: "application/javascript" }]
-    }));
+    expect(fulfillCall[2]).toEqual(
+      expect.objectContaining({
+        requestId: "fetch-replay",
+        responseCode: 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "application/javascript" }
+        ]
+      })
+    );
     const fulfillPayload = fulfillCall?.[2] as { body: string };
-    expect(Buffer.from(fulfillPayload.body, "base64").toString("utf8")).toBe("console.log('edited');");
+    expect(Buffer.from(fulfillPayload.body, "base64").toString("utf8")).toBe(
+      "console.log('edited');"
+    );
   });
 });

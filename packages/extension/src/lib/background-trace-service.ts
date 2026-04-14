@@ -3,10 +3,7 @@ import type {
   TraceBindingPayload
 } from "./background-runtime-shared.js";
 import { DetachedDebuggerCommandError } from "./background-runtime-shared.js";
-import type {
-  FixtureDescriptor,
-  RequestEntry
-} from "./types.js";
+import type { FixtureDescriptor, RequestEntry } from "./types.js";
 import type {
   ServerScenarioTraceRecord,
   WraithWalkerServerClient
@@ -17,7 +14,11 @@ export const TRACE_BINDING_NAME = "__wraithwalkerTraceBinding";
 interface BackgroundTraceServiceDependencies {
   state: BackgroundState;
   serverClient: WraithWalkerServerClient;
-  sendDebuggerCommand: <T = unknown>(tabId: number, method: string, params?: Record<string, unknown>) => Promise<T>;
+  sendDebuggerCommand: <T = unknown>(
+    tabId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ) => Promise<T>;
   scheduleHeartbeat: () => void;
   markServerOffline: () => void;
 }
@@ -138,7 +139,10 @@ export function createBackgroundTraceService({
   scheduleHeartbeat,
   markServerOffline
 }: BackgroundTraceServiceDependencies): BackgroundTraceServiceApi {
-  async function recordTraceClick(tabId: number, payload: TraceBindingPayload): Promise<void> {
+  async function recordTraceClick(
+    tabId: number,
+    payload: TraceBindingPayload
+  ): Promise<void> {
     const activeTrace = state.activeTrace as ServerScenarioTraceRecord | null;
     if (!state.serverInfo || !activeTrace) {
       return;
@@ -152,7 +156,8 @@ export function createBackgroundTraceService({
           tabId,
           recordedAt: payload.recordedAt || new Date().toISOString(),
           pageUrl: payload.pageUrl,
-          topOrigin: payload.topOrigin || state.attachedTabs.get(tabId)?.topOrigin || "",
+          topOrigin:
+            payload.topOrigin || state.attachedTabs.get(tabId)?.topOrigin || "",
           selector: payload.selector,
           tagName: payload.tagName,
           textSnippet: payload.textSnippet,
@@ -168,9 +173,15 @@ export function createBackgroundTraceService({
     }
   }
 
-  async function handleBindingCalled(tabId: number, params: unknown): Promise<boolean> {
+  async function handleBindingCalled(
+    tabId: number,
+    params: unknown
+  ): Promise<boolean> {
     const event = params as RuntimeBindingCalledEvent;
-    if (event.name !== TRACE_BINDING_NAME || typeof event.payload !== "string") {
+    if (
+      event.name !== TRACE_BINDING_NAME ||
+      typeof event.payload !== "string"
+    ) {
       return false;
     }
 
@@ -215,7 +226,12 @@ export function createBackgroundTraceService({
   async function armTraceForTab(tabId: number): Promise<void> {
     const tabState = state.attachedTabs.get(tabId);
     const activeTrace = state.activeTrace as ServerScenarioTraceRecord | null;
-    if (!tabState || !activeTrace || !state.serverInfo || !state.sessionActive) {
+    if (
+      !tabState ||
+      !activeTrace ||
+      !state.serverInfo ||
+      !state.sessionActive
+    ) {
       return;
     }
 
@@ -238,9 +254,13 @@ export function createBackgroundTraceService({
 
     if (tabState.traceScriptIdentifier) {
       try {
-        await sendDebuggerCommand(tabId, "Page.removeScriptToEvaluateOnNewDocument", {
-          identifier: tabState.traceScriptIdentifier
-        });
+        await sendDebuggerCommand(
+          tabId,
+          "Page.removeScriptToEvaluateOnNewDocument",
+          {
+            identifier: tabState.traceScriptIdentifier
+          }
+        );
       } catch (error) {
         if (error instanceof DetachedDebuggerCommandError) {
           return;
@@ -281,9 +301,13 @@ export function createBackgroundTraceService({
 
     if (tabState.traceScriptIdentifier) {
       try {
-        await sendDebuggerCommand(tabId, "Page.removeScriptToEvaluateOnNewDocument", {
-          identifier: tabState.traceScriptIdentifier
-        });
+        await sendDebuggerCommand(
+          tabId,
+          "Page.removeScriptToEvaluateOnNewDocument",
+          {
+            identifier: tabState.traceScriptIdentifier
+          }
+        );
       } catch {
         // Ignore stale script identifiers on detached targets.
       }
@@ -304,12 +328,16 @@ export function createBackgroundTraceService({
   }
 
   async function syncTraceBindings(): Promise<void> {
-    const shouldArm = Boolean(state.serverInfo && state.activeTrace && state.sessionActive);
+    const shouldArm = Boolean(
+      state.serverInfo && state.activeTrace && state.sessionActive
+    );
     const tabIds = [...state.attachedTabs.keys()];
 
-    await Promise.all(tabIds.map((tabId) => shouldArm
-      ? armTraceForTab(tabId)
-      : disarmTraceForTab(tabId)));
+    await Promise.all(
+      tabIds.map((tabId) =>
+        shouldArm ? armTraceForTab(tabId) : disarmTraceForTab(tabId)
+      )
+    );
   }
 
   return {

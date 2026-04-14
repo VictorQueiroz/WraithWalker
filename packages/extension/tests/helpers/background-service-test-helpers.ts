@@ -18,13 +18,36 @@ function createEvent() {
 }
 
 export function createChromeApi(): ChromeApi & {
-  runtime: ChromeApi["runtime"] & { sendMessage: ReturnType<typeof vi.fn>; sendNativeMessage: ReturnType<typeof vi.fn>; getContexts: ReturnType<typeof vi.fn> };
-  debugger: ChromeApi["debugger"] & { attach: ReturnType<typeof vi.fn>; sendCommand: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> };
-  tabs: ChromeApi["tabs"] & { query: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
-  offscreen: ChromeApi["offscreen"] & { createDocument: ReturnType<typeof vi.fn>; closeDocument: ReturnType<typeof vi.fn> };
-  alarms: NonNullable<ChromeApi["alarms"]> & { create: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn> };
-  permissions: NonNullable<ChromeApi["permissions"]> & { request: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
-  contextMenus: NonNullable<ChromeApi["contextMenus"]> & { create: ReturnType<typeof vi.fn>; removeAll: ReturnType<typeof vi.fn> };
+  runtime: ChromeApi["runtime"] & {
+    sendMessage: ReturnType<typeof vi.fn>;
+    sendNativeMessage: ReturnType<typeof vi.fn>;
+    getContexts: ReturnType<typeof vi.fn>;
+  };
+  debugger: ChromeApi["debugger"] & {
+    attach: ReturnType<typeof vi.fn>;
+    sendCommand: ReturnType<typeof vi.fn>;
+    detach: ReturnType<typeof vi.fn>;
+  };
+  tabs: ChromeApi["tabs"] & {
+    query: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+  };
+  offscreen: ChromeApi["offscreen"] & {
+    createDocument: ReturnType<typeof vi.fn>;
+    closeDocument: ReturnType<typeof vi.fn>;
+  };
+  alarms: NonNullable<ChromeApi["alarms"]> & {
+    create: ReturnType<typeof vi.fn>;
+    clear: ReturnType<typeof vi.fn>;
+  };
+  permissions: NonNullable<ChromeApi["permissions"]> & {
+    request: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
+  };
+  contextMenus: NonNullable<ChromeApi["contextMenus"]> & {
+    create: ReturnType<typeof vi.fn>;
+    removeAll: ReturnType<typeof vi.fn>;
+  };
 } {
   return {
     runtime: {
@@ -77,16 +100,20 @@ export function createChromeApi(): ChromeApi & {
   };
 }
 
-export function createMockServerClient(overrides: Partial<WraithWalkerServerClient> = {}): WraithWalkerServerClient {
-  const heartbeat = overrides.heartbeat ?? vi.fn().mockResolvedValue({
-    version: "1.0.0",
-    rootPath: "/tmp/server-root",
-    sentinel: { rootId: "server-root" },
-    baseUrl: "http://127.0.0.1:4319",
-    mcpUrl: "http://127.0.0.1:4319/mcp",
-    trpcUrl: "http://127.0.0.1:4319/trpc",
-    activeTrace: null
-  });
+export function createMockServerClient(
+  overrides: Partial<WraithWalkerServerClient> = {}
+): WraithWalkerServerClient {
+  const heartbeat =
+    overrides.heartbeat ??
+    vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null
+    });
 
   return {
     getSystemInfo: vi.fn().mockResolvedValue({
@@ -98,12 +125,21 @@ export function createMockServerClient(overrides: Partial<WraithWalkerServerClie
       trpcUrl: "http://127.0.0.1:4319/trpc",
       siteConfigs: []
     }),
-    revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "open /tmp/server-root" }),
+    revealRoot: vi
+      .fn()
+      .mockResolvedValue({ ok: true, command: "open /tmp/server-root" }),
     listScenarios: vi.fn().mockResolvedValue({ scenarios: [] }),
-    saveScenario: vi.fn().mockImplementation(async (name: string) => ({ ok: true, name })),
-    switchScenario: vi.fn().mockImplementation(async (name: string) => ({ ok: true, name })),
+    saveScenario: vi
+      .fn()
+      .mockImplementation(async (name: string) => ({ ok: true, name })),
+    switchScenario: vi
+      .fn()
+      .mockImplementation(async (name: string) => ({ ok: true, name })),
     heartbeat,
-    hasFixture: vi.fn().mockResolvedValue({ exists: false, sentinel: { rootId: "server-root" } }),
+    hasFixture: vi.fn().mockResolvedValue({
+      exists: false,
+      sentinel: { rootId: "server-root" }
+    }),
     readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
       siteConfigs: [],
       sentinel: { rootId: "server-root" }
@@ -116,20 +152,27 @@ export function createMockServerClient(overrides: Partial<WraithWalkerServerClie
       siteConfigs: [],
       sentinel: { rootId: "server-root" }
     }),
-    readFixture: vi.fn().mockResolvedValue({ exists: false, sentinel: { rootId: "server-root" } }),
+    readFixture: vi.fn().mockResolvedValue({
+      exists: false,
+      sentinel: { rootId: "server-root" }
+    }),
     writeFixtureIfAbsent: vi.fn().mockResolvedValue({
       written: true,
       descriptor: { bodyPath: "fixture-body" },
       sentinel: { rootId: "server-root" }
     }),
     generateContext: vi.fn().mockResolvedValue({ ok: true }),
-    recordTraceClick: vi.fn().mockResolvedValue({ recorded: false, activeTrace: null }),
+    recordTraceClick: vi
+      .fn()
+      .mockResolvedValue({ recorded: false, activeTrace: null }),
     linkTraceFixture: vi.fn().mockResolvedValue({ linked: false, trace: null }),
     ...overrides
   } as WraithWalkerServerClient;
 }
 
-export function createBackgroundState(overrides: Partial<BackgroundState> = {}): BackgroundState {
+export function createBackgroundState(
+  overrides: Partial<BackgroundState> = {}
+): BackgroundState {
   return {
     sessionActive: false,
     attachedTabs: new Map(),

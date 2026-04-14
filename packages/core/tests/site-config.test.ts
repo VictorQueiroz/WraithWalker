@@ -17,8 +17,13 @@ import {
 
 describe("site config helpers", () => {
   it("normalizes dump patterns and preserves valid input", () => {
-    expect(normalizeDumpAllowlistPatterns(undefined)).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
-    expect(normalizeDumpAllowlistPatterns(["\\.js$", "[", "\\.css$"])).toEqual(["\\.js$", "\\.css$"]);
+    expect(normalizeDumpAllowlistPatterns(undefined)).toEqual(
+      DEFAULT_DUMP_ALLOWLIST_PATTERNS
+    );
+    expect(normalizeDumpAllowlistPatterns(["\\.js$", "[", "\\.css$"])).toEqual([
+      "\\.js$",
+      "\\.css$"
+    ]);
     expect(normalizeDumpAllowlistPatterns("\\.css$")).toEqual(["\\.css$"]);
   });
 
@@ -28,10 +33,12 @@ describe("site config helpers", () => {
       dumpAllowlistPattern: "\\.svg$"
     });
 
-    expect(config).toEqual(expect.objectContaining({
-      origin: "https://app.example.com",
-      dumpAllowlistPatterns: ["\\.svg$"]
-    }));
+    expect(config).toEqual(
+      expect.objectContaining({
+        origin: "https://app.example.com",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      })
+    );
   });
 
   it("creates explicit and discovered site configs with the expected defaults", () => {
@@ -39,7 +46,9 @@ describe("site config helpers", () => {
     const configured = createConfiguredSiteConfig("https://app.example.com");
     const discovered = createDiscoveredSiteConfig("https://app.example.com");
 
-    expect(explicit.dumpAllowlistPatterns).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
+    expect(explicit.dumpAllowlistPatterns).toEqual(
+      DEFAULT_DUMP_ALLOWLIST_PATTERNS
+    );
     expect(configured.dumpAllowlistPatterns).toEqual([
       ...DEFAULT_DUMP_ALLOWLIST_PATTERNS,
       ...EXPLICIT_SITE_EXTRA_DUMP_ALLOWLIST_PATTERNS
@@ -53,11 +62,13 @@ describe("site config helpers", () => {
 
   it("merges discovered origins with explicit config and keeps explicit values authoritative", () => {
     const merged = mergeSiteConfigs(
-      [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }],
+      [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ],
       [
         { origin: "https://app.example.com" },
         { origin: "https://admin.example.com" }
@@ -85,13 +96,31 @@ describe("site config helpers", () => {
     const config = {
       origin: "https://app.example.com",
       createdAt: "2026-04-08T00:00:00.000Z",
-      dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN, "\\.css$", "\\.wasm$"]
+      dumpAllowlistPatterns: [
+        DEFAULT_DUMP_ALLOWLIST_PATTERN,
+        "\\.css$",
+        "\\.wasm$"
+      ]
     };
 
-    expect(shouldDumpRequest(config, "GET", "https://cdn.example.com/app.js")).toBe(true);
-    expect(shouldDumpRequest(config, "GET", "https://cdn.example.com/style.css")).toBe(true);
-    expect(shouldDumpRequest(config, "GET", "https://cdn.example.com/pkg/module.wasm")).toBe(true);
-    expect(shouldDumpRequest(config, "POST", "https://cdn.example.com/app.js")).toBe(false);
-    expect(shouldDumpRequest(config, "GET", "https://cdn.example.com/image.png")).toBe(false);
+    expect(
+      shouldDumpRequest(config, "GET", "https://cdn.example.com/app.js")
+    ).toBe(true);
+    expect(
+      shouldDumpRequest(config, "GET", "https://cdn.example.com/style.css")
+    ).toBe(true);
+    expect(
+      shouldDumpRequest(
+        config,
+        "GET",
+        "https://cdn.example.com/pkg/module.wasm"
+      )
+    ).toBe(true);
+    expect(
+      shouldDumpRequest(config, "POST", "https://cdn.example.com/app.js")
+    ).toBe(false);
+    expect(
+      shouldDumpRequest(config, "GET", "https://cdn.example.com/image.png")
+    ).toBe(false);
   });
 });

@@ -1,7 +1,15 @@
 import { buildSessionSnapshot } from "./background-helpers.js";
 import { DEFAULT_EDITOR_ID } from "./constants.js";
-import type { DiagnosticsReport, RootReadyResult, SiteConfigsResult } from "./messages.js";
-import { getErrorMessage, type BackgroundServerInfo, type BackgroundState } from "./background-runtime-shared.js";
+import type {
+  DiagnosticsReport,
+  RootReadyResult,
+  SiteConfigsResult
+} from "./messages.js";
+import {
+  getErrorMessage,
+  type BackgroundServerInfo,
+  type BackgroundState
+} from "./background-runtime-shared.js";
 import type { SessionSnapshot } from "./types.js";
 
 export interface BackgroundAuthorityDiagnosticsApi {
@@ -15,8 +23,13 @@ interface BackgroundAuthorityDiagnosticsDependencies {
   setLastSessionSnapshot: (snapshot: SessionSnapshot) => Promise<void>;
   queueServerRefresh: (opts?: { force?: boolean }) => void;
   refreshStoredConfig: () => Promise<void>;
-  refreshServerInfo: (opts?: { force?: boolean }) => Promise<BackgroundServerInfo | null>;
-  ensureLocalRootReady: (opts?: { requestPermission?: boolean; silent?: boolean }) => Promise<RootReadyResult>;
+  refreshServerInfo: (opts?: {
+    force?: boolean;
+  }) => Promise<BackgroundServerInfo | null>;
+  ensureLocalRootReady: (opts?: {
+    requestPermission?: boolean;
+    silent?: boolean;
+  }) => Promise<RootReadyResult>;
   readConfiguredSiteConfigsForAuthority: () => Promise<SiteConfigsResult>;
   readEffectiveSiteConfigsForAuthority: () => Promise<SiteConfigsResult>;
 }
@@ -57,15 +70,21 @@ export function createBackgroundAuthorityDiagnostics({
     await refreshStoredConfig();
     const serverInfo = await refreshServerInfo({ force: true });
     const localRootResult = await ensureLocalRootReady({ silent: true });
-    const [configuredResult, effectiveResult, sessionSnapshot] = await Promise.all([
-      readConfiguredSiteConfigsForAuthority(),
-      readEffectiveSiteConfigsForAuthority(),
-      snapshotState()
-    ]);
+    const [configuredResult, effectiveResult, sessionSnapshot] =
+      await Promise.all([
+        readConfiguredSiteConfigsForAuthority(),
+        readEffectiveSiteConfigsForAuthority(),
+        snapshotState()
+      ]);
 
-    const configuredSiteConfigs = configuredResult.ok ? configuredResult.siteConfigs : [];
-    const effectiveSiteConfigs = effectiveResult.ok ? effectiveResult.siteConfigs : [];
-    const localRootError = "error" in localRootResult ? localRootResult.error : undefined;
+    const configuredSiteConfigs = configuredResult.ok
+      ? configuredResult.siteConfigs
+      : [];
+    const effectiveSiteConfigs = effectiveResult.ok
+      ? effectiveResult.siteConfigs
+      : [];
+    const localRootError =
+      "error" in localRootResult ? localRootResult.error : undefined;
     const issues = new Set<string>();
 
     if (!sessionSnapshot.rootReady) {
@@ -78,22 +97,33 @@ export function createBackgroundAuthorityDiagnostics({
       issues.add("Native host name is not configured.");
     }
     if (!state.nativeHostConfig.launchPath.trim() && !serverInfo) {
-      issues.add("Shared editor launch path is not configured for local-root actions.");
+      issues.add(
+        "Shared editor launch path is not configured for local-root actions."
+      );
     }
     if (state.lastError) {
       issues.add(`Last runtime error: ${state.lastError}`);
     }
     if (!configuredResult.ok) {
-      issues.add(`Configured-site read failed: ${getErrorMessage(configuredResult)}`);
+      issues.add(
+        `Configured-site read failed: ${getErrorMessage(configuredResult)}`
+      );
     }
     if (!effectiveResult.ok) {
-      issues.add(`Effective-site read failed: ${getErrorMessage(effectiveResult)}`);
+      issues.add(
+        `Effective-site read failed: ${getErrorMessage(effectiveResult)}`
+      );
     }
     if (!serverInfo) {
       issues.add("Local WraithWalker server is not connected.");
     }
-    if (!localRootResult.ok && localRootError !== "No root directory selected.") {
-      issues.add(`Local root check failed: ${getErrorMessage(localRootResult)}`);
+    if (
+      !localRootResult.ok &&
+      localRootError !== "No root directory selected."
+    ) {
+      issues.add(
+        `Local root check failed: ${getErrorMessage(localRootResult)}`
+      );
     }
 
     return {
@@ -103,26 +133,35 @@ export function createBackgroundAuthorityDiagnostics({
       sessionSnapshot,
       localRoot: {
         ready: localRootResult.ok,
-        permission: localRootResult.ok ? localRootResult.permission : (localRootResult.permission ?? null),
+        permission: localRootResult.ok
+          ? localRootResult.permission
+          : (localRootResult.permission ?? null),
         sentinel: localRootResult.ok ? localRootResult.sentinel : null,
         ...(localRootResult.ok ? {} : { error: localRootError }),
         legacySiteConfigsMigrated: state.legacySiteConfigsMigrated
       },
       server: {
         connected: Boolean(serverInfo),
-        checkedAt: state.serverCheckedAt ? new Date(state.serverCheckedAt).toISOString() : null,
+        checkedAt: state.serverCheckedAt
+          ? new Date(state.serverCheckedAt).toISOString()
+          : null,
         rootPath: serverInfo?.rootPath || "",
         sentinel: serverInfo?.sentinel || null,
         baseUrl: serverInfo?.baseUrl || "",
         trpcUrl: serverInfo?.trpcUrl || "",
         mcpUrl: serverInfo?.mcpUrl || "",
-        activeTraceId: (state.activeTrace as { traceId?: string } | null)?.traceId || null
+        activeTraceId:
+          (state.activeTrace as { traceId?: string } | null)?.traceId || null
       },
       config: {
         configuredSiteConfigs,
         effectiveSiteConfigs,
-        ...(!configuredResult.ok ? { configuredSiteError: getErrorMessage(configuredResult) } : {}),
-        ...(!effectiveResult.ok ? { effectiveSiteError: getErrorMessage(effectiveResult) } : {})
+        ...(!configuredResult.ok
+          ? { configuredSiteError: getErrorMessage(configuredResult) }
+          : {}),
+        ...(!effectiveResult.ok
+          ? { effectiveSiteError: getErrorMessage(effectiveResult) }
+          : {})
       },
       nativeHost: {
         configured: Boolean(state.nativeHostConfig.hostName.trim()),
@@ -131,12 +170,14 @@ export function createBackgroundAuthorityDiagnostics({
         preferredEditorId: state.preferredEditorId || DEFAULT_EDITOR_ID
       },
       runtime: {
-        attachedTabs: [...state.attachedTabs.entries()].map(([tabId, tabState]) => ({
-          tabId,
-          topOrigin: tabState.topOrigin,
-          traceArmedForTraceId: tabState.traceArmedForTraceId || null,
-          hasTraceScriptIdentifier: Boolean(tabState.traceScriptIdentifier)
-        })),
+        attachedTabs: [...state.attachedTabs.entries()].map(
+          ([tabId, tabState]) => ({
+            tabId,
+            topOrigin: tabState.topOrigin,
+            traceArmedForTraceId: tabState.traceArmedForTraceId || null,
+            hasTraceScriptIdentifier: Boolean(tabState.traceScriptIdentifier)
+          })
+        ),
         pendingRequests: [...state.requests.values()].map((entry) => ({
           tabId: entry.tabId,
           requestId: entry.requestId,

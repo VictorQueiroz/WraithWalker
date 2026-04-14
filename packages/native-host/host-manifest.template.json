@@ -3,7 +3,5 @@
   "description": "Reference native host for WraithWalker",
   "path": "/absolute/path/to/wraithwalker/native-host/host.mjs",
   "type": "stdio",
-  "allowed_origins": [
-    "chrome-extension://__EXTENSION_ID__/"
-  ]
+  "allowed_origins": ["chrome-extension://__EXTENSION_ID__/"]
 }

@@ -1,4 +1,8 @@
-import { arrayifyHeaders, createRequestEntry, isHttpUrl } from "./background-helpers.js";
+import {
+  arrayifyHeaders,
+  createRequestEntry,
+  isHttpUrl
+} from "./background-helpers.js";
 import type { RequestEntry } from "./types.js";
 import type {
   LifecycleSource,
@@ -19,10 +23,22 @@ interface RequestLifecycleTrackerDependencies {
 export interface RequestLifecycleTrackerApi {
   ensureRequestEntry(tabId: number, requestId: string): RequestEntry;
   clearTrackedRequest(tabId: number, requestId: string): void;
-  handleNetworkRequestWillBeSent(source: LifecycleSource, params: NetworkRequestWillBeSentParams): void;
-  handleNetworkResponseReceived(source: LifecycleSource, params: NetworkResponseReceivedParams): void;
-  handleNetworkLoadingFinished(source: LifecycleSource, params: NetworkLoadingParams): Promise<void>;
-  handleNetworkLoadingFailed(source: LifecycleSource, params: NetworkLoadingParams): void;
+  handleNetworkRequestWillBeSent(
+    source: LifecycleSource,
+    params: NetworkRequestWillBeSentParams
+  ): void;
+  handleNetworkResponseReceived(
+    source: LifecycleSource,
+    params: NetworkResponseReceivedParams
+  ): void;
+  handleNetworkLoadingFinished(
+    source: LifecycleSource,
+    params: NetworkLoadingParams
+  ): Promise<void>;
+  handleNetworkLoadingFailed(
+    source: LifecycleSource,
+    params: NetworkLoadingParams
+  ): void;
 }
 
 export function createRequestLifecycleTracker({
@@ -47,15 +63,23 @@ export function createRequestLifecycleTracker({
     state.requests.delete(requestKey(tabId, requestId));
   }
 
-  function handleNetworkRequestWillBeSent(source: LifecycleSource, params: NetworkRequestWillBeSentParams): void {
+  function handleNetworkRequestWillBeSent(
+    source: LifecycleSource,
+    params: NetworkRequestWillBeSentParams
+  ): void {
     const tabId = source.tabId;
-    if (!tabId || !state.attachedTabs.has(tabId) || !isHttpUrl(params.request.url)) {
+    if (
+      !tabId ||
+      !state.attachedTabs.has(tabId) ||
+      !isHttpUrl(params.request.url)
+    ) {
       return;
     }
 
     const entry = ensureRequestEntry(tabId, params.requestId);
     entry.requestedAt = new Date().toISOString();
-    entry.topOrigin = state.attachedTabs.get(tabId)?.topOrigin || entry.topOrigin;
+    entry.topOrigin =
+      state.attachedTabs.get(tabId)?.topOrigin || entry.topOrigin;
     entry.method = params.request.method.toUpperCase();
     entry.url = params.request.url;
     entry.requestHeaders = arrayifyHeaders(params.request.headers);
@@ -67,7 +91,10 @@ export function createRequestLifecycleTracker({
     }
   }
 
-  function handleNetworkResponseReceived(source: LifecycleSource, params: NetworkResponseReceivedParams): void {
+  function handleNetworkResponseReceived(
+    source: LifecycleSource,
+    params: NetworkResponseReceivedParams
+  ): void {
     const tabId = source.tabId;
     if (!tabId || !state.attachedTabs.has(tabId)) {
       return;
@@ -81,7 +108,10 @@ export function createRequestLifecycleTracker({
     entry.resourceType = params.type || entry.resourceType;
   }
 
-  async function handleNetworkLoadingFinished(source: LifecycleSource, params: NetworkLoadingParams): Promise<void> {
+  async function handleNetworkLoadingFinished(
+    source: LifecycleSource,
+    params: NetworkLoadingParams
+  ): Promise<void> {
     const tabId = source.tabId;
     if (!tabId) {
       return;
@@ -108,7 +138,10 @@ export function createRequestLifecycleTracker({
     }
   }
 
-  function handleNetworkLoadingFailed(source: LifecycleSource, params: NetworkLoadingParams): void {
+  function handleNetworkLoadingFailed(
+    source: LifecycleSource,
+    params: NetworkLoadingParams
+  ): void {
     if (!source.tabId) {
       return;
     }

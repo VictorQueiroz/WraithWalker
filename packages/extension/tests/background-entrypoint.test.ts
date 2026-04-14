@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_NATIVE_HOST_CONFIG, STORAGE_KEYS } from "../src/lib/constants.js";
+import {
+  DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+  DEFAULT_NATIVE_HOST_CONFIG,
+  STORAGE_KEYS
+} from "../src/lib/constants.js";
 import { WHITELIST_SITE_MENU_ID } from "../src/lib/background-context-menu.js";
 
 function createEvent() {
@@ -80,24 +84,35 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
     baseUrl: "http://127.0.0.1:4319",
     mcpUrl: "http://127.0.0.1:4319/mcp",
     trpcUrl: "http://127.0.0.1:4319/trpc",
-    siteConfigs: [{
-      origin: "https://app.example.com",
-      createdAt: "2026-04-08T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.js$"]
-    }]
+    siteConfigs: [
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }
+    ]
   };
-  const getSystemInfo = overrides.getSystemInfo ?? vi.fn().mockResolvedValue(fallbackInfo);
-  const heartbeat = overrides.heartbeat ?? vi.fn(async () => ({
-    ...(await getSystemInfo()),
-    activeTrace: overrides.activeTrace ?? null
-  }));
+  const getSystemInfo =
+    overrides.getSystemInfo ?? vi.fn().mockResolvedValue(fallbackInfo);
+  const heartbeat =
+    overrides.heartbeat ??
+    vi.fn(async () => ({
+      ...(await getSystemInfo()),
+      activeTrace: overrides.activeTrace ?? null
+    }));
 
   return {
     getSystemInfo,
-    revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
+    revealRoot: vi
+      .fn()
+      .mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
     listScenarios: vi.fn().mockResolvedValue({ scenarios: [] }),
-    saveScenario: vi.fn().mockImplementation(async (name) => ({ ok: true, name })),
-    switchScenario: vi.fn().mockImplementation(async (name) => ({ ok: true, name })),
+    saveScenario: vi
+      .fn()
+      .mockImplementation(async (name) => ({ ok: true, name })),
+    switchScenario: vi
+      .fn()
+      .mockImplementation(async (name) => ({ ok: true, name })),
     heartbeat,
     hasFixture: vi.fn().mockResolvedValue({
       exists: false,
@@ -111,10 +126,12 @@ function createMockServerClient(overrides: Record<string, any> = {}) {
       siteConfigs: fallbackInfo.siteConfigs,
       sentinel: fallbackInfo.sentinel
     }),
-    writeConfiguredSiteConfigs: vi.fn().mockImplementation(async (siteConfigs) => ({
-      siteConfigs,
-      sentinel: fallbackInfo.sentinel
-    })),
+    writeConfiguredSiteConfigs: vi
+      .fn()
+      .mockImplementation(async (siteConfigs) => ({
+        siteConfigs,
+        sentinel: fallbackInfo.sentinel
+      })),
     readFixture: vi.fn().mockResolvedValue({
       exists: false,
       sentinel: fallbackInfo.sentinel
@@ -178,9 +195,14 @@ describe("background entrypoint", () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([
-      { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-03T00:00:00.000Z"
+      }
     ]);
-    const getNativeHostConfig = vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
+    const getNativeHostConfig = vi
+      .fn()
+      .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
     const sessionController = {
       startSession: vi.fn(),
       stopSession: vi.fn(),
@@ -232,16 +254,20 @@ describe("background entrypoint", () => {
         siteConfigs: [],
         sentinel
       }),
-      writeConfiguredSiteConfigs: vi.fn().mockImplementation(async (siteConfigs) => ({
-        siteConfigs,
-        sentinel
-      }))
+      writeConfiguredSiteConfigs: vi
+        .fn()
+        .mockImplementation(async (siteConfigs) => ({
+          siteConfigs,
+          sentinel
+        }))
     });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient as any),
       createSessionController: vi.fn(() => ({
@@ -286,7 +312,12 @@ describe("background entrypoint", () => {
     expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledWith([
       expect.objectContaining({
         origin: "https://docs.example.com",
-        dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+        dumpAllowlistPatterns: [
+          "\\.m?(js|ts)x?$",
+          "\\.css$",
+          "\\.wasm$",
+          "\\.json$"
+        ]
       })
     ]);
     expect(runtime.state.lastError).toBe("");
@@ -300,11 +331,15 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        getSystemInfo: vi.fn(() => never)
-      })),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          getSystemInfo: vi.fn(() => never)
+        })
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -324,7 +359,9 @@ describe("background entrypoint", () => {
 
     const stateResult = await Promise.race([
       runtime.handleRuntimeMessage({ type: "session.getState" }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("session.getState timed out")), 50))
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("session.getState timed out")), 50)
+      )
     ]);
 
     expect(stateResult).toMatchObject({
@@ -337,7 +374,8 @@ describe("background entrypoint", () => {
   it("keeps retrying server detection and switches to the server root once it responds", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    const getSystemInfo = vi.fn()
+    const getSystemInfo = vi
+      .fn()
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce({
         version: "0.6.1",
@@ -351,11 +389,15 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        getSystemInfo
-      })),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          getSystemInfo
+        })
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -377,7 +419,9 @@ describe("background entrypoint", () => {
     expect(runtime.state.serverInfo).toBeNull();
 
     runtime.state.serverCheckedAt = 0;
-    const firstState = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    const firstState = await runtime.handleRuntimeMessage({
+      type: "session.getState"
+    });
     expect(firstState).toMatchObject({
       captureDestination: "none",
       captureRootPath: ""
@@ -385,7 +429,9 @@ describe("background entrypoint", () => {
 
     await flushPromises();
 
-    const secondState = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    const secondState = await runtime.handleRuntimeMessage({
+      type: "session.getState"
+    });
     expect(secondState).toMatchObject({
       captureDestination: "server",
       captureRootPath: "/tmp/server-root",
@@ -448,13 +494,22 @@ describe("background entrypoint", () => {
       generateContext: vi.fn().mockResolvedValue({ ok: true })
     });
     let requestLifecycleDependencies:
-      | Parameters<Exclude<Parameters<typeof createBackgroundRuntime>[0], undefined>["createRequestLifecycle"]>[0]
+      | Parameters<
+          Exclude<
+            Parameters<typeof createBackgroundRuntime>[0],
+            undefined
+          >["createRequestLifecycle"]
+        >[0]
       | undefined;
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-07T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue({
         ...DEFAULT_NATIVE_HOST_CONFIG,
@@ -490,7 +545,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    const stateResult = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    const stateResult = await runtime.handleRuntimeMessage({
+      type: "session.getState"
+    });
     expect(stateResult).toMatchObject({
       captureDestination: "server",
       captureRootPath: "/tmp/server-root",
@@ -500,10 +557,14 @@ describe("background entrypoint", () => {
     expect(runtime.state.enabledOrigins).toEqual(["https://app.example.com"]);
 
     expect(requestLifecycleDependencies).toBeTruthy();
-    const fixtureExists = await requestLifecycleDependencies!.repository.exists({} as never);
+    const fixtureExists = await requestLifecycleDependencies!.repository.exists(
+      {} as never
+    );
     expect(fixtureExists).toBe(true);
     expect(serverClient.hasFixture).toHaveBeenCalledTimes(1);
-    await expect(requestLifecycleDependencies!.repository.read({} as never)).resolves.toEqual({
+    await expect(
+      requestLifecycleDependencies!.repository.read({} as never)
+    ).resolves.toEqual({
       request: expect.objectContaining({
         topOrigin: "https://app.example.com",
         url: "https://cdn.example.com/assets/app.js"
@@ -515,11 +576,13 @@ describe("background entrypoint", () => {
       bodyBase64: "Y29uc29sZS5sb2coJ3NlcnZlcicpOw==",
       size: 22
     });
-    await expect(requestLifecycleDependencies!.repository.writeIfAbsent({
-      descriptor: {} as never,
-      request: {} as never,
-      response: {} as never
-    })).resolves.toEqual({
+    await expect(
+      requestLifecycleDependencies!.repository.writeIfAbsent({
+        descriptor: {} as never,
+        request: {} as never,
+        response: {} as never
+      })
+    ).resolves.toEqual({
       written: true,
       descriptor: { bodyPath: "cdn.example.com/assets/app.js" },
       sentinel: serverSentinel
@@ -535,11 +598,13 @@ describe("background entrypoint", () => {
     const openResult = await runtime.openDirectoryInEditor(undefined, "cursor");
     expect(openResult).toEqual({ ok: true });
     expect(serverClient.generateContext).toHaveBeenCalledWith({
-      siteConfigs: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-07T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }],
+      siteConfigs: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-07T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ],
       editorId: "cursor"
     });
     expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith({
@@ -566,24 +631,30 @@ describe("background entrypoint", () => {
           dumpAllowlistPatterns: ["\\.json$"]
         }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "0.6.1",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
-          siteConfigs: [{
-            origin: "https://server.example.com",
-            createdAt: "2026-04-08T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.svg$"]
-          }],
-          activeTrace: null
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          heartbeat: vi.fn().mockResolvedValue({
+            version: "0.6.1",
+            rootPath: "/tmp/server-root",
+            sentinel: { rootId: "server-root" },
+            baseUrl: "http://127.0.0.1:4319",
+            mcpUrl: "http://127.0.0.1:4319/mcp",
+            trpcUrl: "http://127.0.0.1:4319/trpc",
+            siteConfigs: [
+              {
+                origin: "https://server.example.com",
+                createdAt: "2026-04-08T00:00:00.000Z",
+                dumpAllowlistPatterns: ["\\.svg$"]
+              }
+            ],
+            activeTrace: null
+          })
         })
-      })),
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -602,13 +673,19 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
-    expect(runtime.state.siteConfigsByOrigin.get("https://server.example.com")).toEqual(
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://server.example.com"
+    ]);
+    expect(
+      runtime.state.siteConfigsByOrigin.get("https://server.example.com")
+    ).toEqual(
       expect.objectContaining({
         dumpAllowlistPatterns: ["\\.svg$"]
       })
     );
-    expect(runtime.state.localSiteConfigsByOrigin.get("https://local.example.com")).toEqual(
+    expect(
+      runtime.state.localSiteConfigsByOrigin.get("https://local.example.com")
+    ).toEqual(
       expect.objectContaining({
         dumpAllowlistPatterns: ["\\.json$"]
       })
@@ -620,11 +697,13 @@ describe("background entrypoint", () => {
     const chromeApi = createChromeApi();
     const serverClient = createMockServerClient({
       readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
-        siteConfigs: [{
-          origin: "https://server.example.com",
-          createdAt: "2026-04-08T00:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.svg$"]
-        }],
+        siteConfigs: [
+          {
+            origin: "https://server.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.svg$"]
+          }
+        ],
         sentinel: { rootId: "server-root" }
       })
     });
@@ -632,7 +711,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -653,45 +734,65 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    const result = await runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.readConfiguredSiteConfigs"
+    });
 
     expect(serverClient.readConfiguredSiteConfigs).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ok: true,
       sentinel: { rootId: "server-root" },
-      siteConfigs: [{
-        origin: "https://server.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://server.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
     });
-    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      target: "offscreen"
-    }));
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "offscreen"
+      })
+    );
   });
 
   it("returns an empty configured site config list when the local offscreen payload is malformed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
-      }
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: { target?: string; type?: string }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      switch (message.type) {
-        case "fs.ensureRoot":
-          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
-        case "fs.readConfiguredSiteConfigs":
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: { origin: "broken" } } as any;
-        case "fs.readEffectiveSiteConfigs":
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: [] };
-        default:
-          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+        switch (message.type) {
+          case "fs.ensureRoot":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              permission: "granted"
+            };
+          case "fs.readConfiguredSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: { origin: "broken" }
+            } as any;
+          case "fs.readEffectiveSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: []
+            };
+          default:
+            return {
+              ok: false,
+              error: `Unhandled offscreen message: ${String(message.type)}`
+            };
+        }
       }
-    });
+    );
     const serverClient = createMockServerClient({
       heartbeat: vi.fn().mockRejectedValue(new Error("server unavailable"))
     });
@@ -699,7 +800,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -720,7 +823,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    await expect(runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" })
+    ).resolves.toEqual({
       ok: true,
       sentinel: { rootId: "local-root" },
       siteConfigs: []
@@ -732,11 +837,13 @@ describe("background entrypoint", () => {
     const chromeApi = createChromeApi();
     const serverClient = createMockServerClient({
       readEffectiveSiteConfigs: vi.fn().mockResolvedValue({
-        siteConfigs: [{
-          origin: "https://effective.example.com",
-          createdAt: "2026-04-08T00:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.js$"]
-        }],
+        siteConfigs: [
+          {
+            origin: "https://effective.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          }
+        ],
         sentinel: { rootId: "server-root" }
       })
     });
@@ -744,7 +851,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -765,45 +874,65 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    const result = await runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.readEffectiveSiteConfigs"
+    });
 
     expect(serverClient.readEffectiveSiteConfigs).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ok: true,
       sentinel: { rootId: "server-root" },
-      siteConfigs: [{
-        origin: "https://effective.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://effective.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
-    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      target: "offscreen"
-    }));
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "offscreen"
+      })
+    );
   });
 
   it("returns an empty effective site config list when the local offscreen payload is malformed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
-      }
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: { target?: string; type?: string }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      switch (message.type) {
-        case "fs.ensureRoot":
-          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
-        case "fs.readConfiguredSiteConfigs":
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: [] };
-        case "fs.readEffectiveSiteConfigs":
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: { origin: "broken" } } as any;
-        default:
-          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+        switch (message.type) {
+          case "fs.ensureRoot":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              permission: "granted"
+            };
+          case "fs.readConfiguredSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: []
+            };
+          case "fs.readEffectiveSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: { origin: "broken" }
+            } as any;
+          default:
+            return {
+              ok: false,
+              error: `Unhandled offscreen message: ${String(message.type)}`
+            };
+        }
       }
-    });
+    );
     const serverClient = createMockServerClient({
       heartbeat: vi.fn().mockRejectedValue(new Error("server unavailable"))
     });
@@ -811,7 +940,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -832,7 +963,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    await expect(runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" })
+    ).resolves.toEqual({
       ok: true,
       sentinel: { rootId: "local-root" },
       siteConfigs: []
@@ -842,11 +975,13 @@ describe("background entrypoint", () => {
   it("writes configured site configs to the server when connected without dual-writing locally", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    let serverConfiguredSites = [{
-      origin: "https://server.example.com",
-      createdAt: "2026-04-08T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.svg$"]
-    }];
+    let serverConfiguredSites = [
+      {
+        origin: "https://server.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }
+    ];
     const serverClient = createMockServerClient({
       heartbeat: vi.fn().mockImplementation(async () => ({
         version: "0.6.1",
@@ -858,13 +993,15 @@ describe("background entrypoint", () => {
         siteConfigs: serverConfiguredSites,
         activeTrace: null
       })),
-      writeConfiguredSiteConfigs: vi.fn().mockImplementation(async (siteConfigs) => {
-        serverConfiguredSites = siteConfigs;
-        return {
-          siteConfigs,
-          sentinel: { rootId: "server-root" }
-        };
-      })
+      writeConfiguredSiteConfigs: vi
+        .fn()
+        .mockImplementation(async (siteConfigs) => {
+          serverConfiguredSites = siteConfigs;
+          return {
+            siteConfigs,
+            sentinel: { rootId: "server-root" }
+          };
+        })
     });
 
     const runtime = createBackgroundRuntime({
@@ -876,7 +1013,9 @@ describe("background entrypoint", () => {
           dumpAllowlistPatterns: ["\\.json$"]
         }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -899,71 +1038,104 @@ describe("background entrypoint", () => {
 
     const result = await runtime.handleRuntimeMessage({
       type: "config.writeConfiguredSiteConfigs",
-      siteConfigs: [{
+      siteConfigs: [
+        {
+          origin: "https://server-only.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]
+    });
+
+    expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledWith([
+      {
         origin: "https://server-only.example.com",
         createdAt: "2026-04-08T12:00:00.000Z",
         dumpAllowlistPatterns: ["\\.css$"]
-      }]
-    });
-
-    expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledWith([{
-      origin: "https://server-only.example.com",
-      createdAt: "2026-04-08T12:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.css$"]
-    }]);
+      }
+    ]);
     expect(result).toEqual({
       ok: true,
       sentinel: { rootId: "server-root" },
-      siteConfigs: [{
-        origin: "https://server-only.example.com",
-        createdAt: "2026-04-08T12:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.css$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://server-only.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]
     });
-    expect(runtime.state.enabledOrigins).toEqual(["https://server-only.example.com"]);
-    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      target: "offscreen",
-      type: "fs.writeConfiguredSiteConfigs"
-    }));
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://server-only.example.com"
+    ]);
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "offscreen",
+        type: "fs.writeConfiguredSiteConfigs"
+      })
+    );
   });
 
   it("falls back to the local root when a server-backed config write fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    let localConfiguredSites = [{
-      origin: "https://local.example.com",
-      createdAt: "2026-04-08T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.json$"]
-    }];
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-      payload?: { siteConfigs?: typeof localConfiguredSites };
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
+    let localConfiguredSites = [
+      {
+        origin: "https://local.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$"]
       }
+    ];
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: {
+        target?: string;
+        type?: string;
+        payload?: { siteConfigs?: typeof localConfiguredSites };
+      }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      switch (message.type) {
-        case "fs.ensureRoot":
-          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
-        case "fs.readConfiguredSiteConfigs":
-        case "fs.readEffectiveSiteConfigs":
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: localConfiguredSites };
-        case "fs.writeConfiguredSiteConfigs":
-          localConfiguredSites = message.payload?.siteConfigs ?? [];
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: localConfiguredSites };
-        default:
-          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+        switch (message.type) {
+          case "fs.ensureRoot":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              permission: "granted"
+            };
+          case "fs.readConfiguredSiteConfigs":
+          case "fs.readEffectiveSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: localConfiguredSites
+            };
+          case "fs.writeConfiguredSiteConfigs":
+            localConfiguredSites = message.payload?.siteConfigs ?? [];
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: localConfiguredSites
+            };
+          default:
+            return {
+              ok: false,
+              error: `Unhandled offscreen message: ${String(message.type)}`
+            };
+        }
       }
-    });
+    );
     const serverClient = createMockServerClient({
-      writeConfiguredSiteConfigs: vi.fn().mockRejectedValue(new Error("server write failed"))
+      writeConfiguredSiteConfigs: vi
+        .fn()
+        .mockRejectedValue(new Error("server write failed"))
     });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -986,34 +1158,42 @@ describe("background entrypoint", () => {
 
     const result = await runtime.handleRuntimeMessage({
       type: "config.writeConfiguredSiteConfigs",
-      siteConfigs: [{
-        origin: "https://fallback.example.com",
-        createdAt: "2026-04-08T12:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.css$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://fallback.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]
     });
 
     expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ok: true,
       sentinel: { rootId: "local-root" },
-      siteConfigs: [{
-        origin: "https://fallback.example.com",
-        createdAt: "2026-04-08T12:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.css$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://fallback.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]
     });
     expect(runtime.state.serverInfo).toBeNull();
-    expect(runtime.state.enabledOrigins).toEqual(["https://fallback.example.com"]);
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://fallback.example.com"
+    ]);
     expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith({
       target: "offscreen",
       type: "fs.writeConfiguredSiteConfigs",
       payload: {
-        siteConfigs: [{
-          origin: "https://fallback.example.com",
-          createdAt: "2026-04-08T12:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.css$"]
-        }]
+        siteConfigs: [
+          {
+            origin: "https://fallback.example.com",
+            createdAt: "2026-04-08T12:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.css$"]
+          }
+        ]
       }
     });
   });
@@ -1021,28 +1201,34 @@ describe("background entrypoint", () => {
   it("surfaces a combined error when a server-backed config write fails and no fallback root is ready", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
-      }
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: { target?: string; type?: string }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      if (message.type === "fs.ensureRoot") {
-        return { ok: false, error: "No root directory selected." };
-      }
+        if (message.type === "fs.ensureRoot") {
+          return { ok: false, error: "No root directory selected." };
+        }
 
-      return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
-    });
+        return {
+          ok: false,
+          error: `Unhandled offscreen message: ${String(message.type)}`
+        };
+      }
+    );
     const serverClient = createMockServerClient({
-      writeConfiguredSiteConfigs: vi.fn().mockRejectedValue(new Error("server write failed"))
+      writeConfiguredSiteConfigs: vi
+        .fn()
+        .mockRejectedValue(new Error("server write failed"))
     });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -1065,45 +1251,52 @@ describe("background entrypoint", () => {
 
     const result = await runtime.handleRuntimeMessage({
       type: "config.writeConfiguredSiteConfigs",
-      siteConfigs: [{
-        origin: "https://no-fallback.example.com",
-        createdAt: "2026-04-08T12:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.css$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://no-fallback.example.com",
+          createdAt: "2026-04-08T12:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]
     });
 
     expect(serverClient.writeConfiguredSiteConfigs).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ok: false,
-      error: "Local WraithWalker server is unavailable and no fallback root is ready. server write failed"
+      error:
+        "Local WraithWalker server is unavailable and no fallback root is ready. server write failed"
     });
-    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      target: "offscreen",
-      type: "fs.writeConfiguredSiteConfigs"
-    }));
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "offscreen",
+        type: "fs.writeConfiguredSiteConfigs"
+      })
+    );
   });
 
   it("preserves server authority when local config refresh reads malformed site config data", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
-      }
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: { target?: string; type?: string }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      if (message.type === "fs.readEffectiveSiteConfigs") {
+        if (message.type === "fs.readEffectiveSiteConfigs") {
+          return {
+            ok: true,
+            sentinel: { rootId: "local-root" },
+            siteConfigs: { origin: "broken" }
+          } as any;
+        }
+
         return {
-          ok: true,
-          sentinel: { rootId: "local-root" },
-          siteConfigs: { origin: "broken" }
-        } as any;
+          ok: false,
+          error: `Unhandled offscreen message: ${String(message.type)}`
+        };
       }
-
-      return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
-    });
+    );
     const serverClient = createMockServerClient({
       heartbeat: vi.fn().mockResolvedValue({
         version: "1.0.0",
@@ -1112,18 +1305,22 @@ describe("background entrypoint", () => {
         baseUrl: "http://127.0.0.1:4319",
         mcpUrl: "http://127.0.0.1:4319/mcp",
         trpcUrl: "http://127.0.0.1:4319/trpc",
-        siteConfigs: [{
-          origin: "https://server.example.com",
-          createdAt: "2026-04-08T00:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.svg$"]
-        }],
+        siteConfigs: [
+          {
+            origin: "https://server.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.svg$"]
+          }
+        ],
         activeTrace: null
       })
     });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -1144,55 +1341,80 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://server.example.com"
+    ]);
     expect(runtime.state.localSiteConfigsByOrigin.size).toBe(0);
 
-    chromeApi.storage.onChanged.listeners[0]({
-      preferredEditorId: {
-        oldValue: "cursor",
-        newValue: "windsurf"
-      }
-    }, "local");
+    chromeApi.storage.onChanged.listeners[0](
+      {
+        preferredEditorId: {
+          oldValue: "cursor",
+          newValue: "windsurf"
+        }
+      },
+      "local"
+    );
     await flushPromises();
 
-    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
-    expect(runtime.state.siteConfigsByOrigin.has("https://server.example.com")).toBe(true);
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://server.example.com"
+    ]);
+    expect(
+      runtime.state.siteConfigsByOrigin.has("https://server.example.com")
+    ).toBe(true);
     expect(runtime.state.localSiteConfigsByOrigin.size).toBe(0);
   });
 
   it("falls back to the local root when a server-backed effective config read fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    let localEffectiveSites = [{
-      origin: "https://local-effective.example.com",
-      createdAt: "2026-04-08T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.css$"]
-    }];
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
+    let localEffectiveSites = [
+      {
+        origin: "https://local-effective.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
       }
+    ];
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: { target?: string; type?: string }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      switch (message.type) {
-        case "fs.ensureRoot":
-          return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
-        case "fs.readEffectiveSiteConfigs":
-          return { ok: true, sentinel: { rootId: "local-root" }, siteConfigs: localEffectiveSites };
-        default:
-          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+        switch (message.type) {
+          case "fs.ensureRoot":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              permission: "granted"
+            };
+          case "fs.readEffectiveSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "local-root" },
+              siteConfigs: localEffectiveSites
+            };
+          default:
+            return {
+              ok: false,
+              error: `Unhandled offscreen message: ${String(message.type)}`
+            };
+        }
       }
-    });
+    );
     const serverClient = createMockServerClient({
-      readEffectiveSiteConfigs: vi.fn().mockRejectedValue(new Error("server read failed"))
+      readEffectiveSiteConfigs: vi
+        .fn()
+        .mockRejectedValue(new Error("server read failed"))
     });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -1213,50 +1435,62 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    const result = await runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.readEffectiveSiteConfigs"
+    });
 
     expect(serverClient.readEffectiveSiteConfigs).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ok: true,
       sentinel: { rootId: "local-root" },
-      siteConfigs: [{
-        origin: "https://local-effective.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.css$"]
-      }]
+      siteConfigs: [
+        {
+          origin: "https://local-effective.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]
     });
     expect(runtime.state.serverInfo).toBeNull();
-    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-      target: "offscreen",
-      type: "fs.readEffectiveSiteConfigs"
-    }));
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "offscreen",
+        type: "fs.readEffectiveSiteConfigs"
+      })
+    );
   });
 
   it("surfaces a combined error when a server-backed effective config read fails and no fallback root is ready", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
-      }
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: { target?: string; type?: string }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      if (message.type === "fs.ensureRoot") {
-        return { ok: false, error: "No root directory selected." };
-      }
+        if (message.type === "fs.ensureRoot") {
+          return { ok: false, error: "No root directory selected." };
+        }
 
-      return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
-    });
+        return {
+          ok: false,
+          error: `Unhandled offscreen message: ${String(message.type)}`
+        };
+      }
+    );
     const serverClient = createMockServerClient({
-      readEffectiveSiteConfigs: vi.fn().mockRejectedValue(new Error("server read failed"))
+      readEffectiveSiteConfigs: vi
+        .fn()
+        .mockRejectedValue(new Error("server read failed"))
     });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -1277,23 +1511,30 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    const result = await runtime.handleRuntimeMessage({ type: "config.readEffectiveSiteConfigs" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "config.readEffectiveSiteConfigs"
+    });
 
     expect(serverClient.readEffectiveSiteConfigs).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       ok: false,
-      error: "Local WraithWalker server is unavailable and no fallback root is ready. server read failed"
+      error:
+        "Local WraithWalker server is unavailable and no fallback root is ready. server read failed"
     });
-    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      target: "offscreen",
-      type: "fs.readEffectiveSiteConfigs"
-    }));
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: "offscreen",
+        type: "fs.readEffectiveSiteConfigs"
+      })
+    );
   });
 
   it("heartbeats with a persisted client id and arms debugger-based tracing when the server reports an active trace", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
     const activeTrace = createActiveTrace({
       goal: "Capture the active trace details without breaking debugger arming."
     });
@@ -1310,36 +1551,61 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        heartbeat,
-        activeTrace
-      }))
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          heartbeat,
+          activeTrace
+        })
+      )
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
     await flushPromises();
 
-    expect(heartbeat).toHaveBeenCalledWith(expect.objectContaining({
-      clientId: "client-1",
-      sessionActive: true,
-      enabledOrigins: ["https://app.example.com"]
-    }));
-    expect(runtime.state.activeTrace).toEqual(expect.objectContaining({
-      traceId: "trace-1",
-      goal: "Capture the active trace details without breaking debugger arming."
-    }));
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.enable");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Log.enable");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Page.enable");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.addBinding", {
-      name: "__wraithwalkerTraceBinding"
-    });
+    expect(heartbeat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: "client-1",
+        sessionActive: true,
+        enabledOrigins: ["https://app.example.com"]
+      })
+    );
+    expect(runtime.state.activeTrace).toEqual(
+      expect.objectContaining({
+        traceId: "trace-1",
+        goal: "Capture the active trace details without breaking debugger arming."
+      })
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.enable"
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Log.enable"
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Page.enable"
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.addBinding",
+      {
+        name: "__wraithwalkerTraceBinding"
+      }
+    );
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 7 },
       "Page.addScriptToEvaluateOnNewDocument",
@@ -1347,7 +1613,10 @@ describe("background entrypoint", () => {
         source: expect.stringContaining("__wraithwalkerTraceBinding")
       })
     );
-    expect(chromeApi.alarms.create).toHaveBeenCalledWith("wraithwalker-server-heartbeat", expect.any(Object));
+    expect(chromeApi.alarms.create).toHaveBeenCalledWith(
+      "wraithwalker-server-heartbeat",
+      expect.any(Object)
+    );
   });
 
   it("does not re-arm trace bindings for tabs that are already armed for the active trace", async () => {
@@ -1358,9 +1627,15 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn()
     });
 
@@ -1383,7 +1658,11 @@ describe("background entrypoint", () => {
     });
 
     chromeApi.debugger.sendCommand.mockClear();
-    chromeApi.tabs.onUpdated.listeners[0](7, {}, { id: 7, url: "https://app.example.com/profile" });
+    chromeApi.tabs.onUpdated.listeners[0](
+      7,
+      {},
+      { id: 7, url: "https://app.example.com/profile" }
+    );
     await flushPromises();
 
     expect(runtime.state.attachedTabs.get(7)).toMatchObject({
@@ -1405,40 +1684,52 @@ describe("background entrypoint", () => {
   it("continues arming trace bindings when Runtime.addBinding is already registered", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
-    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
-      if (method === "Runtime.addBinding") {
-        throw new Error("binding already registered");
-      }
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (_target, method) => {
+        if (method === "Runtime.addBinding") {
+          throw new Error("binding already registered");
+        }
 
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        return { identifier: "trace-script-1" };
-      }
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          return { identifier: "trace-script-1" };
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
     const activeTrace = createActiveTrace();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "1.0.0",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          heartbeat: vi.fn().mockResolvedValue({
+            version: "1.0.0",
+            rootPath: "/tmp/server-root",
+            sentinel: { rootId: "server-root" },
+            baseUrl: "http://127.0.0.1:4319",
+            mcpUrl: "http://127.0.0.1:4319/mcp",
+            trpcUrl: "http://127.0.0.1:4319/trpc",
+            activeTrace
+          }),
           activeTrace
-        }),
-        activeTrace
-      }))
+        })
+      )
     });
 
     await runtime.start();
@@ -1449,9 +1740,13 @@ describe("background entrypoint", () => {
       traceScriptIdentifier: "trace-script-1",
       traceArmedForTraceId: "trace-1"
     });
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 7 }, "Runtime.addBinding", {
-      name: "__wraithwalkerTraceBinding"
-    });
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 7 },
+      "Runtime.addBinding",
+      {
+        name: "__wraithwalkerTraceBinding"
+      }
+    );
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 7 },
       "Page.addScriptToEvaluateOnNewDocument",
@@ -1464,7 +1759,9 @@ describe("background entrypoint", () => {
   it("re-arms traced tabs when the active trace changes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
     const firstTrace = createActiveTrace();
     const secondTrace = createActiveTrace({ traceId: "trace-2" });
     let nextTrace = firstTrace;
@@ -1478,38 +1775,54 @@ describe("background entrypoint", () => {
       trpcUrl: "http://127.0.0.1:4319/trpc",
       activeTrace: nextTrace
     }));
-    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        injectedCount += 1;
-        return { identifier: `trace-script-${injectedCount}` };
-      }
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (_target, method) => {
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          injectedCount += 1;
+          return { identifier: `trace-script-${injectedCount}` };
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace: firstTrace }))
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat, activeTrace: firstTrace })
+      )
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
     await flushPromises();
 
-    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-1");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe(
+      "trace-script-1"
+    );
 
     nextTrace = secondTrace;
-    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    chromeApi.alarms.onAlarm.listeners[0]({
+      name: "wraithwalker-server-heartbeat"
+    });
     await flushPromises();
 
     expect(runtime.state.activeTrace?.traceId).toBe("trace-2");
-    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-2");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe(
+      "trace-script-2"
+    );
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 7 },
       "Page.removeScriptToEvaluateOnNewDocument",
@@ -1520,7 +1833,9 @@ describe("background entrypoint", () => {
   it("re-arms traced tabs even when removing the previous trace script fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
     const firstTrace = createActiveTrace();
     const secondTrace = createActiveTrace({ traceId: "trace-2" });
     let nextTrace = firstTrace;
@@ -1534,42 +1849,58 @@ describe("background entrypoint", () => {
       trpcUrl: "http://127.0.0.1:4319/trpc",
       activeTrace: nextTrace
     }));
-    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
-      if (method === "Page.removeScriptToEvaluateOnNewDocument") {
-        throw new Error("stale trace script");
-      }
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (_target, method) => {
+        if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+          throw new Error("stale trace script");
+        }
 
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        injectedCount += 1;
-        return { identifier: `trace-script-${injectedCount}` };
-      }
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          injectedCount += 1;
+          return { identifier: `trace-script-${injectedCount}` };
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace: firstTrace }))
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat, activeTrace: firstTrace })
+      )
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
     await flushPromises();
 
-    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-1");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe(
+      "trace-script-1"
+    );
 
     nextTrace = secondTrace;
-    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    chromeApi.alarms.onAlarm.listeners[0]({
+      name: "wraithwalker-server-heartbeat"
+    });
     await flushPromises();
 
     expect(runtime.state.activeTrace?.traceId).toBe("trace-2");
-    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-2");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe(
+      "trace-script-2"
+    );
     expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 7 },
       "Page.removeScriptToEvaluateOnNewDocument",
@@ -1580,7 +1911,9 @@ describe("background entrypoint", () => {
   it("keeps tabs attached without arming trace scripts when no active trace is available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
     const heartbeat = vi.fn().mockResolvedValue({
       version: "1.0.0",
       rootPath: "/tmp/server-root",
@@ -1594,12 +1927,20 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace: null }))
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat, activeTrace: null })
+      )
     });
 
     await runtime.start();
@@ -1631,9 +1972,12 @@ describe("background entrypoint", () => {
   it("ignores tabs that disappear before trace disarm runs", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
     const activeTrace = createActiveTrace();
-    const heartbeat = vi.fn()
+    const heartbeat = vi
+      .fn()
       .mockResolvedValueOnce({
         version: "1.0.0",
         rootPath: "/tmp/server-root",
@@ -1654,32 +1998,46 @@ describe("background entrypoint", () => {
       })
       .mockRejectedValueOnce(new Error("server offline"));
     let injectedCount = 0;
-    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method) => {
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        injectedCount += 1;
-        return { identifier: `trace-script-${injectedCount}` };
-      }
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (_target, method) => {
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          injectedCount += 1;
+          return { identifier: `trace-script-${injectedCount}` };
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat, activeTrace }))
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat, activeTrace })
+      )
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
     await flushPromises();
 
-    const originalKeys = runtime.state.attachedTabs.keys.bind(runtime.state.attachedTabs);
-    const attachedTabs = runtime.state.attachedTabs as Map<number, unknown> & { keys: typeof runtime.state.attachedTabs.keys };
+    const originalKeys = runtime.state.attachedTabs.keys.bind(
+      runtime.state.attachedTabs
+    );
+    const attachedTabs = runtime.state.attachedTabs as Map<number, unknown> & {
+      keys: typeof runtime.state.attachedTabs.keys;
+    };
     attachedTabs.keys = function* () {
       for (const tabId of originalKeys()) {
         yield tabId;
@@ -1688,7 +2046,9 @@ describe("background entrypoint", () => {
     };
     chromeApi.debugger.sendCommand.mockClear();
 
-    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    chromeApi.alarms.onAlarm.listeners[0]({
+      name: "wraithwalker-server-heartbeat"
+    });
     await flushPromises();
 
     expect(runtime.state.serverInfo).toBeNull();
@@ -1711,53 +2071,73 @@ describe("background entrypoint", () => {
   it("disarms trace bindings during session stop even when debugger cleanup commands fail", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
-    chromeApi.debugger.sendCommand.mockImplementation(async (_target, method, params) => {
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        return { identifier: "trace-script-1" };
-      }
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (_target, method, params) => {
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          return { identifier: "trace-script-1" };
+        }
 
-      if (method === "Page.removeScriptToEvaluateOnNewDocument") {
-        throw new Error("stale trace script");
-      }
+        if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+          throw new Error("stale trace script");
+        }
 
-      if (method === "Runtime.evaluate" && (params as { expression?: string } | undefined)?.expression === "globalThis.__wraithwalkerDisableTrace?.()") {
-        throw new Error("execution context missing");
-      }
+        if (
+          method === "Runtime.evaluate" &&
+          (params as { expression?: string } | undefined)?.expression ===
+            "globalThis.__wraithwalkerDisableTrace?.()"
+        ) {
+          throw new Error("execution context missing");
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
     const activeTrace = createActiveTrace();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "1.0.0",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          heartbeat: vi.fn().mockResolvedValue({
+            version: "1.0.0",
+            rootPath: "/tmp/server-root",
+            sentinel: { rootId: "server-root" },
+            baseUrl: "http://127.0.0.1:4319",
+            mcpUrl: "http://127.0.0.1:4319/mcp",
+            trpcUrl: "http://127.0.0.1:4319/trpc",
+            activeTrace
+          }),
           activeTrace
-        }),
-        activeTrace
-      }))
+        })
+      )
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
     await flushPromises();
 
-    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe("trace-script-1");
+    expect(runtime.state.attachedTabs.get(7)?.traceScriptIdentifier).toBe(
+      "trace-script-1"
+    );
 
-    const snapshot = await runtime.handleRuntimeMessage({ type: "session.stop" });
+    const snapshot = await runtime.handleRuntimeMessage({
+      type: "session.stop"
+    });
 
     expect("sessionActive" in snapshot && snapshot.sessionActive).toBe(false);
     expect(runtime.state.attachedTabs.has(7)).toBe(false);
@@ -1786,39 +2166,45 @@ describe("background entrypoint", () => {
       recorded: true,
       activeTrace: createActiveTrace({
         status: "recording",
-        steps: [{
-          stepId: "step-1",
-          tabId: 3,
-          recordedAt: "2026-04-08T00:00:01.000Z",
-          pageUrl: "https://app.example.com/settings",
-          topOrigin: "https://app.example.com",
-          selector: "#save-button",
-          tagName: "button",
-          textSnippet: "Save",
-          linkedFixtures: []
-        }]
+        steps: [
+          {
+            stepId: "step-1",
+            tabId: 3,
+            recordedAt: "2026-04-08T00:00:01.000Z",
+            pageUrl: "https://app.example.com/settings",
+            topOrigin: "https://app.example.com",
+            selector: "#save-button",
+            tagName: "button",
+            textSnippet: "Save",
+            linkedFixtures: []
+          }
+        ]
       })
     });
     const linkTraceFixture = vi.fn().mockResolvedValue({
       linked: true,
       trace: createActiveTrace({
         status: "recording",
-        steps: [{
-          stepId: "step-1",
-          tabId: 3,
-          recordedAt: "2026-04-08T00:00:01.000Z",
-          pageUrl: "https://app.example.com/settings",
-          topOrigin: "https://app.example.com",
-          selector: "#save-button",
-          tagName: "button",
-          textSnippet: "Save",
-          linkedFixtures: [{
-            bodyPath: "cdn.example.com/assets/app.js",
-            requestUrl: "https://cdn.example.com/assets/app.js",
-            resourceType: "Script",
-            capturedAt: "2026-04-08T00:00:02.500Z"
-          }]
-        }]
+        steps: [
+          {
+            stepId: "step-1",
+            tabId: 3,
+            recordedAt: "2026-04-08T00:00:01.000Z",
+            pageUrl: "https://app.example.com/settings",
+            topOrigin: "https://app.example.com",
+            selector: "#save-button",
+            tagName: "button",
+            textSnippet: "Save",
+            linkedFixtures: [
+              {
+                bodyPath: "cdn.example.com/assets/app.js",
+                requestUrl: "https://cdn.example.com/assets/app.js",
+                resourceType: "Script",
+                capturedAt: "2026-04-08T00:00:02.500Z"
+              }
+            ]
+          }
+        ]
       })
     });
     let requestLifecycleDependencies: any;
@@ -1826,23 +2212,27 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        activeTrace,
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "1.0.0",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
-          activeTrace
-        }),
-        recordTraceClick,
-        linkTraceFixture
-      })),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          activeTrace,
+          heartbeat: vi.fn().mockResolvedValue({
+            version: "1.0.0",
+            rootPath: "/tmp/server-root",
+            sentinel: { rootId: "server-root" },
+            baseUrl: "http://127.0.0.1:4319",
+            mcpUrl: "http://127.0.0.1:4319/mcp",
+            trpcUrl: "http://127.0.0.1:4319/trpc",
+            activeTrace
+          }),
+          recordTraceClick,
+          linkTraceFixture
+        })
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -1873,29 +2263,27 @@ describe("background entrypoint", () => {
     runtime.state.activeTrace = activeTrace;
     runtime.state.attachedTabs.set(3, { topOrigin: "https://app.example.com" });
 
-    await runtime.handleDebuggerEvent(
-      { tabId: 3 },
-      "Runtime.bindingCalled",
-      {
-        name: "__wraithwalkerTraceBinding",
-        payload: JSON.stringify({
-          pageUrl: "https://app.example.com/settings",
-          topOrigin: "https://app.example.com",
-          selector: "#save-button",
-          tagName: "button",
-          textSnippet: "Save",
-          recordedAt: "2026-04-08T00:00:01.000Z"
-        })
-      }
-    );
-
-    expect(recordTraceClick).toHaveBeenCalledWith(expect.objectContaining({
-      traceId: "trace-1",
-      step: expect.objectContaining({
-        tabId: 3,
-        selector: "#save-button"
+    await runtime.handleDebuggerEvent({ tabId: 3 }, "Runtime.bindingCalled", {
+      name: "__wraithwalkerTraceBinding",
+      payload: JSON.stringify({
+        pageUrl: "https://app.example.com/settings",
+        topOrigin: "https://app.example.com",
+        selector: "#save-button",
+        tagName: "button",
+        textSnippet: "Save",
+        recordedAt: "2026-04-08T00:00:01.000Z"
       })
-    }));
+    });
+
+    expect(recordTraceClick).toHaveBeenCalledWith(
+      expect.objectContaining({
+        traceId: "trace-1",
+        step: expect.objectContaining({
+          tabId: 3,
+          selector: "#save-button"
+        })
+      })
+    );
 
     await requestLifecycleDependencies.onFixturePersisted({
       descriptor: {
@@ -1940,7 +2328,9 @@ describe("background entrypoint", () => {
   it("captures recent console entries from Log.entryAdded and includes them in the next heartbeat", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 7, url: "https://app.example.com/settings" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 7, url: "https://app.example.com/settings" }
+    ]);
     const heartbeat = vi.fn().mockResolvedValue({
       version: "1.0.0",
       rootPath: "/tmp/server-root",
@@ -1954,12 +2344,20 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-08T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat }))
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat })
+      )
     });
 
     await runtime.start();
@@ -1968,21 +2366,17 @@ describe("background entrypoint", () => {
 
     heartbeat.mockClear();
 
-    await runtime.handleDebuggerEvent(
-      { tabId: 7 },
-      "Log.entryAdded",
-      {
-        entry: {
-          source: "javascript",
-          level: "error",
-          text: "Unhandled exception: boom",
-          timestamp: 1_775_692_800,
-          url: "https://app.example.com/assets/app.js",
-          lineNumber: 42,
-          columnNumber: 7
-        }
+    await runtime.handleDebuggerEvent({ tabId: 7 }, "Log.entryAdded", {
+      entry: {
+        source: "javascript",
+        level: "error",
+        text: "Unhandled exception: boom",
+        timestamp: 1_775_692_800,
+        url: "https://app.example.com/assets/app.js",
+        lineNumber: 42,
+        columnNumber: 7
       }
-    );
+    });
 
     expect(runtime.state.recentConsoleEntries).toEqual([
       expect.objectContaining({
@@ -1998,20 +2392,24 @@ describe("background entrypoint", () => {
       })
     ]);
 
-    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    chromeApi.alarms.onAlarm.listeners[0]({
+      name: "wraithwalker-server-heartbeat"
+    });
     await flushPromises();
 
-    expect(heartbeat).toHaveBeenCalledWith(expect.objectContaining({
-      recentConsoleEntries: [
-        expect.objectContaining({
-          tabId: 7,
-          topOrigin: "https://app.example.com",
-          source: "javascript",
-          level: "error",
-          text: "Unhandled exception: boom"
-        })
-      ]
-    }));
+    expect(heartbeat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recentConsoleEntries: [
+          expect.objectContaining({
+            tabId: 7,
+            topOrigin: "https://app.example.com",
+            source: "javascript",
+            level: "error",
+            text: "Unhandled exception: boom"
+          })
+        ]
+      })
+    );
   });
 
   it("marks the server offline when linking a persisted fixture to an active trace fails", async () => {
@@ -2022,32 +2420,40 @@ describe("background entrypoint", () => {
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getSiteConfigs: vi.fn().mockResolvedValue([{
-        origin: "https://local.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.json$"]
-      }]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://local.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        }
+      ]),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        activeTrace,
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "1.0.0",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
-          siteConfigs: [{
-            origin: "https://server.example.com",
-            createdAt: "2026-04-08T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.svg$"]
-          }],
-          activeTrace
-        }),
-        linkTraceFixture: vi.fn().mockRejectedValue(new Error("link failed"))
-      })),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          activeTrace,
+          heartbeat: vi.fn().mockResolvedValue({
+            version: "1.0.0",
+            rootPath: "/tmp/server-root",
+            sentinel: { rootId: "server-root" },
+            baseUrl: "http://127.0.0.1:4319",
+            mcpUrl: "http://127.0.0.1:4319/mcp",
+            trpcUrl: "http://127.0.0.1:4319/trpc",
+            siteConfigs: [
+              {
+                origin: "https://server.example.com",
+                createdAt: "2026-04-08T00:00:00.000Z",
+                dumpAllowlistPatterns: ["\\.svg$"]
+              }
+            ],
+            activeTrace
+          }),
+          linkTraceFixture: vi.fn().mockRejectedValue(new Error("link failed"))
+        })
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -2069,7 +2475,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://server.example.com"
+    ]);
 
     await requestLifecycleDependencies.onFixturePersisted({
       descriptor: {
@@ -2169,7 +2577,9 @@ describe("background entrypoint", () => {
       metaPath: "cdn.example.com/assets/missing.js.__response.json"
     } as any;
 
-    await expect(requestLifecycleDependencies.repository.read(descriptor)).resolves.toBeNull();
+    await expect(
+      requestLifecycleDependencies.repository.read(descriptor)
+    ).resolves.toBeNull();
     expect(serverClient.readFixture).toHaveBeenCalledWith(descriptor);
     expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalled();
   });
@@ -2275,7 +2685,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    await expect(requestLifecycleDependencies.repository.read(descriptor)).resolves.toEqual({
+    await expect(
+      requestLifecycleDependencies.repository.read(descriptor)
+    ).resolves.toEqual({
       request: expect.objectContaining({
         topOrigin: "https://app.example.com",
         url: "https://cdn.example.com/assets/app.js"
@@ -2354,7 +2766,9 @@ describe("background entrypoint", () => {
       }),
       hasFixture: vi.fn(),
       readFixture: vi.fn(),
-      writeFixtureIfAbsent: vi.fn().mockRejectedValue(new Error("Server write failed.")),
+      writeFixtureIfAbsent: vi
+        .fn()
+        .mockRejectedValue(new Error("Server write failed.")),
       generateContext: vi.fn()
     });
 
@@ -2406,7 +2820,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    await expect(requestLifecycleDependencies.repository.writeIfAbsent(payload)).resolves.toEqual({
+    await expect(
+      requestLifecycleDependencies.repository.writeIfAbsent(payload)
+    ).resolves.toEqual({
       written: true,
       descriptor: payload.descriptor,
       sentinel: localSentinel
@@ -2477,7 +2893,9 @@ describe("background entrypoint", () => {
       }),
       hasFixture: vi.fn(),
       readFixture: vi.fn(),
-      writeFixtureIfAbsent: vi.fn().mockRejectedValue(new Error("Server write failed.")),
+      writeFixtureIfAbsent: vi
+        .fn()
+        .mockRejectedValue(new Error("Server write failed.")),
       generateContext: vi.fn()
     });
 
@@ -2489,7 +2907,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() => serverClient),
       createSessionController: vi.fn(() => ({
@@ -2513,7 +2933,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    await expect(requestLifecycleDependencies.repository.writeIfAbsent(payload)).rejects.toThrow(
+    await expect(
+      requestLifecycleDependencies.repository.writeIfAbsent(payload)
+    ).rejects.toThrow(
       "Local WraithWalker server is unavailable and no fallback root is ready. Server write failed."
     );
     expect(runtime.state.serverInfo).toBeNull();
@@ -2539,7 +2961,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -2551,28 +2975,57 @@ describe("background entrypoint", () => {
     });
 
     await runtime.start();
-    chromeApi.debugger.onEvent.listeners[0]({ tabId: 1 }, "Fetch.requestPaused", { requestId: "fetch-1" });
-    chromeApi.debugger.onEvent.listeners[0]({ tabId: 1 }, "Network.loadingFinished", { requestId: "req-1" });
-    chromeApi.debugger.onEvent.listeners[0]({ tabId: 1 }, "Network.loadingFailed", { requestId: "req-1" });
+    chromeApi.debugger.onEvent.listeners[0](
+      { tabId: 1 },
+      "Fetch.requestPaused",
+      { requestId: "fetch-1" }
+    );
+    chromeApi.debugger.onEvent.listeners[0](
+      { tabId: 1 },
+      "Network.loadingFinished",
+      { requestId: "req-1" }
+    );
+    chromeApi.debugger.onEvent.listeners[0](
+      { tabId: 1 },
+      "Network.loadingFailed",
+      { requestId: "req-1" }
+    );
     await flushPromises();
 
-    expect(requestLifecycle.handleFetchRequestPaused).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "fetch-1" });
-    expect(requestLifecycle.handleNetworkLoadingFinished).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
-    expect(requestLifecycle.handleNetworkLoadingFailed).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
+    expect(requestLifecycle.handleFetchRequestPaused).toHaveBeenCalledWith(
+      { tabId: 1 },
+      { requestId: "fetch-1" }
+    );
+    expect(requestLifecycle.handleNetworkLoadingFinished).toHaveBeenCalledWith(
+      { tabId: 1 },
+      { requestId: "req-1" }
+    );
+    expect(requestLifecycle.handleNetworkLoadingFailed).toHaveBeenCalledWith(
+      { tabId: 1 },
+      { requestId: "req-1" }
+    );
   });
 
   it("executes the debugger and offscreen wrappers exposed to the request lifecycle", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendMessage.mockResolvedValue({ ok: true, sentinel: { rootId: "root-1" }, permission: "granted" });
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
     const requestLifecycleFactory = vi.fn((deps) => ({
       handleFetchRequestPaused: vi.fn(async () => {
-        await deps.sendDebuggerCommand(9, "Fetch.continueRequest", { requestId: "fetch-9" });
+        await deps.sendDebuggerCommand(9, "Fetch.continueRequest", {
+          requestId: "fetch-9"
+        });
       }),
       handleNetworkRequestWillBeSent: vi.fn(),
       handleNetworkResponseReceived: vi.fn(),
       handleNetworkLoadingFinished: vi.fn(async () => {
-        await deps.sendOffscreenMessage("fs.ensureRoot", { requestPermission: true });
+        await deps.sendOffscreenMessage("fs.ensureRoot", {
+          requestPermission: true
+        });
       }),
       handleNetworkLoadingFailed: vi.fn()
     }));
@@ -2580,7 +3033,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -2592,10 +3047,18 @@ describe("background entrypoint", () => {
     });
 
     await runtime.start();
-    await runtime.handleDebuggerEvent({ tabId: 9 }, "Fetch.requestPaused", { requestId: "fetch-9" });
-    await runtime.handleDebuggerEvent({ tabId: 9 }, "Network.loadingFinished", { requestId: "load-9" });
+    await runtime.handleDebuggerEvent({ tabId: 9 }, "Fetch.requestPaused", {
+      requestId: "fetch-9"
+    });
+    await runtime.handleDebuggerEvent({ tabId: 9 }, "Network.loadingFinished", {
+      requestId: "load-9"
+    });
 
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 9 }, "Fetch.continueRequest", { requestId: "fetch-9" });
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 9 },
+      "Fetch.continueRequest",
+      { requestId: "fetch-9" }
+    );
     expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith({
       target: "offscreen",
       type: "fs.ensureRoot",
@@ -2613,7 +3076,9 @@ describe("background entrypoint", () => {
     const requestLifecycleFactory = vi.fn((deps) => ({
       handleFetchRequestPaused: vi.fn(async () => {
         await sendCommandGate;
-        await deps.sendDebuggerCommand(9, "Fetch.continueRequest", { requestId: "fetch-9" });
+        await deps.sendDebuggerCommand(9, "Fetch.continueRequest", {
+          requestId: "fetch-9"
+        });
       }),
       handleNetworkRequestWillBeSent: vi.fn(),
       handleNetworkResponseReceived: vi.fn(),
@@ -2624,7 +3089,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -2643,7 +3110,11 @@ describe("background entrypoint", () => {
       new Error("Debugger is not attached to the tab with id: 9.")
     );
 
-    const pending = runtime.handleDebuggerEvent({ tabId: 9 }, "Fetch.requestPaused", { requestId: "fetch-9" });
+    const pending = runtime.handleDebuggerEvent(
+      { tabId: 9 },
+      "Fetch.requestPaused",
+      { requestId: "fetch-9" }
+    );
     chromeApi.debugger.onDetach.listeners[0]({ tabId: 9 }, "target_closed");
     await flushPromises();
     releaseSendCommand?.();
@@ -2657,11 +3128,17 @@ describe("background entrypoint", () => {
   it("cleans up and recovers from a detached-tab race in the real request lifecycle", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 11, url: "https://app.example.com/page" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 11, url: "https://app.example.com/page" }
+    ]);
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
-        return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+        return {
+          ok: true,
+          sentinel: { rootId: "root-1" },
+          permission: "granted"
+        };
       }
       if (message?.type === "fs.hasFixture") {
         return { ok: true, exists: false };
@@ -2674,26 +3151,34 @@ describe("background entrypoint", () => {
     const continueRequestGate = new Promise<void>((resolve) => {
       releaseContinueRequest = resolve;
     });
-    chromeApi.debugger.sendCommand.mockImplementation(async (target, method, params) => {
-      if (
-        blockDetachedContinueRequest
-        && (target as { tabId?: number }).tabId === 11
-        && method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-11"
-      ) {
-        await continueRequestGate;
-        throw new Error("Debugger is not attached to the tab with id: 11.");
-      }
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (target, method, params) => {
+        if (
+          blockDetachedContinueRequest &&
+          (target as { tabId?: number }).tabId === 11 &&
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-11"
+        ) {
+          await continueRequestGate;
+          throw new Error("Debugger is not attached to the tab with id: 11.");
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined)
     });
 
@@ -2702,19 +3187,15 @@ describe("background entrypoint", () => {
 
     expect(runtime.state.attachedTabs.has(11)).toBe(true);
 
-    runtime.handleDebuggerEvent(
-      { tabId: 11 },
-      "Network.requestWillBeSent",
-      {
-        requestId: "network-11",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/app.js",
-          headers: {}
-        },
-        type: "Script"
-      }
-    );
+    runtime.handleDebuggerEvent({ tabId: 11 }, "Network.requestWillBeSent", {
+      requestId: "network-11",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        headers: {}
+      },
+      type: "Script"
+    });
 
     const pending = runtime.handleDebuggerEvent(
       { tabId: 11 },
@@ -2741,41 +3222,37 @@ describe("background entrypoint", () => {
     expect(runtime.state.requests.has("11:network-11")).toBe(false);
 
     blockDetachedContinueRequest = false;
-    chromeApi.tabs.onUpdated.listeners[0](11, {}, { id: 11, url: "https://app.example.com/page" });
+    chromeApi.tabs.onUpdated.listeners[0](
+      11,
+      {},
+      { id: 11, url: "https://app.example.com/page" }
+    );
     await flushPromises();
 
     expect(runtime.state.lastError).toBe("");
     expect(runtime.state.attachedTabs.has(11)).toBe(true);
     expect(chromeApi.debugger.attach).toHaveBeenCalledTimes(2);
 
-    runtime.handleDebuggerEvent(
-      { tabId: 11 },
-      "Network.requestWillBeSent",
-      {
-        requestId: "network-11-recovered",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/app.js",
-          headers: {}
-        },
-        type: "Script"
-      }
-    );
+    runtime.handleDebuggerEvent({ tabId: 11 }, "Network.requestWillBeSent", {
+      requestId: "network-11-recovered",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        headers: {}
+      },
+      type: "Script"
+    });
 
-    await runtime.handleDebuggerEvent(
-      { tabId: 11 },
-      "Fetch.requestPaused",
-      {
-        requestId: "fetch-11-recovered",
-        networkId: "network-11-recovered",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/app.js",
-          headers: {}
-        },
-        resourceType: "Script"
-      }
-    );
+    await runtime.handleDebuggerEvent({ tabId: 11 }, "Fetch.requestPaused", {
+      requestId: "fetch-11-recovered",
+      networkId: "network-11-recovered",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        headers: {}
+      },
+      resourceType: "Script"
+    });
 
     expect(runtime.state.requests.has("11:network-11")).toBe(false);
     expect(runtime.state.requests.has("11:network-11-recovered")).toBe(true);
@@ -2789,74 +3266,84 @@ describe("background entrypoint", () => {
   it("ignores stale paused-request resolution errors from the real request lifecycle", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 13, url: "https://app.example.com/page" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 13, url: "https://app.example.com/page" }
+    ]);
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
-        return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+        return {
+          ok: true,
+          sentinel: { rootId: "root-1" },
+          permission: "granted"
+        };
       }
       if (message?.type === "fs.hasFixture") {
         return { ok: true, exists: false };
       }
       return { ok: true };
     });
-    chromeApi.debugger.sendCommand.mockImplementation(async (target, method, params) => {
-      if (
-        (target as { tabId?: number }).tabId === 13
-        && method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-13"
-      ) {
-        throw new Error("{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}");
-      }
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (target, method, params) => {
+        if (
+          (target as { tabId?: number }).tabId === 13 &&
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-13"
+        ) {
+          throw new Error(
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined)
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
 
-    runtime.handleDebuggerEvent(
-      { tabId: 13 },
-      "Network.requestWillBeSent",
-      {
-        requestId: "network-13",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/app.js",
-          headers: {}
-        },
-        type: "Script"
-      }
-    );
+    runtime.handleDebuggerEvent({ tabId: 13 }, "Network.requestWillBeSent", {
+      requestId: "network-13",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        headers: {}
+      },
+      type: "Script"
+    });
 
-    await runtime.handleDebuggerEvent(
-      { tabId: 13 },
-      "Fetch.requestPaused",
-      {
-        requestId: "fetch-13",
-        networkId: "network-13",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/app.js",
-          headers: {}
-        },
-        resourceType: "Script"
-      }
-    );
+    await runtime.handleDebuggerEvent({ tabId: 13 }, "Fetch.requestPaused", {
+      requestId: "fetch-13",
+      networkId: "network-13",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        headers: {}
+      },
+      resourceType: "Script"
+    });
 
     expect(runtime.state.lastError).toBe("");
     expect(runtime.state.requests.has("13:network-13")).toBe(false);
     expect(
-      chromeApi.debugger.sendCommand.mock.calls.filter(([, method]) => method === "Fetch.continueRequest")
+      chromeApi.debugger.sendCommand.mock.calls.filter(
+        ([, method]) => method === "Fetch.continueRequest"
+      )
     ).toEqual([
       [{ tabId: 13 }, "Fetch.continueRequest", { requestId: "fetch-13" }]
     ]);
@@ -2865,11 +3352,17 @@ describe("background entrypoint", () => {
   it("clears multiple in-flight requests and ignores late lifecycle events after target_closed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 12, url: "https://app.example.com/page" }]);
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 12, url: "https://app.example.com/page" }
+    ]);
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
-        return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
+        return {
+          ok: true,
+          sentinel: { rootId: "root-1" },
+          permission: "granted"
+        };
       }
       if (message?.type === "fs.hasFixture") {
         return { ok: true, exists: false };
@@ -2881,57 +3374,57 @@ describe("background entrypoint", () => {
     const continueRequestGate = new Promise<void>((resolve) => {
       releaseContinueRequest = resolve;
     });
-    chromeApi.debugger.sendCommand.mockImplementation(async (target, method, params) => {
-      if (
-        (target as { tabId?: number }).tabId === 12
-        && method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-detach-12"
-      ) {
-        await continueRequestGate;
-        throw new Error("Debugger is not attached to the tab with id: 12.");
-      }
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (target, method, params) => {
+        if (
+          (target as { tabId?: number }).tabId === 12 &&
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-detach-12"
+        ) {
+          await continueRequestGate;
+          throw new Error("Debugger is not attached to the tab with id: 12.");
+        }
 
-      return undefined;
-    });
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined)
     });
 
     await runtime.start();
     await runtime.handleRuntimeMessage({ type: "session.start" });
 
-    runtime.handleDebuggerEvent(
-      { tabId: 12 },
-      "Network.requestWillBeSent",
-      {
-        requestId: "network-a",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/app.js",
-          headers: {}
-        },
-        type: "Script"
-      }
-    );
-    runtime.handleDebuggerEvent(
-      { tabId: 12 },
-      "Network.requestWillBeSent",
-      {
-        requestId: "network-b",
-        request: {
-          method: "GET",
-          url: "https://cdn.example.com/logo.svg",
-          headers: {}
-        },
-        type: "Image"
-      }
-    );
+    runtime.handleDebuggerEvent({ tabId: 12 }, "Network.requestWillBeSent", {
+      requestId: "network-a",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/app.js",
+        headers: {}
+      },
+      type: "Script"
+    });
+    runtime.handleDebuggerEvent({ tabId: 12 }, "Network.requestWillBeSent", {
+      requestId: "network-b",
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/logo.svg",
+        headers: {}
+      },
+      type: "Image"
+    });
 
     expect(runtime.state.requests.has("12:network-a")).toBe(true);
     expect(runtime.state.requests.has("12:network-b")).toBe(true);
@@ -2988,8 +3481,16 @@ describe("background entrypoint", () => {
         type: "Image"
       }
     );
-    await runtime.handleDebuggerEvent({ tabId: 12 }, "Network.loadingFinished", { requestId: "network-a" });
-    await runtime.handleDebuggerEvent({ tabId: 12 }, "Network.loadingFinished", { requestId: "network-b" });
+    await runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Network.loadingFinished",
+      { requestId: "network-a" }
+    );
+    await runtime.handleDebuggerEvent(
+      { tabId: 12 },
+      "Network.loadingFinished",
+      { requestId: "network-b" }
+    );
 
     expect(runtime.state.lastError).toBe("");
     expect(runtime.state.requests.size).toBe(0);
@@ -3015,7 +3516,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -3029,7 +3532,11 @@ describe("background entrypoint", () => {
 
     await runtime.start();
     const sendResponse = vi.fn();
-    const handled = chromeApi.runtime.onMessage.listeners[0]({ type: "session.start" }, {}, sendResponse);
+    const handled = chromeApi.runtime.onMessage.listeners[0](
+      { type: "session.start" },
+      {},
+      sendResponse
+    );
     await flushPromises();
 
     expect(handled).toBe(true);
@@ -3050,7 +3557,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -3064,14 +3573,27 @@ describe("background entrypoint", () => {
 
     await runtime.start();
 
-    expect(chromeApi.runtime.onMessage.listeners[0]({ target: "offscreen", type: "fs.ensureRoot" }, {}, vi.fn())).toBeUndefined();
+    expect(
+      chromeApi.runtime.onMessage.listeners[0](
+        { target: "offscreen", type: "fs.ensureRoot" },
+        {},
+        vi.fn()
+      )
+    ).toBeUndefined();
 
     const sendResponse = vi.fn();
-    const handled = chromeApi.runtime.onMessage.listeners[0]({ type: "session.start" }, {}, sendResponse);
+    const handled = chromeApi.runtime.onMessage.listeners[0](
+      { type: "session.start" },
+      {},
+      sendResponse
+    );
     await flushPromises();
 
     expect(handled).toBe(true);
-    expect(sendResponse).toHaveBeenCalledWith({ ok: false, error: "Session failed." });
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: "Session failed."
+    });
     expect(runtime.state.lastError).toBe("Session failed.");
   });
 
@@ -3111,7 +3633,10 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "windsurf" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "native.open",
+      editorId: "windsurf"
+    });
 
     expect(chromeApi.offscreen.createDocument).toHaveBeenCalled();
     expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(1, {
@@ -3127,17 +3652,25 @@ describe("background entrypoint", () => {
       type: "fs.ensureRoot",
       payload: { requestPermission: true }
     });
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(1, "com.example.host", {
-      type: "verifyRoot",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-1"
-    });
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(2, "com.example.host", {
-      type: "openDirectory",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-1",
-      commandTemplate: 'windsurf "$DIR"'
-    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      1,
+      "com.example.host",
+      {
+        type: "verifyRoot",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-1"
+      }
+    );
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      2,
+      "com.example.host",
+      {
+        type: "openDirectory",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-1",
+        commandTemplate: 'windsurf "$DIR"'
+      }
+    );
     expect(chromeApi.tabs.create).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
@@ -3175,7 +3708,10 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "vscode" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "native.open",
+      editorId: "vscode"
+    });
 
     expect(chromeApi.runtime.sendMessage).toHaveBeenNthCalledWith(1, {
       target: "offscreen",
@@ -3211,7 +3747,11 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-07T00:00:00.000Z", dumpAllowlistPatterns: ["\\.js$"] }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-07T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
       ]),
       getNativeHostConfig: vi.fn().mockResolvedValue({
         ...DEFAULT_NATIVE_HOST_CONFIG,
@@ -3240,11 +3780,17 @@ describe("background entrypoint", () => {
       url: "cursor://file//tmp/fixtures/"
     });
     expect(chromeApi.tabs.create).toHaveBeenNthCalledWith(2, {
-      url: expect.stringContaining("cursor://anysphere.cursor-deeplink/prompt?text=")
+      url: expect.stringContaining(
+        "cursor://anysphere.cursor-deeplink/prompt?text="
+      )
     });
     const promptUrl = chromeApi.tabs.create.mock.calls[1][0].url;
-    expect(decodeURIComponent(promptUrl.split("text=")[1])).toContain("Selected origins: https://app.example.com.");
-    expect(decodeURIComponent(promptUrl.split("text=")[1])).toContain("Prettify");
+    expect(decodeURIComponent(promptUrl.split("text=")[1])).toContain(
+      "Selected origins: https://app.example.com."
+    );
+    expect(decodeURIComponent(promptUrl.split("text=")[1])).toContain(
+      "Prettify"
+    );
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true });
   });
@@ -3288,7 +3834,10 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "vscode" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "native.open",
+      editorId: "vscode"
+    });
 
     expect(chromeApi.tabs.create).toHaveBeenCalledWith({
       url: "custom-vscode://open?folder=%2Ftmp%2Ffixtures"
@@ -3300,7 +3849,9 @@ describe("background entrypoint", () => {
   it("returns the URL-launch error instead of falling back to native messaging", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.create.mockRejectedValueOnce(new Error("External protocol handler failed."));
+    chromeApi.tabs.create.mockRejectedValueOnce(
+      new Error("External protocol handler failed.")
+    );
     chromeApi.runtime.sendMessage
       .mockResolvedValueOnce({ ok: true }) // fs.generateContext
       .mockResolvedValueOnce({
@@ -3345,13 +3896,18 @@ describe("background entrypoint", () => {
     });
     expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: false, error: "External protocol handler failed." });
+    expect(result).toEqual({
+      ok: false,
+      error: "External protocol handler failed."
+    });
   });
 
   it("returns the URL-template launch error when no native fallback is configured", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.create.mockRejectedValueOnce(new Error("No application is registered for the URL."));
+    chromeApi.tabs.create.mockRejectedValueOnce(
+      new Error("No application is registered for the URL.")
+    );
     chromeApi.runtime.sendMessage
       .mockResolvedValueOnce({ ok: true }) // fs.generateContext
       .mockResolvedValueOnce({
@@ -3437,7 +3993,9 @@ describe("background entrypoint", () => {
     const result = await runtime.openDirectoryInEditor(undefined, "cursor");
 
     expect(chromeApi.tabs.create).toHaveBeenCalledWith({
-      url: expect.stringContaining("cursor://anysphere.cursor-deeplink/prompt?text=")
+      url: expect.stringContaining(
+        "cursor://anysphere.cursor-deeplink/prompt?text="
+      )
     });
     expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
@@ -3478,13 +4036,18 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.revealRoot" });
-
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.example.host", {
-      type: "revealDirectory",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-1"
+    const result = await runtime.handleRuntimeMessage({
+      type: "native.revealRoot"
     });
+
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith(
+      "com.example.host",
+      {
+        type: "revealDirectory",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-1"
+      }
+    );
     expect(result).toEqual({ ok: true });
   });
 
@@ -3521,9 +4084,12 @@ describe("background entrypoint", () => {
       }))
     });
 
-    await expect(runtime.handleRuntimeMessage({ type: "native.revealRoot" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "native.revealRoot" })
+    ).resolves.toEqual({
       ok: false,
-      error: "Configure the native host name and shared editor launch path in the options page first."
+      error:
+        "Configure the native host name and shared editor launch path in the options page first."
     });
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
   });
@@ -3542,7 +4108,9 @@ describe("background entrypoint", () => {
         siteConfigs: [],
         activeTrace: null
       }),
-      revealRoot: vi.fn().mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" })
+      revealRoot: vi
+        .fn()
+        .mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" })
     });
 
     const runtime = createBackgroundRuntime({
@@ -3573,7 +4141,9 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.revealRoot" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "native.revealRoot"
+    });
 
     expect(serverClient.revealRoot).toHaveBeenCalledTimes(1);
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
@@ -3612,7 +4182,9 @@ describe("background entrypoint", () => {
       }))
     });
 
-    await expect(runtime.handleRuntimeMessage({ type: "native.revealRoot" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "native.revealRoot" })
+    ).resolves.toEqual({
       ok: false,
       error: "Root directory access is not granted."
     });
@@ -3652,11 +4224,15 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const result = await runtime.handleRuntimeMessage({ type: "native.open", editorId: "windsurf" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "native.open",
+      editorId: "windsurf"
+    });
 
     expect(result).toEqual({
       ok: false,
-      error: "Configure the shared editor launch path in the options page first."
+      error:
+        "Configure the shared editor launch path in the options page first."
     });
     expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
     expect(chromeApi.tabs.create).not.toHaveBeenCalled();
@@ -3694,15 +4270,24 @@ describe("background entrypoint", () => {
       }))
     });
 
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.list" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "scenario.list" })
+    ).resolves.toEqual({
       ok: false,
       error: "Root directory access is not granted."
     });
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })
+    ).resolves.toEqual({
       ok: false,
       error: "Root directory access is not granted."
     });
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.switch", name: "baseline" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.switch",
+        name: "baseline"
+      })
+    ).resolves.toEqual({
       ok: false,
       error: "Root directory access is not granted."
     });
@@ -3717,7 +4302,10 @@ describe("background entrypoint", () => {
       sentinel: { rootId: "root-1" },
       permission: "granted"
     });
-    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: false, error: "Reveal failed." });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({
+      ok: false,
+      error: "Reveal failed."
+    });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -3743,7 +4331,9 @@ describe("background entrypoint", () => {
       }))
     });
 
-    await expect(runtime.handleRuntimeMessage({ type: "native.revealRoot" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "native.revealRoot" })
+    ).resolves.toEqual({
       ok: false,
       error: "Reveal failed."
     });
@@ -3776,12 +4366,17 @@ describe("background entrypoint", () => {
       }))
     });
 
-    chromeApi.runtime.sendMessage.mockResolvedValueOnce({ ok: false, error: "Root directory access is not granted." });
+    chromeApi.runtime.sendMessage.mockResolvedValueOnce({
+      ok: false,
+      error: "Root directory access is not granted."
+    });
     await expect(blockedRuntime.verifyNativeHostRoot()).resolves.toEqual({
       ok: false,
       error: "Root directory access is not granted."
     });
-    expect(blockedRuntime.state.lastError).toBe("Root directory access is not granted.");
+    expect(blockedRuntime.state.lastError).toBe(
+      "Root directory access is not granted."
+    );
 
     const sentinelRuntime = createBackgroundRuntime({
       chromeApi,
@@ -3808,8 +4403,8 @@ describe("background entrypoint", () => {
     });
 
     chromeApi.runtime.sendMessage
-      .mockResolvedValueOnce({ ok: true })  // fs.generateContext
-      .mockResolvedValueOnce({ ok: true, permission: "granted" });  // fs.ensureRoot
+      .mockResolvedValueOnce({ ok: true }) // fs.generateContext
+      .mockResolvedValueOnce({ ok: true, permission: "granted" }); // fs.ensureRoot
     await expect(sentinelRuntime.openDirectoryInEditor()).resolves.toEqual({
       ok: false,
       error: "Root sentinel is missing a rootId."
@@ -3911,36 +4506,57 @@ describe("background entrypoint", () => {
       }
     });
 
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.list" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "scenario.list" })
+    ).resolves.toEqual({
       ok: true,
       scenarios: ["baseline"]
     });
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })
+    ).resolves.toEqual({
       ok: true,
       name: "release"
     });
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.switch", name: "baseline" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.switch",
+        name: "baseline"
+      })
+    ).resolves.toEqual({
       ok: true,
       name: "baseline"
     });
 
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(1, "com.example.host", {
-      type: "listScenarios",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-scenarios"
-    });
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(2, "com.example.host", {
-      type: "saveScenario",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-scenarios",
-      name: "release"
-    });
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(3, "com.example.host", {
-      type: "switchScenario",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-scenarios",
-      name: "baseline"
-    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      1,
+      "com.example.host",
+      {
+        type: "listScenarios",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-scenarios"
+      }
+    );
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      2,
+      "com.example.host",
+      {
+        type: "saveScenario",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-scenarios",
+        name: "release"
+      }
+    );
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      3,
+      "com.example.host",
+      {
+        type: "switchScenario",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-scenarios",
+        name: "baseline"
+      }
+    );
   });
 
   it("routes scenario list, save, and switch actions through the connected server root", async () => {
@@ -3991,15 +4607,24 @@ describe("background entrypoint", () => {
     await runtime.start();
     await flushPromises();
 
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.list" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "scenario.list" })
+    ).resolves.toEqual({
       ok: true,
       scenarios: ["baseline"]
     });
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({ type: "scenario.save", name: "release" })
+    ).resolves.toEqual({
       ok: true,
       name: "release"
     });
-    await expect(runtime.handleRuntimeMessage({ type: "scenario.switch", name: "baseline" })).resolves.toEqual({
+    await expect(
+      runtime.handleRuntimeMessage({
+        type: "scenario.switch",
+        name: "baseline"
+      })
+    ).resolves.toEqual({
       ok: true,
       name: "baseline"
     });
@@ -4013,7 +4638,8 @@ describe("background entrypoint", () => {
   it("records refresh failures triggered by startup and install listeners", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    const getSiteConfigs = vi.fn()
+    const getSiteConfigs = vi
+      .fn()
       .mockResolvedValueOnce([])
       .mockRejectedValueOnce(new Error("Startup refresh failed."))
       .mockRejectedValueOnce(new Error("Install refresh failed."));
@@ -4021,7 +4647,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createSessionController: vi.fn(() => ({
@@ -4061,16 +4689,29 @@ describe("background entrypoint", () => {
   it("uses the real session controller to attach, detach, and reconcile tabs", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 5, url: "https://app.example.com/dashboard" }]);
-    chromeApi.runtime.sendMessage.mockResolvedValue({ ok: true, sentinel: { rootId: "root-1" }, permission: "granted" });
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 5, url: "https://app.example.com/dashboard" }
+    ]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
     chromeApi.runtime.getContexts
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{}]);
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getSiteConfigs: vi.fn().mockResolvedValue([{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      ]),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4090,13 +4731,28 @@ describe("background entrypoint", () => {
       payload: { requestPermission: true }
     });
     expect(chromeApi.debugger.attach).toHaveBeenCalledWith({ tabId: 5 }, "1.3");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 5 }, "Network.enable");
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 5 }, "Network.setCacheDisabled", { cacheDisabled: true });
-    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 5 }, "Fetch.enable", {
-      patterns: [{ urlPattern: "*" }]
-    });
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 5 },
+      "Network.enable"
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 5 },
+      "Network.setCacheDisabled",
+      { cacheDisabled: true }
+    );
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 5 },
+      "Fetch.enable",
+      {
+        patterns: [{ urlPattern: "*" }]
+      }
+    );
 
-    chromeApi.tabs.onUpdated.listeners[0](5, {}, { id: 5, url: "https://app.example.com/settings" });
+    chromeApi.tabs.onUpdated.listeners[0](
+      5,
+      {},
+      { id: 5, url: "https://app.example.com/settings" }
+    );
     await flushPromises();
     expect(chromeApi.debugger.attach).toHaveBeenCalledTimes(1);
 
@@ -4131,9 +4787,14 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4160,7 +4821,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4187,23 +4850,39 @@ describe("background entrypoint", () => {
   it("does not surface a lastError when a tab detaches during debugger setup", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 5, url: "https://app.example.com/dashboard" }]);
-    chromeApi.runtime.sendMessage.mockResolvedValue({ ok: true, sentinel: { rootId: "root-1" }, permission: "granted" });
-    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
-    chromeApi.debugger.sendCommand.mockImplementation(async (target, method) => {
-      if ((target as { tabId?: number }).tabId === 5 && method === "Runtime.enable") {
-        throw new Error("Debugger is not attached to the tab with id: 5.");
-      }
-
-      return undefined;
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 5, url: "https://app.example.com/dashboard" }
+    ]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
     });
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.debugger.sendCommand.mockImplementation(
+      async (target, method) => {
+        if (
+          (target as { tabId?: number }).tabId === 5 &&
+          method === "Runtime.enable"
+        ) {
+          throw new Error("Debugger is not attached to the tab with id: 5.");
+        }
+
+        return undefined;
+      }
+    );
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([
-        { origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
       ]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4229,7 +4908,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4252,14 +4933,27 @@ describe("background entrypoint", () => {
   it("stops the global session when the debugger is canceled by the user", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 8, url: "https://app.example.com/dashboard" }]);
-    chromeApi.runtime.sendMessage.mockResolvedValue({ ok: true, sentinel: { rootId: "root-1" }, permission: "granted" });
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 8, url: "https://app.example.com/dashboard" }
+    ]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getSiteConfigs: vi.fn().mockResolvedValue([{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      ]),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4283,19 +4977,34 @@ describe("background entrypoint", () => {
     expect(runtime.state.sessionActive).toBe(false);
     expect(runtime.state.attachedTabs.has(8)).toBe(false);
     expect(chromeApi.offscreen.closeDocument).toHaveBeenCalled();
-    expect(runtime.state.lastError).toBe("Debugger session was canceled by the user. Session stopped.");
+    expect(runtime.state.lastError).toBe(
+      "Debugger session was canceled by the user. Session stopped."
+    );
   });
 
   it("keeps the global session active when the debuggee target closes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([{ id: 8, url: "https://app.example.com/dashboard" }]);
-    chromeApi.runtime.sendMessage.mockResolvedValue({ ok: true, sentinel: { rootId: "root-1" }, permission: "granted" });
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 8, url: "https://app.example.com/dashboard" }
+    ]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: true,
+      sentinel: { rootId: "root-1" },
+      permission: "granted"
+    });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getSiteConfigs: vi.fn().mockResolvedValue([{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      ]),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4316,7 +5025,11 @@ describe("background entrypoint", () => {
     expect(runtime.state.attachedTabs.has(8)).toBe(false);
     expect(chromeApi.offscreen.closeDocument).not.toHaveBeenCalled();
 
-    chromeApi.tabs.onUpdated.listeners[0](8, {}, { id: 8, url: "https://app.example.com/dashboard" });
+    chromeApi.tabs.onUpdated.listeners[0](
+      8,
+      {},
+      { id: 8, url: "https://app.example.com/dashboard" }
+    );
     await flushPromises();
 
     expect(runtime.state.sessionActive).toBe(true);
@@ -4331,7 +5044,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4368,7 +5083,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4380,7 +5097,9 @@ describe("background entrypoint", () => {
     });
 
     await runtime.start();
-    runtime.state.attachedTabs.set(12, { topOrigin: "https://app.example.com" });
+    runtime.state.attachedTabs.set(12, {
+      topOrigin: "https://app.example.com"
+    });
     runtime.state.requests.set("99:req-1", { requestId: "req-1" } as any);
 
     chromeApi.debugger.onDetach.listeners[0]({ tabId: 12 }, "target_closed");
@@ -4393,24 +5112,29 @@ describe("background entrypoint", () => {
   it("migrates legacy chrome-local site config into the selected root once", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    let configuredSites = [{
-      origin: "https://app.example.com",
-      createdAt: "2026-04-07T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.svg$"]
-    }];
+    let configuredSites = [
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-07T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      }
+    ];
 
     chromeApi.storage.local.get.mockImplementation(async (keys: string[]) => {
       if (keys.includes(STORAGE_KEYS.SITES)) {
         return {
-          [STORAGE_KEYS.SITES]: [{
-            origin: "admin.example.com",
-            createdAt: "2026-04-08T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.json$"]
-          }, {
-            origin: "https://app.example.com",
-            createdAt: "2026-04-06T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.js$"]
-          }]
+          [STORAGE_KEYS.SITES]: [
+            {
+              origin: "admin.example.com",
+              createdAt: "2026-04-08T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.json$"]
+            },
+            {
+              origin: "https://app.example.com",
+              createdAt: "2026-04-06T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            }
+          ]
         };
       }
 
@@ -4422,34 +5146,54 @@ describe("background entrypoint", () => {
         return { [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-1" };
       }
 
-      if (keys.includes(STORAGE_KEYS.NATIVE_HOST) || keys.includes(STORAGE_KEYS.PREFERRED_EDITOR)) {
+      if (
+        keys.includes(STORAGE_KEYS.NATIVE_HOST) ||
+        keys.includes(STORAGE_KEYS.PREFERRED_EDITOR)
+      ) {
         return {};
       }
 
       return {};
     });
-    chromeApi.runtime.sendMessage.mockImplementation(async (message: {
-      target?: string;
-      type?: string;
-      payload?: { siteConfigs?: typeof configuredSites };
-    }) => {
-      if (message.target !== "offscreen") {
-        return undefined;
-      }
+    chromeApi.runtime.sendMessage.mockImplementation(
+      async (message: {
+        target?: string;
+        type?: string;
+        payload?: { siteConfigs?: typeof configuredSites };
+      }) => {
+        if (message.target !== "offscreen") {
+          return undefined;
+        }
 
-      switch (message.type) {
-        case "fs.ensureRoot":
-          return { ok: true, sentinel: { rootId: "root-1" }, permission: "granted" };
-        case "fs.readConfiguredSiteConfigs":
-        case "fs.readEffectiveSiteConfigs":
-          return { ok: true, sentinel: { rootId: "root-1" }, siteConfigs: configuredSites };
-        case "fs.writeConfiguredSiteConfigs":
-          configuredSites = message.payload?.siteConfigs ?? [];
-          return { ok: true, sentinel: { rootId: "root-1" }, siteConfigs: configuredSites };
-        default:
-          return { ok: false, error: `Unhandled offscreen message: ${String(message.type)}` };
+        switch (message.type) {
+          case "fs.ensureRoot":
+            return {
+              ok: true,
+              sentinel: { rootId: "root-1" },
+              permission: "granted"
+            };
+          case "fs.readConfiguredSiteConfigs":
+          case "fs.readEffectiveSiteConfigs":
+            return {
+              ok: true,
+              sentinel: { rootId: "root-1" },
+              siteConfigs: configuredSites
+            };
+          case "fs.writeConfiguredSiteConfigs":
+            configuredSites = message.payload?.siteConfigs ?? [];
+            return {
+              ok: true,
+              sentinel: { rootId: "root-1" },
+              siteConfigs: configuredSites
+            };
+          default:
+            return {
+              ok: false,
+              error: `Unhandled offscreen message: ${String(message.type)}`
+            };
+        }
       }
-    });
+    );
     const sessionController = {
       startSession: vi.fn(),
       stopSession: vi.fn(),
@@ -4459,7 +5203,9 @@ describe("background entrypoint", () => {
 
     const runtime = createBackgroundRuntime({
       chromeApi,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -4485,7 +5231,10 @@ describe("background entrypoint", () => {
         dumpAllowlistPatterns: ["\\.svg$"]
       }
     ]);
-    expect(runtime.state.enabledOrigins).toEqual(["https://admin.example.com", "https://app.example.com"]);
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://admin.example.com",
+      "https://app.example.com"
+    ]);
     expect(chromeApi.storage.local.set).toHaveBeenCalledWith({
       [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true
     });
@@ -4498,9 +5247,12 @@ describe("background entrypoint", () => {
   it("ignores legacy site config storage changes after root-backed config becomes authoritative", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
-    const getSiteConfigs = vi
-      .fn()
-      .mockResolvedValue([{ origin: "https://app.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]);
+    const getSiteConfigs = vi.fn().mockResolvedValue([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-03T00:00:00.000Z"
+      }
+    ]);
     const sessionController = {
       startSession: vi.fn(),
       stopSession: vi.fn(),
@@ -4511,7 +5263,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -4525,7 +5279,10 @@ describe("background entrypoint", () => {
 
     await runtime.start();
     runtime.state.sessionActive = true;
-    chromeApi.storage.onChanged.listeners[0]({ siteConfigs: { newValue: [] } }, "local");
+    chromeApi.storage.onChanged.listeners[0](
+      { siteConfigs: { newValue: [] } },
+      "local"
+    );
     await flushPromises();
 
     expect(getSiteConfigs).toHaveBeenCalledTimes(1);
@@ -4537,8 +5294,18 @@ describe("background entrypoint", () => {
     const chromeApi = createChromeApi();
     const getSiteConfigs = vi
       .fn()
-      .mockResolvedValueOnce([{ origin: "https://local.example.com", createdAt: "2026-04-03T00:00:00.000Z" }])
-      .mockResolvedValueOnce([{ origin: "https://next-local.example.com", createdAt: "2026-04-03T00:00:00.000Z" }]);
+      .mockResolvedValueOnce([
+        {
+          origin: "https://local.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          origin: "https://next-local.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      ]);
     const sessionController = {
       startSession: vi.fn(),
       stopSession: vi.fn(),
@@ -4549,24 +5316,30 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({
-        heartbeat: vi.fn().mockResolvedValue({
-          version: "0.6.1",
-          rootPath: "/tmp/server-root",
-          sentinel: { rootId: "server-root" },
-          baseUrl: "http://127.0.0.1:4319",
-          mcpUrl: "http://127.0.0.1:4319/mcp",
-          trpcUrl: "http://127.0.0.1:4319/trpc",
-          siteConfigs: [{
-            origin: "https://server.example.com",
-            createdAt: "2026-04-08T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.svg$"]
-          }],
-          activeTrace: null
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          heartbeat: vi.fn().mockResolvedValue({
+            version: "0.6.1",
+            rootPath: "/tmp/server-root",
+            sentinel: { rootId: "server-root" },
+            baseUrl: "http://127.0.0.1:4319",
+            mcpUrl: "http://127.0.0.1:4319/mcp",
+            trpcUrl: "http://127.0.0.1:4319/trpc",
+            siteConfigs: [
+              {
+                origin: "https://server.example.com",
+                createdAt: "2026-04-08T00:00:00.000Z",
+                dumpAllowlistPatterns: ["\\.svg$"]
+              }
+            ],
+            activeTrace: null
+          })
         })
-      })),
+      ),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
         handleFetchRequestPaused: vi.fn(),
@@ -4582,11 +5355,18 @@ describe("background entrypoint", () => {
     runtime.state.sessionActive = true;
     sessionController.reconcileTabs.mockClear();
 
-    chromeApi.storage.onChanged.listeners[0]({ nativeHostConfig: { newValue: {} } }, "local");
+    chromeApi.storage.onChanged.listeners[0](
+      { nativeHostConfig: { newValue: {} } },
+      "local"
+    );
     await flushPromises();
 
-    expect(runtime.state.enabledOrigins).toEqual(["https://server.example.com"]);
-    expect(runtime.state.localEnabledOrigins).toEqual(["https://next-local.example.com"]);
+    expect(runtime.state.enabledOrigins).toEqual([
+      "https://server.example.com"
+    ]);
+    expect(runtime.state.localEnabledOrigins).toEqual([
+      "https://next-local.example.com"
+    ]);
     expect(sessionController.reconcileTabs).not.toHaveBeenCalled();
   });
 
@@ -4594,7 +5374,9 @@ describe("background entrypoint", () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([]);
-    const getNativeHostConfig = vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
+    const getNativeHostConfig = vi
+      .fn()
+      .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
     const sessionController = {
       startSession: vi.fn(),
       stopSession: vi.fn(),
@@ -4622,7 +5404,10 @@ describe("background entrypoint", () => {
     getNativeHostConfig.mockClear();
     runtime.state.sessionActive = true;
 
-    runtime.handleStorageChanged({ preferredEditorId: { newValue: "cursor" } }, "local");
+    runtime.handleStorageChanged(
+      { preferredEditorId: { newValue: "cursor" } },
+      "local"
+    );
     await flushPromises();
 
     expect(getSiteConfigs).toHaveBeenCalledTimes(1);
@@ -4634,7 +5419,9 @@ describe("background entrypoint", () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([]);
-    const getNativeHostConfig = vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
+    const getNativeHostConfig = vi
+      .fn()
+      .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG);
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -4680,13 +5467,17 @@ describe("background entrypoint", () => {
       startSession: vi.fn(),
       stopSession: vi.fn(),
       reconcileTabs: vi.fn(),
-      handleTabStateChange: vi.fn().mockRejectedValue(new Error("Tab update failed."))
+      handleTabStateChange: vi
+        .fn()
+        .mockRejectedValue(new Error("Tab update failed."))
     };
 
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs,
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -4701,7 +5492,11 @@ describe("background entrypoint", () => {
     await runtime.start();
     runtime.state.sessionActive = true;
 
-    chromeApi.tabs.onUpdated.listeners[0](3, {}, { id: 3, url: "https://app.example.com" });
+    chromeApi.tabs.onUpdated.listeners[0](
+      3,
+      {},
+      { id: 3, url: "https://app.example.com" }
+    );
     await flushPromises();
     expect(runtime.state.lastError).toBe("Tab update failed.");
 
@@ -4712,10 +5507,16 @@ describe("background entrypoint", () => {
     chromeApi.runtime.onInstalled.listeners[0]();
     await flushPromises();
 
-    chromeApi.storage.onChanged.listeners[0]({ nativeHostConfig: { newValue: {} } }, "sync");
+    chromeApi.storage.onChanged.listeners[0](
+      { nativeHostConfig: { newValue: {} } },
+      "sync"
+    );
     await flushPromises();
 
-    chromeApi.storage.onChanged.listeners[0]({ nativeHostConfig: { newValue: {} } }, "local");
+    chromeApi.storage.onChanged.listeners[0](
+      { nativeHostConfig: { newValue: {} } },
+      "local"
+    );
     await flushPromises();
     expect(runtime.state.lastError).toBe("Storage refresh failed.");
   });
@@ -4736,10 +5537,14 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat })),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat })
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
         stopSession: vi.fn(),
@@ -4763,7 +5568,9 @@ describe("background entrypoint", () => {
     await flushPromises();
     expect(heartbeat).not.toHaveBeenCalled();
 
-    chromeApi.alarms.onAlarm.listeners[0]({ name: "wraithwalker-server-heartbeat" });
+    chromeApi.alarms.onAlarm.listeners[0]({
+      name: "wraithwalker-server-heartbeat"
+    });
     await flushPromises();
     expect(heartbeat).toHaveBeenCalledTimes(1);
   });
@@ -4785,10 +5592,14 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi: chromeApi as any,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
-      createWraithWalkerServerClient: vi.fn(() => createMockServerClient({ heartbeat })),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({ heartbeat })
+      ),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn().mockResolvedValue({
           sessionActive: true,
@@ -4833,7 +5644,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -4845,18 +5658,33 @@ describe("background entrypoint", () => {
     });
 
     await runtime.start();
-    await runtime.handleDebuggerEvent({ tabId: 1 }, "Network.requestWillBeSent", { requestId: "req-1" });
-    await runtime.handleDebuggerEvent({ tabId: 1 }, "Network.responseReceived", { requestId: "req-1" });
+    await runtime.handleDebuggerEvent(
+      { tabId: 1 },
+      "Network.requestWillBeSent",
+      { requestId: "req-1" }
+    );
+    await runtime.handleDebuggerEvent(
+      { tabId: 1 },
+      "Network.responseReceived",
+      { requestId: "req-1" }
+    );
 
-    expect(requestLifecycle.handleNetworkRequestWillBeSent).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
-    expect(requestLifecycle.handleNetworkResponseReceived).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
+    expect(
+      requestLifecycle.handleNetworkRequestWillBeSent
+    ).toHaveBeenCalledWith({ tabId: 1 }, { requestId: "req-1" });
+    expect(requestLifecycle.handleNetworkResponseReceived).toHaveBeenCalledWith(
+      { tabId: 1 },
+      { requestId: "req-1" }
+    );
   });
 
   it("captures lifecycle handler errors into lastError", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
     const chromeApi = createChromeApi();
     const requestLifecycle = {
-      handleFetchRequestPaused: vi.fn().mockRejectedValue(new Error("Fetch handler crashed.")),
+      handleFetchRequestPaused: vi
+        .fn()
+        .mockRejectedValue(new Error("Fetch handler crashed.")),
       handleNetworkRequestWillBeSent: vi.fn(),
       handleNetworkResponseReceived: vi.fn(),
       handleNetworkLoadingFinished: vi.fn(),
@@ -4866,7 +5694,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -4878,7 +5708,9 @@ describe("background entrypoint", () => {
     });
 
     await runtime.start();
-    await runtime.handleDebuggerEvent({ tabId: 1 }, "Fetch.requestPaused", { requestId: "fetch-1" });
+    await runtime.handleDebuggerEvent({ tabId: 1 }, "Fetch.requestPaused", {
+      requestId: "fetch-1"
+    });
 
     expect(runtime.state.lastError).toBe("Fetch handler crashed.");
   });
@@ -4919,7 +5751,8 @@ describe("background entrypoint", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "Configure the native host name and shared editor launch path in the options page first."
+      error:
+        "Configure the native host name and shared editor launch path in the options page first."
     });
   });
 
@@ -4931,7 +5764,9 @@ describe("background entrypoint", () => {
       sentinel: { rootId: "root-1" },
       permission: "granted"
     });
-    chromeApi.runtime.sendNativeMessage.mockRejectedValue(new Error("Host not found."));
+    chromeApi.runtime.sendNativeMessage.mockRejectedValue(
+      new Error("Host not found.")
+    );
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
@@ -4970,7 +5805,10 @@ describe("background entrypoint", () => {
       sentinel: { rootId: "root-1" },
       permission: "granted"
     });
-    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: false, error: "Root mismatch." });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({
+      ok: false,
+      error: "Root mismatch."
+    });
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -5048,7 +5886,10 @@ describe("background entrypoint", () => {
       sentinel: { rootId: "root-1" },
       permission: "granted"
     });
-    chromeApi.runtime.sendNativeMessage.mockResolvedValueOnce({ ok: false, error: "Root mismatch." });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValueOnce({
+      ok: false,
+      error: "Root mismatch."
+    });
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
@@ -5078,11 +5919,14 @@ describe("background entrypoint", () => {
 
     expect(result).toEqual({ ok: false, error: "Root mismatch." });
     expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledTimes(1);
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.example.host", {
-      type: "verifyRoot",
-      path: "/tmp/fixtures",
-      expectedRootId: "root-1"
-    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith(
+      "com.example.host",
+      {
+        type: "verifyRoot",
+        path: "/tmp/fixtures",
+        expectedRootId: "root-1"
+      }
+    );
   });
 
   it("handles native open directory throwing an error", async () => {
@@ -5138,7 +5982,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -5167,7 +6013,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -5216,7 +6064,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot,
       createSessionController: vi.fn(() => sessionController),
       createRequestLifecycle: vi.fn(() => ({
@@ -5228,17 +6078,25 @@ describe("background entrypoint", () => {
       }))
     });
 
-    const stateResult = await runtime.handleRuntimeMessage({ type: "session.getState" });
+    const stateResult = await runtime.handleRuntimeMessage({
+      type: "session.getState"
+    });
     expect(stateResult).toHaveProperty("sessionActive", false);
 
-    const stopResult = await runtime.handleRuntimeMessage({ type: "session.stop" });
+    const stopResult = await runtime.handleRuntimeMessage({
+      type: "session.stop"
+    });
     expect(sessionController.stopSession).toHaveBeenCalled();
 
-    const rootResult = await runtime.handleRuntimeMessage({ type: "root.verify" });
+    const rootResult = await runtime.handleRuntimeMessage({
+      type: "root.verify"
+    });
     expect(rootResult).toHaveProperty("ok", true);
     expect(setLastSessionSnapshot).toHaveBeenCalled();
 
-    const verifyResult = await runtime.handleRuntimeMessage({ type: "native.verify" });
+    const verifyResult = await runtime.handleRuntimeMessage({
+      type: "native.verify"
+    });
     expect(verifyResult).toHaveProperty("ok", false);
     expect(setLastSessionSnapshot).toHaveBeenCalled();
   });
@@ -5305,52 +6163,56 @@ describe("background entrypoint", () => {
     });
     runtime.state.lastError = "Something went wrong.";
 
-    const result = await runtime.handleRuntimeMessage({ type: "diagnostics.getReport" });
+    const result = await runtime.handleRuntimeMessage({
+      type: "diagnostics.getReport"
+    });
 
-    expect(result).toEqual(expect.objectContaining({
-      ok: true,
-      report: expect.objectContaining({
-        extensionVersion: "0.1.0",
-        sessionSnapshot: expect.objectContaining({
-          sessionActive: true,
-          captureDestination: "server",
-          captureRootPath: "/tmp/server-root"
-        }),
-        server: expect.objectContaining({
-          connected: true,
-          rootPath: "/tmp/server-root",
-          activeTraceId: "trace-diagnostics"
-        }),
-        config: expect.objectContaining({
-          configuredSiteConfigs: [
-            expect.objectContaining({ origin: "https://app.example.com" })
-          ],
-          effectiveSiteConfigs: [
-            expect.objectContaining({ origin: "https://app.example.com" })
-          ]
-        }),
-        runtime: expect.objectContaining({
-          attachedTabs: [
-            expect.objectContaining({
-              tabId: 7,
-              topOrigin: "https://app.example.com",
-              hasTraceScriptIdentifier: true
-            })
-          ],
-          pendingRequests: [
-            expect.objectContaining({
-              tabId: 7,
-              requestId: "req-1",
-              url: "https://cdn.example.com/app.js"
-            })
-          ],
-          lastError: "Something went wrong."
-        }),
-        issues: expect.arrayContaining([
-          "Last runtime error: Something went wrong."
-        ])
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        report: expect.objectContaining({
+          extensionVersion: "0.1.0",
+          sessionSnapshot: expect.objectContaining({
+            sessionActive: true,
+            captureDestination: "server",
+            captureRootPath: "/tmp/server-root"
+          }),
+          server: expect.objectContaining({
+            connected: true,
+            rootPath: "/tmp/server-root",
+            activeTraceId: "trace-diagnostics"
+          }),
+          config: expect.objectContaining({
+            configuredSiteConfigs: [
+              expect.objectContaining({ origin: "https://app.example.com" })
+            ],
+            effectiveSiteConfigs: [
+              expect.objectContaining({ origin: "https://app.example.com" })
+            ]
+          }),
+          runtime: expect.objectContaining({
+            attachedTabs: [
+              expect.objectContaining({
+                tabId: 7,
+                topOrigin: "https://app.example.com",
+                hasTraceScriptIdentifier: true
+              })
+            ],
+            pendingRequests: [
+              expect.objectContaining({
+                tabId: 7,
+                requestId: "req-1",
+                url: "https://cdn.example.com/app.js"
+              })
+            ],
+            lastError: "Something went wrong."
+          }),
+          issues: expect.arrayContaining([
+            "Last runtime error: Something went wrong."
+          ])
+        })
       })
-    }));
+    );
   });
 
   it("falls back when getContexts is not available", async () => {
@@ -5366,7 +6228,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -5403,7 +6267,9 @@ describe("background entrypoint", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       setLastSessionSnapshot: vi.fn(),
       createSessionController: vi.fn(() => ({
         startSession: vi.fn(),
@@ -5438,7 +6304,11 @@ describe("background entrypoint", () => {
 
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
     expect(chromeApi.storage.local.get).toHaveBeenCalledTimes(3);
-    expect(chromeApi.storage.local.get).toHaveBeenNthCalledWith(2, [STORAGE_KEYS.EXTENSION_CLIENT_ID]);
-    expect(chromeApi.storage.local.get).toHaveBeenNthCalledWith(3, [STORAGE_KEYS.LEGACY_SITES_MIGRATED]);
+    expect(chromeApi.storage.local.get).toHaveBeenNthCalledWith(2, [
+      STORAGE_KEYS.EXTENSION_CLIENT_ID
+    ]);
+    expect(chromeApi.storage.local.get).toHaveBeenNthCalledWith(3, [
+      STORAGE_KEYS.LEGACY_SITES_MIGRATED
+    ]);
   });
 });

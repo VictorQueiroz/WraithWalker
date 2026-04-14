@@ -22,7 +22,11 @@ const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const REPO_ROOT = path.resolve(ROOT, "../..");
 const require = createRequire(path.join(ROOT, "package.json"));
-const TSC_PATH = path.join(path.dirname(require.resolve("typescript/package.json")), "bin", "tsc");
+const TSC_PATH = path.join(
+  path.dirname(require.resolve("typescript/package.json")),
+  "bin",
+  "tsc"
+);
 const PATHS = createBuildPaths(ROOT);
 const NPM_PATH = process.platform === "win32" ? "npm.cmd" : "npm";
 const NPX_PATH = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -34,9 +38,13 @@ async function runTsc(configPath) {
 }
 
 async function buildCoreFixtureLayout() {
-  await execFileAsync(NPM_PATH, ["run", "build", "--workspace", "@wraithwalker/core"], {
-    cwd: REPO_ROOT
-  });
+  await execFileAsync(
+    NPM_PATH,
+    ["run", "build", "--workspace", "@wraithwalker/core"],
+    {
+      cwd: REPO_ROOT
+    }
+  );
 }
 
 async function ensureDir(directoryPath) {
@@ -66,10 +74,19 @@ async function buildManifest() {
     fs.readFile(PATHS.packageJsonFile, "utf-8")
   ]);
   const manifest = JSON.parse(manifestContent) as ExtensionManifestTemplate;
-  const packageManifest = JSON.parse(packageManifestContent) as ExtensionPackageManifest;
-  const versionedManifest = applyExtensionVersionToManifest(manifest, packageManifest);
+  const packageManifest = JSON.parse(
+    packageManifestContent
+  ) as ExtensionPackageManifest;
+  const versionedManifest = applyExtensionVersionToManifest(
+    manifest,
+    packageManifest
+  );
 
-  await fs.writeFile(PATHS.distManifestFile, `${JSON.stringify(versionedManifest, null, 2)}\n`, "utf-8");
+  await fs.writeFile(
+    PATHS.distManifestFile,
+    `${JSON.stringify(versionedManifest, null, 2)}\n`,
+    "utf-8"
+  );
 }
 
 async function buildRuntime() {
@@ -106,7 +123,10 @@ async function rewriteCoreFixtureLayoutImports() {
     const content = await fs.readFile(filePath, "utf-8");
     await fs.writeFile(
       filePath,
-      rewriteCoreFixtureLayoutSpecifiers(content, "./vendor/wraithwalker-core/fixture-layout.js"),
+      rewriteCoreFixtureLayoutSpecifiers(
+        content,
+        "./vendor/wraithwalker-core/fixture-layout.js"
+      ),
       "utf-8"
     );
   }
@@ -120,7 +140,10 @@ async function rewriteCoreFixtureLayoutImports() {
     const content = await fs.readFile(filePath, "utf-8");
     await fs.writeFile(
       filePath,
-      rewriteCoreFixtureLayoutSpecifiers(content, "../vendor/wraithwalker-core/fixture-layout.js"),
+      rewriteCoreFixtureLayoutSpecifiers(
+        content,
+        "../vendor/wraithwalker-core/fixture-layout.js"
+      ),
       "utf-8"
     );
   }
@@ -136,20 +159,27 @@ async function buildDist() {
   await copyDirectory(PATHS.libEmitDir, path.join(PATHS.distDir, "lib"));
   await ensureDir(PATHS.distVendorDir);
   await copyFile(PATHS.vendorSource, PATHS.distVendorFile);
-  await copyFile(PATHS.coreFixtureLayoutSource, PATHS.distVendorCoreFixtureLayoutFile);
+  await copyFile(
+    PATHS.coreFixtureLayoutSource,
+    PATHS.distVendorCoreFixtureLayoutFile
+  );
   await rewriteIdbImports(path.join(PATHS.distDir, "lib"));
   await rewriteCoreFixtureLayoutImports();
 
-  await execFileAsync(NPX_PATH, [
-    "@tailwindcss/cli",
-    "-i",
-    PATHS.uiStylesSource,
-    "-o",
-    PATHS.distCssFile,
-    "--minify"
-  ], {
-    cwd: ROOT
-  });
+  await execFileAsync(
+    NPX_PATH,
+    [
+      "@tailwindcss/cli",
+      "-i",
+      PATHS.uiStylesSource,
+      "-o",
+      PATHS.distCssFile,
+      "--minify"
+    ],
+    {
+      cwd: ROOT
+    }
+  );
 }
 
 async function main() {

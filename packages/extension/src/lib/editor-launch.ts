@@ -1,4 +1,9 @@
-import { DEFAULT_EDITOR_ID, DEFAULT_NATIVE_HOST_CONFIG, EDITOR_PRESETS, type EditorPreset } from "./constants.js";
+import {
+  DEFAULT_EDITOR_ID,
+  DEFAULT_NATIVE_HOST_CONFIG,
+  EDITOR_PRESETS,
+  type EditorPreset
+} from "./constants.js";
 import type { EditorLaunchOverride, NativeHostConfig } from "./types.js";
 
 type LegacyNativeHostConfig = Partial<NativeHostConfig> & {
@@ -17,7 +22,9 @@ function trimOptionalString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function normalizeEditorLaunchOverride(value: Partial<EditorLaunchOverride> | undefined): EditorLaunchOverride | undefined {
+function normalizeEditorLaunchOverride(
+  value: Partial<EditorLaunchOverride> | undefined
+): EditorLaunchOverride | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
@@ -55,8 +62,18 @@ export function normalizeEditorLaunchOverrides(
 
   return Object.fromEntries(
     Object.entries(overrides)
-      .map(([editorId, value]) => [editorId, normalizeEditorLaunchOverride(value as Partial<EditorLaunchOverride> | undefined)] as const)
-      .filter((entry): entry is [string, EditorLaunchOverride] => Boolean(entry[1]))
+      .map(
+        ([editorId, value]) =>
+          [
+            editorId,
+            normalizeEditorLaunchOverride(
+              value as Partial<EditorLaunchOverride> | undefined
+            )
+          ] as const
+      )
+      .filter((entry): entry is [string, EditorLaunchOverride] =>
+        Boolean(entry[1])
+      )
   );
 }
 
@@ -64,33 +81,47 @@ export function normalizeNativeHostConfig(
   rawConfig: unknown,
   preferredEditorId: string = DEFAULT_EDITOR_ID
 ): NativeHostConfig {
-  const stored = rawConfig && typeof rawConfig === "object"
-    ? rawConfig as LegacyNativeHostConfig
-    : {};
-  const normalizedPreferredEditorId = normalizePreferredEditorId(preferredEditorId);
-  const editorLaunchOverrides = normalizeEditorLaunchOverrides(stored.editorLaunchOverrides);
+  const stored =
+    rawConfig && typeof rawConfig === "object"
+      ? (rawConfig as LegacyNativeHostConfig)
+      : {};
+  const normalizedPreferredEditorId =
+    normalizePreferredEditorId(preferredEditorId);
+  const editorLaunchOverrides = normalizeEditorLaunchOverrides(
+    stored.editorLaunchOverrides
+  );
   const legacyCommandTemplate = trimOptionalString(stored.commandTemplate);
   const legacyUrlTemplate = trimOptionalString(stored.urlTemplate);
 
   if (legacyCommandTemplate || legacyUrlTemplate) {
     editorLaunchOverrides[normalizedPreferredEditorId] = {
       ...editorLaunchOverrides[normalizedPreferredEditorId],
-      ...(editorLaunchOverrides[normalizedPreferredEditorId]?.commandTemplate ? {} : legacyCommandTemplate ? { commandTemplate: legacyCommandTemplate } : {}),
-      ...(editorLaunchOverrides[normalizedPreferredEditorId]?.urlTemplate ? {} : legacyUrlTemplate ? { urlTemplate: legacyUrlTemplate } : {})
+      ...(editorLaunchOverrides[normalizedPreferredEditorId]?.commandTemplate
+        ? {}
+        : legacyCommandTemplate
+          ? { commandTemplate: legacyCommandTemplate }
+          : {}),
+      ...(editorLaunchOverrides[normalizedPreferredEditorId]?.urlTemplate
+        ? {}
+        : legacyUrlTemplate
+          ? { urlTemplate: legacyUrlTemplate }
+          : {})
     };
   }
 
   return {
     ...DEFAULT_NATIVE_HOST_CONFIG,
-    hostName: typeof stored.hostName === "string"
-      ? stored.hostName
-      : DEFAULT_NATIVE_HOST_CONFIG.hostName,
-    launchPath: typeof stored.launchPath === "string"
-      ? stored.launchPath
-      : typeof stored.rootPath === "string"
-        ? stored.rootPath
-        : DEFAULT_NATIVE_HOST_CONFIG.launchPath,
-    editorLaunchOverrides,
+    hostName:
+      typeof stored.hostName === "string"
+        ? stored.hostName
+        : DEFAULT_NATIVE_HOST_CONFIG.hostName,
+    launchPath:
+      typeof stored.launchPath === "string"
+        ? stored.launchPath
+        : typeof stored.rootPath === "string"
+          ? stored.rootPath
+          : DEFAULT_NATIVE_HOST_CONFIG.launchPath,
+    editorLaunchOverrides
   };
 }
 
@@ -119,7 +150,11 @@ export function getEditorLaunchOverride(
   nativeHostConfig: NativeHostConfig,
   editorId: string
 ): EditorLaunchOverride {
-  return nativeHostConfig.editorLaunchOverrides?.[normalizePreferredEditorId(editorId)] ?? {};
+  return (
+    nativeHostConfig.editorLaunchOverrides?.[
+      normalizePreferredEditorId(editorId)
+    ] ?? {}
+  );
 }
 
 export interface ResolvedEditorLaunch {
@@ -139,11 +174,13 @@ export function resolveEditorLaunch(
   nativeHostConfig: NativeHostConfig,
   editorId: string = DEFAULT_EDITOR_ID
 ): ResolvedEditorLaunch {
-  const preset = findEditorPreset(editorId) ?? findEditorPreset(DEFAULT_EDITOR_ID)!;
+  const preset =
+    findEditorPreset(editorId) ?? findEditorPreset(DEFAULT_EDITOR_ID)!;
   const override = getEditorLaunchOverride(nativeHostConfig, preset.id);
   const builtInUrlTemplate = trimOptionalString(preset.urlTemplate) ?? "";
   const builtInAppUrl = trimOptionalString(preset.appUrl) ?? "";
-  const builtInCommandTemplate = trimOptionalString(preset.commandTemplate) ?? "";
+  const builtInCommandTemplate =
+    trimOptionalString(preset.commandTemplate) ?? "";
 
   return {
     editorId: preset.id,
@@ -151,11 +188,14 @@ export function resolveEditorLaunch(
     override,
     urlTemplate: trimOptionalString(override.urlTemplate) ?? builtInUrlTemplate,
     appUrl: builtInAppUrl,
-    commandTemplate: trimOptionalString(override.commandTemplate) ?? builtInCommandTemplate,
+    commandTemplate:
+      trimOptionalString(override.commandTemplate) ?? builtInCommandTemplate,
     hasBuiltInUrlTemplate: Boolean(builtInUrlTemplate),
     hasBuiltInAppUrl: Boolean(builtInAppUrl),
     hasCustomUrlOverride: Boolean(trimOptionalString(override.urlTemplate)),
-    hasCustomCommandOverride: Boolean(trimOptionalString(override.commandTemplate))
+    hasCustomCommandOverride: Boolean(
+      trimOptionalString(override.commandTemplate)
+    )
   };
 }
 
@@ -163,7 +203,11 @@ function normalizePathForUrl(rootPath: string): string {
   return rootPath.replaceAll("\\", "/");
 }
 
-export function buildEditorLaunchUrl(urlTemplate: string, rootPath: string, rootId: string): string {
+export function buildEditorLaunchUrl(
+  urlTemplate: string,
+  rootPath: string,
+  rootId: string
+): string {
   const normalizedPath = normalizePathForUrl(rootPath);
   const url = urlTemplate
     .replaceAll("$DIR_COMPONENT", encodeURIComponent(normalizedPath))
@@ -188,7 +232,7 @@ export function buildCursorPromptText(origins: string[]): string {
     `Selected origins: ${originSummary}.`,
     "Read the workspace context files first, then Prettify minified or dumped contents before reasoning about them.",
     "Start by understanding the structure of the website across the selected origins before making changes.",
-    "Use RESOURCE_MANIFEST.json files, sidecar metadata, and API fixtures to map how requests, chunks, and pages fit together.",
+    "Use RESOURCE_MANIFEST.json files, sidecar metadata, and API fixtures to map how requests, chunks, and pages fit together."
   ].join("\n");
 }
 

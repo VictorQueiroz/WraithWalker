@@ -117,8 +117,12 @@ export function applyThemeOverrides(
       ...overrides.icons
     },
     banner: {
-      art: overrides.banner?.art ? [...overrides.banner.art] : [...theme.banner.art],
-      phrases: overrides.banner?.phrases ? [...overrides.banner.phrases] : [...theme.banner.phrases]
+      art: overrides.banner?.art
+        ? [...overrides.banner.art]
+        : [...theme.banner.art],
+      phrases: overrides.banner?.phrases
+        ? [...overrides.banner.phrases]
+        : [...theme.banner.phrases]
     },
     indent: overrides.indent ?? theme.indent,
     labelWidth: overrides.labelWidth ?? theme.labelWidth

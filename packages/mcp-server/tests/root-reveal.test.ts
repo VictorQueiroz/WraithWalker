@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getRevealRootLaunch, revealRootDirectory } from "../src/root-reveal.mts";
+import {
+  getRevealRootLaunch,
+  revealRootDirectory
+} from "../src/root-reveal.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 describe("root reveal helper", () => {
@@ -32,10 +35,13 @@ describe("root reveal helper", () => {
     const spawnChild = { unref: vi.fn() };
     const spawnMock = vi.fn().mockReturnValue(spawnChild as any);
 
-    const result = await revealRootDirectory({
-      rootPath: root.rootPath,
-      expectedRootId: root.rootId
-    }, spawnMock as any);
+    const result = await revealRootDirectory(
+      {
+        rootPath: root.rootPath,
+        expectedRootId: root.rootId
+      },
+      spawnMock as any
+    );
 
     const launch = getRevealRootLaunch(root.rootPath);
     expect(result).toEqual({
@@ -56,10 +62,15 @@ describe("root reveal helper", () => {
     });
     const spawnMock = vi.fn();
 
-    await expect(revealRootDirectory({
-      rootPath: root.rootPath,
-      expectedRootId: "wrong-root"
-    }, spawnMock as any)).rejects.toThrow("Sentinel root ID mismatch.");
+    await expect(
+      revealRootDirectory(
+        {
+          rootPath: root.rootPath,
+          expectedRootId: "wrong-root"
+        },
+        spawnMock as any
+      )
+    ).rejects.toThrow("Sentinel root ID mismatch.");
     expect(spawnMock).not.toHaveBeenCalled();
   });
 });

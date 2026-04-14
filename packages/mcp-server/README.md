@@ -124,31 +124,31 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 
 ## Tools
 
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `browser-status` | — | Report whether the browser extension is connected, capture-ready, and currently using the server root |
-| `read-console` | optional `limit`, optional filters | Read recent browser console and log entries observed by the connected extension |
-| `trace-status` | — | Report guided trace readiness plus a compact agent summary of the active trace |
-| `start-trace` | optional `name`, optional `goal` | Start a guided click trace for the connected extension |
-| `stop-trace` | `traceId` | Stop a guided click trace and keep it on disk |
-| `list-traces` | — | List stored guided traces from `.wraithwalker/scenario-traces` |
-| `read-trace` | `traceId` | Read one stored guided trace with its steps and linked fixtures |
-| `list-sites` | optional `search` | List all captured origins with endpoint counts, asset counts, and manifest presence |
-| `list-files` | `origin`, optional filters | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, body availability (`hasBody`, `bodySize`), plus `editable` and `canonicalPath` for projection-backed files |
-| `list-api-routes` | `origin` | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath` |
-| `search-files` | `query`, optional filters | Search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, `editable`, `canonicalPath`, and per-file `matchCount` |
-| `read-api-response` | `fixtureDir`, optional `pretty` | Read the response metadata and body for a fixture returned by `list-api-routes` |
-| `read-file` | `path`, optional `pretty` | Read a fixture response body by relative path, restricted to the fixture root |
-| `read-file-snippet` | `path`, optional `pretty`, optional bounds | Read a bounded text snippet from a fixture file without dumping the full blob |
-| `read-site-manifest` | `origin` | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch |
-| `write-file` | `path`, `content` | Overwrite an editable human-facing projection file with UTF-8 text |
-| `patch-file` | `path`, `startLine`, `endLine`, `expectedText`, `replacement` | Apply a line-range patch to an editable projection file and fail if the expected text no longer matches |
-| `restore-file` | `path` | Regenerate the visible projection from its canonical hidden snapshot |
-| `checkout-workspace` | optional `paths`, optional `includeGlobs`, optional `excludeGlobs` | Copy selected projection-backed files into a same-machine local workspace and return its absolute path |
-| `push-workspace` | `workspaceId` | Push tracked edits from a projection workspace back into the human-facing root files, skipping conflicts and untracked changes |
-| `discard-workspace` | `workspaceId` | Remove a previously checked-out projection workspace |
-| `list-snapshots` | — | List saved scenario snapshots |
-| `diff-snapshots` | `scenarioA`, `scenarioB` | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names |
+| Tool                 | Parameters                                                         | Description                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser-status`     | —                                                                  | Report whether the browser extension is connected, capture-ready, and currently using the server root                                                                                             |
+| `read-console`       | optional `limit`, optional filters                                 | Read recent browser console and log entries observed by the connected extension                                                                                                                   |
+| `trace-status`       | —                                                                  | Report guided trace readiness plus a compact agent summary of the active trace                                                                                                                    |
+| `start-trace`        | optional `name`, optional `goal`                                   | Start a guided click trace for the connected extension                                                                                                                                            |
+| `stop-trace`         | `traceId`                                                          | Stop a guided click trace and keep it on disk                                                                                                                                                     |
+| `list-traces`        | —                                                                  | List stored guided traces from `.wraithwalker/scenario-traces`                                                                                                                                    |
+| `read-trace`         | `traceId`                                                          | Read one stored guided trace with its steps and linked fixtures                                                                                                                                   |
+| `list-sites`         | optional `search`                                                  | List all captured origins with endpoint counts, asset counts, and manifest presence                                                                                                               |
+| `list-files`         | `origin`, optional filters                                         | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, body availability (`hasBody`, `bodySize`), plus `editable` and `canonicalPath` for projection-backed files |
+| `list-api-routes`    | `origin`                                                           | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath`                                                                     |
+| `search-files`       | `query`, optional filters                                          | Search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, `editable`, `canonicalPath`, and per-file `matchCount`            |
+| `read-api-response`  | `fixtureDir`, optional `pretty`                                    | Read the response metadata and body for a fixture returned by `list-api-routes`                                                                                                                   |
+| `read-file`          | `path`, optional `pretty`                                          | Read a fixture response body by relative path, restricted to the fixture root                                                                                                                     |
+| `read-file-snippet`  | `path`, optional `pretty`, optional bounds                         | Read a bounded text snippet from a fixture file without dumping the full blob                                                                                                                     |
+| `read-site-manifest` | `origin`                                                           | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch                                                                                                                        |
+| `write-file`         | `path`, `content`                                                  | Overwrite an editable human-facing projection file with UTF-8 text                                                                                                                                |
+| `patch-file`         | `path`, `startLine`, `endLine`, `expectedText`, `replacement`      | Apply a line-range patch to an editable projection file and fail if the expected text no longer matches                                                                                           |
+| `restore-file`       | `path`                                                             | Regenerate the visible projection from its canonical hidden snapshot                                                                                                                              |
+| `checkout-workspace` | optional `paths`, optional `includeGlobs`, optional `excludeGlobs` | Copy selected projection-backed files into a same-machine local workspace and return its absolute path                                                                                            |
+| `push-workspace`     | `workspaceId`                                                      | Push tracked edits from a projection workspace back into the human-facing root files, skipping conflicts and untracked changes                                                                    |
+| `discard-workspace`  | `workspaceId`                                                      | Remove a previously checked-out projection workspace                                                                                                                                              |
+| `list-snapshots`     | —                                                                  | List saved scenario snapshots                                                                                                                                                                     |
+| `diff-snapshots`     | `scenarioA`, `scenarioB`                                           | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names                                                                                          |
 
 ## tRPC Backend
 

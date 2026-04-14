@@ -19,15 +19,22 @@ import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalke
 
 function createStorage(
   rootFs: FixtureRootFs,
-  ensureSentinel: (root: FixtureRootFs) => Promise<Awaited<ReturnType<typeof createRoot>>> = (root) => createRoot(root.rootPath)
+  ensureSentinel: (
+    root: FixtureRootFs
+  ) => Promise<Awaited<ReturnType<typeof createRoot>>> = (root) =>
+    createRoot(root.rootPath)
 ): RootRuntimeStorage<FixtureRootFs> {
   return {
     ensureSentinel,
     exists: (root, relativePath) => root.exists(relativePath),
-    writeText: (root, relativePath, content) => root.writeText(relativePath, content),
-    writeJson: (root, relativePath, value) => root.writeJson(relativePath, value),
-    writeBody: (root, relativePath, payload) => root.writeBody(relativePath, payload),
-    readOptionalJson: (root, relativePath) => root.readOptionalJson(relativePath),
+    writeText: (root, relativePath, content) =>
+      root.writeText(relativePath, content),
+    writeJson: (root, relativePath, value) =>
+      root.writeJson(relativePath, value),
+    writeBody: (root, relativePath, payload) =>
+      root.writeBody(relativePath, payload),
+    readOptionalJson: (root, relativePath) =>
+      root.readOptionalJson(relativePath),
     readBody: async (root, relativePath) => {
       const stats = await root.stat(relativePath);
       if (!stats || !stats.isFile()) {
@@ -44,7 +51,10 @@ function createStorage(
   };
 }
 
-function createRequestPayload(descriptor: FixtureDescriptor, capturedAt = "2026-04-07T00:00:00.000Z"): RequestPayload {
+function createRequestPayload(
+  descriptor: FixtureDescriptor,
+  capturedAt = "2026-04-07T00:00:00.000Z"
+): RequestPayload {
   return {
     topOrigin: descriptor.topOrigin,
     url: descriptor.requestUrl,
@@ -60,7 +70,8 @@ function createRequestPayload(descriptor: FixtureDescriptor, capturedAt = "2026-
 
 function createResponseMeta(
   descriptor: FixtureDescriptor,
-  values: Partial<ResponseMeta> & Pick<ResponseMeta, "mimeType" | "resourceType" | "bodySuggestedExtension">
+  values: Partial<ResponseMeta> &
+    Pick<ResponseMeta, "mimeType" | "resourceType" | "bodySuggestedExtension">
 ): ResponseMeta {
   return {
     status: 200,
@@ -95,7 +106,9 @@ describe("root runtime", () => {
       prefix: "wraithwalker-core-root-runtime-"
     });
     const rootFs = createFixtureRootFs(root.rootPath);
-    const ensureSentinel = vi.fn(async (nextRoot: FixtureRootFs) => createRoot(nextRoot.rootPath));
+    const ensureSentinel = vi.fn(async (nextRoot: FixtureRootFs) =>
+      createRoot(nextRoot.rootPath)
+    );
     const runtime = createWraithwalkerRootRuntime({
       root: rootFs,
       storage: createStorage(rootFs, ensureSentinel)
@@ -137,11 +150,13 @@ describe("root runtime", () => {
         mimeType: "text/css"
       }
     });
-    expect(Buffer.from(fixture!.bodyBase64, "base64").toString("utf8")).toContain("color: red");
+    expect(
+      Buffer.from(fixture!.bodyBase64, "base64").toString("utf8")
+    ).toContain("color: red");
 
-    const manifest = await root.readJson<{ resourcesByPathname: Record<string, unknown[]> }>(
-      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
-    );
+    const manifest = await root.readJson<{
+      resourcesByPathname: Record<string, unknown[]>;
+    }>(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
     expect(manifest.resourcesByPathname["/assets/app.css"]).toHaveLength(1);
     expect(ensureSentinel).toHaveBeenCalledTimes(1);
   });
@@ -201,7 +216,10 @@ describe("root runtime", () => {
       })
     ]);
 
-    const completed = await runtime.stopTrace("trace-guided", "2026-04-08T00:00:03.000Z");
+    const completed = await runtime.stopTrace(
+      "trace-guided",
+      "2026-04-08T00:00:03.000Z"
+    );
     expect(completed.status).toBe("completed");
     expect(await runtime.listTraces()).toEqual([
       expect.objectContaining({
@@ -231,42 +249,54 @@ describe("root runtime", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-07T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/app.js": [{
-            requestUrl: "https://cdn.example.com/assets/app.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/app.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-07T00:00:00.000Z"
-          }],
-          "/assets/style.css": [{
-            requestUrl: "https://cdn.example.com/assets/style.css",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/style.css",
-            search: "",
-            bodyPath: "cdn.example.com/assets/style.css",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__response.json",
-            mimeType: "text/css",
-            resourceType: "Stylesheet",
-            capturedAt: "2026-04-07T00:00:00.000Z"
-          }],
-          "/assets/runtime.wasm": [{
-            requestUrl: "https://cdn.example.com/assets/runtime.wasm",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/runtime.wasm",
-            search: "",
-            bodyPath: "cdn.example.com/assets/runtime.wasm",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/runtime.wasm.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/runtime.wasm.__response.json",
-            mimeType: "application/wasm",
-            resourceType: "",
-            capturedAt: "2026-04-07T00:00:00.000Z"
-          }]
+          "/assets/app.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/app.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/app.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/app.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-07T00:00:00.000Z"
+            }
+          ],
+          "/assets/style.css": [
+            {
+              requestUrl: "https://cdn.example.com/assets/style.css",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/style.css",
+              search: "",
+              bodyPath: "cdn.example.com/assets/style.css",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/style.css.__response.json",
+              mimeType: "text/css",
+              resourceType: "Stylesheet",
+              capturedAt: "2026-04-07T00:00:00.000Z"
+            }
+          ],
+          "/assets/runtime.wasm": [
+            {
+              requestUrl: "https://cdn.example.com/assets/runtime.wasm",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/runtime.wasm",
+              search: "",
+              bodyPath: "cdn.example.com/assets/runtime.wasm",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/runtime.wasm.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/runtime.wasm.__response.json",
+              mimeType: "application/wasm",
+              resourceType: "",
+              capturedAt: "2026-04-07T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -322,7 +352,10 @@ describe("root runtime", () => {
     });
     await runtime.writeIfAbsent({
       descriptor: usersVariantDescriptor,
-      request: createRequestPayload(usersVariantDescriptor, "2026-04-07T00:01:00.000Z"),
+      request: createRequestPayload(
+        usersVariantDescriptor,
+        "2026-04-07T00:01:00.000Z"
+      ),
       response: {
         body: JSON.stringify({ users: [{ name: "Alice" }], nextPage: 2 }),
         bodyEncoding: "utf8",
@@ -372,7 +405,9 @@ describe("root runtime", () => {
     });
 
     expect(markdown).toContain("## Cursor Agent Brief");
-    expect(markdown).toContain("Selected origins: https://app.example.com, http://localhost:4173");
+    expect(markdown).toContain(
+      "Selected origins: https://app.example.com, http://localhost:4173"
+    );
     expect(markdown).toContain("### API Endpoints");
     expect(markdown).toContain("| GET | /users | 200 | application/json |");
     expect(markdown).toContain("### Static Assets");
@@ -383,12 +418,25 @@ describe("root runtime", () => {
     expect(markdown).toContain("## Suggested Agent Tasks");
     expect(markdown).toContain("GET /users");
     expect(markdown).toContain("#### GET /users (200)");
-    expect(markdown).toContain("| GET | health/check | 200 | application/json |");
+    expect(markdown).toContain(
+      "| GET | health/check | 200 | application/json |"
+    );
 
-    await expect(fs.readFile(root.resolve("CLAUDE.md"), "utf8")).resolves.toContain("WraithWalker Fixture Context");
-    await expect(fs.readFile(root.resolve(".cursorrules"), "utf8")).resolves.toContain("Cursor Agent Brief");
-    await expect(fs.readFile(root.resolve(".wraithwalker/types/index.d.ts"), "utf8")).resolves.toContain("export *");
-    await expect(fs.readFile(root.resolve(".wraithwalker/types/https__app.example.com.d.ts"), "utf8")).resolves.toContain("GetUsersResponse");
+    await expect(
+      fs.readFile(root.resolve("CLAUDE.md"), "utf8")
+    ).resolves.toContain("WraithWalker Fixture Context");
+    await expect(
+      fs.readFile(root.resolve(".cursorrules"), "utf8")
+    ).resolves.toContain("Cursor Agent Brief");
+    await expect(
+      fs.readFile(root.resolve(".wraithwalker/types/index.d.ts"), "utf8")
+    ).resolves.toContain("export *");
+    await expect(
+      fs.readFile(
+        root.resolve(".wraithwalker/types/https__app.example.com.d.ts"),
+        "utf8"
+      )
+    ).resolves.toContain("GetUsersResponse");
   });
 
   it("falls back to the default context files when no editor is provided and can recover from fixture directory listing failures", async () => {
@@ -437,7 +485,9 @@ describe("root runtime", () => {
     });
 
     expect(markdown).toContain("No captured fixtures found for this origin.");
-    await expect(fs.readFile(root.resolve("CLAUDE.md"), "utf8")).resolves.toContain("Selected origins: https://broken.example.com");
+    await expect(
+      fs.readFile(root.resolve("CLAUDE.md"), "utf8")
+    ).resolves.toContain("Selected origins: https://broken.example.com");
     await expect(fs.access(root.resolve(".cursorrules"))).rejects.toThrow();
   });
 
@@ -494,14 +544,20 @@ describe("root runtime", () => {
         readBody: async () => ({ bodyBase64: "", size: 0 }),
         readText: async () => "ignored",
         listDirectory: async (_root, relativePath) => {
-          if (relativePath === ".wraithwalker/captures/http/https__stub.example.com/origins/https__stub.example.com/http") {
+          if (
+            relativePath ===
+            ".wraithwalker/captures/http/https__stub.example.com/origins/https__stub.example.com/http"
+          ) {
             return [
               { name: "README.md", kind: "file" },
               { name: "GET", kind: "directory" }
             ];
           }
 
-          if (relativePath === ".wraithwalker/captures/http/https__stub.example.com/origins/https__stub.example.com/http/GET") {
+          if (
+            relativePath ===
+            ".wraithwalker/captures/http/https__stub.example.com/origins/https__stub.example.com/http/GET"
+          ) {
             return [
               { name: "preview.txt", kind: "file" },
               { name: "plain-text", kind: "directory" },
@@ -510,7 +566,10 @@ describe("root runtime", () => {
             ];
           }
 
-          if (relativePath === ".wraithwalker/captures/http/https__stub.example.com/origins") {
+          if (
+            relativePath ===
+            ".wraithwalker/captures/http/https__stub.example.com/origins"
+          ) {
             return [{ name: "notes.txt", kind: "file" }];
           }
 
@@ -520,16 +579,22 @@ describe("root runtime", () => {
     });
 
     const markdown = await runtime.generateContext({
-      siteConfigs: [{
-        origin: "https://stub.example.com"
-      }]
+      siteConfigs: [
+        {
+          origin: "https://stub.example.com"
+        }
+      ]
     });
 
     expect(markdown).toContain("| GET | /plain-text | 200 | text/plain |");
     expect(markdown).toContain("| GET | /missing-mime | 200 |  |");
     expect(markdown).not.toContain("### Response Shapes");
-    expect(markdown).not.toContain("No captured fixtures found for this origin.");
-    expect(writes.get("CLAUDE.md")).toContain("Selected origins: https://stub.example.com");
+    expect(markdown).not.toContain(
+      "No captured fixtures found for this origin."
+    );
+    expect(writes.get("CLAUDE.md")).toContain(
+      "Selected origins: https://stub.example.com"
+    );
 
     const emptyMarkdown = await runtime.generateContext({
       siteConfigs: []

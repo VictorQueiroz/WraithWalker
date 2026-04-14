@@ -202,13 +202,27 @@ function joinParts(parts: Array<string | undefined>): string {
   return parts.filter(Boolean).join("/");
 }
 
-function buildSimpleAssetSidecarPath(hiddenFixtureRoot: string, queryHash: string, search: string, suffix: string): string {
+function buildSimpleAssetSidecarPath(
+  hiddenFixtureRoot: string,
+  queryHash: string,
+  search: string,
+  suffix: string
+): string {
   const queryVariantSuffix = search ? `.__q-${queryHash}` : "";
   return `${hiddenFixtureRoot}${queryVariantSuffix}${suffix}`;
 }
 
-function buildSimpleAssetBodyPath(hiddenFixtureRoot: string, queryHash: string, search: string): string {
-  return buildSimpleAssetSidecarPath(hiddenFixtureRoot, queryHash, search, ".__body");
+function buildSimpleAssetBodyPath(
+  hiddenFixtureRoot: string,
+  queryHash: string,
+  search: string
+): string {
+  return buildSimpleAssetSidecarPath(
+    hiddenFixtureRoot,
+    queryHash,
+    search,
+    ".__body"
+  );
 }
 
 export function normalizeSiteInput(value: string): string {
@@ -217,7 +231,9 @@ export function normalizeSiteInput(value: string): string {
     throw new Error("Origin is required.");
   }
 
-  const candidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const candidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
   const url = new URL(candidate);
 
   if (!["http:", "https:"].includes(url.protocol)) {
@@ -275,7 +291,10 @@ export function splitSimpleModePath(pathname: string): string[] {
   return pathSegments;
 }
 
-export function getFileNameParts(fileName: string): { stem: string; extension: string } {
+export function getFileNameParts(fileName: string): {
+  stem: string;
+  extension: string;
+} {
   const lastDotIndex = fileName.lastIndexOf(".");
   if (lastDotIndex <= 0 || lastDotIndex === fileName.length - 1) {
     return { stem: fileName, extension: "" };
@@ -287,7 +306,10 @@ export function getFileNameParts(fileName: string): { stem: string; extension: s
   };
 }
 
-export function appendHashToFileName(fileName: string, hashLabel: string): string {
+export function appendHashToFileName(
+  fileName: string,
+  hashLabel: string
+): string {
   const { stem, extension } = getFileNameParts(fileName);
   return extension ? `${stem}${hashLabel}.${extension}` : `${stem}${hashLabel}`;
 }
@@ -311,23 +333,21 @@ export function isAssetLikeRequest({
     return true;
   }
 
-  return [
-    "document",
-    "script",
-    "stylesheet",
-    "image",
-    "font",
-    "media"
-  ].includes(lowerType) || [
-    "text/html",
-    "application/javascript",
-    "text/javascript",
-    "text/css",
-    "font/",
-    "image/",
-    "audio/",
-    "video/"
-  ].some((prefix) => lowerMime.startsWith(prefix));
+  return (
+    ["document", "script", "stylesheet", "image", "font", "media"].includes(
+      lowerType
+    ) ||
+    [
+      "text/html",
+      "application/javascript",
+      "text/javascript",
+      "text/css",
+      "font/",
+      "image/",
+      "audio/",
+      "video/"
+    ].some((prefix) => lowerMime.startsWith(prefix))
+  );
 }
 
 export function deriveExtensionFromMime(mimeType: string): string {
@@ -361,20 +381,31 @@ export function deriveMimeTypeFromPathname(pathname: string): string {
   const pathSegments = splitSimpleModePath(pathname);
   const fileName = pathSegments[pathSegments.length - 1];
   const { extension } = getFileNameParts(fileName);
-  return SIMPLE_MIME_BY_EXTENSION.get(extension.toLowerCase()) || "application/octet-stream";
+  return (
+    SIMPLE_MIME_BY_EXTENSION.get(extension.toLowerCase()) ||
+    "application/octet-stream"
+  );
 }
 
-export async function sha256Hex(value: string | ArrayBuffer | ArrayBufferView): Promise<string> {
-  const bytes = typeof value === "string"
-    ? encoder.encode(value)
-    : ArrayBuffer.isView(value)
-      ? value
-      : new Uint8Array(value);
+export async function sha256Hex(
+  value: string | ArrayBuffer | ArrayBufferView
+): Promise<string> {
+  const bytes =
+    typeof value === "string"
+      ? encoder.encode(value)
+      : ArrayBuffer.isView(value)
+        ? value
+        : new Uint8Array(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes as never);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-export async function shortHash(value: string | ArrayBuffer | ArrayBufferView, length = 12): Promise<string> {
+export async function shortHash(
+  value: string | ArrayBuffer | ArrayBufferView,
+  length = 12
+): Promise<string> {
   const fullHash = await sha256Hex(value);
   return fullHash.slice(0, length);
 }
@@ -404,9 +435,16 @@ export async function createFixtureDescriptor({
   const bodyHash = await shortHash(bodyHashSource);
   const topOriginKey = originToKey(topOrigin);
   const requestOriginKey = originToKey(requestOrigin);
-  const assetLike = isAssetLikeRequest({ method: methodUpper, url, resourceType, mimeType });
-  const hasTypeHints = resourceType.trim().length > 0 || mimeType.trim().length > 0;
-  const useVisibleAssetProjection = methodUpper === "GET" && (assetLike || !hasTypeHints);
+  const assetLike = isAssetLikeRequest({
+    method: methodUpper,
+    url,
+    resourceType,
+    mimeType
+  });
+  const hasTypeHints =
+    resourceType.trim().length > 0 || mimeType.trim().length > 0;
+  const useVisibleAssetProjection =
+    methodUpper === "GET" && (assetLike || !hasTypeHints);
 
   if (useVisibleAssetProjection) {
     const pathSegments = splitSimpleModePath(requestUrl.pathname);
@@ -420,7 +458,11 @@ export async function createFixtureDescriptor({
       topOriginKey,
       ...visiblePathParts
     ]);
-    const bodyPath = buildSimpleAssetBodyPath(hiddenFixtureRoot, queryHash, requestUrl.search);
+    const bodyPath = buildSimpleAssetBodyPath(
+      hiddenFixtureRoot,
+      queryHash,
+      requestUrl.search
+    );
 
     return {
       assetLike: true,
@@ -435,8 +477,18 @@ export async function createFixtureDescriptor({
       bodyHash,
       bodyPath,
       projectionPath,
-      requestPath: buildSimpleAssetSidecarPath(hiddenFixtureRoot, queryHash, requestUrl.search, ".__request.json"),
-      metaPath: buildSimpleAssetSidecarPath(hiddenFixtureRoot, queryHash, requestUrl.search, ".__response.json"),
+      requestPath: buildSimpleAssetSidecarPath(
+        hiddenFixtureRoot,
+        queryHash,
+        requestUrl.search,
+        ".__request.json"
+      ),
+      metaPath: buildSimpleAssetSidecarPath(
+        hiddenFixtureRoot,
+        queryHash,
+        requestUrl.search,
+        ".__response.json"
+      ),
       manifestPath: joinParts([
         MANIFESTS_DIR,
         topOriginKey,
@@ -448,7 +500,12 @@ export async function createFixtureDescriptor({
     };
   }
 
-  const baseParts = [CAPTURE_HTTP_DIR, topOriginKey, "origins", requestOriginKey];
+  const baseParts = [
+    CAPTURE_HTTP_DIR,
+    topOriginKey,
+    "origins",
+    requestOriginKey
+  ];
 
   const pathSegments = splitPathSegments(requestUrl.pathname);
   const slug = sanitizeSegment(pathSegments.join("-") || "root");
@@ -481,7 +538,9 @@ export async function createFixtureDescriptor({
   };
 }
 
-export function sanitizeResponseHeaders(headers: HeaderEntry[] = []): HeaderEntry[] {
+export function sanitizeResponseHeaders(
+  headers: HeaderEntry[] = []
+): HeaderEntry[] {
   const filtered: HeaderEntry[] = [];
   const seen = new Set<string>();
 
@@ -497,10 +556,14 @@ export function sanitizeResponseHeaders(headers: HeaderEntry[] = []): HeaderEntr
   return filtered;
 }
 
-export function replayResponseHeaders(headers: HeaderEntry[] = []): HeaderEntry[] {
+export function replayResponseHeaders(
+  headers: HeaderEntry[] = []
+): HeaderEntry[] {
   return sanitizeResponseHeaders(headers).filter((header) => {
     const lowerName = header.name.toLowerCase();
-    return !BODY_DERIVED_HEADERS.has(lowerName) && !HOP_BY_HOP_HEADERS.has(lowerName);
+    return (
+      !BODY_DERIVED_HEADERS.has(lowerName) && !HOP_BY_HOP_HEADERS.has(lowerName)
+    );
   });
 }
 
@@ -540,18 +603,27 @@ export function buildResponseMeta(
   };
 }
 
-export function getStaticResourceManifestPath(descriptor: AssetFixtureDescriptor): string;
 export function getStaticResourceManifestPath(
-  descriptor: { assetLike: boolean; topOriginKey: string; manifestPath?: string | null }
-): string | null;
-export function getStaticResourceManifestPath(
-  descriptor: { assetLike: boolean; topOriginKey: string; manifestPath?: string | null }
-): string | null {
+  descriptor: AssetFixtureDescriptor
+): string;
+export function getStaticResourceManifestPath(descriptor: {
+  assetLike: boolean;
+  topOriginKey: string;
+  manifestPath?: string | null;
+}): string | null;
+export function getStaticResourceManifestPath(descriptor: {
+  assetLike: boolean;
+  topOriginKey: string;
+  manifestPath?: string | null;
+}): string | null {
   if (!descriptor.assetLike) {
     return null;
   }
 
-  return descriptor.manifestPath || `${MANIFESTS_DIR}/${descriptor.topOriginKey}/${STATIC_RESOURCE_MANIFEST_FILE}`;
+  return (
+    descriptor.manifestPath ||
+    `${MANIFESTS_DIR}/${descriptor.topOriginKey}/${STATIC_RESOURCE_MANIFEST_FILE}`
+  );
 }
 
 export function createStaticResourceManifestEntry(
@@ -560,9 +632,10 @@ export function createStaticResourceManifestEntry(
   options: { projectionPath?: string | null } = {}
 ): StaticResourceManifestEntry {
   const requestUrl = new URL(descriptor.requestUrl);
-  const projectionPath = options.projectionPath !== undefined
-    ? options.projectionPath
-    : descriptor.projectionPath ?? null;
+  const projectionPath =
+    options.projectionPath !== undefined
+      ? options.projectionPath
+      : (descriptor.projectionPath ?? null);
 
   return {
     requestUrl: descriptor.requestUrl,
@@ -580,12 +653,16 @@ export function createStaticResourceManifestEntry(
 }
 
 export function getFixtureDisplayPath(
-  fixture: Pick<FixtureDescriptorBase, "bodyPath" | "projectionPath"> | Pick<StaticResourceManifestEntry, "bodyPath" | "projectionPath">
+  fixture:
+    | Pick<FixtureDescriptorBase, "bodyPath" | "projectionPath">
+    | Pick<StaticResourceManifestEntry, "bodyPath" | "projectionPath">
 ): string {
   return fixture.projectionPath || fixture.bodyPath;
 }
 
-export function createStaticResourceManifest(descriptor: AssetFixtureDescriptor): StaticResourceManifest {
+export function createStaticResourceManifest(
+  descriptor: AssetFixtureDescriptor
+): StaticResourceManifest {
   return {
     schemaVersion: STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION,
     topOrigin: descriptor.topOrigin,
@@ -602,7 +679,9 @@ export function upsertStaticResourceManifest(
   const resourcesByPathname = { ...manifest.resourcesByPathname };
   const currentEntries = resourcesByPathname[entry.pathname] || [];
   const nextEntries = [
-    ...currentEntries.filter((currentEntry) => currentEntry.requestUrl !== entry.requestUrl),
+    ...currentEntries.filter(
+      (currentEntry) => currentEntry.requestUrl !== entry.requestUrl
+    ),
     entry
   ].sort((left, right) => left.requestUrl.localeCompare(right.requestUrl));
 

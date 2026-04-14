@@ -19,33 +19,75 @@ describe("scenario operations", () => {
     await root.writeText("cdn.example.com/assets/app.js", "console.log('v1');");
     await root.writeText(".cursorrules", "version 1");
 
-    await saveScenario({ path: root.rootPath, expectedRootId: root.rootId, name: "v1" });
+    await saveScenario({
+      path: root.rootPath,
+      expectedRootId: root.rootId,
+      name: "v1"
+    });
     await root.writeText("cdn.example.com/assets/app.js", "console.log('v2');");
     await root.writeText(".cursorrules", "version 2");
-    await saveScenario({ path: root.rootPath, expectedRootId: root.rootId, name: "v2" });
+    await saveScenario({
+      path: root.rootPath,
+      expectedRootId: root.rootId,
+      name: "v2"
+    });
 
     expect(await listScenarios(root.rootPath)).toEqual(["v1", "v2"]);
 
-    const result = await switchScenario({ path: root.rootPath, expectedRootId: root.rootId, name: "v1" });
+    const result = await switchScenario({
+      path: root.rootPath,
+      expectedRootId: root.rootId,
+      name: "v1"
+    });
     expect(result).toEqual({ ok: true, name: "v1" });
-    expect(await fs.readFile(root.resolve("cdn.example.com/assets/app.js"), "utf8")).toBe("console.log('v1');");
-    expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toBe("version 1");
+    expect(
+      await fs.readFile(root.resolve("cdn.example.com/assets/app.js"), "utf8")
+    ).toBe("console.log('v1');");
+    expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toBe(
+      "version 1"
+    );
   });
 
   it("validates required scenario inputs", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-scenarios-"
     });
-    await expect(saveScenario({ path: root.rootPath, name: "test" })).rejects.toThrow("Expected root ID is required.");
-    await expect(saveScenario({ expectedRootId: "root", name: "test" })).rejects.toThrow("Root path is required.");
-    await expect(saveScenario({ path: root.rootPath, expectedRootId: "wrong", name: "test" })).rejects.toThrow("Sentinel root ID mismatch");
-    await expect(saveScenario({ path: root.rootPath, expectedRootId: "wrong", name: "../escape" })).rejects.toThrow("Sentinel root ID mismatch");
-    await expect(saveScenario({ path: root.rootPath, expectedRootId: root.rootId, name: "../escape" })).rejects.toThrow(
+    await expect(
+      saveScenario({ path: root.rootPath, name: "test" })
+    ).rejects.toThrow("Expected root ID is required.");
+    await expect(
+      saveScenario({ expectedRootId: "root", name: "test" })
+    ).rejects.toThrow("Root path is required.");
+    await expect(
+      saveScenario({
+        path: root.rootPath,
+        expectedRootId: "wrong",
+        name: "test"
+      })
+    ).rejects.toThrow("Sentinel root ID mismatch");
+    await expect(
+      saveScenario({
+        path: root.rootPath,
+        expectedRootId: "wrong",
+        name: "../escape"
+      })
+    ).rejects.toThrow("Sentinel root ID mismatch");
+    await expect(
+      saveScenario({
+        path: root.rootPath,
+        expectedRootId: root.rootId,
+        name: "../escape"
+      })
+    ).rejects.toThrow(
       "Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters."
     );
-    await expect(switchScenario({ path: root.rootPath, expectedRootId: root.rootId, name: "missing" })).rejects.toThrow(
-      'Scenario "missing" does not exist.'
-    );
+    await expect(
+      switchScenario({
+        path: root.rootPath,
+        expectedRootId: root.rootId,
+        name: "missing"
+      })
+    ).rejects.toThrow('Scenario "missing" does not exist.');
   });
 });
 
@@ -54,7 +96,12 @@ describe("scenario diffing", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-scenarios-"
     });
-    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
+    const meta = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
 
     await root.writeApiFixture({
       scenario: "a",
@@ -62,7 +109,7 @@ describe("scenario diffing", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
     await root.writeApiFixture({
       scenario: "b",
@@ -70,7 +117,7 @@ describe("scenario diffing", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta: { ...meta, status: 500 },
-      body: "{\"error\":true}"
+      body: '{"error":true}'
     });
     await root.writeApiFixture({
       scenario: "b",
@@ -83,7 +130,7 @@ describe("scenario diffing", () => {
         url: "https://api.example.com/orders",
         method: "POST"
       },
-      body: "{\"created\":true}"
+      body: '{"created":true}'
     });
 
     const diff = await diffScenarios(root.rootPath, "a", "b");
@@ -113,7 +160,7 @@ describe("scenario diffing", () => {
         url: "https://api.example.com/users",
         method: "POST"
       },
-      body: "{\"created\":true}"
+      body: '{"created":true}'
     });
     await root.ensureScenario("simple-b");
 
@@ -131,10 +178,12 @@ describe("scenario diffing", () => {
     });
     await root.ensureScenario("baseline");
 
-    await expect(diffScenarios(root.rootPath, "baseline", "missing")).rejects.toThrow(
-      'Scenario "missing" does not exist.'
-    );
-    await expect(diffScenarios(root.rootPath, "../escape", "baseline")).rejects.toThrow(
+    await expect(
+      diffScenarios(root.rootPath, "baseline", "missing")
+    ).rejects.toThrow('Scenario "missing" does not exist.');
+    await expect(
+      diffScenarios(root.rootPath, "../escape", "baseline")
+    ).rejects.toThrow(
       "Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters."
     );
   });

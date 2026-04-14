@@ -23,7 +23,11 @@ export interface ScenarioMessage extends VerifyRootMessage {
 
 export type SpawnLike = typeof childProcess.spawn;
 
-export function spawnDetached(command: string, args: string[], spawnFn: SpawnLike = childProcess.spawn): void {
+export function spawnDetached(
+  command: string,
+  args: string[],
+  spawnFn: SpawnLike = childProcess.spawn
+): void {
   const child = spawnFn(command, args, {
     detached: true,
     stdio: "ignore"
@@ -35,7 +39,10 @@ function shellQuote(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-export async function verifyRoot({ path: rootPath, expectedRootId }: VerifyRootMessage): Promise<{ ok: true; sentinel: RootSentinel }> {
+export async function verifyRoot({
+  path: rootPath,
+  expectedRootId
+}: VerifyRootMessage): Promise<{ ok: true; sentinel: RootSentinel }> {
   if (!rootPath) {
     throw new Error("Root path is required.");
   }
@@ -46,13 +53,18 @@ export async function verifyRoot({ path: rootPath, expectedRootId }: VerifyRootM
 
   const sentinel = await readSentinel(rootPath);
   if (sentinel.rootId !== expectedRootId) {
-    throw new Error(`Sentinel root ID mismatch. Expected ${expectedRootId}, received ${sentinel.rootId}.`);
+    throw new Error(
+      `Sentinel root ID mismatch. Expected ${expectedRootId}, received ${sentinel.rootId}.`
+    );
   }
 
   return { ok: true, sentinel };
 }
 
-export function substituteDirectory(commandTemplate: string | undefined, rootPath: string): string {
+export function substituteDirectory(
+  commandTemplate: string | undefined,
+  rootPath: string
+): string {
   if (!commandTemplate) {
     throw new Error("Command template is required.");
   }
@@ -84,7 +96,10 @@ export async function openDirectory({
   return { ok: true, command };
 }
 
-export function getRevealDirectoryCommand(rootPath: string, platform: NodeJS.Platform = process.platform): string {
+export function getRevealDirectoryCommand(
+  rootPath: string,
+  platform: NodeJS.Platform = process.platform
+): string {
   if (platform === "darwin") {
     return `open ${shellQuote(rootPath)}`;
   }
@@ -133,15 +148,26 @@ export async function revealDirectory(
   return { ok: true, command: launch.command };
 }
 
-export async function saveScenario({ path: rootPath, expectedRootId, name }: ScenarioMessage): Promise<{ ok: true; name: string }> {
+export async function saveScenario({
+  path: rootPath,
+  expectedRootId,
+  name
+}: ScenarioMessage): Promise<{ ok: true; name: string }> {
   return coreSaveScenario({ path: rootPath, expectedRootId, name });
 }
 
-export async function switchScenario({ path: rootPath, expectedRootId, name }: ScenarioMessage): Promise<{ ok: true; name: string }> {
+export async function switchScenario({
+  path: rootPath,
+  expectedRootId,
+  name
+}: ScenarioMessage): Promise<{ ok: true; name: string }> {
   return coreSwitchScenario({ path: rootPath, expectedRootId, name });
 }
 
-export async function listScenarios({ path: rootPath, expectedRootId }: VerifyRootMessage): Promise<{ ok: true; scenarios: string[] }> {
+export async function listScenarios({
+  path: rootPath,
+  expectedRootId
+}: VerifyRootMessage): Promise<{ ok: true; scenarios: string[] }> {
   await verifyRoot({ path: rootPath, expectedRootId });
   return { ok: true, scenarios: await listScenarioNames(rootPath as string) };
 }

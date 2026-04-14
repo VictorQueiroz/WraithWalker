@@ -17,7 +17,11 @@ class MemoryFileHandle {
     const bytes = this.bytes;
     return {
       text: async () => new TextDecoder().decode(bytes),
-      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      arrayBuffer: async () =>
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength
+        ),
       size: bytes.byteLength
     };
   }
@@ -34,7 +38,12 @@ class MemoryFileHandle {
           return;
         }
         if (ArrayBuffer.isView(chunk)) {
-          this.bytes = new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+          this.bytes = new Uint8Array(
+            chunk.buffer.slice(
+              chunk.byteOffset,
+              chunk.byteOffset + chunk.byteLength
+            )
+          );
           return;
         }
         throw new Error(`Unsupported write chunk: ${String(chunk)}`);
@@ -49,7 +58,10 @@ class MemoryDirectoryHandle {
   directories = new Map<string, MemoryDirectoryHandle>();
   files = new Map<string, MemoryFileHandle>();
 
-  async getDirectoryHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getDirectoryHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.directories.has(name)) {
       if (!create) {
         throw new Error(`Missing directory: ${name}`);
@@ -59,7 +71,10 @@ class MemoryDirectoryHandle {
     return this.directories.get(name)!;
   }
 
-  async getFileHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getFileHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.files.has(name)) {
       if (!create) {
         throw new Error(`Missing file: ${name}`);
@@ -69,7 +84,9 @@ class MemoryDirectoryHandle {
     return this.files.get(name)!;
   }
 
-  async *[Symbol.asyncIterator](): AsyncIterableIterator<[string, { kind: string }]> {
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<
+    [string, { kind: string }]
+  > {
     for (const [name, handle] of this.directories) {
       yield [name, handle as unknown as { kind: string }];
     }
@@ -79,7 +96,9 @@ class MemoryDirectoryHandle {
   }
 }
 
-function asRootHandle(handle: MemoryDirectoryHandle): FileSystemDirectoryHandle {
+function asRootHandle(
+  handle: MemoryDirectoryHandle
+): FileSystemDirectoryHandle {
   return handle as unknown as FileSystemDirectoryHandle;
 }
 
@@ -111,13 +130,17 @@ describe("extension root runtime adapter", () => {
       resourceType: "Fetch",
       mimeType: "application/json"
     });
-    const siteConfigs: SiteConfig[] = [{
-      origin: "https://app.example.com",
-      createdAt: "2026-04-07T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$"]
-    }];
+    const siteConfigs: SiteConfig[] = [
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-07T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$"]
+      }
+    ];
 
-    expect(await runtime.ensureReady()).toMatchObject({ rootId: "root-extension" });
+    expect(await runtime.ensureReady()).toMatchObject({
+      rootId: "root-extension"
+    });
     expect(await runtime.has(descriptor)).toBe(false);
 
     await runtime.writeIfAbsent({

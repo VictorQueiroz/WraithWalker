@@ -134,8 +134,15 @@ export interface RequestLifecycleMiddleware {
 
 export interface RequestLifecycleDependencies {
   state: RequestLifecycleState;
-  sendDebuggerCommand: <T = unknown>(tabId: number, method: string, params?: Record<string, unknown>) => Promise<T>;
-  sendOffscreenMessage: <T = unknown>(type: string, payload?: Record<string, unknown>) => Promise<T>;
+  sendDebuggerCommand: <T = unknown>(
+    tabId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ) => Promise<T>;
+  sendOffscreenMessage: <T = unknown>(
+    type: string,
+    payload?: Record<string, unknown>
+  ) => Promise<T>;
   setLastError: (message: string) => void;
   repository?: RequestLifecycleRepository;
   getSiteConfigForOrigin?: (topOrigin: string) => SiteConfig | undefined;

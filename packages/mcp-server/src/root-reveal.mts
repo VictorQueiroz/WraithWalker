@@ -4,7 +4,11 @@ import { readSentinel } from "@wraithwalker/core/root";
 
 export type SpawnLike = typeof childProcess.spawn;
 
-export function spawnDetached(command: string, args: string[], spawnFn: SpawnLike = childProcess.spawn): void {
+export function spawnDetached(
+  command: string,
+  args: string[],
+  spawnFn: SpawnLike = childProcess.spawn
+): void {
   const child = spawnFn(command, args, {
     detached: true,
     stdio: "ignore"
@@ -51,7 +55,9 @@ export async function revealRootDirectory(
 ): Promise<{ ok: true; command: string }> {
   const sentinel = await readSentinel(rootPath);
   if (sentinel.rootId !== expectedRootId) {
-    throw new Error(`Sentinel root ID mismatch. Expected ${expectedRootId}, received ${sentinel.rootId}.`);
+    throw new Error(
+      `Sentinel root ID mismatch. Expected ${expectedRootId}, received ${sentinel.rootId}.`
+    );
   }
 
   const launch = getRevealRootLaunch(rootPath);

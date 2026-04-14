@@ -52,7 +52,10 @@ interface EndpointWithBody {
   bodyContent: string | null;
 }
 
-async function verifyRootPath({ path: rootPath, expectedRootId }: ScenarioRootOptions): Promise<string> {
+async function verifyRootPath({
+  path: rootPath,
+  expectedRootId
+}: ScenarioRootOptions): Promise<string> {
   if (!rootPath) {
     throw new Error("Root path is required.");
   }
@@ -63,7 +66,9 @@ async function verifyRootPath({ path: rootPath, expectedRootId }: ScenarioRootOp
 
   const sentinel = await readSentinel(rootPath);
   if (sentinel.rootId !== expectedRootId) {
-    throw new Error(`Sentinel root ID mismatch. Expected ${expectedRootId}, received ${sentinel.rootId}.`);
+    throw new Error(
+      `Sentinel root ID mismatch. Expected ${expectedRootId}, received ${sentinel.rootId}.`
+    );
   }
 
   return rootPath;
@@ -75,13 +80,18 @@ function isScenarioSafe(name: string): boolean {
 
 function validateScenarioName(name: string | undefined): string {
   if (!name || !isScenarioSafe(name)) {
-    throw new Error("Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters.");
+    throw new Error(
+      "Scenario name must be 1-64 alphanumeric, hyphen, or underscore characters."
+    );
   }
 
   return name;
 }
 
-async function requireScenarioDir(rootPath: string, name: string | undefined): Promise<string> {
+async function requireScenarioDir(
+  rootPath: string,
+  name: string | undefined
+): Promise<string> {
   const scenarioName = validateScenarioName(name);
   const scenarioDir = path.join(SCENARIOS_DIR, scenarioName);
   const scenarioStat = await createFixtureRootFs(rootPath).stat(scenarioDir);
@@ -99,7 +109,9 @@ async function listFixtureEntries(rootFs: FixtureRootFs): Promise<string[]> {
     .map((entry) => entry.name);
 }
 
-async function listScenarioMetadataEntries(rootFs: FixtureRootFs): Promise<string[]> {
+async function listScenarioMetadataEntries(
+  rootFs: FixtureRootFs
+): Promise<string[]> {
   const entries = await rootFs.listOptionalDirectory(WRAITHWALKER_DIR);
   return entries
     .filter((entry) => entry.kind === "directory")
@@ -119,17 +131,23 @@ async function scanOriginsTree(
     const methods = await rootFs.listOptionalDirectories(httpDir);
 
     for (const method of methods) {
-      const fixtures = await rootFs.listOptionalDirectories(path.join(httpDir, method));
+      const fixtures = await rootFs.listOptionalDirectories(
+        path.join(httpDir, method)
+      );
       for (const fixture of fixtures) {
         const fixtureDir = path.join(httpDir, method, fixture);
-        const meta = await rootFs.readOptionalJson<ResponseMeta>(path.join(fixtureDir, "response.meta.json"));
+        const meta = await rootFs.readOptionalJson<ResponseMeta>(
+          path.join(fixtureDir, "response.meta.json")
+        );
         if (!meta) continue;
 
         const pathname = meta.url
           ? new URL(meta.url).pathname
           : fixture.replace(/__q-.*/, "").replace(/-/g, "/");
         const key = `${method} ${pathname}`;
-        const bodyContent = await rootFs.readOptionalText(path.join(fixtureDir, "response.body"));
+        const bodyContent = await rootFs.readOptionalText(
+          path.join(fixtureDir, "response.body")
+        );
 
         endpoints.set(key, {
           key,
@@ -153,7 +171,11 @@ async function collectEndpointsFromScenario(
   const captureBase = path.join(scenarioPath, CAPTURE_HTTP_DIR);
   const captureOrigins = await rootFs.listOptionalDirectories(captureBase);
   for (const originKey of captureOrigins) {
-    await scanOriginsTree(rootFs, path.join(captureBase, originKey, "origins"), endpoints);
+    await scanOriginsTree(
+      rootFs,
+      path.join(captureBase, originKey, "origins"),
+      endpoints
+    );
   }
 
   return endpoints;
@@ -168,7 +190,10 @@ export async function saveScenario({
   expectedRootId,
   name
 }: ScenarioOperationOptions): Promise<{ ok: true; name: string }> {
-  const verifiedRootPath = await verifyRootPath({ path: rootPath, expectedRootId });
+  const verifiedRootPath = await verifyRootPath({
+    path: rootPath,
+    expectedRootId
+  });
   const rootFs = createFixtureRootFs(verifiedRootPath);
   const scenarioName = validateScenarioName(name);
 
@@ -194,7 +219,10 @@ export async function switchScenario({
   expectedRootId,
   name
 }: ScenarioOperationOptions): Promise<{ ok: true; name: string }> {
-  const verifiedRootPath = await verifyRootPath({ path: rootPath, expectedRootId });
+  const verifiedRootPath = await verifyRootPath({
+    path: rootPath,
+    expectedRootId
+  });
   const rootFs = createFixtureRootFs(verifiedRootPath);
   const scenarioName = validateScenarioName(name);
   const scenarioDir = await requireScenarioDir(verifiedRootPath, scenarioName);
@@ -215,7 +243,11 @@ export async function switchScenario({
   return { ok: true, name: scenarioName };
 }
 
-export async function diffScenarios(rootPath: string, scenarioA: string, scenarioB: string): Promise<FixtureDiff> {
+export async function diffScenarios(
+  rootPath: string,
+  scenarioA: string,
+  scenarioB: string
+): Promise<FixtureDiff> {
   const rootFs = createFixtureRootFs(rootPath);
   const validatedScenarioA = validateScenarioName(scenarioA);
   const validatedScenarioB = validateScenarioName(scenarioB);
@@ -265,7 +297,13 @@ export async function diffScenarios(rootPath: string, scenarioA: string, scenari
     }
   }
 
-  return { scenarioA: validatedScenarioA, scenarioB: validatedScenarioB, added, removed, changed };
+  return {
+    scenarioA: validatedScenarioA,
+    scenarioB: validatedScenarioB,
+    added,
+    removed,
+    changed
+  };
 }
 
 export function renderDiffMarkdown(diff: FixtureDiff): string {
@@ -274,7 +312,11 @@ export function renderDiffMarkdown(diff: FixtureDiff): string {
   lines.push(`# Fixture Diff: ${diff.scenarioA} vs ${diff.scenarioB}`);
   lines.push("");
 
-  if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
+  if (
+    diff.added.length === 0 &&
+    diff.removed.length === 0 &&
+    diff.changed.length === 0
+  ) {
     lines.push("No differences found.");
     return lines.join("\n");
   }
@@ -283,7 +325,9 @@ export function renderDiffMarkdown(diff: FixtureDiff): string {
     lines.push("## Added Endpoints");
     lines.push("");
     for (const endpoint of diff.added) {
-      lines.push(`- **${endpoint.method} ${endpoint.pathname}** (${endpoint.status}) — ${endpoint.mimeType}`);
+      lines.push(
+        `- **${endpoint.method} ${endpoint.pathname}** (${endpoint.status}) — ${endpoint.mimeType}`
+      );
     }
     lines.push("");
   }
@@ -292,7 +336,9 @@ export function renderDiffMarkdown(diff: FixtureDiff): string {
     lines.push("## Removed Endpoints");
     lines.push("");
     for (const endpoint of diff.removed) {
-      lines.push(`- **${endpoint.method} ${endpoint.pathname}** (${endpoint.status}) — ${endpoint.mimeType}`);
+      lines.push(
+        `- **${endpoint.method} ${endpoint.pathname}** (${endpoint.status}) — ${endpoint.mimeType}`
+      );
     }
     lines.push("");
   }
@@ -303,14 +349,19 @@ export function renderDiffMarkdown(diff: FixtureDiff): string {
     lines.push("| Method | Path | Status | Body Changed |");
     lines.push("|--------|------|--------|-------------|");
     for (const change of diff.changed) {
-      const statusString = change.statusBefore === change.statusAfter
-        ? String(change.statusBefore)
-        : `${change.statusBefore} → ${change.statusAfter}`;
-      lines.push(`| ${change.method} | ${change.pathname} | ${statusString} | ${change.bodyChanged ? "Yes" : "No"} |`);
+      const statusString =
+        change.statusBefore === change.statusAfter
+          ? String(change.statusBefore)
+          : `${change.statusBefore} → ${change.statusAfter}`;
+      lines.push(
+        `| ${change.method} | ${change.pathname} | ${statusString} | ${change.bodyChanged ? "Yes" : "No"} |`
+      );
     }
     lines.push("");
   }
 
-  lines.push(`Summary: ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed`);
+  lines.push(
+    `Summary: ${diff.added.length} added, ${diff.removed.length} removed, ${diff.changed.length} changed`
+  );
   return lines.join("\n");
 }

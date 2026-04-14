@@ -30,24 +30,29 @@ async function createProjectionRoot() {
       topOriginKey,
       generatedAt: "2026-04-09T00:00:00.000Z",
       resourcesByPathname: {
-        "/assets/chunk.js": [{
-          requestUrl: "https://cdn.example.com/assets/chunk.js",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/assets/chunk.js",
-          search: "",
-          bodyPath: canonicalPath,
-          projectionPath,
-          requestPath,
-          metaPath,
-          mimeType: "application/javascript",
-          resourceType: "Script",
-          capturedAt: "2026-04-09T00:00:00.000Z"
-        }]
+        "/assets/chunk.js": [
+          {
+            requestUrl: "https://cdn.example.com/assets/chunk.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/chunk.js",
+            search: "",
+            bodyPath: canonicalPath,
+            projectionPath,
+            requestPath,
+            metaPath,
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          }
+        ]
       }
     }
   });
 
-  await root.writeText(canonicalPath, "function renderMenu(){if(open){return{variant:\"dark\"}}return null}");
+  await root.writeText(
+    canonicalPath,
+    'function renderMenu(){if(open){return{variant:"dark"}}return null}'
+  );
   await root.writeJson(requestPath, {
     topOrigin: "https://app.example.com",
     url: "https://cdn.example.com/assets/chunk.js",
@@ -100,26 +105,32 @@ async function createBinaryProjectionRoot() {
       topOriginKey,
       generatedAt: "2026-04-09T00:00:00.000Z",
       resourcesByPathname: {
-        "/assets/logo.png": [{
-          requestUrl: "https://cdn.example.com/assets/logo.png",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/assets/logo.png",
-          search: "",
-          bodyPath: canonicalPath,
-          projectionPath,
-          requestPath,
-          metaPath,
-          mimeType: "image/png",
-          resourceType: "Image",
-          capturedAt: "2026-04-09T00:00:00.000Z"
-        }]
+        "/assets/logo.png": [
+          {
+            requestUrl: "https://cdn.example.com/assets/logo.png",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/assets/logo.png",
+            search: "",
+            bodyPath: canonicalPath,
+            projectionPath,
+            requestPath,
+            metaPath,
+            mimeType: "image/png",
+            resourceType: "Image",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          }
+        ]
       }
     }
   });
 
-  await fs.mkdir(path.dirname(root.resolve(canonicalPath)), { recursive: true });
+  await fs.mkdir(path.dirname(root.resolve(canonicalPath)), {
+    recursive: true
+  });
   await fs.writeFile(root.resolve(canonicalPath), Buffer.from([0, 1, 2, 3]));
-  await fs.mkdir(path.dirname(root.resolve(projectionPath)), { recursive: true });
+  await fs.mkdir(path.dirname(root.resolve(projectionPath)), {
+    recursive: true
+  });
   await fs.writeFile(root.resolve(projectionPath), Buffer.from([0, 1, 2, 3]));
   await root.writeJson(requestPath, {
     topOrigin: "https://app.example.com",
@@ -153,9 +164,12 @@ async function createBinaryProjectionRoot() {
 
 describe("projection editing", () => {
   it("resolves projection-backed files and writes only the visible projection", async () => {
-    const { root, projectionPath, canonicalPath, metaPath } = await createProjectionRoot();
+    const { root, projectionPath, canonicalPath, metaPath } =
+      await createProjectionRoot();
 
-    await expect(resolveProjectionFile(root.rootPath, projectionPath)).resolves.toEqual({
+    await expect(
+      resolveProjectionFile(root.rootPath, projectionPath)
+    ).resolves.toEqual({
       path: projectionPath,
       canonicalPath,
       metaPath,
@@ -163,7 +177,13 @@ describe("projection editing", () => {
       editable: true
     });
 
-    await expect(writeProjectionFile(root.rootPath, projectionPath, "window.__SEEDED__ = true;\n")).resolves.toEqual({
+    await expect(
+      writeProjectionFile(
+        root.rootPath,
+        projectionPath,
+        "window.__SEEDED__ = true;\n"
+      )
+    ).resolves.toEqual({
       path: projectionPath,
       canonicalPath,
       metaPath,
@@ -171,48 +191,70 @@ describe("projection editing", () => {
       editable: true
     });
 
-    await expect(readFixtureBody(root.rootPath, projectionPath)).resolves.toBe("window.__SEEDED__ = true;\n");
-    await expect(fs.readFile(root.resolve(canonicalPath), "utf8")).resolves.toBe(
-      "function renderMenu(){if(open){return{variant:\"dark\"}}return null}"
+    await expect(readFixtureBody(root.rootPath, projectionPath)).resolves.toBe(
+      "window.__SEEDED__ = true;\n"
+    );
+    await expect(
+      fs.readFile(root.resolve(canonicalPath), "utf8")
+    ).resolves.toBe(
+      'function renderMenu(){if(open){return{variant:"dark"}}return null}'
     );
   });
 
   it("patches projection files by line range and detects stale expected text", async () => {
     const { root, projectionPath } = await createProjectionRoot();
-    await writeProjectionFile(root.rootPath, projectionPath, "const seed = 1;\nconst other = 2;\n");
+    await writeProjectionFile(
+      root.rootPath,
+      projectionPath,
+      "const seed = 1;\nconst other = 2;\n"
+    );
 
-    await expect(patchProjectionFile(root.rootPath, {
-      path: projectionPath,
-      startLine: 1,
-      endLine: 1,
-      expectedText: "const seed = 1;",
-      replacement: "const seed = { users: [1, 2, 3] };"
-    })).resolves.toEqual(expect.objectContaining({
-      path: projectionPath,
-      currentText: "const seed = { users: [1, 2, 3] };\nconst other = 2;\n",
-      editable: true
-    }));
+    await expect(
+      patchProjectionFile(root.rootPath, {
+        path: projectionPath,
+        startLine: 1,
+        endLine: 1,
+        expectedText: "const seed = 1;",
+        replacement: "const seed = { users: [1, 2, 3] };"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        path: projectionPath,
+        currentText: "const seed = { users: [1, 2, 3] };\nconst other = 2;\n",
+        editable: true
+      })
+    );
 
-    await expect(patchProjectionFile(root.rootPath, {
-      path: projectionPath,
-      startLine: 1,
-      endLine: 1,
-      expectedText: "const seed = 1;",
-      replacement: "const seed = 9;"
-    })).rejects.toThrow("Patch conflict");
+    await expect(
+      patchProjectionFile(root.rootPath, {
+        path: projectionPath,
+        startLine: 1,
+        endLine: 1,
+        expectedText: "const seed = 1;",
+        replacement: "const seed = 9;"
+      })
+    ).rejects.toThrow("Patch conflict");
   });
 
   it("restores projections from canonical hidden bodies and prettifies text assets", async () => {
     const { root, projectionPath } = await createProjectionRoot();
-    await writeProjectionFile(root.rootPath, projectionPath, "window.__EDITED__ = true;");
+    await writeProjectionFile(
+      root.rootPath,
+      projectionPath,
+      "window.__EDITED__ = true;"
+    );
 
-    await expect(restoreProjectionFile(root.rootPath, projectionPath)).resolves.toEqual(expect.objectContaining({
-      path: projectionPath,
-      editable: true
-    }));
+    await expect(
+      restoreProjectionFile(root.rootPath, projectionPath)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        path: projectionPath,
+        editable: true
+      })
+    );
 
     await expect(readFixtureBody(root.rootPath, projectionPath)).resolves.toBe(
-      "function renderMenu() {\n  if (open) {\n    return { variant: \"dark\" };\n  }\n  return null;\n}"
+      'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}'
     );
   });
 
@@ -234,27 +276,39 @@ describe("projection editing", () => {
         bodyEncoding: "utf8",
         bodySuggestedExtension: "json"
       },
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
     const binaryRoot = await createBinaryProjectionRoot();
 
-    await expect(writeProjectionFile(root.rootPath, ".wraithwalker/root.json", "oops")).rejects.toThrow(
+    await expect(
+      writeProjectionFile(root.rootPath, ".wraithwalker/root.json", "oops")
+    ).rejects.toThrow(
       "Hidden canonical files under .wraithwalker cannot be edited"
     );
-    await expect(writeProjectionFile(
-      root.rootPath,
-      ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body",
-      "{\"users\":[1]}"
-    )).rejects.toThrow("API response fixtures are read-only in this pass");
-    await expect(writeProjectionFile(root.rootPath, "notes/agent-plan.txt", "oops")).rejects.toThrow(
-      "not a projection-backed captured asset"
-    );
-    await expect(writeProjectionFile(binaryRoot.root.rootPath, binaryRoot.projectionPath, "text")).rejects.toThrow(
-      "Projection file is not text-editable"
-    );
+    await expect(
+      writeProjectionFile(
+        root.rootPath,
+        ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body",
+        '{"users":[1]}'
+      )
+    ).rejects.toThrow("API response fixtures are read-only in this pass");
+    await expect(
+      writeProjectionFile(root.rootPath, "notes/agent-plan.txt", "oops")
+    ).rejects.toThrow("not a projection-backed captured asset");
+    await expect(
+      writeProjectionFile(
+        binaryRoot.root.rootPath,
+        binaryRoot.projectionPath,
+        "text"
+      )
+    ).rejects.toThrow("Projection file is not text-editable");
 
-    await expect(resolveProjectionFile(root.rootPath, projectionPath)).resolves.toEqual(expect.objectContaining({
-      editable: true
-    }));
+    await expect(
+      resolveProjectionFile(root.rootPath, projectionPath)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        editable: true
+      })
+    );
   });
 });

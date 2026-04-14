@@ -4,21 +4,37 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
-import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_NATIVE_HOST_CONFIG, ROOT_DIRECTORY_PICKER_ID } from "../src/lib/constants.js";
-import type { NativeHostConfig, SessionSnapshot, SiteConfig } from "../src/lib/types.js";
+import {
+  DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+  DEFAULT_NATIVE_HOST_CONFIG,
+  ROOT_DIRECTORY_PICKER_ID
+} from "../src/lib/constants.js";
+import type {
+  NativeHostConfig,
+  SessionSnapshot,
+  SiteConfig
+} from "../src/lib/types.js";
 import { createWraithWalkerServerClient } from "../src/lib/wraithwalker-server.js";
 import { startExternalHttpServer } from "../../../test-support/external-http-server.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 function renderRoot() {
-  document.body.innerHTML = "<div id=\"root\"></div>";
+  document.body.innerHTML = '<div id="root"></div>';
 }
 
 function createWindowWithDirectoryPicker(
-  showDirectoryPicker: (options?: { mode?: "read" | "readwrite"; id?: string; startIn?: FileSystemDirectoryHandle }) => Promise<FileSystemDirectoryHandle>
+  showDirectoryPicker: (options?: {
+    mode?: "read" | "readwrite";
+    id?: string;
+    startIn?: FileSystemDirectoryHandle;
+  }) => Promise<FileSystemDirectoryHandle>
 ): Window {
   const windowRef = window as Window & {
-    showDirectoryPicker?: (options?: { mode?: "read" | "readwrite"; id?: string; startIn?: FileSystemDirectoryHandle }) => Promise<unknown>;
+    showDirectoryPicker?: (options?: {
+      mode?: "read" | "readwrite";
+      id?: string;
+      startIn?: FileSystemDirectoryHandle;
+    }) => Promise<unknown>;
   };
   windowRef.showDirectoryPicker = showDirectoryPicker;
   return windowRef;
@@ -33,7 +49,9 @@ function createStoredSite(overrides: Partial<SiteConfig> = {}): SiteConfig {
   };
 }
 
-function createNativeHostConfig(overrides: Partial<NativeHostConfig> = {}): NativeHostConfig {
+function createNativeHostConfig(
+  overrides: Partial<NativeHostConfig> = {}
+): NativeHostConfig {
   return {
     ...DEFAULT_NATIVE_HOST_CONFIG,
     ...overrides,
@@ -69,15 +87,17 @@ function createRuntimeSendMessage({
   return vi.fn(async (message: { type: string; name?: string }) => {
     switch (message.type) {
       case "session.getState":
-        return sessionSnapshot ?? {
-          sessionActive: false,
-          attachedTabIds: [],
-          enabledOrigins: [],
-          rootReady: false,
-          captureDestination: "none",
-          captureRootPath: "",
-          lastError: ""
-        };
+        return (
+          sessionSnapshot ?? {
+            sessionActive: false,
+            attachedTabIds: [],
+            enabledOrigins: [],
+            rootReady: false,
+            captureDestination: "none",
+            captureRootPath: "",
+            lastError: ""
+          }
+        );
       case "scenario.list":
         return { ok: true, scenarios: ["baseline"] };
       case "scenario.switch":
@@ -100,56 +120,65 @@ function createLiveServerRuntimeApi({
   serverClient: ReturnType<typeof createWraithWalkerServerClient>;
 }) {
   return {
-    sendMessage: vi.fn(async (message: { type: string; siteConfigs?: SiteConfig[]; name?: string }) => {
-      switch (message.type) {
-        case "session.getState":
-          return sessionSnapshot;
-        case "config.readConfiguredSiteConfigs": {
-          const result = await serverClient.readConfiguredSiteConfigs();
-          return {
-            ok: true,
-            siteConfigs: result.siteConfigs,
-            sentinel: result.sentinel
-          };
+    sendMessage: vi.fn(
+      async (message: {
+        type: string;
+        siteConfigs?: SiteConfig[];
+        name?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return sessionSnapshot;
+          case "config.readConfiguredSiteConfigs": {
+            const result = await serverClient.readConfiguredSiteConfigs();
+            return {
+              ok: true,
+              siteConfigs: result.siteConfigs,
+              sentinel: result.sentinel
+            };
+          }
+          case "config.readEffectiveSiteConfigs": {
+            const result = await serverClient.readEffectiveSiteConfigs();
+            return {
+              ok: true,
+              siteConfigs: result.siteConfigs,
+              sentinel: result.sentinel
+            };
+          }
+          case "config.writeConfiguredSiteConfigs": {
+            const result = await serverClient.writeConfiguredSiteConfigs(
+              message.siteConfigs ?? []
+            );
+            return {
+              ok: true,
+              siteConfigs: result.siteConfigs,
+              sentinel: result.sentinel
+            };
+          }
+          case "scenario.list":
+            return { ok: true, scenarios: ["baseline"] };
+          case "scenario.switch":
+            return { ok: true, name: message.name ?? "" };
+          case "scenario.save":
+            return { ok: true, name: message.name ?? "" };
+          case "native.verify":
+            return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+          default:
+            return { ok: true };
         }
-        case "config.readEffectiveSiteConfigs": {
-          const result = await serverClient.readEffectiveSiteConfigs();
-          return {
-            ok: true,
-            siteConfigs: result.siteConfigs,
-            sentinel: result.sentinel
-          };
-        }
-        case "config.writeConfiguredSiteConfigs": {
-          const result = await serverClient.writeConfiguredSiteConfigs(message.siteConfigs ?? []);
-          return {
-            ok: true,
-            siteConfigs: result.siteConfigs,
-            sentinel: result.sentinel
-          };
-        }
-        case "scenario.list":
-          return { ok: true, scenarios: ["baseline"] };
-        case "scenario.switch":
-          return { ok: true, name: message.name ?? "" };
-        case "scenario.save":
-          return { ok: true, name: message.name ?? "" };
-        case "native.verify":
-          return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
-        default:
-          return { ok: true };
       }
-    })
+    )
   };
 }
 
 function createLiveServerClient(serverUrl: string) {
   return createWraithWalkerServerClient(serverUrl, {
     timeoutMs: 2_000,
-    fetchImpl: (input, init) => fetch(input, {
-      ...init,
-      signal: undefined
-    })
+    fetchImpl: (input, init) =>
+      fetch(input, {
+        ...init,
+        signal: undefined
+      })
   });
 }
 
@@ -162,7 +191,9 @@ function createReadyRootDeps() {
     queryRootPermission: vi.fn().mockResolvedValue("granted"),
     requestRootPermission: vi.fn().mockResolvedValue("granted"),
     ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" }),
-    storeRootHandleWithSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" })
+    storeRootHandleWithSentinel: vi
+      .fn()
+      .mockResolvedValue({ rootId: "root-ready" })
   };
 }
 
@@ -182,18 +213,20 @@ describe("options entrypoint", () => {
     document.body.innerHTML = "";
     const { initOptions } = await loadOptionsModule();
 
-    await expect(initOptions({
-      document,
-      chromeApi: {
-        permissions: {
-          request: vi.fn(),
-          remove: vi.fn()
-        },
-        runtime: {
-          sendMessage: vi.fn()
+    await expect(
+      initOptions({
+        document,
+        chromeApi: {
+          permissions: {
+            request: vi.fn(),
+            remove: vi.fn()
+          },
+          runtime: {
+            sendMessage: vi.fn()
+          }
         }
-      }
-    })).rejects.toThrow("Options root container not found.");
+      })
+    ).rejects.toThrow("Options root container not found.");
   });
 
   it("renders stored sites and updates or removes them", async () => {
@@ -209,7 +242,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -243,11 +278,15 @@ describe("options entrypoint", () => {
           dumpAllowlistPatterns: ["\\.json$"]
         })
       ]);
-      expect(await screen.findByText("Updated https://app.example.com.")).toBeTruthy();
+      expect(
+        await screen.findByText("Updated https://app.example.com.")
+      ).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Remove" }));
       expect(setSiteConfigs).toHaveBeenLastCalledWith([]);
-      expect(await screen.findByText("Removed https://app.example.com.")).toBeTruthy();
+      expect(
+        await screen.findByText("Removed https://app.example.com.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -263,7 +302,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -291,7 +332,11 @@ describe("options entrypoint", () => {
       await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(setSiteConfigs).not.toHaveBeenCalled();
-      expect(await screen.findByText("One or more dump allowlist patterns are invalid.")).toBeTruthy();
+      expect(
+        await screen.findByText(
+          "One or more dump allowlist patterns are invalid."
+        )
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -301,9 +346,11 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
-    let sites = [createStoredSite({
-      dumpAllowlistPatterns: ["\\.svg$"]
-    })];
+    let sites = [
+      createStoredSite({
+        dumpAllowlistPatterns: ["\\.svg$"]
+      })
+    ];
     const setSiteConfigs = vi.fn(async (nextSites: SiteConfig[]) => {
       sites = nextSites;
     });
@@ -312,7 +359,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -342,7 +391,9 @@ describe("options entrypoint", () => {
           dumpAllowlistPatterns: DEFAULT_DUMP_ALLOWLIST_PATTERNS
         })
       ]);
-      expect(await screen.findByText("Updated https://app.example.com.")).toBeTruthy();
+      expect(
+        await screen.findByText("Updated https://app.example.com.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -365,7 +416,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -383,17 +436,27 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText(/WraithWalker root access is ready\./);
-      await user.type(await screen.findByLabelText("Exact origin"), "app.example.com");
+      await user.type(
+        await screen.findByLabelText("Exact origin"),
+        "app.example.com"
+      );
       await user.click(screen.getByRole("button", { name: "Add Origin" }));
 
-      expect(permissions.request).toHaveBeenCalledWith({ origins: ["https://app.example.com/*"] });
+      expect(permissions.request).toHaveBeenCalledWith({
+        origins: ["https://app.example.com/*"]
+      });
       expect(setSiteConfigs).toHaveBeenCalledWith([
         expect.objectContaining({
           origin: "https://app.example.com",
-          dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS, "\\.json$"]
+          dumpAllowlistPatterns: [
+            ...DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+            "\\.json$"
+          ]
         })
       ]);
-      expect(await screen.findByText("Origin added and host access granted.")).toBeTruthy();
+      expect(
+        await screen.findByText("Origin added and host access granted.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -415,7 +478,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -446,21 +511,41 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText(/Settings changes are using \/tmp\/server-root\./)).toBeTruthy();
+      expect(
+        await screen.findByText(
+          /Settings changes are using \/tmp\/server-root\./
+        )
+      ).toBeTruthy();
       expect(screen.getByText(/Editing \/tmp\/server-root\./)).toBeTruthy();
-      expect((screen.getByRole("button", { name: "Add Origin" }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Add Origin"
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(false);
 
-      await user.type(await screen.findByLabelText("Exact origin"), "app.example.com");
+      await user.type(
+        await screen.findByLabelText("Exact origin"),
+        "app.example.com"
+      );
       await user.click(screen.getByRole("button", { name: "Add Origin" }));
 
-      expect(permissions.request).toHaveBeenCalledWith({ origins: ["https://app.example.com/*"] });
+      expect(permissions.request).toHaveBeenCalledWith({
+        origins: ["https://app.example.com/*"]
+      });
       expect(setSiteConfigs).toHaveBeenCalledWith([
         expect.objectContaining({
           origin: "https://app.example.com",
-          dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS, "\\.json$"]
+          dumpAllowlistPatterns: [
+            ...DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+            "\\.json$"
+          ]
         })
       ]);
-      expect(await screen.findByText("Origin added and host access granted.")).toBeTruthy();
+      expect(
+        await screen.findByText("Origin added and host access granted.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -484,7 +569,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -492,22 +579,24 @@ describe("options entrypoint", () => {
           remove: vi.fn().mockResolvedValue(true)
         },
         runtime: {
-          sendMessage: vi.fn(async (message: { type: string; name?: string }) => {
-            switch (message.type) {
-              case "session.getState":
-                return sessionSnapshot;
-              case "scenario.list":
-                return { ok: true, scenarios: ["baseline"] };
-              case "scenario.switch":
-                return { ok: true, name: message.name ?? "" };
-              case "scenario.save":
-                return { ok: true, name: message.name ?? "" };
-              case "native.verify":
-                return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
-              default:
-                return { ok: true };
+          sendMessage: vi.fn(
+            async (message: { type: string; name?: string }) => {
+              switch (message.type) {
+                case "session.getState":
+                  return sessionSnapshot;
+                case "scenario.list":
+                  return { ok: true, scenarios: ["baseline"] };
+                case "scenario.switch":
+                  return { ok: true, name: message.name ?? "" };
+                case "scenario.save":
+                  return { ok: true, name: message.name ?? "" };
+                case "native.verify":
+                  return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+                default:
+                  return { ok: true };
+              }
             }
-          })
+          )
         }
       },
       getSiteConfigs: vi.fn(async () => [...sites]),
@@ -540,10 +629,26 @@ describe("options entrypoint", () => {
       await user.type(patterns, "\\.css$");
       await user.click(screen.getByRole("button", { name: "Save" }));
 
-      expect(await screen.findByText("Updated https://app.example.com.")).toBeTruthy();
-      expect(await screen.findByText(/No WraithWalker root directory is connected yet/i)).toBeTruthy();
-      expect((screen.getByRole("button", { name: "Add Origin" }) as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getByText(/Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i)).toBeTruthy();
+      expect(
+        await screen.findByText("Updated https://app.example.com.")
+      ).toBeTruthy();
+      expect(
+        await screen.findByText(
+          /No WraithWalker root directory is connected yet/i
+        )
+      ).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Add Origin"
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
+      expect(
+        screen.getByText(
+          /Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i
+        )
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -556,7 +661,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -590,7 +697,9 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText(/Settings changes are using the server root\./)).toBeTruthy();
+      expect(
+        await screen.findByText(/Settings changes are using the server root\./)
+      ).toBeTruthy();
       expect(screen.getByText(/Editing the server root\./)).toBeTruthy();
     } finally {
       options.unmount();
@@ -600,7 +709,8 @@ describe("options entrypoint", () => {
   it("writes a Settings-added origin into the live server root config file", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
-    const { getConfiguredSiteConfigs, setConfiguredSiteConfigs } = await loadRootConfigModule();
+    const { getConfiguredSiteConfigs, setConfiguredSiteConfigs } =
+      await loadRootConfigModule();
     const user = userEvent.setup();
     const serverRoot = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-options-live-server-config-"
@@ -628,7 +738,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -637,7 +749,8 @@ describe("options entrypoint", () => {
       getSiteConfigs: () => getConfiguredSiteConfigs(runtimeApi),
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
       setNativeHostConfig: vi.fn(),
-      setSiteConfigs: (siteConfigs) => setConfiguredSiteConfigs(siteConfigs, runtimeApi),
+      setSiteConfigs: (siteConfigs) =>
+        setConfiguredSiteConfigs(siteConfigs, runtimeApi),
       loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
       queryRootPermission: vi.fn(),
       requestRootPermission: vi.fn(),
@@ -647,12 +760,20 @@ describe("options entrypoint", () => {
     });
 
     try {
-      const escapedRootPath = serverRoot.rootPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedRootPath = serverRoot.rootPath.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
       await screen.findByText(new RegExp(`Editing ${escapedRootPath}\\.`));
-      await user.type(await screen.findByLabelText("Exact origin"), "app.example.com");
+      await user.type(
+        await screen.findByLabelText("Exact origin"),
+        "app.example.com"
+      );
       await user.click(screen.getByRole("button", { name: "Add Origin" }));
 
-      expect(permissions.request).toHaveBeenCalledWith({ origins: ["https://app.example.com/*"] });
+      expect(permissions.request).toHaveBeenCalledWith({
+        origins: ["https://app.example.com/*"]
+      });
       const writeCallIndex = runtimeApi.sendMessage.mock.calls.findIndex(
         ([message]) => message.type === "config.writeConfiguredSiteConfigs"
       );
@@ -660,7 +781,9 @@ describe("options entrypoint", () => {
       expect(permissions.request.mock.invocationCallOrder[0]).toBeLessThan(
         runtimeApi.sendMessage.mock.invocationCallOrder[writeCallIndex]
       );
-      expect(await screen.findByText("Origin added and host access granted.")).toBeTruthy();
+      expect(
+        await screen.findByText("Origin added and host access granted.")
+      ).toBeTruthy();
 
       const config = await serverRoot.readJson<{
         schemaVersion: number;
@@ -674,11 +797,16 @@ describe("options entrypoint", () => {
 
       expect(config).toEqual({
         schemaVersion: 1,
-        sites: [{
-          origin: "https://app.example.com",
-          createdAt: expect.any(String),
-          dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS, "\\.json$"]
-        }]
+        sites: [
+          {
+            origin: "https://app.example.com",
+            createdAt: expect.any(String),
+            dumpAllowlistPatterns: [
+              ...DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+              "\\.json$"
+            ]
+          }
+        ]
       });
     } finally {
       options.unmount();
@@ -689,18 +817,21 @@ describe("options entrypoint", () => {
   it("writes updates for an existing server-backed origin into the live server root config file", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
-    const { getConfiguredSiteConfigs, setConfiguredSiteConfigs } = await loadRootConfigModule();
+    const { getConfiguredSiteConfigs, setConfiguredSiteConfigs } =
+      await loadRootConfigModule();
     const user = userEvent.setup();
     const serverRoot = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-options-live-server-update-"
     });
     await serverRoot.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
     const server = await startExternalHttpServer(serverRoot.rootPath);
     const serverClient = createLiveServerClient(server.trpcUrl);
@@ -720,7 +851,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -732,7 +865,8 @@ describe("options entrypoint", () => {
       getSiteConfigs: () => getConfiguredSiteConfigs(runtimeApi),
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
       setNativeHostConfig: vi.fn(),
-      setSiteConfigs: (siteConfigs) => setConfiguredSiteConfigs(siteConfigs, runtimeApi),
+      setSiteConfigs: (siteConfigs) =>
+        setConfiguredSiteConfigs(siteConfigs, runtimeApi),
       loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
       queryRootPermission: vi.fn(),
       requestRootPermission: vi.fn(),
@@ -748,14 +882,20 @@ describe("options entrypoint", () => {
       await user.type(patterns, "\\.css$\n\\.json$");
       await user.click(screen.getByRole("button", { name: "Save" }));
 
-      expect(await screen.findByText("Updated https://app.example.com.")).toBeTruthy();
-      expect(await serverRoot.readJson(serverRoot.projectConfigRelativePath())).toEqual({
+      expect(
+        await screen.findByText("Updated https://app.example.com.")
+      ).toBeTruthy();
+      expect(
+        await serverRoot.readJson(serverRoot.projectConfigRelativePath())
+      ).toEqual({
         schemaVersion: 1,
-        sites: [{
-          origin: "https://app.example.com",
-          createdAt: "2026-04-08T00:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.css$", "\\.json$"]
-        }]
+        sites: [
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.css$", "\\.json$"]
+          }
+        ]
       });
     } finally {
       options.unmount();
@@ -775,7 +915,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -806,12 +948,26 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText(/No WraithWalker root directory is connected yet/i)).toBeTruthy();
-      expect((screen.getByRole("button", { name: "Add Origin" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(
+        await screen.findByText(
+          /No WraithWalker root directory is connected yet/i
+        )
+      ).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Add Origin"
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
 
       expect(setSiteConfigs).not.toHaveBeenCalled();
       expect(permissions.request).not.toHaveBeenCalled();
-      expect(screen.getByText(/Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i)).toBeTruthy();
+      expect(
+        screen.getByText(
+          /Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i
+        )
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -830,7 +986,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -866,8 +1024,12 @@ describe("options entrypoint", () => {
       await screen.findByText("https://app.example.com");
       await user.click(screen.getByRole("button", { name: "Remove" }));
 
-      expect(permissions.remove).toHaveBeenCalledWith({ origins: ["https://app.example.com/*"] });
-      expect(await screen.findByText("Removed https://app.example.com.")).toBeTruthy();
+      expect(permissions.remove).toHaveBeenCalledWith({
+        origins: ["https://app.example.com/*"]
+      });
+      expect(
+        await screen.findByText("Removed https://app.example.com.")
+      ).toBeTruthy();
       expect(sites).toEqual([]);
     } finally {
       options.unmount();
@@ -877,17 +1039,20 @@ describe("options entrypoint", () => {
   it("reloads explicit site config from the server root after an external change", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
-    const { getConfiguredSiteConfigs, setConfiguredSiteConfigs } = await loadRootConfigModule();
+    const { getConfiguredSiteConfigs, setConfiguredSiteConfigs } =
+      await loadRootConfigModule();
     const serverRoot = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-options-server-refresh-"
     });
     await serverRoot.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://before.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]
+      sites: [
+        {
+          origin: "https://before.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
     });
     const server = await startExternalHttpServer(serverRoot.rootPath);
     const serverClient = createLiveServerClient(server.trpcUrl);
@@ -904,29 +1069,35 @@ describe("options entrypoint", () => {
       serverClient
     });
 
-    const createOptions = () => initOptions({
-      document,
-      windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
-      ),
-      chromeApi: {
-        permissions: {
-          request: vi.fn().mockResolvedValue(true),
-          remove: vi.fn().mockResolvedValue(true)
+    const createOptions = () =>
+      initOptions({
+        document,
+        windowRef: createWindowWithDirectoryPicker(
+          vi.fn().mockResolvedValue({
+            kind: "directory"
+          } as FileSystemDirectoryHandle)
+        ),
+        chromeApi: {
+          permissions: {
+            request: vi.fn().mockResolvedValue(true),
+            remove: vi.fn().mockResolvedValue(true)
+          },
+          runtime: runtimeApi
         },
-        runtime: runtimeApi
-      },
-      getSiteConfigs: () => getConfiguredSiteConfigs(runtimeApi),
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
-      setNativeHostConfig: vi.fn(),
-      setSiteConfigs: (siteConfigs) => setConfiguredSiteConfigs(siteConfigs, runtimeApi),
-      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
-      queryRootPermission: vi.fn(),
-      requestRootPermission: vi.fn(),
-      ensureRootSentinel: vi.fn(),
-      storeRootHandleWithSentinel: vi.fn(),
-      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
-    });
+        getSiteConfigs: () => getConfiguredSiteConfigs(runtimeApi),
+        getNativeHostConfig: vi
+          .fn()
+          .mockResolvedValue(createNativeHostConfig()),
+        setNativeHostConfig: vi.fn(),
+        setSiteConfigs: (siteConfigs) =>
+          setConfiguredSiteConfigs(siteConfigs, runtimeApi),
+        loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+        queryRootPermission: vi.fn(),
+        requestRootPermission: vi.fn(),
+        ensureRootSentinel: vi.fn(),
+        storeRootHandleWithSentinel: vi.fn(),
+        getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+      });
 
     const firstOptions = await createOptions();
 
@@ -934,11 +1105,13 @@ describe("options entrypoint", () => {
       await screen.findByText("https://before.example.com");
       await serverRoot.writeProjectConfig({
         schemaVersion: 1,
-        sites: [{
-          origin: "https://after.example.com",
-          createdAt: "2026-04-08T12:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.json$"]
-        }]
+        sites: [
+          {
+            origin: "https://after.example.com",
+            createdAt: "2026-04-08T12:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$"]
+          }
+        ]
       });
 
       firstOptions.unmount();
@@ -946,7 +1119,9 @@ describe("options entrypoint", () => {
 
       const secondOptions = await createOptions();
       try {
-        expect(await screen.findByText("https://after.example.com")).toBeTruthy();
+        expect(
+          await screen.findByText("https://after.example.com")
+        ).toBeTruthy();
         expect(screen.queryByText("https://before.example.com")).toBeNull();
       } finally {
         secondOptions.unmount();
@@ -969,7 +1144,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -987,11 +1164,20 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText(/WraithWalker root access is ready\./);
-      await user.type(await screen.findByLabelText("Exact origin"), "app.example.com");
+      await user.type(
+        await screen.findByLabelText("Exact origin"),
+        "app.example.com"
+      );
       await user.click(screen.getByRole("button", { name: "Add Origin" }));
 
-      expect(permissions.request).toHaveBeenCalledWith({ origins: ["https://app.example.com/*"] });
-      expect(await screen.findByText("Host access was not granted for https://app.example.com/*." )).toBeTruthy();
+      expect(permissions.request).toHaveBeenCalledWith({
+        origins: ["https://app.example.com/*"]
+      });
+      expect(
+        await screen.findByText(
+          "Host access was not granted for https://app.example.com/*."
+        )
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1008,7 +1194,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1048,13 +1236,17 @@ describe("options entrypoint", () => {
       request: vi.fn().mockResolvedValue(true),
       remove: vi.fn().mockResolvedValue(true)
     };
-    const setSiteConfigs = vi.fn().mockRejectedValue(new Error("Remove failed."));
+    const setSiteConfigs = vi
+      .fn()
+      .mockRejectedValue(new Error("Remove failed."));
     const readyRoot = createReadyRootDeps();
 
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions,
@@ -1089,11 +1281,16 @@ describe("options entrypoint", () => {
     const user = userEvent.setup();
     const rootHandle = { kind: "directory" } as FileSystemDirectoryHandle;
     const showDirectoryPicker = vi.fn().mockResolvedValue(rootHandle);
-    const loadStoredRootHandle = vi.fn()
+    const loadStoredRootHandle = vi
+      .fn()
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(rootHandle);
-    const ensureRootSentinel = vi.fn().mockResolvedValue({ rootId: "root-123" });
-    const storeRootHandleWithSentinel = vi.fn().mockResolvedValue({ rootId: "root-123" });
+    const ensureRootSentinel = vi
+      .fn()
+      .mockResolvedValue({ rootId: "root-123" });
+    const storeRootHandleWithSentinel = vi
+      .fn()
+      .mockResolvedValue({ rootId: "root-123" });
 
     const options = await initOptions({
       document,
@@ -1120,7 +1317,9 @@ describe("options entrypoint", () => {
     });
 
     try {
-      const button = await screen.findByRole("button", { name: "Choose Root Directory" });
+      const button = await screen.findByRole("button", {
+        name: "Choose Root Directory"
+      });
       await user.click(button);
 
       expect(showDirectoryPicker).toHaveBeenCalledWith({
@@ -1128,7 +1327,9 @@ describe("options entrypoint", () => {
         id: ROOT_DIRECTORY_PICKER_ID
       });
       expect(storeRootHandleWithSentinel).toHaveBeenCalledWith(rootHandle);
-      expect(await screen.findByText(/Root directory saved\. Root ID: root-123\./)).toBeTruthy();
+      expect(
+        await screen.findByText(/Root directory saved\. Root ID: root-123\./)
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1138,7 +1339,9 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
-    const showDirectoryPicker = vi.fn().mockRejectedValue(new DOMException("Aborted", "AbortError"));
+    const showDirectoryPicker = vi
+      .fn()
+      .mockRejectedValue(new DOMException("Aborted", "AbortError"));
 
     const options = await initOptions({
       document,
@@ -1165,13 +1368,17 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Choose Root Directory" }));
+      await user.click(
+        await screen.findByRole("button", { name: "Choose Root Directory" })
+      );
       expect(showDirectoryPicker).toHaveBeenCalledWith({
         mode: "readwrite",
         id: ROOT_DIRECTORY_PICKER_ID
       });
       expect(screen.queryByText(/Aborted/i)).toBeNull();
-      expect(screen.getByText(/No WraithWalker root directory is connected yet/i)).toBeTruthy();
+      expect(
+        screen.getByText(/No WraithWalker root directory is connected yet/i)
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1182,7 +1389,8 @@ describe("options entrypoint", () => {
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
     const rootHandle = {};
-    const queryRootPermission = vi.fn()
+    const queryRootPermission = vi
+      .fn()
       .mockResolvedValueOnce("prompt")
       .mockResolvedValueOnce("granted");
     const requestRootPermission = vi.fn().mockResolvedValue("granted");
@@ -1190,7 +1398,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1214,10 +1424,14 @@ describe("options entrypoint", () => {
     });
 
     try {
-      const button = await screen.findByRole("button", { name: "Reconnect Root Directory" });
+      const button = await screen.findByRole("button", {
+        name: "Reconnect Root Directory"
+      });
       await user.click(button);
       expect(requestRootPermission).toHaveBeenCalledWith(rootHandle);
-      expect(await screen.findByText("Root permission status: granted.")).toBeTruthy();
+      expect(
+        await screen.findByText("Root permission status: granted.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1232,7 +1446,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1256,8 +1472,12 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Reconnect Root Directory" }));
-      expect(await screen.findByText("Root permission status: denied.")).toBeTruthy();
+      await user.click(
+        await screen.findByRole("button", { name: "Reconnect Root Directory" })
+      );
+      expect(
+        await screen.findByText("Root permission status: denied.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1271,7 +1491,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1286,7 +1508,8 @@ describe("options entrypoint", () => {
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
-      loadStoredRootHandle: vi.fn()
+      loadStoredRootHandle: vi
+        .fn()
         .mockResolvedValueOnce({} as FileSystemDirectoryHandle)
         .mockResolvedValueOnce(undefined),
       queryRootPermission: vi.fn().mockResolvedValue("prompt"),
@@ -1297,8 +1520,12 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Reconnect Root Directory" }));
-      expect(await screen.findByText("Choose a root directory first.")).toBeTruthy();
+      await user.click(
+        await screen.findByRole("button", { name: "Reconnect Root Directory" })
+      );
+      expect(
+        await screen.findByText("Choose a root directory first.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1311,7 +1538,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1336,8 +1565,12 @@ describe("options entrypoint", () => {
     try {
       expect(await screen.findByText("WraithWalker Root")).toBeTruthy();
       expect(screen.queryByText("Preferred Editor")).toBeNull();
-      await userEvent.setup().click(screen.getByRole("button", { name: "Show" }));
-      expect(await screen.findByLabelText("Custom URL Override For Cursor")).toBeTruthy();
+      await userEvent
+        .setup()
+        .click(screen.getByRole("button", { name: "Show" }));
+      expect(
+        await screen.findByLabelText("Custom URL Override For Cursor")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1346,8 +1579,12 @@ describe("options entrypoint", () => {
   it("shows the change-root action and sentinel when the root is ready", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
-    const currentRootHandle = { kind: "directory" } as FileSystemDirectoryHandle;
-    const showDirectoryPicker = vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle);
+    const currentRootHandle = {
+      kind: "directory"
+    } as FileSystemDirectoryHandle;
+    const showDirectoryPicker = vi
+      .fn()
+      .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle);
 
     const options = await initOptions({
       document,
@@ -1374,15 +1611,25 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByRole("button", { name: "Change Root Directory" })).toBeTruthy();
-      expect(screen.getByText("WraithWalker root access is ready. Root ID: root-ready.")).toBeTruthy();
+      expect(
+        await screen.findByRole("button", { name: "Change Root Directory" })
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          "WraithWalker root access is ready. Root ID: root-ready."
+        )
+      ).toBeTruthy();
       expect(screen.getByText("root-ready")).toBeTruthy();
       expect(screen.getByText("WraithWalker Root")).toBeTruthy();
       expect(screen.getByText("Enabled Origins")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Open Launch Folder" })).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Open Launch Folder" })
+      ).toBeTruthy();
       expect(screen.queryByText("Default root path")).toBeNull();
 
-      await userEvent.setup().click(screen.getByRole("button", { name: "Change Root Directory" }));
+      await userEvent
+        .setup()
+        .click(screen.getByRole("button", { name: "Change Root Directory" }));
       expect(showDirectoryPicker).toHaveBeenCalledWith({
         mode: "readwrite",
         id: ROOT_DIRECTORY_PICKER_ID,
@@ -1398,34 +1645,41 @@ describe("options entrypoint", () => {
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
     const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
-    const getNativeHostConfig = vi.fn()
+    const getNativeHostConfig = vi
+      .fn()
       .mockResolvedValueOnce(createNativeHostConfig())
-      .mockResolvedValueOnce(createNativeHostConfig({
-        hostName: "com.example.host",
-        launchPath: "/tmp/fixtures",
-        editorLaunchOverrides: {
-          cursor: {
-            urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
-            commandTemplate: 'cursor "$DIR"'
+      .mockResolvedValueOnce(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor "$DIR"'
+            }
           }
-        }
-      }))
-      .mockResolvedValueOnce(createNativeHostConfig({
-        hostName: "com.example.host",
-        launchPath: "/tmp/fixtures",
-        editorLaunchOverrides: {
-          cursor: {
-            urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
-            commandTemplate: 'cursor "$DIR"'
+        })
+      )
+      .mockResolvedValueOnce(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor "$DIR"'
+            }
           }
-        }
-      }));
+        })
+      );
     const runtimeSendMessage = createRuntimeSendMessage();
 
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1448,7 +1702,11 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText(/Hidden by default so the common flow stays simple/i)).toBeTruthy();
+      expect(
+        await screen.findByText(
+          /Hidden by default so the common flow stays simple/i
+        )
+      ).toBeTruthy();
       expect(screen.queryByLabelText("Native Host Name")).toBeNull();
 
       await user.click(screen.getByRole("button", { name: "Show" }));
@@ -1458,29 +1716,43 @@ describe("options entrypoint", () => {
       fireEvent.change(screen.getByLabelText("Shared Editor Launch Path"), {
         target: { value: "/tmp/fixtures" }
       });
-      fireEvent.change(screen.getByLabelText("Custom URL Override For Cursor"), {
-        target: { value: "cursor://workspace?folder=$DIR_COMPONENT" }
-      });
-      fireEvent.change(screen.getByLabelText("Custom Command Override For Cursor"), {
-        target: { value: 'cursor "$DIR"' }
-      });
-      await user.click(screen.getByRole("button", { name: "Save Launch Settings" }));
-
-      expect(setNativeHostConfig).toHaveBeenCalledWith(createNativeHostConfig({
-        hostName: "com.example.host",
-        launchPath: "/tmp/fixtures",
-        editorLaunchOverrides: {
-          cursor: {
-            urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
-            commandTemplate: 'cursor "$DIR"'
-          }
+      fireEvent.change(
+        screen.getByLabelText("Custom URL Override For Cursor"),
+        {
+          target: { value: "cursor://workspace?folder=$DIR_COMPONENT" }
         }
-      }));
+      );
+      fireEvent.change(
+        screen.getByLabelText("Custom Command Override For Cursor"),
+        {
+          target: { value: 'cursor "$DIR"' }
+        }
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save Launch Settings" })
+      );
+
+      expect(setNativeHostConfig).toHaveBeenCalledWith(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor "$DIR"'
+            }
+          }
+        })
+      );
       expect(await screen.findByText("Launch settings saved.")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Verify Helper" }));
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.verify" });
-      expect(await screen.findByText("Helper verified at 2026-04-03T12:00:00.000Z.")).toBeTruthy();
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "native.verify"
+      });
+      expect(
+        await screen.findByText("Helper verified at 2026-04-03T12:00:00.000Z.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1494,7 +1766,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1517,7 +1791,11 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText(/Hidden by default so the common flow stays simple/i)).toBeTruthy();
+      expect(
+        await screen.findByText(
+          /Hidden by default so the common flow stays simple/i
+        )
+      ).toBeTruthy();
       expect(screen.queryByLabelText("Native Host Name")).toBeNull();
 
       await user.click(screen.getByRole("button", { name: "Show" }));
@@ -1525,7 +1803,9 @@ describe("options entrypoint", () => {
 
       await user.click(screen.getByRole("button", { name: "Hide" }));
       expect(screen.queryByLabelText("Native Host Name")).toBeNull();
-      expect(screen.getByText(/Hidden by default so the common flow stays simple/i)).toBeTruthy();
+      expect(
+        screen.getByText(/Hidden by default so the common flow stays simple/i)
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1549,7 +1829,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1561,13 +1843,17 @@ describe("options entrypoint", () => {
         }
       },
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
-        hostName: "com.example.host",
-        launchPath: "/tmp/fixtures"
-      })),
+      getNativeHostConfig: vi.fn().mockResolvedValue(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures"
+        })
+      ),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
-      loadStoredRootHandle: vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle),
+      loadStoredRootHandle: vi
+        .fn()
+        .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle),
       queryRootPermission: vi.fn().mockResolvedValue("granted"),
       requestRootPermission: vi.fn(),
       ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" }),
@@ -1575,9 +1861,17 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Open Launch Folder" }));
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.revealRoot" });
-      expect(await screen.findByText("Opened the launch folder in the OS file manager.")).toBeTruthy();
+      await user.click(
+        await screen.findByRole("button", { name: "Open Launch Folder" })
+      );
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "native.revealRoot"
+      });
+      expect(
+        await screen.findByText(
+          "Opened the launch folder in the OS file manager."
+        )
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1635,37 +1929,41 @@ describe("options entrypoint", () => {
       },
       issues: []
     };
-    const runtimeSendMessage = vi.fn(async (message: { type: string; name?: string }) => {
-      switch (message.type) {
-        case "session.getState":
-          return {
-            sessionActive: false,
-            attachedTabIds: [],
-            enabledOrigins: ["https://app.example.com"],
-            rootReady: true,
-            captureDestination: "server",
-            captureRootPath: "/tmp/server-root",
-            lastError: ""
-          };
-        case "scenario.list":
-          return { ok: true, scenarios: ["baseline"] };
-        case "scenario.switch":
-          return { ok: true, name: message.name ?? "" };
-        case "scenario.save":
-          return { ok: true, name: message.name ?? "" };
-        case "diagnostics.getReport":
-          return { ok: true, report: diagnosticsReport };
-        case "native.verify":
-          return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
-        default:
-          return { ok: true };
+    const runtimeSendMessage = vi.fn(
+      async (message: { type: string; name?: string }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return { ok: true, scenarios: ["baseline"] };
+          case "scenario.switch":
+            return { ok: true, name: message.name ?? "" };
+          case "scenario.save":
+            return { ok: true, name: message.name ?? "" };
+          case "diagnostics.getReport":
+            return { ok: true, report: diagnosticsReport };
+          case "native.verify":
+            return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+          default:
+            return { ok: true };
+        }
       }
-    });
+    );
 
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1677,7 +1975,11 @@ describe("options entrypoint", () => {
         }
       },
       getSiteConfigs: vi.fn().mockResolvedValue([createStoredSite()]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
       writeClipboardText,
@@ -1687,11 +1989,19 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText("Enabled Origins");
-      await user.click(screen.getByRole("button", { name: "Copy Diagnostics" }));
+      await user.click(
+        screen.getByRole("button", { name: "Copy Diagnostics" })
+      );
 
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "diagnostics.getReport" });
-      expect(writeClipboardText).toHaveBeenCalledWith(JSON.stringify(diagnosticsReport, null, 2));
-      expect(await screen.findByText("Diagnostics copied to clipboard.")).toBeTruthy();
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "diagnostics.getReport"
+      });
+      expect(writeClipboardText).toHaveBeenCalledWith(
+        JSON.stringify(diagnosticsReport, null, 2)
+      );
+      expect(
+        await screen.findByText("Diagnostics copied to clipboard.")
+      ).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1705,7 +2015,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1713,36 +2025,42 @@ describe("options entrypoint", () => {
           remove: vi.fn().mockResolvedValue(true)
         },
         runtime: {
-          sendMessage: vi.fn(async (message: { type: string; name?: string }) => {
-            switch (message.type) {
-              case "session.getState":
-                return {
-                  sessionActive: false,
-                  attachedTabIds: [],
-                  enabledOrigins: ["https://app.example.com"],
-                  rootReady: true,
-                  captureDestination: "local",
-                  captureRootPath: "/tmp/fixtures",
-                  lastError: ""
-                };
-              case "scenario.list":
-                return { ok: true, scenarios: ["baseline"] };
-              case "scenario.switch":
-                return { ok: true, name: message.name ?? "" };
-              case "scenario.save":
-                return { ok: true, name: message.name ?? "" };
-              case "diagnostics.getReport":
-                return { ok: false, error: "Diagnostics unavailable." };
-              case "native.verify":
-                return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
-              default:
-                return { ok: true };
+          sendMessage: vi.fn(
+            async (message: { type: string; name?: string }) => {
+              switch (message.type) {
+                case "session.getState":
+                  return {
+                    sessionActive: false,
+                    attachedTabIds: [],
+                    enabledOrigins: ["https://app.example.com"],
+                    rootReady: true,
+                    captureDestination: "local",
+                    captureRootPath: "/tmp/fixtures",
+                    lastError: ""
+                  };
+                case "scenario.list":
+                  return { ok: true, scenarios: ["baseline"] };
+                case "scenario.switch":
+                  return { ok: true, name: message.name ?? "" };
+                case "scenario.save":
+                  return { ok: true, name: message.name ?? "" };
+                case "diagnostics.getReport":
+                  return { ok: false, error: "Diagnostics unavailable." };
+                case "native.verify":
+                  return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+                default:
+                  return { ok: true };
+              }
             }
-          })
+          )
         }
       },
       getSiteConfigs: vi.fn().mockResolvedValue([createStoredSite()]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({ launchPath: "/tmp/fixtures" })),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
       writeClipboardText: vi.fn(),
@@ -1752,7 +2070,9 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText("Enabled Origins");
-      await user.click(screen.getByRole("button", { name: "Copy Diagnostics" }));
+      await user.click(
+        screen.getByRole("button", { name: "Copy Diagnostics" })
+      );
 
       expect(await screen.findByText("Diagnostics unavailable.")).toBeTruthy();
     } finally {
@@ -1778,7 +2098,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1790,13 +2112,17 @@ describe("options entrypoint", () => {
         }
       },
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig({
-        hostName: "com.example.host",
-        launchPath: "/tmp/fixtures"
-      })),
+      getNativeHostConfig: vi.fn().mockResolvedValue(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures"
+        })
+      ),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
-      loadStoredRootHandle: vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle),
+      loadStoredRootHandle: vi
+        .fn()
+        .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle),
       queryRootPermission: vi.fn().mockResolvedValue("granted"),
       requestRootPermission: vi.fn(),
       ensureRootSentinel: vi.fn().mockResolvedValue({ rootId: "root-ready" }),
@@ -1804,8 +2130,12 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await user.click(await screen.findByRole("button", { name: "Open Launch Folder" }));
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "native.revealRoot" });
+      await user.click(
+        await screen.findByRole("button", { name: "Open Launch Folder" })
+      );
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "native.revealRoot"
+      });
       expect(await screen.findByText("Reveal failed.")).toBeTruthy();
     } finally {
       options.unmount();
@@ -1821,7 +2151,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1847,12 +2179,18 @@ describe("options entrypoint", () => {
     try {
       expect(await screen.findByText("baseline")).toBeTruthy();
       await user.click(screen.getByRole("button", { name: "Switch" }));
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "scenario.switch", name: "baseline" });
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.switch",
+        name: "baseline"
+      });
       expect(await screen.findByText('Switched to "baseline".')).toBeTruthy();
 
       await user.type(screen.getByLabelText("Scenario name"), "release");
       await user.click(screen.getByRole("button", { name: "Save Scenario" }));
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "scenario.save", name: "release" });
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.save",
+        name: "release"
+      });
       expect(await screen.findByText('Scenario "release" saved.')).toBeTruthy();
     } finally {
       options.unmount();
@@ -1868,7 +2206,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1895,8 +2235,12 @@ describe("options entrypoint", () => {
       await user.type(await screen.findByLabelText("Scenario name"), "   ");
       await user.click(screen.getByRole("button", { name: "Save Scenario" }));
       expect(runtimeSendMessage).toHaveBeenCalledTimes(2);
-      expect(runtimeSendMessage).toHaveBeenNthCalledWith(1, { type: "session.getState" });
-      expect(runtimeSendMessage).toHaveBeenCalledWith({ type: "scenario.list" });
+      expect(runtimeSendMessage).toHaveBeenNthCalledWith(1, {
+        type: "session.getState"
+      });
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.list"
+      });
     } finally {
       options.unmount();
     }
@@ -1915,7 +2259,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -1950,25 +2296,29 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
-    const runtimeSendMessage = vi.fn(async (message: { type: string; name?: string }) => {
-      switch (message.type) {
-        case "scenario.list":
-          return { ok: true, scenarios: ["baseline"] };
-        case "native.verify":
-          return { ok: false, error: "Helper unavailable." };
-        case "scenario.switch":
-          return { ok: false, error: "Switch failed." };
-        case "scenario.save":
-          return { ok: false, error: "Save failed." };
-        default:
-          return { ok: true };
+    const runtimeSendMessage = vi.fn(
+      async (message: { type: string; name?: string }) => {
+        switch (message.type) {
+          case "scenario.list":
+            return { ok: true, scenarios: ["baseline"] };
+          case "native.verify":
+            return { ok: false, error: "Helper unavailable." };
+          case "scenario.switch":
+            return { ok: false, error: "Switch failed." };
+          case "scenario.save":
+            return { ok: false, error: "Save failed." };
+          default:
+            return { ok: true };
+        }
       }
-    });
+    );
 
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -2022,7 +2372,9 @@ describe("options entrypoint", () => {
       loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
       queryRootPermission: vi.fn().mockResolvedValue("prompt"),
       requestRootPermission: vi.fn().mockResolvedValue("granted"),
-      storeRootHandleWithSentinel: vi.fn().mockResolvedValue({ rootId: "root-auto" })
+      storeRootHandleWithSentinel: vi
+        .fn()
+        .mockResolvedValue({ rootId: "root-auto" })
     }));
     globalThis.chrome = {
       permissions: {
@@ -2048,12 +2400,16 @@ describe("options entrypoint", () => {
       }
     } as any;
     createWindowWithDirectoryPicker(
-      vi.fn().mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      vi
+        .fn()
+        .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
     );
 
     await loadOptionsModuleOutsideTestMode();
 
     expect(await screen.findByText("Enabled Origins")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Choose Root Directory" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Choose Root Directory" })
+    ).toBeTruthy();
   });
 });

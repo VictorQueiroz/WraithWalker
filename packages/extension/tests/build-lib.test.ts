@@ -15,15 +15,25 @@ describe("build layout helpers", () => {
     const paths = createBuildPaths(process.cwd());
 
     expect(paths.emitDir).toBe(path.join(process.cwd(), ".ts-emit"));
-    expect(paths.packageJsonFile).toBe(path.join(process.cwd(), "package.json"));
+    expect(paths.packageJsonFile).toBe(
+      path.join(process.cwd(), "package.json")
+    );
     expect(paths.staticDir).toBe(path.join(process.cwd(), "static"));
-    expect(paths.staticManifestFile).toBe(path.join(process.cwd(), "static", "manifest.json"));
+    expect(paths.staticManifestFile).toBe(
+      path.join(process.cwd(), "static", "manifest.json")
+    );
     expect(paths.distDir).toBe(path.join(process.cwd(), "dist"));
-    expect(paths.distManifestFile).toBe(path.join(process.cwd(), "dist", "manifest.json"));
+    expect(paths.distManifestFile).toBe(
+      path.join(process.cwd(), "dist", "manifest.json")
+    );
     expect(paths.libEmitDir).toBe(path.join(process.cwd(), ".ts-emit", "lib"));
-    expect(paths.distVendorFile).toBe(path.join(process.cwd(), "dist", "vendor", "idb.js"));
+    expect(paths.distVendorFile).toBe(
+      path.join(process.cwd(), "dist", "vendor", "idb.js")
+    );
     expect(paths.vendorSource).toMatch(/idb[/\\]build[/\\]index\.js$/);
-    expect(paths.uiStylesSource).toBe(path.join(process.cwd(), "src", "ui", "styles.css"));
+    expect(paths.uiStylesSource).toBe(
+      path.join(process.cwd(), "src", "ui", "styles.css")
+    );
     expect(paths.distCssFile).toBe(path.join(process.cwd(), "dist", "app.css"));
   });
 
@@ -76,20 +86,68 @@ describe("build layout helpers", () => {
         targetPath: path.join(process.cwd(), "dist", "assets", "logo.svg")
       },
       {
-        sourcePath: path.join(process.cwd(), "static", "assets", "icons", "icon-16.png"),
-        targetPath: path.join(process.cwd(), "dist", "assets", "icons", "icon-16.png")
+        sourcePath: path.join(
+          process.cwd(),
+          "static",
+          "assets",
+          "icons",
+          "icon-16.png"
+        ),
+        targetPath: path.join(
+          process.cwd(),
+          "dist",
+          "assets",
+          "icons",
+          "icon-16.png"
+        )
       },
       {
-        sourcePath: path.join(process.cwd(), "static", "assets", "icons", "icon-32.png"),
-        targetPath: path.join(process.cwd(), "dist", "assets", "icons", "icon-32.png")
+        sourcePath: path.join(
+          process.cwd(),
+          "static",
+          "assets",
+          "icons",
+          "icon-32.png"
+        ),
+        targetPath: path.join(
+          process.cwd(),
+          "dist",
+          "assets",
+          "icons",
+          "icon-32.png"
+        )
       },
       {
-        sourcePath: path.join(process.cwd(), "static", "assets", "icons", "icon-48.png"),
-        targetPath: path.join(process.cwd(), "dist", "assets", "icons", "icon-48.png")
+        sourcePath: path.join(
+          process.cwd(),
+          "static",
+          "assets",
+          "icons",
+          "icon-48.png"
+        ),
+        targetPath: path.join(
+          process.cwd(),
+          "dist",
+          "assets",
+          "icons",
+          "icon-48.png"
+        )
       },
       {
-        sourcePath: path.join(process.cwd(), "static", "assets", "icons", "icon-128.png"),
-        targetPath: path.join(process.cwd(), "dist", "assets", "icons", "icon-128.png")
+        sourcePath: path.join(
+          process.cwd(),
+          "static",
+          "assets",
+          "icons",
+          "icon-128.png"
+        ),
+        targetPath: path.join(
+          process.cwd(),
+          "dist",
+          "assets",
+          "icons",
+          "icon-128.png"
+        )
       }
     ]);
   });
@@ -167,7 +225,15 @@ const distManifestPath = path.join(process.cwd(), "dist", "manifest.json");
 const packageManifestPath = path.join(process.cwd(), "package.json");
 
 describe("dist output", () => {
-  it.skipIf(!(existsSync(distBackgroundPath) && existsSync(distOffscreenPath) && existsSync(distPopupPath) && existsSync(distOptionsPath) && existsSync(distCssPath)))(
+  it.skipIf(
+    !(
+      existsSync(distBackgroundPath) &&
+      existsSync(distOffscreenPath) &&
+      existsSync(distPopupPath) &&
+      existsSync(distOptionsPath) &&
+      existsSync(distCssPath)
+    )
+  )(
     "emits bundled background/offscreen/popup/options runtime files and the shared Tailwind stylesheet",
     () => {
       expect(existsSync(distBackgroundPath)).toBe(true);
@@ -204,7 +270,9 @@ describe("dist output", () => {
         fs.readFile(packageManifestPath, "utf-8")
       ]);
       const manifest = JSON.parse(manifestContent) as { version: string };
-      const packageManifest = JSON.parse(packageManifestContent) as { version: string };
+      const packageManifest = JSON.parse(packageManifestContent) as {
+        version: string;
+      };
 
       expect(manifest.version).toBe(packageManifest.version);
     }

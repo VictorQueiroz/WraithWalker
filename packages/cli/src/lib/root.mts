@@ -1,1 +1,6 @@
-export { createRoot, findRoot, readSentinel, type RootSentinel } from "@wraithwalker/core/root";
+export {
+  createRoot,
+  findRoot,
+  readSentinel,
+  type RootSentinel
+} from "@wraithwalker/core/root";

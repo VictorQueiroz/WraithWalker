@@ -15,7 +15,9 @@ import {
 const activeListeners: Server[] = [];
 
 afterEach(async () => {
-  await Promise.allSettled(activeListeners.splice(0).map((listener) => closeHttpListener(listener)));
+  await Promise.allSettled(
+    activeListeners.splice(0).map((listener) => closeHttpListener(listener))
+  );
   vi.restoreAllMocks();
 });
 
@@ -26,7 +28,9 @@ async function startLoopbackApp(): Promise<Server> {
   });
 
   const listener = await new Promise<Server>((resolve, reject) => {
-    const nextListener = app.listen(0, "127.0.0.1", () => resolve(nextListener));
+    const nextListener = app.listen(0, "127.0.0.1", () =>
+      resolve(nextListener)
+    );
     nextListener.once("error", reject);
   });
   activeListeners.push(listener);
@@ -35,9 +39,13 @@ async function startLoopbackApp(): Promise<Server> {
 
 function invokeLoopbackHostGuard(hostHeader?: string) {
   const app = createLoopbackHttpApp();
-  const middleware = app.router.stack[0]?.handle as ((req: unknown, res: unknown, next: () => void) => void) | undefined;
+  const middleware = app.router.stack[0]?.handle as
+    | ((req: unknown, res: unknown, next: () => void) => void)
+    | undefined;
   if (!middleware) {
-    throw new Error("Expected the loopback app to register a host-validation middleware.");
+    throw new Error(
+      "Expected the loopback app to register a host-validation middleware."
+    );
   }
 
   const result = {
@@ -86,26 +94,29 @@ async function requestLoopbackApp(
   }
 
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      host: "127.0.0.1",
-      port: address.port,
-      path: "/",
-      method: "GET",
-      ...(typeof setHost === "boolean" ? { setHost } : {}),
-      ...(hostHeader ? { headers: { host: hostHeader } } : {})
-    }, (res: IncomingMessage) => {
-      let body = "";
-      res.setEncoding("utf8");
-      res.on("data", (chunk) => {
-        body += chunk;
-      });
-      res.on("end", () => {
-        resolve({
-          statusCode: res.statusCode ?? 0,
-          body
+    const req = http.request(
+      {
+        host: "127.0.0.1",
+        port: address.port,
+        path: "/",
+        method: "GET",
+        ...(typeof setHost === "boolean" ? { setHost } : {}),
+        ...(hostHeader ? { headers: { host: hostHeader } } : {})
+      },
+      (res: IncomingMessage) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          body += chunk;
         });
-      });
-    });
+        res.on("end", () => {
+          resolve({
+            statusCode: res.statusCode ?? 0,
+            body
+          });
+        });
+      }
+    );
 
     req.on("error", reject);
     req.end();
@@ -117,20 +128,26 @@ describe("server http helpers", () => {
     const response = invokeLoopbackHostGuard();
 
     expect(response.statusCode).toBe(403);
-    expect(response.payload).toEqual(createJsonRpcError(-32000, "Missing Host header"));
+    expect(response.payload).toEqual(
+      createJsonRpcError(-32000, "Missing Host header")
+    );
     expect(response.next).not.toHaveBeenCalled();
   });
 
   it("rejects malformed and non-loopback Host headers", async () => {
     const listener = await startLoopbackApp();
 
-    const malformedResponse = await requestLoopbackApp(listener, { hostHeader: "[::1" });
+    const malformedResponse = await requestLoopbackApp(listener, {
+      hostHeader: "[::1"
+    });
     expect(malformedResponse.statusCode).toBe(403);
     expect(JSON.parse(malformedResponse.body)).toEqual(
       createJsonRpcError(-32000, "Invalid Host header: [::1")
     );
 
-    const disallowedResponse = await requestLoopbackApp(listener, { hostHeader: "example.com" });
+    const disallowedResponse = await requestLoopbackApp(listener, {
+      hostHeader: "example.com"
+    });
     expect(disallowedResponse.statusCode).toBe(403);
     expect(JSON.parse(disallowedResponse.body)).toEqual(
       createJsonRpcError(-32000, "Invalid Host: example.com")
@@ -140,13 +157,17 @@ describe("server http helpers", () => {
   it("allows recognized loopback Host headers through the middleware", async () => {
     const listener = await startLoopbackApp();
 
-    const localhostResponse = await requestLoopbackApp(listener, { hostHeader: "localhost" });
+    const localhostResponse = await requestLoopbackApp(listener, {
+      hostHeader: "localhost"
+    });
     expect(localhostResponse).toEqual({
       statusCode: 200,
       body: "ok"
     });
 
-    const ipv6Response = await requestLoopbackApp(listener, { hostHeader: "[::1]" });
+    const ipv6Response = await requestLoopbackApp(listener, {
+      hostHeader: "[::1]"
+    });
     expect(ipv6Response).toEqual({
       statusCode: 200,
       body: "ok"
@@ -191,6 +212,8 @@ describe("server http helpers", () => {
       })
     };
 
-    await expect(closeHttpListener(listener as unknown as Server)).rejects.toThrow("listener close failed");
+    await expect(
+      closeHttpListener(listener as unknown as Server)
+    ).rejects.toThrow("listener close failed");
   });
 });

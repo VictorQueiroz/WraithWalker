@@ -61,12 +61,14 @@ function normalizeRelativePath(value: string): string {
 }
 
 function normalizeSelectorValues(values?: string[]): string[] {
-  return [...new Set(
-    (values ?? [])
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0)
-      .map(normalizeRelativePath)
-  )].sort();
+  return [
+    ...new Set(
+      (values ?? [])
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map(normalizeRelativePath)
+    )
+  ].sort();
 }
 
 function workspaceRelativePath(workspaceId: string): string {
@@ -74,15 +76,27 @@ function workspaceRelativePath(workspaceId: string): string {
 }
 
 function workspaceManifestRelativePath(workspaceId: string): string {
-  return path.posix.join(workspaceRelativePath(workspaceId), WORKSPACE_MANIFEST_FILENAME);
+  return path.posix.join(
+    workspaceRelativePath(workspaceId),
+    WORKSPACE_MANIFEST_FILENAME
+  );
 }
 
 function workspaceFilesRelativePath(workspaceId: string): string {
-  return path.posix.join(workspaceRelativePath(workspaceId), WORKSPACE_FILES_DIRNAME);
+  return path.posix.join(
+    workspaceRelativePath(workspaceId),
+    WORKSPACE_FILES_DIRNAME
+  );
 }
 
-function workspaceTrackedFileRelativePath(workspaceId: string, trackedPath: string): string {
-  return path.posix.join(workspaceFilesRelativePath(workspaceId), normalizeRelativePath(trackedPath));
+function workspaceTrackedFileRelativePath(
+  workspaceId: string,
+  trackedPath: string
+): string {
+  return path.posix.join(
+    workspaceFilesRelativePath(workspaceId),
+    normalizeRelativePath(trackedPath)
+  );
 }
 
 function assertValidWorkspaceId(workspaceId: string): void {
@@ -96,7 +110,9 @@ async function hashAbsoluteFile(filePath: string): Promise<string> {
   return createHash("sha256").update(contents).digest("hex");
 }
 
-async function listAbsoluteFilesRecursively(directoryPath: string): Promise<string[]> {
+async function listAbsoluteFilesRecursively(
+  directoryPath: string
+): Promise<string[]> {
   const entries = await fs.readdir(directoryPath, { withFileTypes: true });
   const files: string[] = [];
 
@@ -104,7 +120,7 @@ async function listAbsoluteFilesRecursively(directoryPath: string): Promise<stri
     const absolutePath = path.join(directoryPath, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...await listAbsoluteFilesRecursively(absolutePath));
+      files.push(...(await listAbsoluteFilesRecursively(absolutePath)));
       continue;
     }
 
@@ -127,7 +143,10 @@ async function collectProjectionPaths(rootPath: string): Promise<string[]> {
         continue;
       }
 
-      const projection = await resolveProjectionFile(rootPath, asset.projectionPath);
+      const projection = await resolveProjectionFile(
+        rootPath,
+        asset.projectionPath
+      );
       if (!projection) {
         continue;
       }
@@ -139,20 +158,32 @@ async function collectProjectionPaths(rootPath: string): Promise<string[]> {
   return [...paths].sort();
 }
 
-async function requireProjectionPath(rootPath: string, relativePath: string): Promise<string> {
+async function requireProjectionPath(
+  rootPath: string,
+  relativePath: string
+): Promise<string> {
   const normalizedPath = normalizeRelativePath(relativePath);
 
   if (path.isAbsolute(normalizedPath)) {
-    throw new Error(`Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`);
+    throw new Error(
+      `Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`
+    );
   }
 
-  if (normalizedPath === ".wraithwalker" || normalizedPath.startsWith(".wraithwalker/")) {
-    throw new Error(`Hidden canonical files under .wraithwalker cannot be checked out into projection workspaces: ${relativePath}`);
+  if (
+    normalizedPath === ".wraithwalker" ||
+    normalizedPath.startsWith(".wraithwalker/")
+  ) {
+    throw new Error(
+      `Hidden canonical files under .wraithwalker cannot be checked out into projection workspaces: ${relativePath}`
+    );
   }
 
   const projection = await resolveProjectionFile(rootPath, normalizedPath);
   if (!projection) {
-    throw new Error(`File is not a projection-backed captured asset: ${relativePath}`);
+    throw new Error(
+      `File is not a projection-backed captured asset: ${relativePath}`
+    );
   }
 
   return normalizeRelativePath(projection.path);
@@ -160,7 +191,9 @@ async function requireProjectionPath(rootPath: string, relativePath: string): Pr
 
 function matchesAnyGlob(targetPath: string, globs: string[]): boolean {
   const normalizedTarget = normalizeRelativePath(targetPath);
-  return globs.some((glob) => path.posix.matchesGlob(normalizedTarget, normalizeRelativePath(glob)));
+  return globs.some((glob) =>
+    path.posix.matchesGlob(normalizedTarget, normalizeRelativePath(glob))
+  );
 }
 
 async function resolveWorkspaceSelection(
@@ -195,7 +228,9 @@ async function resolveWorkspaceSelection(
     .sort();
 
   if (files.length === 0) {
-    throw new Error("No projection-backed files matched the workspace selectors.");
+    throw new Error(
+      "No projection-backed files matched the workspace selectors."
+    );
   }
 
   return {
@@ -206,12 +241,18 @@ async function resolveWorkspaceSelection(
   };
 }
 
-async function loadWorkspaceContext(rootPath: string, workspaceId: string): Promise<ProjectionWorkspaceContext> {
+async function loadWorkspaceContext(
+  rootPath: string,
+  workspaceId: string
+): Promise<ProjectionWorkspaceContext> {
   assertValidWorkspaceId(workspaceId);
 
   const rootFs = createFixtureRootFs(rootPath);
   const manifestRelativePath = workspaceManifestRelativePath(workspaceId);
-  const manifest = await rootFs.readOptionalJson<ProjectionWorkspaceManifest>(manifestRelativePath);
+  const manifest =
+    await rootFs.readOptionalJson<ProjectionWorkspaceManifest>(
+      manifestRelativePath
+    );
 
   if (!manifest) {
     throw new Error(`Projection workspace not found: ${workspaceId}`);
@@ -252,7 +293,10 @@ export async function checkoutProjectionWorkspace(
   selection: ProjectionWorkspaceSelection
 ) {
   const rootFs = createFixtureRootFs(rootPath);
-  const resolvedSelection = await resolveWorkspaceSelection(rootPath, selection);
+  const resolvedSelection = await resolveWorkspaceSelection(
+    rootPath,
+    selection
+  );
   const workspaceId = randomUUID();
   const filesRelativePath = workspaceFilesRelativePath(workspaceId);
 
@@ -261,11 +305,16 @@ export async function checkoutProjectionWorkspace(
   const trackedFiles: ProjectionWorkspaceTrackedFile[] = [];
 
   for (const relativePath of resolvedSelection.files) {
-    await rootFs.copyRecursive(relativePath, workspaceTrackedFileRelativePath(workspaceId, relativePath));
+    await rootFs.copyRecursive(
+      relativePath,
+      workspaceTrackedFileRelativePath(workspaceId, relativePath)
+    );
 
     const sourcePath = rootFs.resolve(relativePath);
     if (!sourcePath) {
-      throw new Error(`Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`);
+      throw new Error(
+        `Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`
+      );
     }
 
     trackedFiles.push({
@@ -309,31 +358,48 @@ export async function pushProjectionWorkspace(
   const rootFs = createFixtureRootFs(rootPath);
   const context = await loadWorkspaceContext(rootPath, workspaceId);
   const trackedFileMap = new Map(
-    context.manifest.trackedFiles.map((trackedFile) => [trackedFile.path, trackedFile])
+    context.manifest.trackedFiles.map((trackedFile) => [
+      trackedFile.path,
+      trackedFile
+    ])
   );
 
   const workspaceFilesAbsolute = rootFs.resolve(context.filesRelativePath);
-  const workspaceFiles = workspaceFilesAbsolute && await rootFs.exists(context.filesRelativePath)
-    ? (await listAbsoluteFilesRecursively(workspaceFilesAbsolute))
-      .map((absolutePath) => normalizeRelativePath(path.relative(workspaceFilesAbsolute, absolutePath)))
-      .sort()
-    : [];
+  const workspaceFiles =
+    workspaceFilesAbsolute && (await rootFs.exists(context.filesRelativePath))
+      ? (await listAbsoluteFilesRecursively(workspaceFilesAbsolute))
+          .map((absolutePath) =>
+            normalizeRelativePath(
+              path.relative(workspaceFilesAbsolute, absolutePath)
+            )
+          )
+          .sort()
+      : [];
 
-  const ignoredNewFiles = workspaceFiles.filter((relativePath) => !trackedFileMap.has(relativePath));
+  const ignoredNewFiles = workspaceFiles.filter(
+    (relativePath) => !trackedFileMap.has(relativePath)
+  );
   const updatedFiles: string[] = [];
   const unchangedFiles: string[] = [];
   const conflictingFiles: string[] = [];
   const ignoredDeletedFiles: string[] = [];
 
   for (const trackedFile of context.manifest.trackedFiles) {
-    const workspaceTrackedRelativePath = workspaceTrackedFileRelativePath(workspaceId, trackedFile.path);
-    const workspaceTrackedAbsolutePath = rootFs.resolve(workspaceTrackedRelativePath);
+    const workspaceTrackedRelativePath = workspaceTrackedFileRelativePath(
+      workspaceId,
+      trackedFile.path
+    );
+    const workspaceTrackedAbsolutePath = rootFs.resolve(
+      workspaceTrackedRelativePath
+    );
     if (!workspaceTrackedAbsolutePath) {
       ignoredDeletedFiles.push(trackedFile.path);
       continue;
     }
 
-    const workspaceTrackedStat = await fs.lstat(workspaceTrackedAbsolutePath).catch(() => null);
+    const workspaceTrackedStat = await fs
+      .lstat(workspaceTrackedAbsolutePath)
+      .catch(() => null);
     if (!workspaceTrackedStat?.isFile()) {
       ignoredDeletedFiles.push(trackedFile.path);
       continue;
@@ -369,7 +435,10 @@ export async function pushProjectionWorkspace(
     updatedFiles.push(trackedFile.path);
   }
 
-  await rootFs.writeJson(workspaceManifestRelativePath(workspaceId), context.manifest);
+  await rootFs.writeJson(
+    workspaceManifestRelativePath(workspaceId),
+    context.manifest
+  );
 
   return {
     workspaceId: context.manifest.workspaceId,
@@ -389,11 +458,17 @@ export async function pushProjectionWorkspace(
   };
 }
 
-export async function discardProjectionWorkspace(rootPath: string, workspaceId: string) {
+export async function discardProjectionWorkspace(
+  rootPath: string,
+  workspaceId: string
+) {
   const rootFs = createFixtureRootFs(rootPath);
   const context = await loadWorkspaceContext(rootPath, workspaceId);
 
-  await rootFs.remove(context.workspaceRelativePath, { recursive: true, force: true });
+  await rootFs.remove(context.workspaceRelativePath, {
+    recursive: true,
+    force: true
+  });
 
   return {
     workspaceId: context.manifest.workspaceId,

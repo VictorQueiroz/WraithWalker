@@ -1,7 +1,12 @@
 import { findRoot } from "@wraithwalker/core/root";
 import type { CommandContext, CommandSpec } from "./command.mjs";
 import { UsageError } from "./command.mjs";
-import { loadGlobalCliConfig, loadProjectCliConfig, mergeCliConfigs, resolveCliConfig } from "./cli-config.mjs";
+import {
+  loadGlobalCliConfig,
+  loadProjectCliConfig,
+  mergeCliConfigs,
+  resolveCliConfig
+} from "./cli-config.mjs";
 import { supportsColor } from "./ansi.mjs";
 import { createPlainOutput } from "./plain-output.mjs";
 import { createThemedOutput } from "./themed-output.mjs";
@@ -47,7 +52,10 @@ Commands:
 
 function createOutput(
   cliConfig: CommandContext["cliConfig"],
-  { env = process.env, isTTY = process.stdout.isTTY }: { env?: NodeJS.ProcessEnv; isTTY?: boolean } = {}
+  {
+    env = process.env,
+    isTTY = process.stdout.isTTY
+  }: { env?: NodeJS.ProcessEnv; isTTY?: boolean } = {}
 ) {
   return supportsColor({ env, isTTY })
     ? createThemedOutput(cliConfig.theme, { isTTY })
@@ -70,12 +78,20 @@ export async function runCli(
     homeDir?: string;
   } = {}
 ): Promise<number> {
-  const globalConfigFile = await loadGlobalCliConfig({ env, platform, homeDir });
+  const globalConfigFile = await loadGlobalCliConfig({
+    env,
+    platform,
+    homeDir
+  });
   const globalConfig = resolveCliConfig(globalConfigFile);
   let output = createOutput(globalConfig, { env, isTTY });
   const [commandName, ...rest] = argv;
 
-  if (commandName === undefined || commandName === "--help" || commandName === "-h") {
+  if (
+    commandName === undefined ||
+    commandName === "--help" ||
+    commandName === "-h"
+  ) {
     output.banner();
     output.usage(USAGE);
     return 0;
@@ -94,10 +110,9 @@ export async function runCli(
 
     if (command.requiresRoot) {
       const { rootPath } = await findRoot(cwd);
-      cliConfig = resolveCliConfig(mergeCliConfigs(
-        globalConfigFile,
-        await loadProjectCliConfig(rootPath)
-      ));
+      cliConfig = resolveCliConfig(
+        mergeCliConfigs(globalConfigFile, await loadProjectCliConfig(rootPath))
+      );
       output = createOutput(cliConfig, { env, isTTY });
     }
 

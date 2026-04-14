@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import {
   getNativeHostConfig as defaultGetNativeHostConfig,
-  setNativeHostConfig as defaultSetNativeHostConfig,
+  setNativeHostConfig as defaultSetNativeHostConfig
 } from "./lib/chrome-storage.js";
 import { EDITOR_PRESETS, type EditorPreset } from "./lib/constants.js";
 import type { BackgroundMessage } from "./lib/messages.js";
@@ -54,7 +54,10 @@ export interface OptionsDependencies {
 }
 
 function isTestMode(): boolean {
-  return Boolean((globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean }).__WRAITHWALKER_TEST__);
+  return Boolean(
+    (globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean })
+      .__WRAITHWALKER_TEST__
+  );
 }
 
 export async function initOptions({

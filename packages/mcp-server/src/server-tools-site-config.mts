@@ -14,12 +14,19 @@ import type { createServerRootRuntime } from "./root-runtime.mjs";
 import { renderErrorMessage, renderJson } from "./server-responses.mjs";
 
 function sortSiteConfigs(siteConfigs: SiteConfig[]): SiteConfig[] {
-  return [...siteConfigs].sort((left, right) => left.origin.localeCompare(right.origin));
+  return [...siteConfigs].sort((left, right) =>
+    left.origin.localeCompare(right.origin)
+  );
 }
 
-function replaceSiteConfig(siteConfigs: SiteConfig[], nextSiteConfig: SiteConfig): SiteConfig[] {
+function replaceSiteConfig(
+  siteConfigs: SiteConfig[],
+  nextSiteConfig: SiteConfig
+): SiteConfig[] {
   return normalizeSiteConfigs([
-    ...siteConfigs.filter((siteConfig) => siteConfig.origin !== nextSiteConfig.origin),
+    ...siteConfigs.filter(
+      (siteConfig) => siteConfig.origin !== nextSiteConfig.origin
+    ),
     nextSiteConfig
   ]);
 }
@@ -66,17 +73,23 @@ export function registerSiteConfigTools(
     "list-configured-sites",
     "List the explicit site config entries stored in the current WraithWalker root",
     {
-      search: z.string().trim().min(1).optional().describe("Optional case-insensitive origin substring filter")
+      search: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe("Optional case-insensitive origin substring filter")
     },
     async ({ search }) => {
       const normalizedSearch = search?.toLowerCase();
       const siteConfigs = await runtime.readConfiguredSiteConfigs();
 
       return renderJson(
-        siteConfigs.filter((siteConfig) => (
-          !normalizedSearch
-          || siteConfig.origin.toLowerCase().includes(normalizedSearch)
-        ))
+        siteConfigs.filter(
+          (siteConfig) =>
+            !normalizedSearch ||
+            siteConfig.origin.toLowerCase().includes(normalizedSearch)
+        )
       );
     }
   );
@@ -85,18 +98,24 @@ export function registerSiteConfigTools(
     "whitelist-site",
     "Ensure an origin is explicitly configured in the current root using the agent-friendly default capture patterns",
     {
-      origin: z.string().describe("Origin to whitelist (for example https://app.example.com)")
+      origin: z
+        .string()
+        .describe("Origin to whitelist (for example https://app.example.com)")
     },
     async ({ origin }) => {
       let normalizedOrigin: string;
       try {
         normalizedOrigin = normalizeSiteInput(origin);
       } catch (error) {
-        return renderErrorMessage(error instanceof Error ? error.message : String(error));
+        return renderErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
       const siteConfigs = await runtime.readConfiguredSiteConfigs();
-      const existing = siteConfigs.find((siteConfig) => siteConfig.origin === normalizedOrigin);
+      const existing = siteConfigs.find(
+        (siteConfig) => siteConfig.origin === normalizedOrigin
+      );
       if (existing) {
         return renderJson({
           changed: false,
@@ -121,18 +140,24 @@ export function registerSiteConfigTools(
     "remove-site",
     "Remove an explicit site config entry from the current WraithWalker root",
     {
-      origin: z.string().describe("Origin to remove from the configured site list")
+      origin: z
+        .string()
+        .describe("Origin to remove from the configured site list")
     },
     async ({ origin }) => {
       let normalizedOrigin: string;
       try {
         normalizedOrigin = normalizeSiteInput(origin);
       } catch (error) {
-        return renderErrorMessage(error instanceof Error ? error.message : String(error));
+        return renderErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
       const siteConfigs = await runtime.readConfiguredSiteConfigs();
-      const existing = siteConfigs.find((siteConfig) => siteConfig.origin === normalizedOrigin);
+      const existing = siteConfigs.find(
+        (siteConfig) => siteConfig.origin === normalizedOrigin
+      );
       if (!existing) {
         return renderJson({
           changed: false,
@@ -141,7 +166,9 @@ export function registerSiteConfigTools(
         });
       }
 
-      const nextSiteConfigs = siteConfigs.filter((siteConfig) => siteConfig.origin !== normalizedOrigin);
+      const nextSiteConfigs = siteConfigs.filter(
+        (siteConfig) => siteConfig.origin !== normalizedOrigin
+      );
       await runtime.writeConfiguredSiteConfigs(nextSiteConfigs);
 
       return renderJson({
@@ -157,43 +184,64 @@ export function registerSiteConfigTools(
     "Replace, append, or reset dump allowlist patterns for an explicitly configured origin",
     {
       origin: z.string().describe("Configured origin to update"),
-      mode: z.enum(["replace", "append", "reset"]).optional().describe("How to apply dumpPatterns; defaults to replace"),
-      dumpPatterns: z.array(z.string()).optional().describe("Regex patterns used when mode is replace or append")
+      mode: z
+        .enum(["replace", "append", "reset"])
+        .optional()
+        .describe("How to apply dumpPatterns; defaults to replace"),
+      dumpPatterns: z
+        .array(z.string())
+        .optional()
+        .describe("Regex patterns used when mode is replace or append")
     },
     async ({ origin, mode = "replace", dumpPatterns }) => {
       let normalizedOrigin: string;
       try {
         normalizedOrigin = normalizeSiteInput(origin);
       } catch (error) {
-        return renderErrorMessage(error instanceof Error ? error.message : String(error));
+        return renderErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
       const siteConfigs = await runtime.readConfiguredSiteConfigs();
-      const existing = siteConfigs.find((siteConfig) => siteConfig.origin === normalizedOrigin);
+      const existing = siteConfigs.find(
+        (siteConfig) => siteConfig.origin === normalizedOrigin
+      );
       if (!existing) {
-        return renderErrorMessage(`Origin "${normalizedOrigin}" is not explicitly configured. Call whitelist-site first.`);
+        return renderErrorMessage(
+          `Origin "${normalizedOrigin}" is not explicitly configured. Call whitelist-site first.`
+        );
       }
 
       if (mode !== "reset" && (!dumpPatterns || dumpPatterns.length === 0)) {
-        return renderErrorMessage("dumpPatterns is required when mode is replace or append.");
+        return renderErrorMessage(
+          "dumpPatterns is required when mode is replace or append."
+        );
       }
 
       if (dumpPatterns) {
         for (const pattern of dumpPatterns) {
-          if (typeof pattern !== "string" || !pattern.trim() || !isValidDumpAllowlistPattern(pattern)) {
+          if (
+            typeof pattern !== "string" ||
+            !pattern.trim() ||
+            !isValidDumpAllowlistPattern(pattern)
+          ) {
             return renderInvalidPatternError(String(pattern));
           }
         }
       }
 
-      const nextPatterns = mode === "reset"
-        ? createConfiguredSiteConfig(normalizedOrigin).dumpAllowlistPatterns
-        : mode === "append"
-          ? [...new Set([
-              ...existing.dumpAllowlistPatterns,
-              ...(dumpPatterns ?? [])
-            ])]
-          : normalizeDumpAllowlistPatterns(dumpPatterns ?? []);
+      const nextPatterns =
+        mode === "reset"
+          ? createConfiguredSiteConfig(normalizedOrigin).dumpAllowlistPatterns
+          : mode === "append"
+            ? [
+                ...new Set([
+                  ...existing.dumpAllowlistPatterns,
+                  ...(dumpPatterns ?? [])
+                ])
+              ]
+            : normalizeDumpAllowlistPatterns(dumpPatterns ?? []);
 
       const nextSiteConfig: SiteConfig = {
         ...existing,
@@ -203,7 +251,9 @@ export function registerSiteConfigTools(
       await runtime.writeConfiguredSiteConfigs(nextSiteConfigs);
 
       return renderJson({
-        changed: JSON.stringify(existing.dumpAllowlistPatterns) !== JSON.stringify(nextPatterns),
+        changed:
+          JSON.stringify(existing.dumpAllowlistPatterns) !==
+          JSON.stringify(nextPatterns),
         siteConfig: nextSiteConfig,
         configuredSites: nextSiteConfigs
       });
@@ -221,22 +271,30 @@ export function registerSiteConfigTools(
       try {
         normalizedOrigin = normalizeSiteInput(origin);
       } catch (error) {
-        return renderErrorMessage(error instanceof Error ? error.message : String(error));
+        return renderErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
       const configuredSiteConfigs = await runtime.readConfiguredSiteConfigs();
-      const existing = configuredSiteConfigs.find((siteConfig) => siteConfig.origin === normalizedOrigin);
-      const nextConfiguredSite = existing ?? createConfiguredSiteConfig(normalizedOrigin);
+      const existing = configuredSiteConfigs.find(
+        (siteConfig) => siteConfig.origin === normalizedOrigin
+      );
+      const nextConfiguredSite =
+        existing ?? createConfiguredSiteConfig(normalizedOrigin);
       const changed = !existing;
 
       if (changed) {
-        await runtime.writeConfiguredSiteConfigs(replaceSiteConfig(configuredSiteConfigs, nextConfiguredSite));
+        await runtime.writeConfiguredSiteConfigs(
+          replaceSiteConfig(configuredSiteConfigs, nextConfiguredSite)
+        );
       }
 
       const status = await extensionSessions.getStatus();
-      const originReady = status.connected
-        && status.sessionActive
-        && status.enabledOrigins.includes(normalizedOrigin);
+      const originReady =
+        status.connected &&
+        status.sessionActive &&
+        status.enabledOrigins.includes(normalizedOrigin);
 
       return renderJson({
         changed,

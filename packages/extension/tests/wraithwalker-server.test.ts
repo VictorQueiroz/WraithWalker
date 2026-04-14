@@ -16,7 +16,9 @@ describe("wraithwalker server client helpers", () => {
   });
 
   it("wraps fetch without changing successful responses", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok", { status: 200 }));
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("ok", { status: 200 }));
     const timedFetch = createTimedFetch(100, fetchImpl);
 
     const response = await timedFetch("http://127.0.0.1:4319/trpc/system.info");
@@ -27,18 +29,25 @@ describe("wraithwalker server client helpers", () => {
   });
 
   it("aborts slow requests with the default timeout budget", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockImplementation((_input, init) => new Promise((_, reject) => {
-      const signal = init?.signal;
-      signal?.addEventListener("abort", () => {
-        reject(signal.reason);
-      }, { once: true });
-    }));
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(
+      (_input, init) =>
+        new Promise((_, reject) => {
+          const signal = init?.signal;
+          signal?.addEventListener(
+            "abort",
+            () => {
+              reject(signal.reason);
+            },
+            { once: true }
+          );
+        })
+    );
 
     const timedFetch = createTimedFetch(1, fetchImpl);
 
-    await expect(timedFetch("http://127.0.0.1:4319/trpc/system.info")).rejects.toThrow(
-      `Timed out after 1ms`
-    );
+    await expect(
+      timedFetch("http://127.0.0.1:4319/trpc/system.info")
+    ).rejects.toThrow(`Timed out after 1ms`);
   });
 
   it("keeps the exported default timeout meaningful for local server probes", () => {
@@ -47,11 +56,16 @@ describe("wraithwalker server client helpers", () => {
   });
 
   it("forces POST batching for extension-side local server traffic", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok", { status: 200 }));
-    const transport = createWraithWalkerServerTransportOptions("http://127.0.0.1:4319/trpc", {
-      timeoutMs: 42,
-      fetchImpl
-    });
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("ok", { status: 200 }));
+    const transport = createWraithWalkerServerTransportOptions(
+      "http://127.0.0.1:4319/trpc",
+      {
+        timeoutMs: 42,
+        fetchImpl
+      }
+    );
 
     expect(transport.url).toBe("http://127.0.0.1:4319/trpc");
     expect(transport.methodOverride).toBe("POST");

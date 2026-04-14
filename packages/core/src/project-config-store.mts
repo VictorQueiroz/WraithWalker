@@ -15,7 +15,10 @@ import {
 export interface ProjectConfigStorage<TRoot> {
   readOptionalJson(root: TRoot, relativePath: string): Promise<unknown | null>;
   writeJson(root: TRoot, relativePath: string, value: unknown): Promise<void>;
-  listDirectory(root: TRoot, relativePath: string): Promise<Array<{ name: string; kind: "file" | "directory" }>>;
+  listDirectory(
+    root: TRoot,
+    relativePath: string
+  ): Promise<Array<{ name: string; kind: "file" | "directory" }>>;
 }
 
 export interface ProjectConfigFile {
@@ -24,7 +27,9 @@ export interface ProjectConfigFile {
 }
 
 function formatConfigError(rootPath: string, message: string): Error {
-  return new Error(`Invalid WraithWalker config at ${rootPath}/${PROJECT_CONFIG_RELATIVE_PATH}: ${message}`);
+  return new Error(
+    `Invalid WraithWalker config at ${rootPath}/${PROJECT_CONFIG_RELATIVE_PATH}: ${message}`
+  );
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -38,10 +43,15 @@ function keyToOrigin(key: string): string {
   }
 
   const [, protocol, hostname, port] = match;
-  return port ? `${protocol}://${hostname}:${port}` : `${protocol}://${hostname}`;
+  return port
+    ? `${protocol}://${hostname}:${port}`
+    : `${protocol}://${hostname}`;
 }
 
-function validateProjectConfig(raw: unknown, rootPath: string): ProjectConfigFile {
+function validateProjectConfig(
+  raw: unknown,
+  rootPath: string
+): ProjectConfigFile {
   if (!isPlainObject(raw)) {
     throw formatConfigError(rootPath, "config root must be an object.");
   }
@@ -52,7 +62,10 @@ function validateProjectConfig(raw: unknown, rootPath: string): ProjectConfigFil
     }
   }
 
-  if (raw.schemaVersion !== undefined && raw.schemaVersion !== PROJECT_CONFIG_SCHEMA_VERSION) {
+  if (
+    raw.schemaVersion !== undefined &&
+    raw.schemaVersion !== PROJECT_CONFIG_SCHEMA_VERSION
+  ) {
     throw formatConfigError(
       rootPath,
       `unsupported schemaVersion "${String(raw.schemaVersion)}".`
@@ -69,9 +82,16 @@ function validateProjectConfig(raw: unknown, rootPath: string): ProjectConfigFil
       throw formatConfigError(rootPath, `sites[${index}] must be an object.`);
     }
     if (typeof value.origin !== "string" || !value.origin.trim()) {
-      throw formatConfigError(rootPath, `sites[${index}].origin must be a non-empty string.`);
+      throw formatConfigError(
+        rootPath,
+        `sites[${index}].origin must be a non-empty string.`
+      );
     }
-    return normalizeSiteConfig(value as Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string });
+    return normalizeSiteConfig(
+      value as Partial<SiteConfig> & { origin: string } & {
+        dumpAllowlistPattern?: string;
+      }
+    );
   });
 
   return {
@@ -92,7 +112,10 @@ export function createProjectConfigStore<TRoot>({
   const rootPath = rootPathLabel ?? "<root>";
 
   async function readProjectConfig(): Promise<ProjectConfigFile> {
-    const raw = await storage.readOptionalJson(root, PROJECT_CONFIG_RELATIVE_PATH);
+    const raw = await storage.readOptionalJson(
+      root,
+      PROJECT_CONFIG_RELATIVE_PATH
+    );
     if (!raw) {
       return {
         schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
@@ -103,7 +126,9 @@ export function createProjectConfigStore<TRoot>({
     return validateProjectConfig(raw, rootPath);
   }
 
-  async function writeProjectConfig(config: ProjectConfigFile): Promise<ProjectConfigFile> {
+  async function writeProjectConfig(
+    config: ProjectConfigFile
+  ): Promise<ProjectConfigFile> {
     const validated = validateProjectConfig(config, rootPath);
     await storage.writeJson(root, PROJECT_CONFIG_RELATIVE_PATH, validated);
     return validated;
@@ -113,14 +138,18 @@ export function createProjectConfigStore<TRoot>({
     return (await readProjectConfig()).sites;
   }
 
-  async function writeConfiguredSiteConfigs(siteConfigs: SiteConfig[]): Promise<ProjectConfigFile> {
+  async function writeConfiguredSiteConfigs(
+    siteConfigs: SiteConfig[]
+  ): Promise<ProjectConfigFile> {
     return writeProjectConfig({
       schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
       sites: siteConfigs
     });
   }
 
-  async function resolveConfiguredSite(origin: string): Promise<SiteConfig | null> {
+  async function resolveConfiguredSite(
+    origin: string
+  ): Promise<SiteConfig | null> {
     const normalizedOrigin = normalizeSiteInput(origin);
     const sites = await readConfiguredSiteConfigs();
     return sites.find((site) => site.origin === normalizedOrigin) || null;
@@ -155,7 +184,9 @@ export function createProjectConfigStore<TRoot>({
 
     return mergeSiteConfigs(
       await readConfiguredSiteConfigs(),
-      [...discoveredOrigins].sort().map((origin) => createDiscoveredSiteConfig(origin))
+      [...discoveredOrigins]
+        .sort()
+        .map((origin) => createDiscoveredSiteConfig(origin))
     );
   }
 

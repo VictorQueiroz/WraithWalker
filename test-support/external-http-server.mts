@@ -9,9 +9,13 @@ export async function startExternalHttpServer(rootPath: string) {
     path.resolve(process.cwd(), "packages/mcp-server/src/server.mts"),
     path.resolve(process.cwd(), "../mcp-server/src/server.mts")
   ];
-  const serverModulePath = candidatePaths.find((candidatePath) => fs.existsSync(candidatePath));
+  const serverModulePath = candidatePaths.find((candidatePath) =>
+    fs.existsSync(candidatePath)
+  );
   if (!serverModulePath) {
-    throw new Error(`Unable to locate mcp-server entrypoint from ${process.cwd()}.`);
+    throw new Error(
+      `Unable to locate mcp-server entrypoint from ${process.cwd()}.`
+    );
   }
 
   const serverModuleUrl = pathToFileURL(serverModulePath).href;
@@ -54,29 +58,35 @@ export async function startExternalHttpServer(rootPath: string) {
     stderr += chunk;
   });
 
-  const started = await new Promise<{ trpcUrl: string; rootPath: string }>((resolve, reject) => {
-    const onExit = (code: number | null) => {
-      reject(new Error(`External test server exited before startup (${code ?? "signal"}): ${stderr || stdout}`));
-    };
+  const started = await new Promise<{ trpcUrl: string; rootPath: string }>(
+    (resolve, reject) => {
+      const onExit = (code: number | null) => {
+        reject(
+          new Error(
+            `External test server exited before startup (${code ?? "signal"}): ${stderr || stdout}`
+          )
+        );
+      };
 
-    child.once("exit", onExit);
-    const poll = () => {
-      const lineBreakIndex = stdout.indexOf("\n");
-      if (lineBreakIndex === -1) {
-        setTimeout(poll, 10);
-        return;
-      }
+      child.once("exit", onExit);
+      const poll = () => {
+        const lineBreakIndex = stdout.indexOf("\n");
+        if (lineBreakIndex === -1) {
+          setTimeout(poll, 10);
+          return;
+        }
 
-      child.off("exit", onExit);
-      try {
-        resolve(JSON.parse(stdout.slice(0, lineBreakIndex)));
-      } catch (error) {
-        reject(error);
-      }
-    };
+        child.off("exit", onExit);
+        try {
+          resolve(JSON.parse(stdout.slice(0, lineBreakIndex)));
+        } catch (error) {
+          reject(error);
+        }
+      };
 
-    poll();
-  });
+      poll();
+    }
+  );
 
   return {
     ...started,

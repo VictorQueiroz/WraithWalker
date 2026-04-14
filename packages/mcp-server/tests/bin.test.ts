@@ -47,7 +47,9 @@ describe("mcp server bin", () => {
   });
 
   it("parses the supported CLI flags", () => {
-    expect(parseArgs(["--http", "--host", "0.0.0.0", "--port", "8321", "/tmp/root"])).toEqual({
+    expect(
+      parseArgs(["--http", "--host", "0.0.0.0", "--port", "8321", "/tmp/root"])
+    ).toEqual({
       http: true,
       host: "0.0.0.0",
       port: 8321,
@@ -117,11 +119,15 @@ describe("mcp server bin", () => {
   it("renders HTTP startup output line by line", () => {
     const writeLine = vi.fn();
 
-    renderHttpStartup({
-      host: "127.0.0.1",
-      port: 4319,
-      url: "http://127.0.0.1:4319/mcp"
-    }, "/tmp/root", writeLine);
+    renderHttpStartup(
+      {
+        host: "127.0.0.1",
+        port: 4319,
+        url: "http://127.0.0.1:4319/mcp"
+      },
+      "/tmp/root",
+      writeLine
+    );
 
     expect(writeLine.mock.calls).toEqual([
       ["MCP Server Ready"],
@@ -134,11 +140,15 @@ describe("mcp server bin", () => {
   });
 
   it("rejects a missing HTTP host value", () => {
-    expect(() => parseArgs(["--http", "--host"])).toThrow("Missing value for --host.");
+    expect(() => parseArgs(["--http", "--host"])).toThrow(
+      "Missing value for --host."
+    );
   });
 
   it("rejects a missing HTTP port value", () => {
-    expect(() => parseArgs(["--http", "--port"])).toThrow("Missing value for --port.");
+    expect(() => parseArgs(["--http", "--port"])).toThrow(
+      "Missing value for --port."
+    );
   });
 
   it("rejects invalid HTTP ports", () => {
@@ -146,15 +156,23 @@ describe("mcp server bin", () => {
   });
 
   it("requires HTTP mode before accepting host and port flags", () => {
-    expect(() => parseArgs(["--host", "127.0.0.1"])).toThrow("--host and --port require --http.");
-    expect(() => parseArgs(["--port", "4319"])).toThrow("--host and --port require --http.");
+    expect(() => parseArgs(["--host", "127.0.0.1"])).toThrow(
+      "--host and --port require --http."
+    );
+    expect(() => parseArgs(["--port", "4319"])).toThrow(
+      "--host and --port require --http."
+    );
   });
 
   it("rejects unknown flags", () => {
-    expect(() => parseArgs(["--mystery"])).toThrow("Unknown argument: --mystery");
+    expect(() => parseArgs(["--mystery"])).toThrow(
+      "Unknown argument: --mystery"
+    );
   });
 
   it("rejects extra positional arguments", () => {
-    expect(() => parseArgs(["/tmp/root", "/tmp/extra"])).toThrow("Unexpected extra positional argument: /tmp/extra");
+    expect(() => parseArgs(["/tmp/root", "/tmp/extra"])).toThrow(
+      "Unexpected extra positional argument: /tmp/extra"
+    );
   });
 });

@@ -73,7 +73,9 @@ function releaseExists({ repo, version }) {
     return true;
   } catch (error) {
     const message =
-      error && typeof error === "object" && "stderr" in error ? String(error.stderr) : String(error);
+      error && typeof error === "object" && "stderr" in error
+        ? String(error.stderr)
+        : String(error);
 
     if (message.includes("release not found")) {
       return false;

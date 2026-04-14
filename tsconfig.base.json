@@ -15,21 +15,33 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@wraithwalker/core/fixture-layout": ["packages/core/src/fixture-layout.mts"],
-      "@wraithwalker/core/fixture-repository": ["packages/core/src/fixture-repository.mts"],
+      "@wraithwalker/core/fixture-layout": [
+        "packages/core/src/fixture-layout.mts"
+      ],
+      "@wraithwalker/core/fixture-repository": [
+        "packages/core/src/fixture-repository.mts"
+      ],
       "@wraithwalker/core/har-import": ["packages/core/src/har-import.mts"],
-      "@wraithwalker/core/overrides-sync": ["packages/core/src/overrides-sync.mts"],
+      "@wraithwalker/core/overrides-sync": [
+        "packages/core/src/overrides-sync.mts"
+      ],
       "@wraithwalker/core/root": ["packages/core/src/root.mts"],
       "@wraithwalker/core/root-runtime": ["packages/core/src/root-runtime.mts"],
       "@wraithwalker/core/root-fs": ["packages/core/src/root-fs.mts"],
       "@wraithwalker/core/fixtures": ["packages/core/src/fixtures.mts"],
-      "@wraithwalker/core/scenario-traces": ["packages/core/src/scenario-traces.mts"],
+      "@wraithwalker/core/scenario-traces": [
+        "packages/core/src/scenario-traces.mts"
+      ],
       "@wraithwalker/core/scenarios": ["packages/core/src/scenarios.mts"],
       "@wraithwalker/core/context": ["packages/core/src/context.mts"],
       "@wraithwalker/mcp-server/server": ["packages/mcp-server/src/server.mts"],
       "@wraithwalker/mcp-server/trpc": ["packages/mcp-server/src/trpc.mts"],
-      "@wraithwalker/mcp-server/fixture-reader": ["packages/mcp-server/src/fixture-reader.mts"],
-      "@wraithwalker/mcp-server/fixture-diff": ["packages/mcp-server/src/fixture-diff.mts"],
+      "@wraithwalker/mcp-server/fixture-reader": [
+        "packages/mcp-server/src/fixture-reader.mts"
+      ],
+      "@wraithwalker/mcp-server/fixture-diff": [
+        "packages/mcp-server/src/fixture-diff.mts"
+      ],
       "@wraithwalker/native-host/lib": ["packages/native-host/src/lib.mts"]
     }
   }

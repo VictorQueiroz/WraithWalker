@@ -4,9 +4,7 @@ import path from "node:path";
 import { findRoot } from "@wraithwalker/core/root";
 
 function resolveMaybeRelative(cwd: string, value: string): string {
-  return path.isAbsolute(value)
-    ? value
-    : path.resolve(cwd, value);
+  return path.isAbsolute(value) ? value : path.resolve(cwd, value);
 }
 
 export function resolveDefaultServeRoot({

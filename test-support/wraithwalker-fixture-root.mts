@@ -11,7 +11,11 @@ import {
   STATIC_RESOURCE_MANIFEST_FILE,
   WRAITHWALKER_DIR
 } from "../packages/core/src/constants.mts";
-import { createRoot, readSentinel, type RootSentinel } from "../packages/core/src/root.mts";
+import {
+  createRoot,
+  readSentinel,
+  type RootSentinel
+} from "../packages/core/src/root.mts";
 
 export type FixtureMode = "simple" | "advanced";
 
@@ -53,8 +57,12 @@ export class WraithwalkerFixtureRoot {
     readonly sentinel: RootSentinel
   ) {}
 
-  static async create(options: CreateFixtureRootOptions = {}): Promise<WraithwalkerFixtureRoot> {
-    const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), options.prefix ?? "wraithwalker-test-"));
+  static async create(
+    options: CreateFixtureRootOptions = {}
+  ): Promise<WraithwalkerFixtureRoot> {
+    const rootPath = await fs.mkdtemp(
+      path.join(os.tmpdir(), options.prefix ?? "wraithwalker-test-")
+    );
     const created = await createRoot(rootPath);
 
     if (options.rootId) {
@@ -96,13 +104,19 @@ export class WraithwalkerFixtureRoot {
     return PROJECT_CONFIG_RELATIVE_PATH;
   }
 
-  manifestRelativePath({ topOrigin, scenario }: ManifestLocationOptions): string {
+  manifestRelativePath({
+    topOrigin,
+    scenario
+  }: ManifestLocationOptions): string {
     const topOriginKey = originToKey(topOrigin);
-    const base = scenario
-      ? this.scenarioRelativePath(scenario)
-      : "";
+    const base = scenario ? this.scenarioRelativePath(scenario) : "";
 
-    return path.join(base, MANIFESTS_DIR, topOriginKey, STATIC_RESOURCE_MANIFEST_FILE);
+    return path.join(
+      base,
+      MANIFESTS_DIR,
+      topOriginKey,
+      STATIC_RESOURCE_MANIFEST_FILE
+    );
   }
 
   apiFixturePaths({
@@ -118,9 +132,7 @@ export class WraithwalkerFixtureRoot {
   } {
     const topOriginKey = originToKey(topOrigin);
     const requestOriginKey = originToKey(requestOrigin);
-    const base = scenario
-      ? this.scenarioRelativePath(scenario)
-      : "";
+    const base = scenario ? this.scenarioRelativePath(scenario) : "";
 
     const fixtureDir = path.join(
       base,
@@ -153,7 +165,9 @@ export class WraithwalkerFixtureRoot {
   }
 
   async readJson<T>(relativePath: string): Promise<T> {
-    return JSON.parse(await fs.readFile(this.resolve(relativePath), "utf8")) as T;
+    return JSON.parse(
+      await fs.readFile(this.resolve(relativePath), "utf8")
+    ) as T;
   }
 
   async writeCliConfig(config: unknown): Promise<string> {
@@ -181,14 +195,21 @@ export class WraithwalkerFixtureRoot {
     const topOriginKey = originToKey(topOrigin);
     const base = scenario ? this.scenarioRelativePath(scenario) : "";
     const manifestDir = path.join(base, MANIFESTS_DIR, topOriginKey);
-    const captureDir = path.join(base, CAPTURE_HTTP_DIR, topOriginKey, "origins");
+    const captureDir = path.join(
+      base,
+      CAPTURE_HTTP_DIR,
+      topOriginKey,
+      "origins"
+    );
 
     await fs.mkdir(this.resolve(manifestDir), { recursive: true });
     await fs.mkdir(this.resolve(captureDir), { recursive: true });
     return captureDir;
   }
 
-  async writeManifest(options: ManifestLocationOptions & { manifest: unknown }): Promise<string> {
+  async writeManifest(
+    options: ManifestLocationOptions & { manifest: unknown }
+  ): Promise<string> {
     const relativePath = this.manifestRelativePath(options);
     await this.writeJson(relativePath, options.manifest);
     return relativePath;

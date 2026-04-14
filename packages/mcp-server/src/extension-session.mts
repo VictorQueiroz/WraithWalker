@@ -80,7 +80,12 @@ interface CreateExtensionSessionTrackerDependencies {
   completedCommandResultLimit?: number;
 }
 
-export type ScenarioTracePhase = "disconnected" | "not_ready" | "idle" | "armed" | "recording";
+export type ScenarioTracePhase =
+  | "disconnected"
+  | "not_ready"
+  | "idle"
+  | "armed"
+  | "recording";
 
 export type ScenarioTraceBlockingReason =
   | "extension_disconnected"
@@ -148,7 +153,9 @@ function getTracePhase(status: {
   return "idle";
 }
 
-export function describeTraceStatusGuidance(view: Pick<TraceStatusView, "phase" | "blockingReason">): string {
+export function describeTraceStatusGuidance(
+  view: Pick<TraceStatusView, "phase" | "blockingReason">
+): string {
   switch (view.phase) {
     case "disconnected":
       return "Connect the browser extension to this server and start a session before tracing.";
@@ -198,13 +205,22 @@ export function createExtensionSessionTracker({
 }: CreateExtensionSessionTrackerDependencies) {
   let activeClient: ActiveExtensionClientState | null = null;
   let commandSequence = 0;
-  const pendingCommands = new Map<string, { clientId: string; command: ExtensionServerCommand }>();
-  const completedCommandResults = new Map<string, ExtensionServerCommandResult>();
-  const commandWaiters = new Map<string, Array<{
-    resolve: (result: ExtensionServerCommandResult) => void;
-    reject: (error: Error) => void;
-    timeoutId?: ReturnType<typeof setTimeout>;
-  }>>();
+  const pendingCommands = new Map<
+    string,
+    { clientId: string; command: ExtensionServerCommand }
+  >();
+  const completedCommandResults = new Map<
+    string,
+    ExtensionServerCommandResult
+  >();
+  const commandWaiters = new Map<
+    string,
+    Array<{
+      resolve: (result: ExtensionServerCommandResult) => void;
+      reject: (error: Error) => void;
+      timeoutId?: ReturnType<typeof setTimeout>;
+    }>
+  >();
 
   function isConnected(client: ActiveExtensionClientState | null): boolean {
     if (!client) {
@@ -237,7 +253,9 @@ export function createExtensionSessionTracker({
       return;
     }
 
-    clearCommandState("The browser extension heartbeat expired before the queued command completed.");
+    clearCommandState(
+      "The browser extension heartbeat expired before the queued command completed."
+    );
   }
 
   function settleCompletedCommand(result: ExtensionServerCommandResult): void {
@@ -262,16 +280,22 @@ export function createExtensionSessionTracker({
     }
   }
 
-  function listPendingCommandsForClient(clientId: string): ExtensionServerCommand[] {
+  function listPendingCommandsForClient(
+    clientId: string
+  ): ExtensionServerCommand[] {
     return [...pendingCommands.values()]
       .filter((entry) => entry.clientId === clientId)
       .map((entry) => entry.command);
   }
 
-  async function heartbeat(input: ExtensionHeartbeatInput): Promise<ExtensionHeartbeatStatus> {
+  async function heartbeat(
+    input: ExtensionHeartbeatInput
+  ): Promise<ExtensionHeartbeatStatus> {
     sweepExpiredCommandState();
     if (activeClient && activeClient.clientId !== input.clientId) {
-      clearCommandState(`The active browser extension client changed from ${activeClient.clientId} to ${input.clientId}.`);
+      clearCommandState(
+        `The active browser extension client changed from ${activeClient.clientId} to ${input.clientId}.`
+      );
     }
 
     const heartbeatAt = new Date(now()).toISOString();
@@ -302,18 +326,26 @@ export function createExtensionSessionTracker({
   async function getStatus(): Promise<ExtensionStatus> {
     sweepExpiredCommandState();
     const trace = await getActiveTrace();
-    const activeTraceSummary = trace
-      ? summarizeScenarioTrace(trace)
-      : null;
+    const activeTraceSummary = trace ? summarizeScenarioTrace(trace) : null;
     const connected = isConnected(activeClient);
-    const siteConfigs = connected
-      ? await getEffectiveSiteConfigs()
-      : [];
-    const configuredOrigins = new Set(siteConfigs.map((siteConfig) => siteConfig.origin));
-    const enabledOrigins = connected && activeClient
-      ? [...new Set(activeClient.enabledOrigins.filter((origin) => configuredOrigins.has(origin)))]
-      : [];
-    const captureReady = connected && Boolean(activeClient?.sessionActive) && enabledOrigins.length > 0;
+    const siteConfigs = connected ? await getEffectiveSiteConfigs() : [];
+    const configuredOrigins = new Set(
+      siteConfigs.map((siteConfig) => siteConfig.origin)
+    );
+    const enabledOrigins =
+      connected && activeClient
+        ? [
+            ...new Set(
+              activeClient.enabledOrigins.filter((origin) =>
+                configuredOrigins.has(origin)
+              )
+            )
+          ]
+        : [];
+    const captureReady =
+      connected &&
+      Boolean(activeClient?.sessionActive) &&
+      enabledOrigins.length > 0;
     const tracePhase = getTracePhase({
       connected,
       captureReady,
@@ -365,10 +397,14 @@ export function createExtensionSessionTracker({
     };
   }
 
-  function queueCommand(command: Pick<ExtensionServerCommand, "type">): ExtensionServerCommand {
+  function queueCommand(
+    command: Pick<ExtensionServerCommand, "type">
+  ): ExtensionServerCommand {
     sweepExpiredCommandState();
     if (!activeClient || !isConnected(activeClient)) {
-      throw new Error("No connected browser extension is available to receive server commands.");
+      throw new Error(
+        "No connected browser extension is available to receive server commands."
+      );
     }
 
     const queuedCommand: ExtensionServerCommand = {
@@ -395,7 +431,9 @@ export function createExtensionSessionTracker({
     }
 
     if (!pendingCommands.has(commandId)) {
-      return Promise.reject(new Error(`Unknown extension server command: ${commandId}`));
+      return Promise.reject(
+        new Error(`Unknown extension server command: ${commandId}`)
+      );
     }
 
     return new Promise<ExtensionServerCommandResult>((resolve, reject) => {
@@ -403,16 +441,21 @@ export function createExtensionSessionTracker({
       const waiter = {
         resolve,
         reject,
-        timeoutId: timeoutMs > 0
-          ? setTimeout(() => {
-              const currentWaiters = commandWaiters.get(commandId) ?? [];
-              commandWaiters.set(
-                commandId,
-                currentWaiters.filter((entry) => entry !== waiter)
-              );
-              reject(new Error(`Timed out waiting for extension command ${commandId} to complete.`));
-            }, timeoutMs)
-          : undefined
+        timeoutId:
+          timeoutMs > 0
+            ? setTimeout(() => {
+                const currentWaiters = commandWaiters.get(commandId) ?? [];
+                commandWaiters.set(
+                  commandId,
+                  currentWaiters.filter((entry) => entry !== waiter)
+                );
+                reject(
+                  new Error(
+                    `Timed out waiting for extension command ${commandId} to complete.`
+                  )
+                );
+              }, timeoutMs)
+            : undefined
       };
       waiters.push(waiter);
       commandWaiters.set(commandId, waiters);

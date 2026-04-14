@@ -7,7 +7,10 @@ export interface RootFsEntry {
 }
 
 export interface WriteBodyOptions {
-  onProgress?: (writtenBytes: number, totalBytes: number) => void | Promise<void>;
+  onProgress?: (
+    writtenBytes: number,
+    totalBytes: number
+  ) => void | Promise<void>;
   chunkSize?: number;
 }
 
@@ -33,11 +36,20 @@ export interface FixtureRootFs {
   listOptionalDirectory(relativePath?: string): Promise<RootFsEntry[]>;
   listDirectories(relativePath?: string): Promise<string[]>;
   listOptionalDirectories(relativePath?: string): Promise<string[]>;
-  remove(relativePath: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>;
-  copyRecursive(sourceRelativePath: string, destRelativePath: string): Promise<void>;
+  remove(
+    relativePath: string,
+    options?: { recursive?: boolean; force?: boolean }
+  ): Promise<void>;
+  copyRecursive(
+    sourceRelativePath: string,
+    destRelativePath: string
+  ): Promise<void>;
 }
 
-export function resolveWithinRoot(rootPath: string, relativePath: string): string | null {
+export function resolveWithinRoot(
+  rootPath: string,
+  relativePath: string
+): string | null {
   if (path.isAbsolute(relativePath)) {
     return null;
   }
@@ -55,14 +67,19 @@ export function resolveWithinRoot(rootPath: string, relativePath: string): strin
 function requireWithinRoot(rootPath: string, relativePath: string): string {
   const resolved = resolveWithinRoot(rootPath, relativePath);
   if (!resolved) {
-    throw new Error(`Path "${relativePath}" must stay within the fixture root.`);
+    throw new Error(
+      `Path "${relativePath}" must stay within the fixture root.`
+    );
   }
 
   return resolved;
 }
 
 export function createFixtureRootFs(rootPath: string): FixtureRootFs {
-  async function copyRecursive(sourceRelativePath: string, destRelativePath: string): Promise<void> {
+  async function copyRecursive(
+    sourceRelativePath: string,
+    destRelativePath: string
+  ): Promise<void> {
     const sourceStat = await stat(sourceRelativePath);
     if (!sourceStat) {
       throw new Error(`Path not found: ${sourceRelativePath}`);
@@ -117,7 +134,9 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     return fs.readFile(requireWithinRoot(rootPath, relativePath), "utf8");
   }
 
-  async function readOptionalText(relativePath: string): Promise<string | null> {
+  async function readOptionalText(
+    relativePath: string
+  ): Promise<string | null> {
     try {
       return await readText(relativePath);
     } catch {
@@ -142,13 +161,19 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     }
   }
 
-  async function writeText(relativePath: string, content: string): Promise<void> {
+  async function writeText(
+    relativePath: string,
+    content: string
+  ): Promise<void> {
     const absolutePath = requireWithinRoot(rootPath, relativePath);
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     await fs.writeFile(absolutePath, content, "utf8");
   }
 
-  async function writeJson(relativePath: string, value: unknown): Promise<void> {
+  async function writeJson(
+    relativePath: string,
+    value: unknown
+  ): Promise<void> {
     await writeText(relativePath, JSON.stringify(value, null, 2));
   }
 
@@ -158,9 +183,10 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     options: WriteBodyOptions = {}
   ): Promise<void> {
     const absolutePath = requireWithinRoot(rootPath, relativePath);
-    const bodyBuffer = payload.bodyEncoding === "base64"
-      ? Buffer.from(payload.body, "base64")
-      : Buffer.from(payload.body, "utf8");
+    const bodyBuffer =
+      payload.bodyEncoding === "base64"
+        ? Buffer.from(payload.body, "base64")
+        : Buffer.from(payload.body, "utf8");
     const chunkSize = Math.max(1, options.chunkSize ?? 64 * 1024);
 
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
@@ -169,7 +195,10 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     try {
       let writtenBytes = 0;
       while (writtenBytes < bodyBuffer.byteLength) {
-        const nextChunk = bodyBuffer.subarray(writtenBytes, writtenBytes + chunkSize);
+        const nextChunk = bodyBuffer.subarray(
+          writtenBytes,
+          writtenBytes + chunkSize
+        );
         await handle.write(nextChunk);
         writtenBytes += nextChunk.byteLength;
         if (options.onProgress) {
@@ -182,7 +211,9 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
   }
 
   async function ensureDir(relativePath: string): Promise<void> {
-    await fs.mkdir(requireWithinRoot(rootPath, relativePath), { recursive: true });
+    await fs.mkdir(requireWithinRoot(rootPath, relativePath), {
+      recursive: true
+    });
   }
 
   async function listDirectory(relativePath = ""): Promise<RootFsEntry[]> {
@@ -190,11 +221,13 @@ export function createFixtureRootFs(rootPath: string): FixtureRootFs {
     const entries = await fs.readdir(absolutePath, { withFileTypes: true });
     return entries.map((entry) => ({
       name: entry.name,
-      kind: entry.isDirectory() ? "directory" as const : "file" as const
+      kind: entry.isDirectory() ? ("directory" as const) : ("file" as const)
     }));
   }
 
-  async function listOptionalDirectory(relativePath = ""): Promise<RootFsEntry[]> {
+  async function listOptionalDirectory(
+    relativePath = ""
+  ): Promise<RootFsEntry[]> {
     try {
       return await listDirectory(relativePath);
     } catch {

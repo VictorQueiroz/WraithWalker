@@ -23,7 +23,11 @@ body {
   min-height: 100vh;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(11, 95, 255, 0.12), transparent 28%),
+    radial-gradient(
+      circle at top left,
+      rgba(11, 95, 255, 0.12),
+      transparent 28%
+    ),
     linear-gradient(180deg, #f9fbfd 0%, var(--bg) 100%);
 }
 
@@ -43,7 +47,11 @@ main {
   padding: 16px;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(11, 95, 255, 0.14), transparent 40%),
+    radial-gradient(
+      circle at top left,
+      rgba(11, 95, 255, 0.14),
+      transparent 40%
+    ),
     linear-gradient(180deg, #fcfdff 0%, #eef3f8 100%);
 }
 
@@ -187,7 +195,11 @@ button:hover,
 }
 
 button.primary {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent) 0%,
+    var(--accent-strong) 100%
+  );
   color: white;
 }
 

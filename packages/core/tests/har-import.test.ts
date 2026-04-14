@@ -3,7 +3,11 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { importHarFile, parseHarArchive, type HarImportEvent } from "../src/har-import.mts";
+import {
+  importHarFile,
+  parseHarArchive,
+  type HarImportEvent
+} from "../src/har-import.mts";
 import { createFixtureDescriptor } from "../src/fixture-layout.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
@@ -87,67 +91,115 @@ describe("har import", () => {
     });
 
     expect(() => parseHarArchive("{oops")).toThrow("Failed to parse HAR JSON.");
-    expect(() => parseHarArchive(JSON.stringify({ nope: true }))).toThrow("HAR file must contain a top-level log object.");
-    expect(() => parseHarArchive(JSON.stringify({ log: {} }))).toThrow("HAR file must contain log.entries.");
-    expect(() => parseHarArchive(JSON.stringify({ log: { entries: [null] } }))).toThrow("HAR entry 0 must be an object.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, startedDateTime: "oops" }] }
-    }))).toThrow("HAR entry 0 is missing a valid startedDateTime.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, time: -1 }] }
-    }))).toThrow("HAR entry 0 has an invalid time value.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, time: "12" }] }
-    }))).not.toThrow();
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, request: undefined }] }
-    }))).toThrow("HAR entry 0 is missing a request object.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, request: {} }] }
-    }))).toThrow("HAR entry 0 request must include method and url strings.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, response: undefined }] }
-    }))).toThrow("HAR entry 0 is missing a response object.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: { entries: [{ ...validEntry, response: {} }] }
-    }))).toThrow("HAR entry 0 response must include status and statusText.");
-    expect(() => parseHarArchive(JSON.stringify({
-      log: {
-        entries: [
-          {
-            ...validEntry,
-            timings: {
-              wait: "-1"
-            }
+    expect(() => parseHarArchive(JSON.stringify({ nope: true }))).toThrow(
+      "HAR file must contain a top-level log object."
+    );
+    expect(() => parseHarArchive(JSON.stringify({ log: {} }))).toThrow(
+      "HAR file must contain log.entries."
+    );
+    expect(() =>
+      parseHarArchive(JSON.stringify({ log: { entries: [null] } }))
+    ).toThrow("HAR entry 0 must be an object.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, startedDateTime: "oops" }] }
+        })
+      )
+    ).toThrow("HAR entry 0 is missing a valid startedDateTime.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, time: -1 }] }
+        })
+      )
+    ).toThrow("HAR entry 0 has an invalid time value.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, time: "12" }] }
+        })
+      )
+    ).not.toThrow();
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, request: undefined }] }
+        })
+      )
+    ).toThrow("HAR entry 0 is missing a request object.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, request: {} }] }
+        })
+      )
+    ).toThrow("HAR entry 0 request must include method and url strings.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, response: undefined }] }
+        })
+      )
+    ).toThrow("HAR entry 0 is missing a response object.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: { entries: [{ ...validEntry, response: {} }] }
+        })
+      )
+    ).toThrow("HAR entry 0 response must include status and statusText.");
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: {
+            entries: [
+              {
+                ...validEntry,
+                timings: {
+                  wait: "-1"
+                }
+              }
+            ]
           }
-        ]
-      }
-    }))).not.toThrow();
-    expect(() => parseHarArchive(JSON.stringify({
-      log: {
-        entries: [
-          {
-            ...validEntry,
-            timings: {
-              wait: null
-            }
+        })
+      )
+    ).not.toThrow();
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: {
+            entries: [
+              {
+                ...validEntry,
+                timings: {
+                  wait: null
+                }
+              }
+            ]
           }
-        ]
-      }
-    }))).not.toThrow();
-    expect(() => parseHarArchive(JSON.stringify({
-      log: {
-        entries: [
-          createHarEntry({
-            startedDateTime: "2026-04-06T00:00:00.000Z",
-            url: "https://app.example.com",
-            mimeType: "text/html",
-            text: "<html></html>",
-            timings: { blocked: -2 }
-          })
-        ]
-      }
-    }))).toThrow('Invalid HAR timing "blocked" for https://app.example.com. Timings must be numbers >= -1.');
+        })
+      )
+    ).not.toThrow();
+    expect(() =>
+      parseHarArchive(
+        JSON.stringify({
+          log: {
+            entries: [
+              createHarEntry({
+                startedDateTime: "2026-04-06T00:00:00.000Z",
+                url: "https://app.example.com",
+                mimeType: "text/html",
+                text: "<html></html>",
+                timings: { blocked: -2 }
+              })
+            ]
+          }
+        })
+      )
+    ).toThrow(
+      'Invalid HAR timing "blocked" for https://app.example.com. Timings must be numbers >= -1.'
+    );
   });
 
   it("rejects har files with no entries to import", async () => {
@@ -157,10 +209,14 @@ describe("har import", () => {
       }
     });
 
-    await expect(importHarFile({
-      harPath,
-      dir: await tmpdir()
-    })).rejects.toThrow("Unable to infer a top origin from an empty HAR entry set.");
+    await expect(
+      importHarFile({
+        harPath,
+        dir: await tmpdir()
+      })
+    ).rejects.toThrow(
+      "Unable to infer a top origin from an empty HAR entry set."
+    );
   });
 
   it("fails when the top origin is ambiguous without an explicit override", async () => {
@@ -183,10 +239,12 @@ describe("har import", () => {
       }
     });
 
-    await expect(importHarFile({
-      harPath,
-      dir: await tmpdir()
-    })).rejects.toThrow(
+    await expect(
+      importHarFile({
+        harPath,
+        dir: await tmpdir()
+      })
+    ).rejects.toThrow(
       "Unable to infer a single top origin from the HAR. Use --top-origin with one of: https://admin.example.com, https://app.example.com"
     );
   });
@@ -317,10 +375,10 @@ describe("har import", () => {
             url: "https://api.example.com/orders",
             postData: {
               mimeType: "application/json",
-              text: "{\"sku\":\"A1\"}"
+              text: '{"sku":"A1"}'
             },
             mimeType: "application/json",
-            text: "{\"ok\":true}"
+            text: '{"ok":true}'
           })
         ]
       }
@@ -343,7 +401,12 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:03.000Z",
             method: "POST",
             url: "https://api.example.com/graphql",
-            requestHeaders: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }],
+            requestHeaders: [
+              {
+                name: "Content-Type",
+                value: "application/x-www-form-urlencoded"
+              }
+            ],
             postData: {
               mimeType: "application/x-www-form-urlencoded",
               params: [
@@ -351,21 +414,27 @@ describe("har import", () => {
                 { name: "draft", value: "true" }
               ]
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"data":{"viewer":{"id":1}}}'
           }),
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:01.000Z",
             url: "https://app.example.com/",
-            responseHeaders: [{ name: "Content-Type", value: "text/html; charset=utf-8" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "text/html; charset=utf-8" }
+            ],
             mimeType: "text/html",
             text: "<html>home</html>"
           }),
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:02.000Z",
             url: "https://cdn.example.com/assets/app.js?v=1",
-            responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             mimeType: "application/javascript",
             text: "console.log('asset');"
           }),
@@ -373,14 +442,18 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:04.000Z",
             method: "PATCH",
             url: "https://api.example.com/users/1",
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"ok":true}'
           }),
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:05.000Z",
             url: "https://cdn.example.com/assets/missing.js",
-            responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             mimeType: "application/javascript"
           })
         ]
@@ -443,11 +516,25 @@ describe("har import", () => {
       resourceType: "Fetch"
     });
 
-    expect(await fs.readFile(path.join(dir, htmlDescriptor.bodyPath), "utf8")).toBe("<html>home</html>");
-    expect(await fs.readFile(path.join(dir, scriptDescriptor.bodyPath), "utf8")).toBe("console.log('asset');");
-    expect(await fs.readFile(path.join(dir, apiDescriptor.bodyPath), "utf8")).toBe('{"data":{"viewer":{"id":1}}}');
+    expect(
+      await fs.readFile(path.join(dir, htmlDescriptor.bodyPath), "utf8")
+    ).toBe("<html>home</html>");
+    expect(
+      await fs.readFile(path.join(dir, scriptDescriptor.bodyPath), "utf8")
+    ).toBe("console.log('asset');");
+    expect(
+      await fs.readFile(path.join(dir, apiDescriptor.bodyPath), "utf8")
+    ).toBe('{"data":{"viewer":{"id":1}}}');
 
-    const manifest = JSON.parse(await fs.readFile(path.join(dir, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8"));
+    const manifest = JSON.parse(
+      await fs.readFile(
+        path.join(
+          dir,
+          ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+        ),
+        "utf8"
+      )
+    );
     expect(manifest.resourcesByPathname["/"]).toHaveLength(1);
     expect(manifest.resourcesByPathname["/assets/app.js"]).toHaveLength(1);
 
@@ -458,8 +545,12 @@ describe("har import", () => {
       topOrigin: "https://app.example.com",
       topOrigins: ["https://app.example.com"]
     });
-    expect(events.filter((event) => event.type === "entry-skipped")).toHaveLength(2);
-    expect(events.filter((event) => event.type === "entry-complete")).toHaveLength(3);
+    expect(
+      events.filter((event) => event.type === "entry-skipped")
+    ).toHaveLength(2);
+    expect(
+      events.filter((event) => event.type === "entry-complete")
+    ).toHaveLength(3);
   });
 
   it("imports entries whose HAR timings use null for optional timing fields", async () => {
@@ -469,7 +560,9 @@ describe("har import", () => {
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:00.000Z",
             url: "https://assets.example.com/polyfills.js",
-            responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             mimeType: "application/javascript",
             text: "console.log('polyfills');",
             timings: {
@@ -512,8 +605,12 @@ describe("har import", () => {
             ...createHarEntry({
               startedDateTime: "2026-04-06T00:00:00.500Z",
               url: "https://cdn.example.com/assets/shared.js",
-              requestHeaders: [{ name: "Referer", value: "https://app.example.com/" }],
-              responseHeaders: [{ name: "Date", value: "Thu, 02 Apr 2026 19:06:16 GMT" }],
+              requestHeaders: [
+                { name: "Referer", value: "https://app.example.com/" }
+              ],
+              responseHeaders: [
+                { name: "Date", value: "Thu, 02 Apr 2026 19:06:16 GMT" }
+              ],
               mimeType: "application/javascript",
               text: "console.log('shared');"
             }),
@@ -523,8 +620,12 @@ describe("har import", () => {
             ...createHarEntry({
               startedDateTime: "2026-04-06T00:00:01.500Z",
               url: "https://cdn.example.com/assets/shared.js",
-              requestHeaders: [{ name: "Referer", value: "https://app.example.com/dashboard" }],
-              responseHeaders: [{ name: "Date", value: "Thu, 02 Apr 2026 19:06:17 GMT" }],
+              requestHeaders: [
+                { name: "Referer", value: "https://app.example.com/dashboard" }
+              ],
+              responseHeaders: [
+                { name: "Date", value: "Thu, 02 Apr 2026 19:06:17 GMT" }
+              ],
               mimeType: "application/javascript",
               text: "console.log('shared');"
             }),
@@ -535,10 +636,12 @@ describe("har import", () => {
     });
     const dir = await tmpdir();
 
-    await expect(importHarFile({
-      harPath,
-      dir
-    })).resolves.toEqual(
+    await expect(
+      importHarFile({
+        harPath,
+        dir
+      })
+    ).resolves.toEqual(
       expect.objectContaining({
         topOrigins: ["https://app.example.com"]
       })
@@ -592,7 +695,9 @@ describe("har import", () => {
       resourceType: "Script"
     });
 
-    expect(await fs.readFile(path.join(dir, descriptor.bodyPath), "utf8")).toBe("console.log('second');");
+    expect(await fs.readFile(path.join(dir, descriptor.bodyPath), "utf8")).toBe(
+      "console.log('second');"
+    );
   });
 
   it("stores simple-mode GET json endpoints as API fixtures to avoid file-directory collisions", async () => {
@@ -651,8 +756,12 @@ describe("har import", () => {
 
     expect(parentDescriptor.storageMode).toBe("api");
     expect(childDescriptor.storageMode).toBe("api");
-    expect(await fs.readFile(path.join(dir, parentDescriptor.bodyPath), "utf8")).toBe('{"items":[1]}');
-    expect(await fs.readFile(path.join(dir, childDescriptor.bodyPath), "utf8")).toBe('{"items":[1,2]}');
+    expect(
+      await fs.readFile(path.join(dir, parentDescriptor.bodyPath), "utf8")
+    ).toBe('{"items":[1]}');
+    expect(
+      await fs.readFile(path.join(dir, childDescriptor.bodyPath), "utf8")
+    ).toBe('{"items":[1,2]}');
   });
 
   it("accepts an explicit top origin, imports binary bodies, and supports har files without pages", async () => {
@@ -672,12 +781,16 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:01.000Z",
             method: "POST",
             url: "https://api.example.com/login",
-            requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+            requestHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             postData: {
               mimeType: "application/json",
               text: '{"email":"a@example.com"}'
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"ok":true}'
           })
@@ -703,8 +816,12 @@ describe("har import", () => {
       resourceType: "Font"
     });
 
-    expect(await fs.readFile(path.join(dir, fontDescriptor.bodyPath))).toEqual(binaryPayload);
-    expect(await fs.readFile(path.join(dir, fontDescriptor.projectionPath!))).toEqual(binaryPayload);
+    expect(await fs.readFile(path.join(dir, fontDescriptor.bodyPath))).toEqual(
+      binaryPayload
+    );
+    expect(
+      await fs.readFile(path.join(dir, fontDescriptor.projectionPath!))
+    ).toEqual(binaryPayload);
   });
 
   it("falls back to a single request origin when there is no unique document origin", async () => {
@@ -715,12 +832,16 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:00.000Z",
             method: "POST",
             url: "https://api.example.com/orders",
-            requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+            requestHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             postData: {
               mimeType: "application/json",
               text: '{"sku":"A1"}'
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"ok":true}'
           }),
@@ -728,12 +849,16 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:01.000Z",
             method: "POST",
             url: "chrome-extension://abcdef/background",
-            requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+            requestHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             postData: {
               mimeType: "application/json",
               text: '{"skip":true}'
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"ok":false}'
           })
@@ -757,7 +882,9 @@ describe("har import", () => {
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:00.000Z",
             url: "https://cdn.example.com/styles/theme",
-            responseHeaders: [{ name: "Content-Type", value: "text/css; charset=utf-8" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "text/css; charset=utf-8" }
+            ],
             text: "body{}"
           }),
           createHarEntry({
@@ -781,7 +908,9 @@ describe("har import", () => {
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:04.000Z",
             url: "https://cdn.example.com/blob",
-            responseHeaders: [{ name: "Content-Type", value: "application/octet-stream" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/octet-stream" }
+            ],
             text: "blob-body"
           }),
           createHarEntry({
@@ -794,12 +923,16 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:05.000Z",
             method: "POST",
             url: "https://api.example.com/orders",
-            requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+            requestHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             postData: {
               mimeType: "application/json",
               text: '{"sku":"A1"}'
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             text: '{"ok":true}'
           }),
           createHarEntry({
@@ -811,7 +944,9 @@ describe("har import", () => {
           createHarEntry({
             startedDateTime: "2026-04-06T00:00:07.000Z",
             url: "chrome-extension://abcdef/background",
-            responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             text: "ignored"
           })
         ]
@@ -876,13 +1011,41 @@ describe("har import", () => {
       resourceType: "Fetch"
     });
 
-    expect(JSON.parse(await fs.readFile(path.join(dir, cssDescriptor.metaPath), "utf8")).resourceType).toBe("Stylesheet");
-    expect(JSON.parse(await fs.readFile(path.join(dir, imageDescriptor.metaPath), "utf8")).resourceType).toBe("Image");
-    expect(JSON.parse(await fs.readFile(path.join(dir, fontDescriptor.metaPath), "utf8")).resourceType).toBe("Font");
-    expect(JSON.parse(await fs.readFile(path.join(dir, mediaDescriptor.metaPath), "utf8")).resourceType).toBe("Media");
-    expect(JSON.parse(await fs.readFile(path.join(dir, otherDescriptor.metaPath), "utf8")).resourceType).toBe("Other");
-    expect(JSON.parse(await fs.readFile(path.join(dir, headerlessDescriptor.metaPath), "utf8")).mimeType).toBe("");
-    expect(JSON.parse(await fs.readFile(path.join(dir, fetchDescriptor.metaPath), "utf8")).resourceType).toBe("Fetch");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, cssDescriptor.metaPath), "utf8")
+      ).resourceType
+    ).toBe("Stylesheet");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, imageDescriptor.metaPath), "utf8")
+      ).resourceType
+    ).toBe("Image");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, fontDescriptor.metaPath), "utf8")
+      ).resourceType
+    ).toBe("Font");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, mediaDescriptor.metaPath), "utf8")
+      ).resourceType
+    ).toBe("Media");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, otherDescriptor.metaPath), "utf8")
+      ).resourceType
+    ).toBe("Other");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, headerlessDescriptor.metaPath), "utf8")
+      ).mimeType
+    ).toBe("");
+    expect(
+      JSON.parse(
+        await fs.readFile(path.join(dir, fetchDescriptor.metaPath), "utf8")
+      ).resourceType
+    ).toBe("Fetch");
     expect(result.skipped).toEqual([
       {
         requestUrl: "not a valid url",
@@ -913,12 +1076,19 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:01.000Z",
             method: "POST",
             url: "https://api.example.com/search",
-            requestHeaders: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }],
+            requestHeaders: [
+              {
+                name: "Content-Type",
+                value: "application/x-www-form-urlencoded"
+              }
+            ],
             postData: {
               mimeType: "application/x-www-form-urlencoded",
               params: [{ name: "query" }]
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"ok":true}'
           }),
@@ -926,12 +1096,19 @@ describe("har import", () => {
             startedDateTime: "2026-04-06T00:00:02.000Z",
             method: "POST",
             url: "https://api.example.com/invalid-form",
-            requestHeaders: [{ name: "Content-Type", value: "application/x-www-form-urlencoded" }],
+            requestHeaders: [
+              {
+                name: "Content-Type",
+                value: "application/x-www-form-urlencoded"
+              }
+            ],
             postData: {
               mimeType: "application/x-www-form-urlencoded",
               params: [{}]
             },
-            responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+            responseHeaders: [
+              { name: "Content-Type", value: "application/json" }
+            ],
             mimeType: "application/json",
             text: '{"ok":false}'
           }),
@@ -965,7 +1142,9 @@ describe("har import", () => {
       mimeType: "application/json",
       resourceType: "Fetch"
     });
-    const formRequest = JSON.parse(await fs.readFile(path.join(dir, formDescriptor.requestPath), "utf8"));
+    const formRequest = JSON.parse(
+      await fs.readFile(path.join(dir, formDescriptor.requestPath), "utf8")
+    );
 
     expect(formRequest.body).toBe("query=");
     expect(result.skipped).toEqual([
@@ -994,7 +1173,9 @@ describe("har import", () => {
     });
 
     expect(additiveResult.topOrigins).toEqual(["https://app.example.com"]);
-    expect(await fs.readFile(root.resolve(".wraithwalker/notes.txt"), "utf8")).toBe("busy");
+    expect(
+      await fs.readFile(root.resolve(".wraithwalker/notes.txt"), "utf8")
+    ).toBe("busy");
   });
 
   it("imports multiple top origins from page groups and reuses shared visible assets when content matches", async () => {
@@ -1067,16 +1248,18 @@ describe("har import", () => {
       "https://admin.example.com",
       "https://app.example.com"
     ]);
-    expect(result.imported).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        requestUrl: "https://app.example.com/",
-        topOrigin: "https://app.example.com"
-      }),
-      expect.objectContaining({
-        requestUrl: "https://admin.example.com/",
-        topOrigin: "https://admin.example.com"
-      })
-    ]));
+    expect(result.imported).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requestUrl: "https://app.example.com/",
+          topOrigin: "https://app.example.com"
+        }),
+        expect.objectContaining({
+          requestUrl: "https://admin.example.com/",
+          topOrigin: "https://admin.example.com"
+        })
+      ])
+    );
 
     const appHtmlDescriptor = await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
@@ -1107,15 +1290,60 @@ describe("har import", () => {
       resourceType: "Script"
     });
 
-    expect(sharedAppDescriptor.bodyPath).not.toBe(sharedAdminDescriptor.bodyPath);
-    expect(sharedAppDescriptor.projectionPath).toBe(sharedAdminDescriptor.projectionPath);
-    expect(await fs.readFile(path.join(root.rootPath, appHtmlDescriptor.bodyPath), "utf8")).toBe("<html>app</html>");
-    expect(await fs.readFile(path.join(root.rootPath, adminHtmlDescriptor.bodyPath), "utf8")).toBe("<html>admin</html>");
-    expect(await fs.readFile(path.join(root.rootPath, sharedAppDescriptor.bodyPath), "utf8")).toBe("console.log('shared');");
-    expect(await fs.readFile(path.join(root.rootPath, sharedAdminDescriptor.bodyPath), "utf8")).toBe("console.log('shared');");
-    expect(await fs.readFile(path.join(root.rootPath, sharedAppDescriptor.projectionPath!), "utf8")).toBe("console.log(\"shared\");");
-    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://app.example.com"');
-    expect(await fs.readFile(path.join(root.rootPath, ".wraithwalker/manifests/https__admin.example.com/RESOURCE_MANIFEST.json"), "utf8")).toContain('"topOrigin": "https://admin.example.com"');
+    expect(sharedAppDescriptor.bodyPath).not.toBe(
+      sharedAdminDescriptor.bodyPath
+    );
+    expect(sharedAppDescriptor.projectionPath).toBe(
+      sharedAdminDescriptor.projectionPath
+    );
+    expect(
+      await fs.readFile(
+        path.join(root.rootPath, appHtmlDescriptor.bodyPath),
+        "utf8"
+      )
+    ).toBe("<html>app</html>");
+    expect(
+      await fs.readFile(
+        path.join(root.rootPath, adminHtmlDescriptor.bodyPath),
+        "utf8"
+      )
+    ).toBe("<html>admin</html>");
+    expect(
+      await fs.readFile(
+        path.join(root.rootPath, sharedAppDescriptor.bodyPath),
+        "utf8"
+      )
+    ).toBe("console.log('shared');");
+    expect(
+      await fs.readFile(
+        path.join(root.rootPath, sharedAdminDescriptor.bodyPath),
+        "utf8"
+      )
+    ).toBe("console.log('shared');");
+    expect(
+      await fs.readFile(
+        path.join(root.rootPath, sharedAppDescriptor.projectionPath!),
+        "utf8"
+      )
+    ).toBe('console.log("shared");');
+    expect(
+      await fs.readFile(
+        path.join(
+          root.rootPath,
+          ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+        ),
+        "utf8"
+      )
+    ).toContain('"topOrigin": "https://app.example.com"');
+    expect(
+      await fs.readFile(
+        path.join(
+          root.rootPath,
+          ".wraithwalker/manifests/https__admin.example.com/RESOURCE_MANIFEST.json"
+        ),
+        "utf8"
+      )
+    ).toContain('"topOrigin": "https://admin.example.com"');
   });
 
   it("allows additive imports for different top origins in the same root", async () => {
@@ -1125,38 +1353,46 @@ describe("har import", () => {
 
     const appHarPath = await writeHarFile({
       log: {
-        pages: [{
-          id: "page_app",
-          startedDateTime: "2026-04-06T00:00:00.000Z",
-          title: "https://app.example.com/"
-        }],
-        entries: [{
-          ...createHarEntry({
+        pages: [
+          {
+            id: "page_app",
             startedDateTime: "2026-04-06T00:00:00.000Z",
-            url: "https://app.example.com/",
-            mimeType: "text/html",
-            text: "<html>app</html>"
-          }),
-          pageref: "page_app"
-        }]
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.000Z",
+              url: "https://app.example.com/",
+              mimeType: "text/html",
+              text: "<html>app</html>"
+            }),
+            pageref: "page_app"
+          }
+        ]
       }
     });
     const adminHarPath = await writeHarFile({
       log: {
-        pages: [{
-          id: "page_admin",
-          startedDateTime: "2026-04-06T00:00:01.000Z",
-          title: "https://admin.example.com/"
-        }],
-        entries: [{
-          ...createHarEntry({
+        pages: [
+          {
+            id: "page_admin",
             startedDateTime: "2026-04-06T00:00:01.000Z",
-            url: "https://admin.example.com/",
-            mimeType: "text/html",
-            text: "<html>admin</html>"
-          }),
-          pageref: "page_admin"
-        }]
+            title: "https://admin.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.000Z",
+              url: "https://admin.example.com/",
+              mimeType: "text/html",
+              text: "<html>admin</html>"
+            }),
+            pageref: "page_admin"
+          }
+        ]
       }
     });
 
@@ -1170,10 +1406,18 @@ describe("har import", () => {
     });
 
     expect(result.topOrigins).toEqual(["https://admin.example.com"]);
-    expect(await root.readJson(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json")).toEqual(
+    expect(
+      await root.readJson(
+        ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+      )
+    ).toEqual(
       expect.objectContaining({ topOrigin: "https://app.example.com" })
     );
-    expect(await root.readJson(".wraithwalker/manifests/https__admin.example.com/RESOURCE_MANIFEST.json")).toEqual(
+    expect(
+      await root.readJson(
+        ".wraithwalker/manifests/https__admin.example.com/RESOURCE_MANIFEST.json"
+      )
+    ).toEqual(
       expect.objectContaining({ topOrigin: "https://admin.example.com" })
     );
   });
@@ -1216,10 +1460,12 @@ describe("har import", () => {
       }
     });
 
-    await expect(importHarFile({
-      harPath: sameRunConflictHarPath,
-      dir: await tmpdir()
-    })).rejects.toThrow(
+    await expect(
+      importHarFile({
+        harPath: sameRunConflictHarPath,
+        dir: await tmpdir()
+      })
+    ).rejects.toThrow(
       "Cannot import HAR because multiple entries would write different content to cdn.example.com/assets/shared.js."
     );
 
@@ -1228,38 +1474,46 @@ describe("har import", () => {
     });
     const firstHarPath = await writeHarFile({
       log: {
-        pages: [{
-          id: "page_app",
-          startedDateTime: "2026-04-06T00:00:00.000Z",
-          title: "https://app.example.com/"
-        }],
-        entries: [{
-          ...createHarEntry({
+        pages: [
+          {
+            id: "page_app",
             startedDateTime: "2026-04-06T00:00:00.000Z",
-            url: "https://cdn.example.com/assets/shared.js",
-            mimeType: "application/javascript",
-            text: "console.log('first');"
-          }),
-          pageref: "page_app"
-        }]
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.000Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              mimeType: "application/javascript",
+              text: "console.log('first');"
+            }),
+            pageref: "page_app"
+          }
+        ]
       }
     });
     const secondHarPath = await writeHarFile({
       log: {
-        pages: [{
-          id: "page_admin",
-          startedDateTime: "2026-04-06T00:00:01.000Z",
-          title: "https://admin.example.com/"
-        }],
-        entries: [{
-          ...createHarEntry({
+        pages: [
+          {
+            id: "page_admin",
             startedDateTime: "2026-04-06T00:00:01.000Z",
-            url: "https://cdn.example.com/assets/shared.js",
-            mimeType: "application/javascript",
-            text: "console.log('second');"
-          }),
-          pageref: "page_admin"
-        }]
+            title: "https://admin.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:01.000Z",
+              url: "https://cdn.example.com/assets/shared.js",
+              mimeType: "application/javascript",
+              text: "console.log('second');"
+            }),
+            pageref: "page_admin"
+          }
+        ]
       }
     });
 
@@ -1268,22 +1522,32 @@ describe("har import", () => {
       dir: root.rootPath
     });
 
-    await expect(importHarFile({
-      harPath: secondHarPath,
-      dir: root.rootPath
-    })).rejects.toThrow(
+    await expect(
+      importHarFile({
+        harPath: secondHarPath,
+        dir: root.rootPath
+      })
+    ).rejects.toThrow(
       "Cannot import HAR because cdn.example.com/assets/shared.js already exists with different content."
     );
 
     const directoryConflictRoot = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-import-directory-conflict-"
     });
-    await fs.mkdir(path.join(directoryConflictRoot.rootPath, "cdn.example.com/assets/shared.js"), { recursive: true });
+    await fs.mkdir(
+      path.join(
+        directoryConflictRoot.rootPath,
+        "cdn.example.com/assets/shared.js"
+      ),
+      { recursive: true }
+    );
 
-    await expect(importHarFile({
-      harPath: firstHarPath,
-      dir: directoryConflictRoot.rootPath
-    })).rejects.toThrow(
+    await expect(
+      importHarFile({
+        harPath: firstHarPath,
+        dir: directoryConflictRoot.rootPath
+      })
+    ).rejects.toThrow(
       "Cannot import HAR because cdn.example.com/assets/shared.js already exists as a directory."
     );
   });
@@ -1309,20 +1573,24 @@ describe("har import", () => {
 
     const harPath = await writeHarFile({
       log: {
-        pages: [{
-          id: "page_app",
-          startedDateTime: "2026-04-06T00:00:00.000Z",
-          title: "https://app.example.com/"
-        }],
-        entries: [{
-          ...createHarEntry({
+        pages: [
+          {
+            id: "page_app",
             startedDateTime: "2026-04-06T00:00:00.000Z",
-            url: "https://cdn.example.com/assets/app.js",
-            mimeType: "application/javascript",
-            text: "console.log('app');"
-          }),
-          pageref: "page_app"
-        }]
+            title: "https://app.example.com/"
+          }
+        ],
+        entries: [
+          {
+            ...createHarEntry({
+              startedDateTime: "2026-04-06T00:00:00.000Z",
+              url: "https://cdn.example.com/assets/app.js",
+              mimeType: "application/javascript",
+              text: "console.log('app');"
+            }),
+            pageref: "page_app"
+          }
+        ]
       }
     });
 

@@ -1,4 +1,11 @@
-import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SessionSnapshot, SiteConfig } from "./types.js";
+import type {
+  FixtureDescriptor,
+  RequestPayload,
+  ResponseMeta,
+  RootSentinel,
+  SessionSnapshot,
+  SiteConfig
+} from "./types.js";
 
 export interface ErrorResult {
   ok: false;
@@ -96,7 +103,9 @@ export type SessionMessage =
   | { type: "session.start" }
   | { type: "session.stop" };
 
-export type ScenarioListResult = { ok: true; scenarios: string[] } | ErrorResult;
+export type ScenarioListResult =
+  | { ok: true; scenarios: string[] }
+  | ErrorResult;
 export type ScenarioResult = { ok: true; name: string } | ErrorResult;
 
 export type BackgroundMessage =

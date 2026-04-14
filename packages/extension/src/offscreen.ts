@@ -1,12 +1,37 @@
-import type { ErrorResult, FixtureHasResult, FixtureReadResult, FixtureWriteResult, OffscreenMessage, RootReadyResult, SiteConfigsResult } from "./lib/messages.js";
+import type {
+  ErrorResult,
+  FixtureHasResult,
+  FixtureReadResult,
+  FixtureWriteResult,
+  OffscreenMessage,
+  RootReadyResult,
+  SiteConfigsResult
+} from "./lib/messages.js";
 import { createFileSystemGateway } from "./lib/file-system-gateway.js";
 import { createExtensionRootRuntime } from "./lib/root-runtime.js";
-import { ensureRootSentinel as defaultEnsureRootSentinel, loadStoredRootHandle as defaultLoadStoredRootHandle, queryRootPermission as defaultQueryRootPermission, requestRootPermission as defaultRequestRootPermission } from "./lib/root-handle.js";
-import type { FixtureDescriptor, RequestPayload, ResponseMeta, RootSentinel, SiteConfig } from "./lib/types.js";
+import {
+  ensureRootSentinel as defaultEnsureRootSentinel,
+  loadStoredRootHandle as defaultLoadStoredRootHandle,
+  queryRootPermission as defaultQueryRootPermission,
+  requestRootPermission as defaultRequestRootPermission
+} from "./lib/root-handle.js";
+import type {
+  FixtureDescriptor,
+  RequestPayload,
+  ResponseMeta,
+  RootSentinel,
+  SiteConfig
+} from "./lib/types.js";
 
 interface RuntimeApi {
   onMessage: {
-    addListener(listener: (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean | void): void;
+    addListener(
+      listener: (
+        message: unknown,
+        sender: unknown,
+        sendResponse: (response: unknown) => void
+      ) => boolean | void
+    ): void;
   };
 }
 
@@ -36,7 +61,9 @@ interface OffscreenDependencies {
   arrayBufferToBase64?: (buffer: ArrayBuffer) => string;
 }
 
-function isOffscreenTargetMessage(message: unknown): message is { target: "offscreen"; type?: string; payload?: unknown } {
+function isOffscreenTargetMessage(
+  message: unknown
+): message is { target: "offscreen"; type?: string; payload?: unknown } {
   if (!message || typeof message !== "object") {
     return false;
   }
@@ -45,7 +72,9 @@ function isOffscreenTargetMessage(message: unknown): message is { target: "offsc
   return typedMessage.target === "offscreen";
 }
 
-function isKnownOffscreenMessage(message: unknown): message is OffscreenMessage {
+function isKnownOffscreenMessage(
+  message: unknown
+): message is OffscreenMessage {
   if (!isOffscreenTargetMessage(message)) {
     return false;
   }
@@ -62,7 +91,10 @@ function isKnownOffscreenMessage(message: unknown): message is OffscreenMessage 
   ].includes(message.type || "");
 }
 
-function toErrorResult(result: { error?: string; permission?: PermissionState }): ErrorResult {
+function toErrorResult(result: {
+  error?: string;
+  permission?: PermissionState;
+}): ErrorResult {
   return {
     ok: false,
     error: result.error || "Unknown error.",
@@ -71,7 +103,10 @@ function toErrorResult(result: { error?: string; permission?: PermissionState })
 }
 
 function isTestMode(): boolean {
-  return Boolean((globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean }).__WRAITHWALKER_TEST__);
+  return Boolean(
+    (globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean })
+      .__WRAITHWALKER_TEST__
+  );
 }
 
 export function createOffscreenRuntime({
@@ -88,7 +123,9 @@ export function createOffscreenRuntime({
     arrayBufferToBase64
   });
 
-  async function getRootState({ requestPermission = false }: { requestPermission?: boolean } = {}): Promise<RootStateResult> {
+  async function getRootState({
+    requestPermission = false
+  }: { requestPermission?: boolean } = {}): Promise<RootStateResult> {
     const rootHandle = await loadStoredRootHandle();
     if (!rootHandle) {
       return { ok: false, error: "No root directory selected." };
@@ -100,7 +137,11 @@ export function createOffscreenRuntime({
     }
 
     if (permission !== "granted") {
-      return { ok: false, error: "Root directory access is not granted.", permission };
+      return {
+        ok: false,
+        error: "Root directory access is not granted.",
+        permission
+      };
     }
 
     const runtime = createExtensionRootRuntime({
@@ -112,16 +153,23 @@ export function createOffscreenRuntime({
     return { ok: true, rootHandle, sentinel, permission, runtime };
   }
 
-  async function handleHasFixture(payload: { descriptor: FixtureDescriptor }): Promise<FixtureHasResult> {
+  async function handleHasFixture(payload: {
+    descriptor: FixtureDescriptor;
+  }): Promise<FixtureHasResult> {
     const rootState = await getRootState();
     if (!rootState.ok) {
       return toErrorResult(rootState as ErrorResult);
     }
 
-    return { ok: true, exists: await rootState.runtime.has(payload.descriptor) };
+    return {
+      ok: true,
+      exists: await rootState.runtime.has(payload.descriptor)
+    };
   }
 
-  async function handleReadFixture(payload: { descriptor: FixtureDescriptor }): Promise<FixtureReadResult> {
+  async function handleReadFixture(payload: {
+    descriptor: FixtureDescriptor;
+  }): Promise<FixtureReadResult> {
     const rootState = await getRootState();
     if (!rootState.ok) {
       return toErrorResult(rootState as ErrorResult);
@@ -206,20 +254,37 @@ export function createOffscreenRuntime({
     };
   }
 
-  async function handleMessage(message: unknown): Promise<RootReadyResult | SiteConfigsResult | FixtureHasResult | FixtureReadResult | FixtureWriteResult | { ok: true } | undefined> {
+  async function handleMessage(
+    message: unknown
+  ): Promise<
+    | RootReadyResult
+    | SiteConfigsResult
+    | FixtureHasResult
+    | FixtureReadResult
+    | FixtureWriteResult
+    | { ok: true }
+    | undefined
+  > {
     if (!isOffscreenTargetMessage(message)) {
       return undefined;
     }
 
     if (!isKnownOffscreenMessage(message)) {
-      return { ok: false, error: `Unknown offscreen message: ${String(message.type)}` };
+      return {
+        ok: false,
+        error: `Unknown offscreen message: ${String(message.type)}`
+      };
     }
 
     switch (message.type) {
       case "fs.ensureRoot": {
         const result = await getRootState(message.payload);
         return result.ok
-          ? { ok: true, sentinel: result.sentinel, permission: result.permission }
+          ? {
+              ok: true,
+              sentinel: result.sentinel,
+              permission: result.permission
+            }
           : result;
       }
       case "fs.readConfiguredSiteConfigs":

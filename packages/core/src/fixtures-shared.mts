@@ -9,7 +9,10 @@ import {
 } from "./constants.mjs";
 import { type ResponseMeta } from "./fixture-layout.mjs";
 import { resolveWithinRoot } from "./root-fs.mjs";
-import type { PaginatedResult, PatchProjectionFileOptions } from "./fixtures-types.mjs";
+import type {
+  PaginatedResult,
+  PatchProjectionFileOptions
+} from "./fixtures-types.mjs";
 
 export interface SearchableFixtureEntry {
   path: string;
@@ -69,7 +72,11 @@ const SEARCH_SUFFIX_EXCLUDE = [
   "response.meta.json"
 ];
 
-export function normalizeLimit(limit: number | undefined, defaultLimit: number, maxLimit: number): number {
+export function normalizeLimit(
+  limit: number | undefined,
+  defaultLimit: number,
+  maxLimit: number
+): number {
   if (typeof limit !== "number" || !Number.isFinite(limit)) {
     return defaultLimit;
   }
@@ -115,9 +122,8 @@ export function paginateItems<T>(
 ): PaginatedResult<T> {
   const offset = decodeCursor(cursor);
   const pagedItems = items.slice(offset, offset + limit);
-  const nextCursor = offset + limit < items.length
-    ? encodeCursor(offset + limit)
-    : null;
+  const nextCursor =
+    offset + limit < items.length ? encodeCursor(offset + limit) : null;
 
   return {
     items: pagedItems,
@@ -132,7 +138,10 @@ export function normalizeSearchPath(relativePath: string): string {
 
 export function isHiddenFixturePath(relativePath: string): boolean {
   const normalized = normalizeSearchPath(relativePath);
-  return normalized === WRAITHWALKER_DIR || normalized.startsWith(`${WRAITHWALKER_DIR}/`);
+  return (
+    normalized === WRAITHWALKER_DIR ||
+    normalized.startsWith(`${WRAITHWALKER_DIR}/`)
+  );
 }
 
 export function isApiResponseBodyPath(relativePath: string): boolean {
@@ -153,11 +162,16 @@ export function isExcludedSearchPath(relativePath: string): boolean {
     return true;
   }
 
-  if (SEARCH_EXACT_EXCLUDE.has(relativePath) || SEARCH_EXACT_EXCLUDE.has(normalized)) {
+  if (
+    SEARCH_EXACT_EXCLUDE.has(relativePath) ||
+    SEARCH_EXACT_EXCLUDE.has(normalized)
+  ) {
     return true;
   }
 
-  return SEARCH_SUFFIX_EXCLUDE.some((suffix) => normalized.endsWith(normalizeSearchPath(suffix)));
+  return SEARCH_SUFFIX_EXCLUDE.some((suffix) =>
+    normalized.endsWith(normalizeSearchPath(suffix))
+  );
 }
 
 export function guessMimeType(relativePath: string): string | null {
@@ -200,34 +214,44 @@ export function isEditableProjectionMimeType(value?: string | null): boolean {
     return true;
   }
 
-  return mimeType === "application/javascript"
-    || mimeType === "text/javascript"
-    || mimeType === "application/ecmascript"
-    || mimeType === "text/ecmascript"
-    || mimeType === "application/typescript"
-    || mimeType === "text/typescript"
-    || mimeType === "application/json"
-    || mimeType.endsWith("+json")
-    || mimeType === "image/svg+xml"
-    || mimeType === "application/xml"
-    || mimeType === "text/xml";
+  return (
+    mimeType === "application/javascript" ||
+    mimeType === "text/javascript" ||
+    mimeType === "application/ecmascript" ||
+    mimeType === "text/ecmascript" ||
+    mimeType === "application/typescript" ||
+    mimeType === "text/typescript" ||
+    mimeType === "application/json" ||
+    mimeType.endsWith("+json") ||
+    mimeType === "image/svg+xml" ||
+    mimeType === "application/xml" ||
+    mimeType === "text/xml"
+  );
 }
 
-export function isEditableProjectionResourceType(value?: string | null): boolean {
+export function isEditableProjectionResourceType(
+  value?: string | null
+): boolean {
   const resourceType = (value || "").trim().toLowerCase();
-  return resourceType === "document"
-    || resourceType === "fetch"
-    || resourceType === "script"
-    || resourceType === "stylesheet"
-    || resourceType === "xhr";
+  return (
+    resourceType === "document" ||
+    resourceType === "fetch" ||
+    resourceType === "script" ||
+    resourceType === "stylesheet" ||
+    resourceType === "xhr"
+  );
 }
 
-export function isEditableProjectionPath(relativePath?: string | null): boolean {
+export function isEditableProjectionPath(
+  relativePath?: string | null
+): boolean {
   if (!relativePath) {
     return false;
   }
 
-  return EDITABLE_PROJECTION_EXTENSIONS.has(path.extname(relativePath).toLowerCase());
+  return EDITABLE_PROJECTION_EXTENSIONS.has(
+    path.extname(relativePath).toLowerCase()
+  );
 }
 
 export function isEditableProjectionAsset(
@@ -244,16 +268,21 @@ export function isEditableProjectionAsset(
     return false;
   }
 
-  return isEditableProjectionMimeType(mimeType)
-    || isEditableProjectionResourceType(resourceType)
-    || isEditableProjectionPath(projectionPath);
+  return (
+    isEditableProjectionMimeType(mimeType) ||
+    isEditableProjectionResourceType(resourceType) ||
+    isEditableProjectionPath(projectionPath)
+  );
 }
 
 export function looksBinary(buffer: Buffer): boolean {
   return buffer.includes(0);
 }
 
-export async function readTextFixture(rootPath: string, relativePath: string): Promise<TextFixtureReadResult> {
+export async function readTextFixture(
+  rootPath: string,
+  relativePath: string
+): Promise<TextFixtureReadResult> {
   const absolutePath = resolveWithinRoot(rootPath, relativePath);
   if (!absolutePath) {
     return { ok: false, reason: "invalid-path" };
@@ -278,7 +307,10 @@ export async function readTextFixture(rootPath: string, relativePath: string): P
   }
 }
 
-function splitTextLines(text: string): { lines: string[]; endsWithNewline: boolean } {
+function splitTextLines(text: string): {
+  lines: string[];
+  endsWithNewline: boolean;
+} {
   const normalized = normalizeLineEndings(text);
   const endsWithNewline = normalized.endsWith("\n");
   if (!normalized) {
@@ -311,29 +343,37 @@ export function applyLinePatch(
     throw new Error("startLine must be a positive integer.");
   }
   if (!Number.isInteger(endLine) || endLine < startLine) {
-    throw new Error("endLine must be a positive integer greater than or equal to startLine.");
+    throw new Error(
+      "endLine must be a positive integer greater than or equal to startLine."
+    );
   }
 
   const { lines, endsWithNewline } = splitTextLines(text);
   if (endLine > lines.length) {
-    throw new Error(`Patch range ${startLine}-${endLine} is outside the current file.`);
+    throw new Error(
+      `Patch range ${startLine}-${endLine} is outside the current file.`
+    );
   }
 
   const currentRange = lines.slice(startLine - 1, endLine).join("\n");
   if (currentRange !== normalizeLineEndings(expectedText)) {
-    throw new Error(`Patch conflict for ${startLine}-${endLine}: current file content no longer matches expectedText.`);
+    throw new Error(
+      `Patch conflict for ${startLine}-${endLine}: current file content no longer matches expectedText.`
+    );
   }
 
   const replacementText = normalizeLineEndings(replacement);
-  const replacementLines = replacementText === ""
-    ? []
-    : splitTextLines(replacementText).lines;
+  const replacementLines =
+    replacementText === "" ? [] : splitTextLines(replacementText).lines;
 
   lines.splice(startLine - 1, endLine - startLine + 1, ...replacementLines);
   return joinTextLines(lines, endsWithNewline);
 }
 
-export function truncateUtf8(text: string, maxBytes: number): { text: string; truncated: boolean } {
+export function truncateUtf8(
+  text: string,
+  maxBytes: number
+): { text: string; truncated: boolean } {
   const buffer = Buffer.from(text, "utf8");
   if (buffer.byteLength <= maxBytes) {
     return { text, truncated: false };
@@ -347,12 +387,18 @@ export function truncateUtf8(text: string, maxBytes: number): { text: string; tr
 
 export function createProjectionEditError(relativePath: string): Error {
   if (isApiResponseBodyPath(relativePath)) {
-    return new Error(`API response fixtures are read-only in this pass: ${relativePath}`);
+    return new Error(
+      `API response fixtures are read-only in this pass: ${relativePath}`
+    );
   }
   if (isHiddenFixturePath(relativePath)) {
-    return new Error(`Hidden canonical files under .wraithwalker cannot be edited with projection tools: ${relativePath}`);
+    return new Error(
+      `Hidden canonical files under .wraithwalker cannot be edited with projection tools: ${relativePath}`
+    );
   }
-  return new Error(`File is not a projection-backed captured asset: ${relativePath}`);
+  return new Error(
+    `File is not a projection-backed captured asset: ${relativePath}`
+  );
 }
 
 export async function readProjectionResponseMeta(

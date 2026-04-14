@@ -1,4 +1,9 @@
-import type { FixtureDescriptor, RequestPayload, ResponseMeta, StoredFixture } from "./types.js";
+import type {
+  FixtureDescriptor,
+  RequestPayload,
+  ResponseMeta,
+  StoredFixture
+} from "./types.js";
 import type {
   FixtureCheckResponse,
   FixtureReadResponse,
@@ -8,11 +13,17 @@ import type {
 export function createDefaultRequestLifecycleRepository({
   sendOffscreenMessage
 }: {
-  sendOffscreenMessage: <T = unknown>(type: string, payload?: Record<string, unknown>) => Promise<T>;
+  sendOffscreenMessage: <T = unknown>(
+    type: string,
+    payload?: Record<string, unknown>
+  ) => Promise<T>;
 }): RequestLifecycleRepository {
   return {
     async exists(descriptor: FixtureDescriptor): Promise<boolean> {
-      const fixtureCheck = await sendOffscreenMessage<FixtureCheckResponse>("fs.hasFixture", { descriptor });
+      const fixtureCheck = await sendOffscreenMessage<FixtureCheckResponse>(
+        "fs.hasFixture",
+        { descriptor }
+      );
       if (!fixtureCheck.ok) {
         throw new Error(fixtureCheck.error || "Fixture lookup failed.");
       }
@@ -20,12 +31,20 @@ export function createDefaultRequestLifecycleRepository({
       return Boolean(fixtureCheck.exists);
     },
     async read(descriptor: FixtureDescriptor): Promise<StoredFixture | null> {
-      const fixture = await sendOffscreenMessage<FixtureReadResponse>("fs.readFixture", { descriptor });
+      const fixture = await sendOffscreenMessage<FixtureReadResponse>(
+        "fs.readFixture",
+        { descriptor }
+      );
       if (!fixture.ok) {
         throw new Error(fixture.error || "Fixture lookup failed.");
       }
 
-      if (!fixture.exists || !fixture.meta || !fixture.bodyBase64 || !fixture.request) {
+      if (
+        !fixture.exists ||
+        !fixture.meta ||
+        !fixture.bodyBase64 ||
+        !fixture.request
+      ) {
         return null;
       }
 

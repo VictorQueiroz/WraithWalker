@@ -3,16 +3,30 @@ import { describe, expect, it, vi } from "vitest";
 import { createBackgroundNativeActions } from "../src/lib/background-native-actions.js";
 import type { BackgroundAuthorityApi } from "../src/lib/background-authority.js";
 import { getRequiredRootId } from "../src/lib/background-authority.js";
-import { createBackgroundState, createChromeApi, createMockServerClient } from "./helpers/background-service-test-helpers.js";
+import {
+  createBackgroundState,
+  createChromeApi,
+  createMockServerClient
+} from "./helpers/background-service-test-helpers.js";
 
 function createAuthorityStub(
-  overrides: Partial<Pick<
-    BackgroundAuthorityApi,
-    "refreshStoredConfig" | "refreshServerInfo" | "ensureLocalRootReady" | "sendOffscreenMessage" | "withServerFallback"
-  >> = {}
+  overrides: Partial<
+    Pick<
+      BackgroundAuthorityApi,
+      | "refreshStoredConfig"
+      | "refreshServerInfo"
+      | "ensureLocalRootReady"
+      | "sendOffscreenMessage"
+      | "withServerFallback"
+    >
+  > = {}
 ): Pick<
   BackgroundAuthorityApi,
-  "refreshStoredConfig" | "refreshServerInfo" | "ensureLocalRootReady" | "sendOffscreenMessage" | "withServerFallback"
+  | "refreshStoredConfig"
+  | "refreshServerInfo"
+  | "ensureLocalRootReady"
+  | "sendOffscreenMessage"
+  | "withServerFallback"
 > {
   return {
     refreshStoredConfig: vi.fn().mockResolvedValue(undefined),
@@ -24,7 +38,9 @@ function createAuthorityStub(
     }),
     sendOffscreenMessage: vi.fn().mockResolvedValue({ ok: true }),
     withServerFallback: vi.fn(
-      async <T>({ localOperation }: {
+      async <T>({
+        localOperation
+      }: {
         remoteOperation: (info: any) => Promise<T>;
         localOperation: () => Promise<T>;
       }) => localOperation()
@@ -44,9 +60,13 @@ function createNativeHarness({
   authorityOverrides?: Record<string, unknown>;
   serverClientOverrides?: Record<string, unknown>;
 } = {}) {
-  const state = createBackgroundState(stateOverrides as Parameters<typeof createBackgroundState>[0]);
+  const state = createBackgroundState(
+    stateOverrides as Parameters<typeof createBackgroundState>[0]
+  );
   const authority = createAuthorityStub(authorityOverrides);
-  const serverClient = createMockServerClient(serverClientOverrides as Parameters<typeof createMockServerClient>[0]);
+  const serverClient = createMockServerClient(
+    serverClientOverrides as Parameters<typeof createMockServerClient>[0]
+  );
   const nativeActions = createBackgroundNativeActions({
     state,
     chromeApi,
@@ -85,14 +105,23 @@ describe("background native actions", () => {
       authority: {
         refreshStoredConfig: vi.fn().mockResolvedValue(undefined),
         refreshServerInfo: vi.fn().mockResolvedValue(serverInfo),
-        ensureLocalRootReady: vi.fn().mockResolvedValue({ ok: true, sentinel: { rootId: "local-root" }, permission: "granted" }),
+        ensureLocalRootReady: vi.fn().mockResolvedValue({
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        }),
         sendOffscreenMessage: vi.fn().mockResolvedValue({ ok: true }),
-        withServerFallback: vi.fn(async ({ remoteOperation }) => remoteOperation(serverInfo))
+        withServerFallback: vi.fn(async ({ remoteOperation }) =>
+          remoteOperation(serverInfo)
+        )
       },
       getRequiredRootId
     });
 
-    const result = await nativeActions.openDirectoryInEditor(undefined, "cursor");
+    const result = await nativeActions.openDirectoryInEditor(
+      undefined,
+      "cursor"
+    );
 
     expect(result).toEqual({ ok: true });
     expect(chromeApi.tabs.create).toHaveBeenCalledWith({
@@ -117,9 +146,15 @@ describe("background native actions", () => {
       authority: {
         refreshStoredConfig: vi.fn().mockResolvedValue(undefined),
         refreshServerInfo: vi.fn().mockResolvedValue(serverInfo),
-        ensureLocalRootReady: vi.fn().mockResolvedValue({ ok: true, sentinel: { rootId: "local-root" }, permission: "granted" }),
+        ensureLocalRootReady: vi.fn().mockResolvedValue({
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        }),
         sendOffscreenMessage: vi.fn().mockResolvedValue({ ok: true }),
-        withServerFallback: vi.fn(async ({ remoteOperation }) => remoteOperation(serverInfo))
+        withServerFallback: vi.fn(async ({ remoteOperation }) =>
+          remoteOperation(serverInfo)
+        )
       },
       getRequiredRootId
     });
@@ -132,7 +167,10 @@ describe("background native actions", () => {
 
   it("routes scenario actions through the native host when only a local root is available", async () => {
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendNativeMessage.mockResolvedValue({ ok: true, name: "smoke" });
+    chromeApi.runtime.sendNativeMessage.mockResolvedValue({
+      ok: true,
+      name: "smoke"
+    });
     const state = createBackgroundState({
       localRootReady: true,
       localRootSentinel: { rootId: "local-root" },
@@ -150,9 +188,15 @@ describe("background native actions", () => {
       authority: {
         refreshStoredConfig: vi.fn().mockResolvedValue(undefined),
         refreshServerInfo: vi.fn().mockResolvedValue(null),
-        ensureLocalRootReady: vi.fn().mockResolvedValue({ ok: true, sentinel: { rootId: "local-root" }, permission: "granted" }),
+        ensureLocalRootReady: vi.fn().mockResolvedValue({
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        }),
         sendOffscreenMessage: vi.fn().mockResolvedValue({ ok: true }),
-        withServerFallback: vi.fn(async ({ localOperation }) => localOperation())
+        withServerFallback: vi.fn(async ({ localOperation }) =>
+          localOperation()
+        )
       },
       getRequiredRootId
     });
@@ -160,12 +204,15 @@ describe("background native actions", () => {
     const result = await nativeActions.saveScenarioForActiveTarget("smoke");
 
     expect(result).toEqual({ ok: true, name: "smoke" });
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith("com.wraithwalker.host", {
-      type: "saveScenario",
-      path: "/tmp/local-root",
-      expectedRootId: "local-root",
-      name: "smoke"
-    });
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith(
+      "com.wraithwalker.host",
+      {
+        type: "saveScenario",
+        path: "/tmp/local-root",
+        expectedRootId: "local-root",
+        name: "smoke"
+      }
+    );
   });
 
   it("returns root-id validation errors for server and explicit root targets", async () => {
@@ -181,7 +228,9 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(serverHarness.nativeActions.openDirectoryInEditor(undefined, "vscode")).resolves.toEqual({
+    await expect(
+      serverHarness.nativeActions.openDirectoryInEditor(undefined, "vscode")
+    ).resolves.toEqual({
       ok: false,
       error: "Root sentinel is missing a rootId."
     });
@@ -196,13 +245,15 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(localHarness.nativeActions.verifyNativeHostRoot({
-      rootResult: {
-        ok: true,
-        sentinel: {} as any,
-        permission: "granted"
-      }
-    })).resolves.toEqual({
+    await expect(
+      localHarness.nativeActions.verifyNativeHostRoot({
+        rootResult: {
+          ok: true,
+          sentinel: {} as any,
+          permission: "granted"
+        }
+      })
+    ).resolves.toEqual({
       ok: false,
       error: "Root sentinel is missing a rootId."
     });
@@ -222,11 +273,15 @@ describe("background native actions", () => {
       },
       authorityOverrides: {
         refreshServerInfo: vi.fn().mockResolvedValue(serverInfo),
-        withServerFallback: vi.fn().mockRejectedValue(new Error("context offline"))
+        withServerFallback: vi
+          .fn()
+          .mockRejectedValue(new Error("context offline"))
       }
     });
 
-    await expect(successHarness.nativeActions.openDirectoryInEditor(undefined, "cursor")).resolves.toEqual({ ok: true });
+    await expect(
+      successHarness.nativeActions.openDirectoryInEditor(undefined, "cursor")
+    ).resolves.toEqual({ ok: true });
     expect(successHarness.chromeApi.tabs.create).toHaveBeenCalledWith({
       url: "cursor://file//tmp/server-root/"
     });
@@ -243,7 +298,9 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(failureHarness.nativeActions.openDirectoryInEditor(undefined, "cursor")).resolves.toEqual({
+    await expect(
+      failureHarness.nativeActions.openDirectoryInEditor(undefined, "cursor")
+    ).resolves.toEqual({
       ok: false,
       error: "tab creation blocked"
     });
@@ -268,9 +325,12 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(nativeActions.openDirectoryInEditor(undefined, "vscode")).resolves.toEqual({
+    await expect(
+      nativeActions.openDirectoryInEditor(undefined, "vscode")
+    ).resolves.toEqual({
       ok: false,
-      error: "Set the absolute editor launch path in Settings to open the remembered root in VS Code. Chrome does not expose local folder paths from the directory picker."
+      error:
+        "Set the absolute editor launch path in Settings to open the remembered root in VS Code. Chrome does not expose local folder paths from the directory picker."
     });
   });
 
@@ -285,15 +345,18 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(missingPathHarness.nativeActions.verifyNativeHostRoot({
-      rootResult: {
-        ok: true,
-        sentinel: { rootId: "local-root" },
-        permission: "granted"
-      }
-    })).resolves.toEqual({
+    await expect(
+      missingPathHarness.nativeActions.verifyNativeHostRoot({
+        rootResult: {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        }
+      })
+    ).resolves.toEqual({
       ok: false,
-      error: "Configure the shared editor launch path in the options page first."
+      error:
+        "Configure the shared editor launch path in the options page first."
     });
 
     const rejectedChromeApi = createChromeApi();
@@ -312,13 +375,15 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(rejectedHarness.nativeActions.verifyNativeHostRoot({
-      rootResult: {
-        ok: true,
-        sentinel: { rootId: "local-root" },
-        permission: "granted"
-      }
-    })).resolves.toEqual({
+    await expect(
+      rejectedHarness.nativeActions.verifyNativeHostRoot({
+        rootResult: {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        }
+      })
+    ).resolves.toEqual({
       ok: false,
       error: "native root mismatch"
     });
@@ -326,18 +391,20 @@ describe("background native actions", () => {
 
   it("surfaces native open and local reveal failures", async () => {
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendNativeMessage.mockImplementation(async (_hostName, message) => {
-      if (message.type === "verifyRoot") {
+    chromeApi.runtime.sendNativeMessage.mockImplementation(
+      async (_hostName, message) => {
+        if (message.type === "verifyRoot") {
+          return { ok: true };
+        }
+        if (message.type === "openDirectory") {
+          return { ok: false, error: "open failed" };
+        }
+        if (message.type === "revealDirectory") {
+          throw "native reveal unavailable";
+        }
         return { ok: true };
       }
-      if (message.type === "openDirectory") {
-        return { ok: false, error: "open failed" };
-      }
-      if (message.type === "revealDirectory") {
-        throw "native reveal unavailable";
-      }
-      return { ok: true };
-    });
+    );
     const harness = createNativeHarness({
       chromeApi,
       stateOverrides: {
@@ -358,7 +425,9 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(harness.nativeActions.openDirectoryInEditor(undefined, "antigravity")).resolves.toEqual({
+    await expect(
+      harness.nativeActions.openDirectoryInEditor(undefined, "antigravity")
+    ).resolves.toEqual({
       ok: false,
       error: "open failed"
     });
@@ -386,7 +455,9 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(nativeActions.openDirectoryInEditor(undefined, "antigravity")).resolves.toEqual({
+    await expect(
+      nativeActions.openDirectoryInEditor(undefined, "antigravity")
+    ).resolves.toEqual({
       ok: false,
       error: "Permission denied."
     });
@@ -405,10 +476,18 @@ describe("background native actions", () => {
         refreshServerInfo: vi.fn().mockResolvedValue(serverInfo)
       },
       serverClientOverrides: {
-        revealRoot: vi.fn().mockRejectedValue(new Error("server reveal failed")),
-        listScenarios: vi.fn().mockRejectedValue(new Error("server list failed")),
-        saveScenario: vi.fn().mockRejectedValue(new Error("server save failed")),
-        switchScenario: vi.fn().mockRejectedValue(new Error("server switch failed"))
+        revealRoot: vi
+          .fn()
+          .mockRejectedValue(new Error("server reveal failed")),
+        listScenarios: vi
+          .fn()
+          .mockRejectedValue(new Error("server list failed")),
+        saveScenario: vi
+          .fn()
+          .mockRejectedValue(new Error("server save failed")),
+        switchScenario: vi
+          .fn()
+          .mockRejectedValue(new Error("server switch failed"))
       }
     });
 
@@ -416,15 +495,21 @@ describe("background native actions", () => {
       ok: false,
       error: "server reveal failed"
     });
-    await expect(harness.nativeActions.listScenariosForActiveTarget()).resolves.toEqual({
+    await expect(
+      harness.nativeActions.listScenariosForActiveTarget()
+    ).resolves.toEqual({
       ok: false,
       error: "server list failed"
     });
-    await expect(harness.nativeActions.saveScenarioForActiveTarget("smoke")).resolves.toEqual({
+    await expect(
+      harness.nativeActions.saveScenarioForActiveTarget("smoke")
+    ).resolves.toEqual({
       ok: false,
       error: "server save failed"
     });
-    await expect(harness.nativeActions.switchScenarioForActiveTarget("smoke")).resolves.toEqual({
+    await expect(
+      harness.nativeActions.switchScenarioForActiveTarget("smoke")
+    ).resolves.toEqual({
       ok: false,
       error: "server switch failed"
     });
@@ -446,17 +531,26 @@ describe("background native actions", () => {
       }
     });
 
-    await expect(nativeActions.listScenariosForActiveTarget()).resolves.toEqual({
+    await expect(nativeActions.listScenariosForActiveTarget()).resolves.toEqual(
+      {
+        ok: false,
+        error:
+          "Configure the native host name and shared editor launch path in the options page first."
+      }
+    );
+    await expect(
+      nativeActions.saveScenarioForActiveTarget("smoke")
+    ).resolves.toEqual({
       ok: false,
-      error: "Configure the native host name and shared editor launch path in the options page first."
+      error:
+        "Configure the native host name and shared editor launch path in the options page first."
     });
-    await expect(nativeActions.saveScenarioForActiveTarget("smoke")).resolves.toEqual({
+    await expect(
+      nativeActions.switchScenarioForActiveTarget("smoke")
+    ).resolves.toEqual({
       ok: false,
-      error: "Configure the native host name and shared editor launch path in the options page first."
-    });
-    await expect(nativeActions.switchScenarioForActiveTarget("smoke")).resolves.toEqual({
-      ok: false,
-      error: "Configure the native host name and shared editor launch path in the options page first."
+      error:
+        "Configure the native host name and shared editor launch path in the options page first."
     });
   });
 });

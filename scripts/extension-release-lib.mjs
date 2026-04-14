@@ -13,7 +13,12 @@ export function getExtensionReleaseNotes(version) {
   return `Packaged Chrome extension build for version ${version}.`;
 }
 
-export function getCreateExtensionReleaseArgs({ assetPath, repo, target, version }) {
+export function getCreateExtensionReleaseArgs({
+  assetPath,
+  repo,
+  target,
+  version
+}) {
   const tag = getExtensionReleaseTag(version);
 
   return [
@@ -33,7 +38,11 @@ export function getCreateExtensionReleaseArgs({ assetPath, repo, target, version
   ];
 }
 
-export function getUploadExtensionReleaseAssetArgs({ assetPath, repo, version }) {
+export function getUploadExtensionReleaseAssetArgs({
+  assetPath,
+  repo,
+  version
+}) {
   return [
     "release",
     "upload",
@@ -44,4 +53,3 @@ export function getUploadExtensionReleaseAssetArgs({ assetPath, repo, version })
     "--clobber"
   ];
 }
-

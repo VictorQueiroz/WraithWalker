@@ -13,18 +13,30 @@ import {
 
 describe("inferTypeNode", () => {
   it("infers primitives", () => {
-    expect(inferTypeNode("hello")).toEqual({ kind: "primitive", value: "string" });
+    expect(inferTypeNode("hello")).toEqual({
+      kind: "primitive",
+      value: "string"
+    });
     expect(inferTypeNode(42)).toEqual({ kind: "primitive", value: "number" });
-    expect(inferTypeNode(true)).toEqual({ kind: "primitive", value: "boolean" });
+    expect(inferTypeNode(true)).toEqual({
+      kind: "primitive",
+      value: "boolean"
+    });
     expect(inferTypeNode(null)).toEqual({ kind: "primitive", value: "null" });
   });
 
   it("infers empty array as unknown[]", () => {
-    expect(inferTypeNode([])).toEqual({ kind: "array", element: { kind: "unknown" } });
+    expect(inferTypeNode([])).toEqual({
+      kind: "array",
+      element: { kind: "unknown" }
+    });
   });
 
   it("infers array of homogeneous primitives", () => {
-    expect(inferTypeNode([1, 2, 3])).toEqual({ kind: "array", element: { kind: "primitive", value: "number" } });
+    expect(inferTypeNode([1, 2, 3])).toEqual({
+      kind: "array",
+      element: { kind: "primitive", value: "number" }
+    });
   });
 
   it("infers array of mixed primitives as union", () => {
@@ -100,11 +112,17 @@ describe("mergeTypeNodes", () => {
   it("merges two objects with overlapping keys", () => {
     const a: TypeNode = {
       kind: "object",
-      properties: { id: { kind: "primitive", value: "number" }, name: { kind: "primitive", value: "string" } }
+      properties: {
+        id: { kind: "primitive", value: "number" },
+        name: { kind: "primitive", value: "string" }
+      }
     };
     const b: TypeNode = {
       kind: "object",
-      properties: { id: { kind: "primitive", value: "number" }, email: { kind: "primitive", value: "string" } }
+      properties: {
+        id: { kind: "primitive", value: "number" },
+        email: { kind: "primitive", value: "string" }
+      }
     };
     const result = mergeTypeNodes(a, b);
     expect(result).toEqual({
@@ -118,8 +136,14 @@ describe("mergeTypeNodes", () => {
   });
 
   it("merges two arrays by merging their element types", () => {
-    const a: TypeNode = { kind: "array", element: { kind: "primitive", value: "string" } };
-    const b: TypeNode = { kind: "array", element: { kind: "primitive", value: "number" } };
+    const a: TypeNode = {
+      kind: "array",
+      element: { kind: "primitive", value: "string" }
+    };
+    const b: TypeNode = {
+      kind: "array",
+      element: { kind: "primitive", value: "number" }
+    };
     const result = mergeTypeNodes(a, b);
     expect(result).toEqual({
       kind: "array",
@@ -152,7 +176,10 @@ describe("mergeTypeNodes", () => {
   it("deduplicates union members", () => {
     const a: TypeNode = {
       kind: "union",
-      members: [{ kind: "primitive", value: "string" }, { kind: "primitive", value: "number" }]
+      members: [
+        { kind: "primitive", value: "string" },
+        { kind: "primitive", value: "number" }
+      ]
     };
     const b: TypeNode = { kind: "primitive", value: "string" };
     const result = mergeTypeNodes(a, b);
@@ -168,7 +195,9 @@ describe("mergeTypeNodes", () => {
 
 describe("renderTypeNode", () => {
   it("renders primitives", () => {
-    expect(renderTypeNode({ kind: "primitive", value: "string" })).toBe("string");
+    expect(renderTypeNode({ kind: "primitive", value: "string" })).toBe(
+      "string"
+    );
     expect(renderTypeNode({ kind: "primitive", value: "null" })).toBe("null");
   });
 
@@ -177,7 +206,12 @@ describe("renderTypeNode", () => {
   });
 
   it("renders simple arrays", () => {
-    expect(renderTypeNode({ kind: "array", element: { kind: "primitive", value: "number" } })).toBe("number[]");
+    expect(
+      renderTypeNode({
+        kind: "array",
+        element: { kind: "primitive", value: "number" }
+      })
+    ).toBe("number[]");
   });
 
   it("renders union arrays with parens", () => {
@@ -185,7 +219,10 @@ describe("renderTypeNode", () => {
       kind: "array",
       element: {
         kind: "union",
-        members: [{ kind: "primitive", value: "string" }, { kind: "primitive", value: "number" }]
+        members: [
+          { kind: "primitive", value: "string" },
+          { kind: "primitive", value: "number" }
+        ]
       }
     };
     expect(renderTypeNode(node)).toBe("(string | number)[]");
@@ -213,7 +250,10 @@ describe("renderTypeNode", () => {
   it("renders unions", () => {
     const node: TypeNode = {
       kind: "union",
-      members: [{ kind: "primitive", value: "string" }, { kind: "primitive", value: "null" }]
+      members: [
+        { kind: "primitive", value: "string" },
+        { kind: "primitive", value: "null" }
+      ]
     };
     expect(renderTypeNode(node)).toBe("string | null");
   });
@@ -221,9 +261,13 @@ describe("renderTypeNode", () => {
 
 describe("pathToInterfaceName", () => {
   it("converts method and path to PascalCase interface name", () => {
-    expect(pathToInterfaceName("GET", "/api/users")).toBe("GetApiUsersResponse");
+    expect(pathToInterfaceName("GET", "/api/users")).toBe(
+      "GetApiUsersResponse"
+    );
     expect(pathToInterfaceName("POST", "/graphql")).toBe("PostGraphqlResponse");
-    expect(pathToInterfaceName("DELETE", "/api/users/123")).toBe("DeleteApiUsers123Response");
+    expect(pathToInterfaceName("DELETE", "/api/users/123")).toBe(
+      "DeleteApiUsers123Response"
+    );
   });
 
   it("handles root path", () => {
@@ -231,8 +275,12 @@ describe("pathToInterfaceName", () => {
   });
 
   it("handles hyphenated and underscored paths", () => {
-    expect(pathToInterfaceName("GET", "/api/user-profiles")).toBe("GetApiUserProfilesResponse");
-    expect(pathToInterfaceName("GET", "/api/user_settings")).toBe("GetApiUserSettingsResponse");
+    expect(pathToInterfaceName("GET", "/api/user-profiles")).toBe(
+      "GetApiUserProfilesResponse"
+    );
+    expect(pathToInterfaceName("GET", "/api/user_settings")).toBe(
+      "GetApiUserSettingsResponse"
+    );
   });
 });
 
@@ -253,13 +301,19 @@ describe("renderInterfaceDeclaration", () => {
   });
 
   it("renders non-object types as type aliases", () => {
-    const node: TypeNode = { kind: "array", element: { kind: "primitive", value: "string" } };
+    const node: TypeNode = {
+      kind: "array",
+      element: { kind: "primitive", value: "string" }
+    };
     const result = renderInterfaceDeclaration("GetTagsResponse", node);
     expect(result).toBe("export type GetTagsResponse = string[];\n");
   });
 
   it("renders empty object interface", () => {
-    const result = renderInterfaceDeclaration("EmptyResponse", { kind: "object", properties: {} });
+    const result = renderInterfaceDeclaration("EmptyResponse", {
+      kind: "object",
+      properties: {}
+    });
     expect(result).toBe("export interface EmptyResponse {}\n");
   });
 });
@@ -269,7 +323,10 @@ describe("renderDtsFile", () => {
     const result = renderDtsFile([
       {
         name: "GetUsersResponse",
-        node: { kind: "object", properties: { id: { kind: "primitive", value: "number" } } }
+        node: {
+          kind: "object",
+          properties: { id: { kind: "primitive", value: "number" } }
+        }
       }
     ]);
     expect(result).toContain("// Auto-generated by WraithWalker");

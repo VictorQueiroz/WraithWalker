@@ -3,7 +3,11 @@ import type { RequestContext, SiteConfig } from "./types.js";
 
 interface CapturePolicyDependencies {
   getSiteConfigForOrigin?: (topOrigin: string) => SiteConfig | undefined;
-  shouldDumpRequest?: (siteConfig: SiteConfig, method: string, url: string) => boolean;
+  shouldDumpRequest?: (
+    siteConfig: SiteConfig,
+    method: string,
+    url: string
+  ) => boolean;
 }
 
 export function createCapturePolicy({
@@ -14,7 +18,9 @@ export function createCapturePolicy({
     return getSiteConfigForOrigin?.(topOrigin);
   }
 
-  function shouldPersist(context: Pick<RequestContext, "topOrigin" | "method" | "url">): boolean {
+  function shouldPersist(
+    context: Pick<RequestContext, "topOrigin" | "method" | "url">
+  ): boolean {
     const siteConfig = getSiteConfig(context.topOrigin);
     return siteConfig
       ? shouldDumpRequest(siteConfig, context.method, context.url)

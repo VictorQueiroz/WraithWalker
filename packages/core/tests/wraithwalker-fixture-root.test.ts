@@ -10,46 +10,68 @@ describe("WraithwalkerFixtureRoot", () => {
     });
 
     expect(root.rootId).toBe("root-helper");
-    expect(await root.readJson<{ rootId: string }>(".wraithwalker/root.json")).toEqual(
-      expect.objectContaining({ rootId: "root-helper" })
-    );
+    expect(
+      await root.readJson<{ rootId: string }>(".wraithwalker/root.json")
+    ).toEqual(expect.objectContaining({ rootId: "root-helper" }));
   });
 
   it("builds manifest and fixture paths for simple and advanced layouts", async () => {
     const root = await createWraithwalkerFixtureRoot();
 
-    expect(root.originKey("https://api.example.com:8443")).toBe("https__api.example.com__8443");
-    expect(root.scenarioRelativePath("baseline")).toBe(".wraithwalker/scenarios/baseline");
+    expect(root.originKey("https://api.example.com:8443")).toBe(
+      "https__api.example.com__8443"
+    );
+    expect(root.scenarioRelativePath("baseline")).toBe(
+      ".wraithwalker/scenarios/baseline"
+    );
     expect(root.cliConfigRelativePath()).toBe(".wraithwalker/cli.json");
-    expect(root.manifestRelativePath({
-      topOrigin: "https://app.example.com"
-    })).toBe(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
-    expect(root.manifestRelativePath({
-      topOrigin: "https://app.example.com",
-      scenario: "baseline"
-    })).toBe(".wraithwalker/scenarios/baseline/.wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
+    expect(
+      root.manifestRelativePath({
+        topOrigin: "https://app.example.com"
+      })
+    ).toBe(
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
+    expect(
+      root.manifestRelativePath({
+        topOrigin: "https://app.example.com",
+        scenario: "baseline"
+      })
+    ).toBe(
+      ".wraithwalker/scenarios/baseline/.wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
 
-    expect(root.apiFixturePaths({
-      topOrigin: "https://app.example.com",
-      requestOrigin: "https://api.example.com",
-      method: "GET",
-      fixtureName: "users__q-abc__b-def"
-    })).toEqual({
-      fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
-      metaPath: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
-      bodyPath: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
+    expect(
+      root.apiFixturePaths({
+        topOrigin: "https://app.example.com",
+        requestOrigin: "https://api.example.com",
+        method: "GET",
+        fixtureName: "users__q-abc__b-def"
+      })
+    ).toEqual({
+      fixtureDir:
+        ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
+      metaPath:
+        ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json",
+      bodyPath:
+        ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.body"
     });
 
-    expect(root.apiFixturePaths({
-      topOrigin: "https://app.example.com",
-      requestOrigin: "https://api.example.com",
-      scenario: "candidate",
-      method: "POST",
-      fixtureName: "orders__q-abc__b-def"
-    })).toEqual({
-      fixtureDir: ".wraithwalker/scenarios/candidate/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def",
-      metaPath: ".wraithwalker/scenarios/candidate/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.meta.json",
-      bodyPath: ".wraithwalker/scenarios/candidate/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.body"
+    expect(
+      root.apiFixturePaths({
+        topOrigin: "https://app.example.com",
+        requestOrigin: "https://api.example.com",
+        scenario: "candidate",
+        method: "POST",
+        fixtureName: "orders__q-abc__b-def"
+      })
+    ).toEqual({
+      fixtureDir:
+        ".wraithwalker/scenarios/candidate/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def",
+      metaPath:
+        ".wraithwalker/scenarios/candidate/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.meta.json",
+      bodyPath:
+        ".wraithwalker/scenarios/candidate/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.body"
     });
   });
 
@@ -82,7 +104,7 @@ describe("WraithwalkerFixtureRoot", () => {
         url: "https://api.example.com/users",
         method: "GET"
       },
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
     await root.ensureScenario("baseline");
     await root.writeApiFixture({
@@ -98,21 +120,42 @@ describe("WraithwalkerFixtureRoot", () => {
         method: "POST"
       }
     });
-    await root.writeText("cdn.example.com/assets/app.js", "console.log('fixture');");
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "console.log('fixture');"
+    );
 
-    expect(await root.readJson<{ theme: { overrides: { labelWidth: number } } }>(".wraithwalker/cli.json")).toEqual({
+    expect(
+      await root.readJson<{ theme: { overrides: { labelWidth: number } } }>(
+        ".wraithwalker/cli.json"
+      )
+    ).toEqual({
       theme: { overrides: { labelWidth: 16 } }
     });
-    expect(await root.readJson<{ topOriginKey: string }>(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json")).toEqual(
+    expect(
+      await root.readJson<{ topOriginKey: string }>(
+        ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+      )
+    ).toEqual(
       expect.objectContaining({ topOriginKey: "https__app.example.com" })
     );
-    expect(await root.readJson<{ status: number }>(".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json")).toEqual(
-      expect.objectContaining({ status: 200 })
+    expect(
+      await root.readJson<{ status: number }>(
+        ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def/response.meta.json"
+      )
+    ).toEqual(expect.objectContaining({ status: 200 }));
+    expect(
+      await root.readJson<{ status: number }>(
+        ".wraithwalker/scenarios/baseline/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.meta.json"
+      )
+    ).toEqual(expect.objectContaining({ status: 201 }));
+    await expect(
+      root.readJson(
+        ".wraithwalker/scenarios/baseline/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.body"
+      )
+    ).rejects.toThrow();
+    expect(root.resolve("cdn.example.com/assets/app.js")).toContain(
+      "cdn.example.com/assets/app.js"
     );
-    expect(await root.readJson<{ status: number }>(".wraithwalker/scenarios/baseline/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.meta.json")).toEqual(
-      expect.objectContaining({ status: 201 })
-    );
-    await expect(root.readJson(".wraithwalker/scenarios/baseline/.wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/POST/orders__q-abc__b-def/response.body")).rejects.toThrow();
-    expect(root.resolve("cdn.example.com/assets/app.js")).toContain("cdn.example.com/assets/app.js");
   });
 });

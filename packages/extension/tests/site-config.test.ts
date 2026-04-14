@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_DUMP_ALLOWLIST_PATTERN, DEFAULT_DUMP_ALLOWLIST_PATTERNS } from "../src/lib/constants.js";
+import {
+  DEFAULT_DUMP_ALLOWLIST_PATTERN,
+  DEFAULT_DUMP_ALLOWLIST_PATTERNS
+} from "../src/lib/constants.js";
 import {
   createConfiguredSiteConfig,
   createSiteConfig,
@@ -14,10 +17,18 @@ import type { SiteConfig } from "../src/lib/types.js";
 describe("site config", () => {
   describe("normalizeDumpAllowlistPatterns", () => {
     it("returns the default patterns for empty or invalid input", () => {
-      expect(normalizeDumpAllowlistPatterns(undefined)).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
-      expect(normalizeDumpAllowlistPatterns(null)).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
-      expect(normalizeDumpAllowlistPatterns("")).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
-      expect(normalizeDumpAllowlistPatterns([])).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
+      expect(normalizeDumpAllowlistPatterns(undefined)).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
+      expect(normalizeDumpAllowlistPatterns(null)).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
+      expect(normalizeDumpAllowlistPatterns("")).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
+      expect(normalizeDumpAllowlistPatterns([])).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
     });
 
     it("migrates a legacy single-pattern string into an array", () => {
@@ -25,19 +36,28 @@ describe("site config", () => {
     });
 
     it("falls back to defaults for an invalid legacy string", () => {
-      expect(normalizeDumpAllowlistPatterns("[")).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
+      expect(normalizeDumpAllowlistPatterns("[")).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
     });
 
     it("filters out invalid patterns from an array", () => {
-      expect(normalizeDumpAllowlistPatterns(["\\.js$", "[", "\\.css$"])).toEqual(["\\.js$", "\\.css$"]);
+      expect(
+        normalizeDumpAllowlistPatterns(["\\.js$", "[", "\\.css$"])
+      ).toEqual(["\\.js$", "\\.css$"]);
     });
 
     it("falls back to defaults when all array entries are invalid", () => {
-      expect(normalizeDumpAllowlistPatterns(["[", "("])).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
+      expect(normalizeDumpAllowlistPatterns(["[", "("])).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
     });
 
     it("preserves valid patterns from an array", () => {
-      expect(normalizeDumpAllowlistPatterns(["\\.js$", "\\.css$"])).toEqual(["\\.js$", "\\.css$"]);
+      expect(normalizeDumpAllowlistPatterns(["\\.js$", "\\.css$"])).toEqual([
+        "\\.js$",
+        "\\.css$"
+      ]);
     });
   });
 
@@ -79,7 +99,9 @@ describe("site config", () => {
   describe("createSiteConfig", () => {
     it("creates a config with default patterns as an array", () => {
       const config = createSiteConfig("app.example.com");
-      expect(config.dumpAllowlistPatterns).toEqual(DEFAULT_DUMP_ALLOWLIST_PATTERNS);
+      expect(config.dumpAllowlistPatterns).toEqual(
+        DEFAULT_DUMP_ALLOWLIST_PATTERNS
+      );
       expect(Array.isArray(config.dumpAllowlistPatterns)).toBe(true);
       expect(config.dumpAllowlistPatterns).toEqual([
         DEFAULT_DUMP_ALLOWLIST_PATTERN,
@@ -107,15 +129,21 @@ describe("site config", () => {
     };
 
     it("matches the first pattern", () => {
-      expect(shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/app.js")).toBe(true);
+      expect(
+        shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/app.js")
+      ).toBe(true);
     });
 
     it("matches a middle pattern", () => {
-      expect(shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/style.css")).toBe(true);
+      expect(
+        shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/style.css")
+      ).toBe(true);
     });
 
     it("matches the last pattern", () => {
-      expect(shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/data.json")).toBe(true);
+      expect(
+        shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/data.json")
+      ).toBe(true);
     });
 
     it("matches wasm files when a wasm pattern is present", () => {
@@ -124,15 +152,25 @@ describe("site config", () => {
         dumpAllowlistPatterns: ["\\.wasm$"]
       };
 
-      expect(shouldDumpRequest(wasmSite, "GET", "https://cdn.example.com/pkg/app.wasm")).toBe(true);
+      expect(
+        shouldDumpRequest(
+          wasmSite,
+          "GET",
+          "https://cdn.example.com/pkg/app.wasm"
+        )
+      ).toBe(true);
     });
 
     it("rejects when no pattern matches", () => {
-      expect(shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/image.png")).toBe(false);
+      expect(
+        shouldDumpRequest(baseSite, "GET", "https://cdn.example.com/image.png")
+      ).toBe(false);
     });
 
     it("rejects non-GET requests regardless of patterns", () => {
-      expect(shouldDumpRequest(baseSite, "POST", "https://cdn.example.com/app.js")).toBe(false);
+      expect(
+        shouldDumpRequest(baseSite, "POST", "https://cdn.example.com/app.js")
+      ).toBe(false);
     });
   });
 });

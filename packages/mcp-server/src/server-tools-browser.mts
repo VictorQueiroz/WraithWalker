@@ -1,7 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { buildTraceStatusView, type createExtensionSessionTracker } from "./extension-session.mjs";
+import {
+  buildTraceStatusView,
+  type createExtensionSessionTracker
+} from "./extension-session.mjs";
 import { optionalStringArraySchema, renderJson } from "./server-responses.mjs";
 
 function filterConsoleEntries(
@@ -37,11 +40,17 @@ function filterConsoleEntries(
       return false;
     }
 
-    if (normalizedSearch && !entry.text.toLowerCase().includes(normalizedSearch)) {
+    if (
+      normalizedSearch &&
+      !entry.text.toLowerCase().includes(normalizedSearch)
+    ) {
       return false;
     }
 
-    if (normalizedSources && !normalizedSources.has(entry.source.toLowerCase())) {
+    if (
+      normalizedSources &&
+      !normalizedSources.has(entry.source.toLowerCase())
+    ) {
       return false;
     }
 
@@ -74,11 +83,33 @@ export function registerBrowserTools(
     "read-console",
     "Read recent browser console and log entries observed by the connected extension",
     {
-      limit: z.number().int().positive().max(200).optional().describe("Maximum number of recent entries to return"),
-      tabId: z.number().int().nonnegative().optional().describe("Optional exact tab ID filter"),
-      search: z.string().trim().min(1).optional().describe("Optional case-insensitive substring filter on the entry text"),
-      sources: optionalStringArraySchema.describe("Optional exact log sources to include"),
-      levels: optionalStringArraySchema.describe("Optional exact log levels to include")
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(200)
+        .optional()
+        .describe("Maximum number of recent entries to return"),
+      tabId: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe("Optional exact tab ID filter"),
+      search: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          "Optional case-insensitive substring filter on the entry text"
+        ),
+      sources: optionalStringArraySchema.describe(
+        "Optional exact log sources to include"
+      ),
+      levels: optionalStringArraySchema.describe(
+        "Optional exact log levels to include"
+      )
     },
     async ({ limit, tabId, search, sources, levels }) => {
       const status = await extensionSessions.getStatus();
@@ -105,6 +136,7 @@ export function registerBrowserTools(
     "trace-status",
     "Report guided trace readiness plus an agent-friendly summary of the active trace, if one exists",
     {},
-    async () => renderJson(buildTraceStatusView(await extensionSessions.getStatus()))
+    async () =>
+      renderJson(buildTraceStatusView(await extensionSessions.getStatus()))
   );
 }

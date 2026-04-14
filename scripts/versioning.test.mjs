@@ -17,9 +17,17 @@ import {
 } from "./versioning-lib.mjs";
 
 function createFixtureRoot({ packageVersion, manifestVersion }) {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-versioning-"));
-  const packageManifestPath = path.join(rootDir, EXTENSION_PACKAGE_MANIFEST_RELATIVE_PATH);
-  const staticManifestPath = path.join(rootDir, EXTENSION_STATIC_MANIFEST_RELATIVE_PATH);
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wraithwalker-versioning-")
+  );
+  const packageManifestPath = path.join(
+    rootDir,
+    EXTENSION_PACKAGE_MANIFEST_RELATIVE_PATH
+  );
+  const staticManifestPath = path.join(
+    rootDir,
+    EXTENSION_STATIC_MANIFEST_RELATIVE_PATH
+  );
 
   fs.mkdirSync(path.dirname(packageManifestPath), { recursive: true });
   fs.mkdirSync(path.dirname(staticManifestPath), { recursive: true });
@@ -55,7 +63,9 @@ test("syncExtensionManifestVersion rewrites the static manifest version from pac
   assert.equal(result.changed, true);
   assert.equal(result.version, "3.1.4");
   assert.equal(readJson(staticManifestPath).version, "3.1.4");
-  assert.deepEqual(readJson(staticManifestPath).action, { default_title: "WraithWalker" });
+  assert.deepEqual(readJson(staticManifestPath).action, {
+    default_title: "WraithWalker"
+  });
 });
 
 test("syncExtensionManifestVersion reports unchanged when versions already match", () => {
@@ -99,12 +109,14 @@ Test release metadata.
 });
 
 test("getChangedChangesetFiles keeps only changed changeset markdown files that still exist", () => {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-changesets-"));
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wraithwalker-changesets-")
+  );
   const changesetDir = path.join(rootDir, ".changeset");
   const keptChangesetPath = path.join(changesetDir, "kept.md");
 
   fs.mkdirSync(changesetDir, { recursive: true });
-  fs.writeFileSync(keptChangesetPath, "---\n\"@wraithwalker/cli\": patch\n---\n");
+  fs.writeFileSync(keptChangesetPath, '---\n"@wraithwalker/cli": patch\n---\n');
 
   assert.deepEqual(
     getChangedChangesetFiles(
@@ -121,7 +133,9 @@ test("getChangedChangesetFiles keeps only changed changeset markdown files that 
 });
 
 test("getDeclaredChangesetPackagesFromFiles unions packages across provided changeset files", () => {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-changesets-"));
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wraithwalker-changesets-")
+  );
   const changesetDir = path.join(rootDir, ".changeset");
   const firstChangesetPath = path.join(changesetDir, "one.md");
   const secondChangesetPath = path.join(changesetDir, "two.md");
@@ -147,13 +161,18 @@ Extension update.
   );
 
   assert.deepEqual(
-    getDeclaredChangesetPackagesFromFiles([firstChangesetPath, secondChangesetPath]),
+    getDeclaredChangesetPackagesFromFiles([
+      firstChangesetPath,
+      secondChangesetPath
+    ]),
     ["@wraithwalker/cli", "@wraithwalker/extension"]
   );
 });
 
 test("getDeclaredChangesetPackages unions packages across changeset files", () => {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "wraithwalker-changesets-"));
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wraithwalker-changesets-")
+  );
   const changesetDir = path.join(rootDir, ".changeset");
 
   fs.mkdirSync(changesetDir, { recursive: true });
@@ -177,8 +196,8 @@ Extension update.
 `
   );
 
-  assert.deepEqual(
-    getDeclaredChangesetPackages(rootDir),
-    ["@wraithwalker/cli", "@wraithwalker/extension"]
-  );
+  assert.deepEqual(getDeclaredChangesetPackages(rootDir), [
+    "@wraithwalker/cli",
+    "@wraithwalker/extension"
+  ]);
 });

@@ -47,7 +47,10 @@ export interface BackgroundNativeActionsApi {
     rootResult?: RootReadySuccess;
     launchPathOverride?: string;
   }): Promise<NativeVerifyResult>;
-  openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult>;
+  openDirectoryInEditor(
+    commandTemplate?: string,
+    editorId?: string
+  ): Promise<NativeOpenResult>;
   revealRootInOs(): Promise<NativeOpenResult>;
   listScenariosForActiveTarget(): Promise<ScenarioListResult>;
   saveScenarioForActiveTarget(name: string): Promise<ScenarioResult>;
@@ -66,7 +69,12 @@ export function createBackgroundNativeActions({
   }: {
     requestPermission?: boolean;
   } = {}): Promise<
-    | { ok: true; rootId: string; launchPath: string; source: "server" | "local" }
+    | {
+        ok: true;
+        rootId: string;
+        launchPath: string;
+        source: "server" | "local";
+      }
     | { ok: false; error: string }
   > {
     const serverInfo = await authority.refreshServerInfo({ force: true });
@@ -88,13 +96,14 @@ export function createBackgroundNativeActions({
       };
     }
 
-    const rootResult: RootReadyResult = !requestPermission && state.localRootReady && state.localRootSentinel
-      ? {
-          ok: true,
-          sentinel: state.localRootSentinel,
-          permission: "granted"
-        }
-      : await authority.ensureLocalRootReady({ requestPermission });
+    const rootResult: RootReadyResult =
+      !requestPermission && state.localRootReady && state.localRootSentinel
+        ? {
+            ok: true,
+            sentinel: state.localRootSentinel,
+            permission: "granted"
+          }
+        : await authority.ensureLocalRootReady({ requestPermission });
     if (!rootResult.ok) {
       return { ok: false, error: getErrorMessage(rootResult) };
     }
@@ -106,7 +115,11 @@ export function createBackgroundNativeActions({
 
     const launchPath = state.nativeHostConfig.launchPath.trim();
     if (!launchPath) {
-      return { ok: false, error: "Configure the shared editor launch path in the options page first." };
+      return {
+        ok: false,
+        error:
+          "Configure the shared editor launch path in the options page first."
+      };
     }
 
     return {
@@ -128,7 +141,8 @@ export function createBackgroundNativeActions({
   } = {}): Promise<NativeVerifyResult> {
     await authority.refreshStoredConfig();
     if (!state.nativeHostConfig.hostName.trim()) {
-      const error = "Configure the native host name and shared editor launch path in the options page first.";
+      const error =
+        "Configure the native host name and shared editor launch path in the options page first.";
       return { ok: false, error };
     }
 
@@ -142,7 +156,8 @@ export function createBackgroundNativeActions({
       resolvedTarget = {
         ok: true,
         rootId,
-        launchPath: launchPathOverride ?? state.nativeHostConfig.launchPath.trim(),
+        launchPath:
+          launchPathOverride ?? state.nativeHostConfig.launchPath.trim(),
         source: "local"
       };
     } else {
@@ -153,23 +168,35 @@ export function createBackgroundNativeActions({
     }
 
     if (!resolvedTarget.launchPath) {
-      return { ok: false, error: "Configure the shared editor launch path in the options page first." };
+      return {
+        ok: false,
+        error:
+          "Configure the shared editor launch path in the options page first."
+      };
     }
 
     try {
-      const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-        type: "verifyRoot",
-        path: resolvedTarget.launchPath,
-        expectedRootId: resolvedTarget.rootId
-      });
+      const response = await chromeApi.runtime.sendNativeMessage(
+        state.nativeHostConfig.hostName,
+        {
+          type: "verifyRoot",
+          path: resolvedTarget.launchPath,
+          expectedRootId: resolvedTarget.rootId
+        }
+      );
 
       if (!response?.ok) {
-        throw new Error(String(response?.error || "Native host verification failed."));
+        throw new Error(
+          String(response?.error || "Native host verification failed.")
+        );
       }
 
       return { ok: true, verifiedAt: new Date().toISOString() };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 
@@ -182,7 +209,8 @@ export function createBackgroundNativeActions({
 
       await authority.withServerFallback({
         remoteOperation: () => serverClient.generateContext(payload),
-        localOperation: () => authority.sendOffscreenMessage("fs.generateContext", payload)
+        localOperation: () =>
+          authority.sendOffscreenMessage("fs.generateContext", payload)
       });
     } catch {
       // Context generation failure should not block editor open.
@@ -196,7 +224,10 @@ export function createBackgroundNativeActions({
       });
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 
@@ -211,15 +242,22 @@ export function createBackgroundNativeActions({
     return { ok: true };
   }
 
-  async function openDirectoryInEditor(commandTemplate?: string, editorId?: string): Promise<NativeOpenResult> {
+  async function openDirectoryInEditor(
+    commandTemplate?: string,
+    editorId?: string
+  ): Promise<NativeOpenResult> {
     await authority.refreshStoredConfig();
     const serverInfo = await authority.refreshServerInfo({ force: true });
     const resolvedEditorId = editorId || state.preferredEditorId;
-    const launch = resolveEditorLaunch(state.nativeHostConfig, resolvedEditorId);
+    const launch = resolveEditorLaunch(
+      state.nativeHostConfig,
+      resolvedEditorId
+    );
     const urlTemplate = launch.urlTemplate.trim();
     const appUrl = launch.appUrl.trim();
     const canLaunchEditorApp = Boolean(appUrl && !launch.hasCustomUrlOverride);
-    const launchPath = serverInfo?.rootPath || state.nativeHostConfig.launchPath.trim();
+    const launchPath =
+      serverInfo?.rootPath || state.nativeHostConfig.launchPath.trim();
     const isCursorLaunch = launch.editorId === DEFAULT_EDITOR_ID;
     const shouldOpenCursorPrompt = isCursorLaunch && !serverInfo;
     const cursorPromptUrl = shouldOpenCursorPrompt
@@ -232,11 +270,15 @@ export function createBackgroundNativeActions({
       const urls: string[] = [];
 
       if (launchPath && urlTemplate) {
-        const target = await resolveActiveLaunchTarget({ requestPermission: true });
+        const target = await resolveActiveLaunchTarget({
+          requestPermission: true
+        });
         if (target.ok === false) {
           return { ok: false, error: target.error };
         }
-        urls.push(buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId));
+        urls.push(
+          buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId)
+        );
       }
 
       if (cursorPromptUrl) {
@@ -257,11 +299,15 @@ export function createBackgroundNativeActions({
     }
 
     if (urlTemplate) {
-      const target = await resolveActiveLaunchTarget({ requestPermission: true });
+      const target = await resolveActiveLaunchTarget({
+        requestPermission: true
+      });
       if (target.ok === false) {
         return { ok: false, error: target.error };
       }
-      return openEditorViaUrl(buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId));
+      return openEditorViaUrl(
+        buildEditorLaunchUrl(urlTemplate, target.launchPath, target.rootId)
+      );
     }
 
     const target = await resolveActiveLaunchTarget({ requestPermission: true });
@@ -282,20 +328,28 @@ export function createBackgroundNativeActions({
     }
 
     try {
-      const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-        type: "openDirectory",
-        path: target.launchPath,
-        expectedRootId: target.rootId,
-        commandTemplate: commandTemplate || launch.commandTemplate
-      });
+      const response = await chromeApi.runtime.sendNativeMessage(
+        state.nativeHostConfig.hostName,
+        {
+          type: "openDirectory",
+          path: target.launchPath,
+          expectedRootId: target.rootId,
+          commandTemplate: commandTemplate || launch.commandTemplate
+        }
+      );
 
       if (!response?.ok) {
-        throw new Error(String(response?.error || "Open directory request failed."));
+        throw new Error(
+          String(response?.error || "Open directory request failed.")
+        );
       }
 
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 
@@ -311,34 +365,51 @@ export function createBackgroundNativeActions({
         await serverClient.revealRoot();
         return { ok: true };
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        };
       }
     }
 
     if (!state.nativeHostConfig.hostName.trim()) {
-      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+      return {
+        ok: false,
+        error:
+          "Configure the native host name and shared editor launch path in the options page first."
+      };
     }
 
     try {
-      const response = await chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-        type: "revealDirectory",
-        path: target.launchPath,
-        expectedRootId: target.rootId
-      });
+      const response = await chromeApi.runtime.sendNativeMessage(
+        state.nativeHostConfig.hostName,
+        {
+          type: "revealDirectory",
+          path: target.launchPath,
+          expectedRootId: target.rootId
+        }
+      );
 
       if (!response?.ok) {
-        throw new Error(String(response?.error || "Reveal directory request failed."));
+        throw new Error(
+          String(response?.error || "Reveal directory request failed.")
+        );
       }
 
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 
   async function listScenariosForActiveTarget(): Promise<ScenarioListResult> {
     await authority.refreshStoredConfig();
-    const target = await resolveActiveLaunchTarget({ requestPermission: false });
+    const target = await resolveActiveLaunchTarget({
+      requestPermission: false
+    });
     if (target.ok === false) {
       return { ok: false, error: target.error };
     }
@@ -348,24 +419,38 @@ export function createBackgroundNativeActions({
         const result = await serverClient.listScenarios();
         return { ok: true, scenarios: result.scenarios };
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        };
       }
     }
 
     if (!state.nativeHostConfig.hostName.trim()) {
-      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+      return {
+        ok: false,
+        error:
+          "Configure the native host name and shared editor launch path in the options page first."
+      };
     }
 
-    return chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-      type: "listScenarios",
-      path: target.launchPath,
-      expectedRootId: target.rootId
-    }) as Promise<ScenarioListResult>;
+    return chromeApi.runtime.sendNativeMessage(
+      state.nativeHostConfig.hostName,
+      {
+        type: "listScenarios",
+        path: target.launchPath,
+        expectedRootId: target.rootId
+      }
+    ) as Promise<ScenarioListResult>;
   }
 
-  async function saveScenarioForActiveTarget(name: string): Promise<ScenarioResult> {
+  async function saveScenarioForActiveTarget(
+    name: string
+  ): Promise<ScenarioResult> {
     await authority.refreshStoredConfig();
-    const target = await resolveActiveLaunchTarget({ requestPermission: false });
+    const target = await resolveActiveLaunchTarget({
+      requestPermission: false
+    });
     if (target.ok === false) {
       return { ok: false, error: target.error };
     }
@@ -374,25 +459,39 @@ export function createBackgroundNativeActions({
       try {
         return await serverClient.saveScenario(name);
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        };
       }
     }
 
     if (!state.nativeHostConfig.hostName.trim()) {
-      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+      return {
+        ok: false,
+        error:
+          "Configure the native host name and shared editor launch path in the options page first."
+      };
     }
 
-    return chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-      type: "saveScenario",
-      path: target.launchPath,
-      expectedRootId: target.rootId,
-      name
-    }) as Promise<ScenarioResult>;
+    return chromeApi.runtime.sendNativeMessage(
+      state.nativeHostConfig.hostName,
+      {
+        type: "saveScenario",
+        path: target.launchPath,
+        expectedRootId: target.rootId,
+        name
+      }
+    ) as Promise<ScenarioResult>;
   }
 
-  async function switchScenarioForActiveTarget(name: string): Promise<ScenarioResult> {
+  async function switchScenarioForActiveTarget(
+    name: string
+  ): Promise<ScenarioResult> {
     await authority.refreshStoredConfig();
-    const target = await resolveActiveLaunchTarget({ requestPermission: false });
+    const target = await resolveActiveLaunchTarget({
+      requestPermission: false
+    });
     if (target.ok === false) {
       return { ok: false, error: target.error };
     }
@@ -401,20 +500,30 @@ export function createBackgroundNativeActions({
       try {
         return await serverClient.switchScenario(name);
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        };
       }
     }
 
     if (!state.nativeHostConfig.hostName.trim()) {
-      return { ok: false, error: "Configure the native host name and shared editor launch path in the options page first." };
+      return {
+        ok: false,
+        error:
+          "Configure the native host name and shared editor launch path in the options page first."
+      };
     }
 
-    return chromeApi.runtime.sendNativeMessage(state.nativeHostConfig.hostName, {
-      type: "switchScenario",
-      path: target.launchPath,
-      expectedRootId: target.rootId,
-      name
-    }) as Promise<ScenarioResult>;
+    return chromeApi.runtime.sendNativeMessage(
+      state.nativeHostConfig.hostName,
+      {
+        type: "switchScenario",
+        path: target.launchPath,
+        expectedRootId: target.rootId,
+        name
+      }
+    ) as Promise<ScenarioResult>;
   }
 
   return {

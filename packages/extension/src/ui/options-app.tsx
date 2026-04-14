@@ -1,7 +1,15 @@
 import * as React from "react";
 
-import { DEFAULT_DUMP_ALLOWLIST_PATTERNS, DEFAULT_EDITOR_ID, EDITOR_PRESETS, type EditorPreset } from "../lib/constants.js";
-import { getEditorLaunchOverride, updateEditorLaunchOverride } from "../lib/editor-launch.js";
+import {
+  DEFAULT_DUMP_ALLOWLIST_PATTERNS,
+  DEFAULT_EDITOR_ID,
+  EDITOR_PRESETS,
+  type EditorPreset
+} from "../lib/constants.js";
+import {
+  getEditorLaunchOverride,
+  updateEditorLaunchOverride
+} from "../lib/editor-launch.js";
 import type {
   BackgroundMessage,
   DiagnosticsResult,
@@ -11,7 +19,10 @@ import type {
   ScenarioListResult,
   ScenarioResult
 } from "../lib/messages.js";
-import { normalizeSiteInput, originToPermissionPattern } from "../lib/path-utils.js";
+import {
+  normalizeSiteInput,
+  originToPermissionPattern
+} from "../lib/path-utils.js";
 import {
   createRootDirectoryPickerOptions,
   ensureRootSentinel as defaultEnsureRootSentinel,
@@ -20,8 +31,16 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
-import { createConfiguredSiteConfig, isValidDumpAllowlistPatterns } from "../lib/site-config.js";
-import type { NativeHostConfig, RootSentinel, SessionSnapshot, SiteConfig } from "../lib/types.js";
+import {
+  createConfiguredSiteConfig,
+  isValidDumpAllowlistPatterns
+} from "../lib/site-config.js";
+import type {
+  NativeHostConfig,
+  RootSentinel,
+  SessionSnapshot,
+  SiteConfig
+} from "../lib/types.js";
 import {
   Alert,
   Badge,
@@ -84,7 +103,10 @@ function getErrorMessage(result: { error?: string }): string {
   return result.error || "Unknown error.";
 }
 
-function sendMessage<T>(runtime: RuntimeApi, message: BackgroundMessage): Promise<T> {
+function sendMessage<T>(
+  runtime: RuntimeApi,
+  message: BackgroundMessage
+): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;
 }
 
@@ -94,9 +116,7 @@ function parseDumpAllowlistPatterns(text: string): string[] {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  return patterns.length > 0
-    ? patterns
-    : [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
+  return patterns.length > 0 ? patterns : [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
 }
 
 function formatDumpAllowlistPatterns(patterns: string[]): string {
@@ -120,8 +140,10 @@ function RootStatusSummary({
     return (
       <Alert variant="default">
         Connected to the local WraithWalker server.
-        {serverRootPath ? ` Settings changes are using ${serverRootPath}.` : " Settings changes are using the server root."}
-        {" "}A browser-local root is optional fallback only.
+        {serverRootPath
+          ? ` Settings changes are using ${serverRootPath}.`
+          : " Settings changes are using the server root."}{" "}
+        A browser-local root is optional fallback only.
       </Alert>
     );
   }
@@ -129,7 +151,8 @@ function RootStatusSummary({
   if (!rootState || !rootState.hasHandle) {
     return (
       <Alert variant="default">
-        No WraithWalker root directory is connected yet. Choose one to start writing fixtures to disk.
+        No WraithWalker root directory is connected yet. Choose one to start
+        writing fixtures to disk.
       </Alert>
     );
   }
@@ -137,7 +160,8 @@ function RootStatusSummary({
   if (rootState.permission !== "granted") {
     return (
       <Alert variant="destructive">
-        Chrome still knows this WraithWalker root directory, but write access needs to be reconnected before capture can start.
+        Chrome still knows this WraithWalker root directory, but write access
+        needs to be reconnected before capture can start.
       </Alert>
     );
   }
@@ -173,14 +197,21 @@ function SiteCard({
 }: {
   siteConfig: SiteConfig;
   disabled?: boolean;
-  onSave: (origin: string, patch: Pick<SiteConfig, "dumpAllowlistPatterns">) => Promise<void>;
+  onSave: (
+    origin: string,
+    patch: Pick<SiteConfig, "dumpAllowlistPatterns">
+  ) => Promise<void>;
   onRemove: (origin: string) => Promise<void>;
 }) {
-  const [patternsText, setPatternsText] = React.useState(formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns));
+  const [patternsText, setPatternsText] = React.useState(
+    formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns)
+  );
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
 
   React.useEffect(() => {
-    setPatternsText(formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns));
+    setPatternsText(
+      formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns)
+    );
   }, [siteConfig.dumpAllowlistPatterns]);
 
   return (
@@ -189,7 +220,9 @@ function SiteCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle>{siteConfig.origin}</CardTitle>
-            <CardDescription>Granted pattern: {originToPermissionPattern(siteConfig.origin)}</CardDescription>
+            <CardDescription>
+              Granted pattern: {originToPermissionPattern(siteConfig.origin)}
+            </CardDescription>
           </div>
           <div className="flex gap-2">
             <Button
@@ -200,7 +233,8 @@ function SiteCard({
                 setBusy("save");
                 try {
                   await onSave(siteConfig.origin, {
-                    dumpAllowlistPatterns: parseDumpAllowlistPatterns(patternsText)
+                    dumpAllowlistPatterns:
+                      parseDumpAllowlistPatterns(patternsText)
                   });
                 } finally {
                   setBusy(null);
@@ -229,7 +263,9 @@ function SiteCard({
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-2">
-          <Label htmlFor={`patterns-${siteConfig.origin}`}>Dump Allowlist Patterns</Label>
+          <Label htmlFor={`patterns-${siteConfig.origin}`}>
+            Dump Allowlist Patterns
+          </Label>
           <Textarea
             id={`patterns-${siteConfig.origin}`}
             value={patternsText}
@@ -237,7 +273,9 @@ function SiteCard({
             onChange={(event) => setPatternsText(event.currentTarget.value)}
             placeholder={"\\.m?(js|ts)x?$"}
           />
-          <p className="text-xs text-muted-foreground">One regular expression per line.</p>
+          <p className="text-xs text-muted-foreground">
+            One regular expression per line.
+          </p>
         </div>
       </CardContent>
     </Card>
@@ -258,7 +296,9 @@ export function OptionsApp({
   storeRootHandleWithSentinel = defaultStoreRootHandleWithSentinel,
   writeClipboardText = async (text: string) => {
     if (!windowRef.navigator?.clipboard?.writeText) {
-      throw new Error("Clipboard access is unavailable in this browser context.");
+      throw new Error(
+        "Clipboard access is unavailable in this browser context."
+      );
     }
     await windowRef.navigator.clipboard.writeText(text);
   },
@@ -267,17 +307,22 @@ export function OptionsApp({
   const [sites, setSites] = React.useState<SiteConfig[]>([]);
   const [siteOriginInput, setSiteOriginInput] = React.useState("");
   const [rootState, setRootState] = React.useState<RootState | null>(null);
-  const [sessionSnapshot, setSessionSnapshot] = React.useState<SessionSnapshot | null>(null);
-  const [nativeHostConfig, setNativeHostConfigState] = React.useState<NativeHostConfig | null>(null);
+  const [sessionSnapshot, setSessionSnapshot] =
+    React.useState<SessionSnapshot | null>(null);
+  const [nativeHostConfig, setNativeHostConfigState] =
+    React.useState<NativeHostConfig | null>(null);
   const [scenarioNames, setScenarioNames] = React.useState<string[]>([]);
   const [scenarioName, setScenarioName] = React.useState("");
-  const [scenarioStatus, setScenarioStatus] = React.useState<FlashState | null>(null);
+  const [scenarioStatus, setScenarioStatus] = React.useState<FlashState | null>(
+    null
+  );
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [flash, setFlash] = React.useState<FlashState | null>(null);
   const [loading, setLoading] = React.useState(true);
   const cursorEditor = React.useMemo(
-    () => editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID)
-      ?? editorPresets[0],
+    () =>
+      editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID) ??
+      editorPresets[0],
     [editorPresets]
   );
   const cursorOverride = nativeHostConfig
@@ -287,7 +332,9 @@ export function OptionsApp({
   const canEditSites = serverConnected || hasConfiguredRoot(rootState);
 
   const refreshSessionSnapshot = React.useCallback(async () => {
-    const snapshot = await sendMessage<SessionSnapshot>(chromeApi.runtime, { type: "session.getState" });
+    const snapshot = await sendMessage<SessionSnapshot>(chromeApi.runtime, {
+      type: "session.getState"
+    });
     setSessionSnapshot(snapshot);
     return snapshot;
   }, [chromeApi.runtime]);
@@ -304,9 +351,8 @@ export function OptionsApp({
     }
 
     const permission = await queryRootPermission(rootHandle);
-    const sentinel = permission === "granted"
-      ? await ensureRootSentinel(rootHandle)
-      : null;
+    const sentinel =
+      permission === "granted" ? await ensureRootSentinel(rootHandle) : null;
 
     setRootState({
       hasHandle: true,
@@ -317,7 +363,9 @@ export function OptionsApp({
 
   const refreshScenarios = React.useCallback(async () => {
     try {
-      const result = await sendMessage<ScenarioListResult>(chromeApi.runtime, { type: "scenario.list" });
+      const result = await sendMessage<ScenarioListResult>(chromeApi.runtime, {
+        type: "scenario.list"
+      });
       if (!result.ok) {
         setScenarioStatus({
           variant: "destructive",
@@ -370,18 +418,25 @@ export function OptionsApp({
     setFlash(null);
     try {
       if (!canEditSites) {
-        throw new Error("Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns.");
+        throw new Error(
+          "Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns."
+        );
       }
 
       const origin = normalizeSiteInput(siteOriginInput);
       const permissionPattern = originToPermissionPattern(origin);
-      const granted = await chromeApi.permissions.request({ origins: [permissionPattern] });
+      const granted = await chromeApi.permissions.request({
+        origins: [permissionPattern]
+      });
       if (!granted) {
-        throw new Error(`Host access was not granted for ${permissionPattern}.`);
+        throw new Error(
+          `Host access was not granted for ${permissionPattern}.`
+        );
       }
 
-      const nextSites = [...sites, createConfiguredSiteConfig(origin)]
-        .sort((left, right) => left.origin.localeCompare(right.origin));
+      const nextSites = [...sites, createConfiguredSiteConfig(origin)].sort(
+        (left, right) => left.origin.localeCompare(right.origin)
+      );
       await setSiteConfigs(nextSites);
       setSites(nextSites);
       setSiteOriginInput("");
@@ -398,7 +453,10 @@ export function OptionsApp({
     }
   }
 
-  async function handleUpdateSite(origin: string, patch: Pick<SiteConfig, "dumpAllowlistPatterns">) {
+  async function handleUpdateSite(
+    origin: string,
+    patch: Pick<SiteConfig, "dumpAllowlistPatterns">
+  ) {
     if (!canEditSites) {
       setFlash({
         variant: "destructive",
@@ -416,14 +474,14 @@ export function OptionsApp({
     }
 
     try {
-      const nextSites = sites.map((site) => (
+      const nextSites = sites.map((site) =>
         site.origin === origin
           ? {
               ...site,
               dumpAllowlistPatterns: patch.dumpAllowlistPatterns
             }
           : site
-      ));
+      );
       await setSiteConfigs(nextSites);
       setSites(nextSites);
       await refreshSessionSnapshot();
@@ -443,14 +501,18 @@ export function OptionsApp({
     setFlash(null);
     try {
       if (!canEditSites) {
-        throw new Error("Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns.");
+        throw new Error(
+          "Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns."
+        );
       }
 
       const permissionPattern = originToPermissionPattern(origin);
       const nextSites = sites.filter((site) => site.origin !== origin);
       await setSiteConfigs(nextSites);
       setSites(nextSites);
-      await Promise.resolve(chromeApi.permissions.remove({ origins: [permissionPattern] })).catch(() => false);
+      await Promise.resolve(
+        chromeApi.permissions.remove({ origins: [permissionPattern] })
+      ).catch(() => false);
       await refreshSessionSnapshot();
       setFlash({
         variant: "success",
@@ -471,7 +533,9 @@ export function OptionsApp({
         const currentHandle = rootState?.hasHandle
           ? await loadStoredRootHandle()
           : undefined;
-        const rootHandle = await windowRef.showDirectoryPicker(createRootDirectoryPickerOptions(currentHandle));
+        const rootHandle = await windowRef.showDirectoryPicker(
+          createRootDirectoryPickerOptions(currentHandle)
+        );
         const sentinel = await storeRootHandleWithSentinel(rootHandle);
         await refreshRootState();
         setFlash({
@@ -521,7 +585,9 @@ export function OptionsApp({
   async function handleVerifyHelper() {
     setFlash(null);
     try {
-      const result = await sendMessage<NativeVerifyResult>(chromeApi.runtime, { type: "native.verify" });
+      const result = await sendMessage<NativeVerifyResult>(chromeApi.runtime, {
+        type: "native.verify"
+      });
       const refreshedConfig = await getNativeHostConfig();
       setNativeHostConfigState(refreshedConfig);
       if (!result.ok) {
@@ -542,7 +608,9 @@ export function OptionsApp({
   async function handleOpenLaunchFolder() {
     setFlash(null);
     try {
-      const result = await sendMessage<NativeOpenResult>(chromeApi.runtime, { type: "native.revealRoot" });
+      const result = await sendMessage<NativeOpenResult>(chromeApi.runtime, {
+        type: "native.revealRoot"
+      });
       if (!result.ok) {
         throw new Error(getErrorMessage(result as ErrorResult));
       }
@@ -561,7 +629,9 @@ export function OptionsApp({
   async function handleCopyDiagnostics() {
     setFlash(null);
     try {
-      const result = await sendMessage<DiagnosticsResult>(chromeApi.runtime, { type: "diagnostics.getReport" });
+      const result = await sendMessage<DiagnosticsResult>(chromeApi.runtime, {
+        type: "diagnostics.getReport"
+      });
       if (!result.ok) {
         throw new Error(getErrorMessage(result as ErrorResult));
       }
@@ -643,9 +713,12 @@ export function OptionsApp({
             <div className="space-y-2">
               <Badge variant="default">WraithWalker Settings</Badge>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Choose the WraithWalker root first, everything else second.</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  Choose the WraithWalker root first, everything else second.
+                </h1>
                 <p className="max-w-2xl text-sm text-muted-foreground">
-                  Reuse the last granted root, keep exact origins tidy, and make Cursor the default one-click workspace action.
+                  Reuse the last granted root, keep exact origins tidy, and make
+                  Cursor the default one-click workspace action.
                 </p>
               </div>
             </div>
@@ -671,20 +744,38 @@ export function OptionsApp({
                 {rootState?.sentinel ? (
                   <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3 text-sm">
                     <div className="font-medium">Root ID</div>
-                    <div className="mt-1 font-mono text-xs text-muted-foreground">{rootState.sentinel.rootId}</div>
+                    <div className="mt-1 font-mono text-xs text-muted-foreground">
+                      {rootState.sentinel.rootId}
+                    </div>
                   </div>
                 ) : null}
-                <Button className="sm:w-fit" type="button" onClick={() => void handleRootAction()}>
+                <Button
+                  className="sm:w-fit"
+                  type="button"
+                  onClick={() => void handleRootAction()}
+                >
                   {rootActionLabel}
                 </Button>
-                <Button className="sm:w-fit" type="button" variant="secondary" onClick={() => void handleOpenLaunchFolder()}>
+                <Button
+                  className="sm:w-fit"
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void handleOpenLaunchFolder()}
+                >
                   Open Launch Folder
                 </Button>
-                <Button className="sm:w-fit" type="button" variant="secondary" onClick={() => void handleCopyDiagnostics()}>
+                <Button
+                  className="sm:w-fit"
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void handleCopyDiagnostics()}
+                >
                   Copy Diagnostics
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Chrome can remember the selected directory handle, but opening that folder in Finder or Explorer still requires the native host plus the shared launch path below.
+                  Chrome can remember the selected directory handle, but opening
+                  that folder in Finder or Explorer still requires the native
+                  host plus the shared launch path below.
                 </p>
               </CardContent>
             </Card>
@@ -700,16 +791,23 @@ export function OptionsApp({
                 {serverConnected ? (
                   <Alert variant="success">
                     Connected to the local WraithWalker server.
-                    {sessionSnapshot?.captureRootPath ? ` Editing ${sessionSnapshot.captureRootPath}.` : " Editing the server root."}
+                    {sessionSnapshot?.captureRootPath
+                      ? ` Editing ${sessionSnapshot.captureRootPath}.`
+                      : " Editing the server root."}
                   </Alert>
                 ) : null}
-                <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={handleAddSite}>
+                <form
+                  className="grid gap-3 sm:grid-cols-[1fr_auto]"
+                  onSubmit={handleAddSite}
+                >
                   <Input
                     aria-label="Exact origin"
                     placeholder="https://app.example.com"
                     disabled={!canEditSites}
                     value={siteOriginInput}
-                    onChange={(event) => setSiteOriginInput(event.currentTarget.value)}
+                    onChange={(event) =>
+                      setSiteOriginInput(event.currentTarget.value)
+                    }
                   />
                   <Button type="submit" disabled={!canEditSites}>
                     Add Origin
@@ -718,7 +816,9 @@ export function OptionsApp({
                 <div className="grid gap-3">
                   {!canEditSites ? (
                     <Alert variant="default">
-                      Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns.
+                      Choose and connect a WraithWalker root directory, or
+                      connect the local WraithWalker server, before configuring
+                      origins or dump patterns.
                     </Alert>
                   ) : sites.length > 0 ? (
                     sites.map((siteConfig) => (
@@ -745,13 +845,24 @@ export function OptionsApp({
                 />
               </CardHeader>
               <CardContent className="grid gap-4">
-                {scenarioStatus ? <Alert variant={scenarioStatus.variant}>{scenarioStatus.text}</Alert> : null}
+                {scenarioStatus ? (
+                  <Alert variant={scenarioStatus.variant}>
+                    {scenarioStatus.text}
+                  </Alert>
+                ) : null}
                 <div className="grid gap-2">
                   {scenarioNames.length > 0 ? (
                     scenarioNames.map((name) => (
-                      <div key={name} className="flex items-center justify-between rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                      <div
+                        key={name}
+                        className="flex items-center justify-between rounded-xl border border-border/70 bg-white/70 px-4 py-3"
+                      >
                         <span className="font-medium">{name}</span>
-                        <Button type="button" variant="secondary" onClick={() => void handleSwitchScenario(name)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => void handleSwitchScenario(name)}
+                        >
                           Switch
                         </Button>
                       </div>
@@ -766,9 +877,14 @@ export function OptionsApp({
                     aria-label="Scenario name"
                     placeholder="baseline"
                     value={scenarioName}
-                    onChange={(event) => setScenarioName(event.currentTarget.value)}
+                    onChange={(event) =>
+                      setScenarioName(event.currentTarget.value)
+                    }
                   />
-                  <Button type="button" onClick={() => void handleSaveScenario()}>
+                  <Button
+                    type="button"
+                    onClick={() => void handleSaveScenario()}
+                  >
                     Save Scenario
                   </Button>
                 </div>
@@ -781,10 +897,15 @@ export function OptionsApp({
                   <div className="space-y-1">
                     <CardTitle>Advanced Native Host</CardTitle>
                     <CardDescription>
-                      Collapsed by default so the main flow stays focused on the remembered root and default editor.
+                      Collapsed by default so the main flow stays focused on the
+                      remembered root and default editor.
                     </CardDescription>
                   </div>
-                  <Button type="button" variant="ghost" onClick={() => setAdvancedOpen((value) => !value)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setAdvancedOpen((value) => !value)}
+                  >
                     {advancedOpen ? "Hide" : "Show"}
                   </Button>
                 </div>
@@ -792,7 +913,9 @@ export function OptionsApp({
               <CardContent className="grid gap-4">
                 {!advancedOpen ? (
                   <Alert variant="default">
-                    Hidden by default so the common flow stays simple. Open this section when you need native-host verification or editor overrides.
+                    Hidden by default so the common flow stays simple. Open this
+                    section when you need native-host verification or editor
+                    overrides.
                   </Alert>
                 ) : null}
 
@@ -805,74 +928,109 @@ export function OptionsApp({
                         value={nativeHostConfig.hostName}
                         onChange={(event) => {
                           const hostName = event.currentTarget.value;
-                          setNativeHostConfigState((current) => (
+                          setNativeHostConfigState((current) =>
                             current ? { ...current, hostName } : current
-                          ));
+                          );
                         }}
                         placeholder="com.wraithwalker.host"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="native-root-path">Shared Editor Launch Path</Label>
+                      <Label htmlFor="native-root-path">
+                        Shared Editor Launch Path
+                      </Label>
                       <Input
                         id="native-root-path"
                         value={nativeHostConfig.launchPath}
                         onChange={(event) => {
                           const launchPath = event.currentTarget.value;
-                          setNativeHostConfigState((current) => (
+                          setNativeHostConfigState((current) =>
                             current ? { ...current, launchPath } : current
-                          ));
+                          );
                         }}
                         placeholder="/Users/you/wraithwalker-fixtures"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Needed when you want Cursor to open the remembered root directly, or when using the native host fallback. Without it, Cursor can still launch and receive the workspace brief through its prompt deeplink, but Chrome does not expose the absolute local path back to the extension.
+                        Needed when you want Cursor to open the remembered root
+                        directly, or when using the native host fallback.
+                        Without it, Cursor can still launch and receive the
+                        workspace brief through its prompt deeplink, but Chrome
+                        does not expose the absolute local path back to the
+                        extension.
                       </p>
                     </div>
                     <Separator />
                     <div className="grid gap-2">
-                      <Label htmlFor="editor-url-template">Custom URL Override For Cursor</Label>
+                      <Label htmlFor="editor-url-template">
+                        Custom URL Override For Cursor
+                      </Label>
                       <Input
                         id="editor-url-template"
                         value={cursorOverride.urlTemplate ?? ""}
                         onChange={(event) => {
                           const urlTemplate = event.currentTarget.value;
-                          setNativeHostConfigState((current) => (
+                          setNativeHostConfigState((current) =>
                             current
-                              ? updateEditorLaunchOverride(current, cursorEditor.id, {
-                                  ...getEditorLaunchOverride(current, cursorEditor.id),
-                                  urlTemplate
-                                })
+                              ? updateEditorLaunchOverride(
+                                  current,
+                                  cursorEditor.id,
+                                  {
+                                    ...getEditorLaunchOverride(
+                                      current,
+                                      cursorEditor.id
+                                    ),
+                                    urlTemplate
+                                  }
+                                )
                               : current
-                          ));
+                          );
                         }}
-                        placeholder={cursorEditor.urlTemplate || "custom://open?folder=$DIR_COMPONENT"}
+                        placeholder={
+                          cursorEditor.urlTemplate ||
+                          "custom://open?folder=$DIR_COMPONENT"
+                        }
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="editor-command-template">Custom Command Override For Cursor</Label>
+                      <Label htmlFor="editor-command-template">
+                        Custom Command Override For Cursor
+                      </Label>
                       <Input
                         id="editor-command-template"
                         value={cursorOverride.commandTemplate ?? ""}
                         onChange={(event) => {
                           const commandTemplate = event.currentTarget.value;
-                          setNativeHostConfigState((current) => (
+                          setNativeHostConfigState((current) =>
                             current
-                              ? updateEditorLaunchOverride(current, cursorEditor.id, {
-                                  ...getEditorLaunchOverride(current, cursorEditor.id),
-                                  commandTemplate
-                                })
+                              ? updateEditorLaunchOverride(
+                                  current,
+                                  cursorEditor.id,
+                                  {
+                                    ...getEditorLaunchOverride(
+                                      current,
+                                      cursorEditor.id
+                                    ),
+                                    commandTemplate
+                                  }
+                                )
                               : current
-                          ));
+                          );
                         }}
                         placeholder={cursorEditor.commandTemplate}
                       />
                     </div>
                     <div className="flex flex-wrap gap-3">
-                      <Button type="button" onClick={() => void handleSaveLaunchSettings()}>
+                      <Button
+                        type="button"
+                        onClick={() => void handleSaveLaunchSettings()}
+                      >
                         Save Launch Settings
                       </Button>
-                      <Button type="button" variant="secondary" onClick={() => void handleVerifyHelper()}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handleVerifyHelper()}
+                      >
                         Verify Helper
                       </Button>
                     </div>

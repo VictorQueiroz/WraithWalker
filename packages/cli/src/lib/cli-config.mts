@@ -30,12 +30,24 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function validateStyleTokens(value: unknown, filePath: string, key: string): StyleToken[] {
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
-    throw formatConfigError(filePath, `theme.overrides.styles.${key} must be an array of style tokens.`);
+function validateStyleTokens(
+  value: unknown,
+  filePath: string,
+  key: string
+): StyleToken[] {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => typeof item === "string")
+  ) {
+    throw formatConfigError(
+      filePath,
+      `theme.overrides.styles.${key} must be an array of style tokens.`
+    );
   }
 
-  const invalid = value.filter((item) => !STYLE_TOKENS.includes(item as StyleToken));
+  const invalid = value.filter(
+    (item) => !STYLE_TOKENS.includes(item as StyleToken)
+  );
   if (invalid.length > 0) {
     throw formatConfigError(
       filePath,
@@ -72,14 +84,23 @@ function validateThemeConfig(theme: unknown, filePath: string): ThemeConfig {
       const overrides: NonNullable<ThemeConfig["overrides"]> = {};
 
       if ("styles" in theme.overrides) {
-        if (theme.overrides.styles !== undefined && !isPlainObject(theme.overrides.styles)) {
-          throw formatConfigError(filePath, "theme.overrides.styles must be an object.");
+        if (
+          theme.overrides.styles !== undefined &&
+          !isPlainObject(theme.overrides.styles)
+        ) {
+          throw formatConfigError(
+            filePath,
+            "theme.overrides.styles must be an object."
+          );
         }
         if (isPlainObject(theme.overrides.styles)) {
           overrides.styles = {};
           for (const key of Object.keys(theme.overrides.styles)) {
             if (!THEME_STYLE_KEYS.some((allowedKey) => allowedKey === key)) {
-              throw formatConfigError(filePath, `theme.overrides.styles.${key} is not supported.`);
+              throw formatConfigError(
+                filePath,
+                `theme.overrides.styles.${key} is not supported.`
+              );
             }
           }
           for (const key of THEME_STYLE_KEYS) {
@@ -92,21 +113,33 @@ function validateThemeConfig(theme: unknown, filePath: string): ThemeConfig {
       }
 
       if ("icons" in theme.overrides) {
-        if (theme.overrides.icons !== undefined && !isPlainObject(theme.overrides.icons)) {
-          throw formatConfigError(filePath, "theme.overrides.icons must be an object.");
+        if (
+          theme.overrides.icons !== undefined &&
+          !isPlainObject(theme.overrides.icons)
+        ) {
+          throw formatConfigError(
+            filePath,
+            "theme.overrides.icons must be an object."
+          );
         }
         if (isPlainObject(theme.overrides.icons)) {
           overrides.icons = {};
           for (const key of Object.keys(theme.overrides.icons)) {
             if (!THEME_ICON_KEYS.some((allowedKey) => allowedKey === key)) {
-              throw formatConfigError(filePath, `theme.overrides.icons.${key} is not supported.`);
+              throw formatConfigError(
+                filePath,
+                `theme.overrides.icons.${key} is not supported.`
+              );
             }
           }
           for (const key of THEME_ICON_KEYS) {
             const value = theme.overrides.icons[key];
             if (value !== undefined) {
               if (typeof value !== "string") {
-                throw formatConfigError(filePath, `theme.overrides.icons.${key} must be a string.`);
+                throw formatConfigError(
+                  filePath,
+                  `theme.overrides.icons.${key} must be a string.`
+                );
               }
               overrides.icons[key] = value;
             }
@@ -115,20 +148,42 @@ function validateThemeConfig(theme: unknown, filePath: string): ThemeConfig {
       }
 
       if ("banner" in theme.overrides) {
-        if (theme.overrides.banner !== undefined && !isPlainObject(theme.overrides.banner)) {
-          throw formatConfigError(filePath, "theme.overrides.banner must be an object.");
+        if (
+          theme.overrides.banner !== undefined &&
+          !isPlainObject(theme.overrides.banner)
+        ) {
+          throw formatConfigError(
+            filePath,
+            "theme.overrides.banner must be an object."
+          );
         }
         if (isPlainObject(theme.overrides.banner)) {
           overrides.banner = {};
           if (theme.overrides.banner.art !== undefined) {
-            if (!Array.isArray(theme.overrides.banner.art) || !theme.overrides.banner.art.every((item) => typeof item === "string")) {
-              throw formatConfigError(filePath, "theme.overrides.banner.art must be an array of strings.");
+            if (
+              !Array.isArray(theme.overrides.banner.art) ||
+              !theme.overrides.banner.art.every(
+                (item) => typeof item === "string"
+              )
+            ) {
+              throw formatConfigError(
+                filePath,
+                "theme.overrides.banner.art must be an array of strings."
+              );
             }
             overrides.banner.art = theme.overrides.banner.art;
           }
           if (theme.overrides.banner.phrases !== undefined) {
-            if (!Array.isArray(theme.overrides.banner.phrases) || !theme.overrides.banner.phrases.every((item) => typeof item === "string")) {
-              throw formatConfigError(filePath, "theme.overrides.banner.phrases must be an array of strings.");
+            if (
+              !Array.isArray(theme.overrides.banner.phrases) ||
+              !theme.overrides.banner.phrases.every(
+                (item) => typeof item === "string"
+              )
+            ) {
+              throw formatConfigError(
+                filePath,
+                "theme.overrides.banner.phrases must be an array of strings."
+              );
             }
             overrides.banner.phrases = theme.overrides.banner.phrases;
           }
@@ -136,18 +191,28 @@ function validateThemeConfig(theme: unknown, filePath: string): ThemeConfig {
       }
 
       if ("indent" in theme.overrides) {
-        if (theme.overrides.indent !== undefined && typeof theme.overrides.indent !== "string") {
-          throw formatConfigError(filePath, "theme.overrides.indent must be a string.");
+        if (
+          theme.overrides.indent !== undefined &&
+          typeof theme.overrides.indent !== "string"
+        ) {
+          throw formatConfigError(
+            filePath,
+            "theme.overrides.indent must be a string."
+          );
         }
         overrides.indent = theme.overrides.indent as string | undefined;
       }
 
       if ("labelWidth" in theme.overrides) {
         if (
-          theme.overrides.labelWidth !== undefined
-          && (!Number.isInteger(theme.overrides.labelWidth) || Number(theme.overrides.labelWidth) < 0)
+          theme.overrides.labelWidth !== undefined &&
+          (!Number.isInteger(theme.overrides.labelWidth) ||
+            Number(theme.overrides.labelWidth) < 0)
         ) {
-          throw formatConfigError(filePath, "theme.overrides.labelWidth must be a non-negative integer.");
+          throw formatConfigError(
+            filePath,
+            "theme.overrides.labelWidth must be a non-negative integer."
+          );
         }
         overrides.labelWidth = theme.overrides.labelWidth as number | undefined;
       }
@@ -185,7 +250,10 @@ async function loadCliConfigFile(filePath: string): Promise<CliConfig> {
     try {
       parsed = JSON.parse(raw);
     } catch (error) {
-      throw formatConfigError(filePath, error instanceof Error ? error.message : String(error));
+      throw formatConfigError(
+        filePath,
+        error instanceof Error ? error.message : String(error)
+      );
     }
     return validateCliConfig(parsed, filePath);
   } catch (error) {
@@ -196,7 +264,10 @@ async function loadCliConfigFile(filePath: string): Promise<CliConfig> {
   }
 }
 
-function mergeThemeConfig(base?: ThemeConfig, override?: ThemeConfig): ThemeConfig | undefined {
+function mergeThemeConfig(
+  base?: ThemeConfig,
+  override?: ThemeConfig
+): ThemeConfig | undefined {
   if (!base && !override) {
     return undefined;
   }
@@ -223,10 +294,11 @@ function mergeThemeConfig(base?: ThemeConfig, override?: ThemeConfig): ThemeConf
   const hasBanner = banner.art !== undefined || banner.phrases !== undefined;
   const hasStyles = Object.keys(styles).length > 0;
   const hasIcons = Object.keys(icons).length > 0;
-  const hasScalarOverrides = overrideOverrides.indent !== undefined
-    || baseOverrides.indent !== undefined
-    || overrideOverrides.labelWidth !== undefined
-    || baseOverrides.labelWidth !== undefined;
+  const hasScalarOverrides =
+    overrideOverrides.indent !== undefined ||
+    baseOverrides.indent !== undefined ||
+    overrideOverrides.labelWidth !== undefined ||
+    baseOverrides.labelWidth !== undefined;
 
   if (hasBanner || hasStyles || hasIcons || hasScalarOverrides) {
     merged.overrides = {
@@ -251,7 +323,13 @@ export function getGlobalConfigPath({
   homeDir?: string;
 } = {}): string {
   if (platform === "darwin") {
-    return path.join(homeDir, "Library", "Application Support", "WraithWalker", "config.json");
+    return path.join(
+      homeDir,
+      "Library",
+      "Application Support",
+      "WraithWalker",
+      "config.json"
+    );
   }
 
   if (platform === "win32") {
@@ -275,11 +353,16 @@ export async function loadGlobalCliConfig(options?: {
   return loadCliConfigFile(getGlobalConfigPath(options));
 }
 
-export async function loadProjectCliConfig(rootPath: string): Promise<CliConfig> {
+export async function loadProjectCliConfig(
+  rootPath: string
+): Promise<CliConfig> {
   return loadCliConfigFile(getProjectConfigPath(rootPath));
 }
 
-export function mergeCliConfigs(base: CliConfig, override: CliConfig): CliConfig {
+export function mergeCliConfigs(
+  base: CliConfig,
+  override: CliConfig
+): CliConfig {
   return {
     theme: mergeThemeConfig(base.theme, override.theme)
   };

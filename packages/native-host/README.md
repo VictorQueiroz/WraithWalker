@@ -21,14 +21,14 @@ You **do** want the native host when you need:
 
 ## What It Does
 
-| Message | Description |
-|---------|-------------|
-| `verifyRoot` | Reads `.wraithwalker/root.json` and verifies the sentinel `rootId` matches the extension's expectation |
-| `openDirectory` | Verifies the root, substitutes `$DIR` in the command template, and spawns the command via `/bin/sh -lc` |
-| `revealDirectory` | Verifies the root and opens that directory in Finder, Explorer, or the platform file manager |
-| `saveScenario` | Copies current fixture directories into `.wraithwalker/scenarios/{name}/` |
-| `switchScenario` | Restores a saved scenario by replacing current fixtures with the snapshot |
-| `listScenarios` | Returns the names of all saved scenarios |
+| Message           | Description                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| `verifyRoot`      | Reads `.wraithwalker/root.json` and verifies the sentinel `rootId` matches the extension's expectation  |
+| `openDirectory`   | Verifies the root, substitutes `$DIR` in the command template, and spawns the command via `/bin/sh -lc` |
+| `revealDirectory` | Verifies the root and opens that directory in Finder, Explorer, or the platform file manager            |
+| `saveScenario`    | Copies current fixture directories into `.wraithwalker/scenarios/{name}/`                               |
+| `switchScenario`  | Restores a saved scenario by replacing current fixtures with the snapshot                               |
+| `listScenarios`   | Returns the names of all saved scenarios                                                                |
 
 ## Setup
 
@@ -52,11 +52,13 @@ chmod +x /absolute/path/to/out/host.mjs
 5. Place the manifest where Chrome looks for native-messaging hosts:
 
 **macOS (user install):**
+
 ```
 ~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.wraithwalker.host.json
 ```
 
 **Linux:**
+
 ```
 ~/.config/google-chrome/NativeMessagingHosts/com.wraithwalker.host.json
 ```

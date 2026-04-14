@@ -7,7 +7,10 @@ import {
   resolveConfiguredSite,
   writeConfiguredSiteConfigs
 } from "../src/project-config.mts";
-import { PROJECT_CONFIG_RELATIVE_PATH, PROJECT_CONFIG_SCHEMA_VERSION } from "../src/constants.mts";
+import {
+  PROJECT_CONFIG_RELATIVE_PATH,
+  PROJECT_CONFIG_SCHEMA_VERSION
+} from "../src/constants.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
 describe("project config helpers", () => {
@@ -28,22 +31,28 @@ describe("project config helpers", () => {
       prefix: "wraithwalker-core-project-config-"
     });
 
-    await writeConfiguredSiteConfigs(root.rootPath, [{
-      origin: "app.example.com",
-      createdAt: "2026-04-08T00:00:00.000Z",
-      dumpAllowlistPatterns: ["\\.svg$"]
-    } as any]);
+    await writeConfiguredSiteConfigs(root.rootPath, [
+      {
+        origin: "app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.svg$"]
+      } as any
+    ]);
 
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
     });
 
-    await expect(resolveConfiguredSite(root.rootPath, "app.example.com")).resolves.toEqual({
+    await expect(
+      resolveConfiguredSite(root.rootPath, "app.example.com")
+    ).resolves.toEqual({
       origin: "https://app.example.com",
       createdAt: "2026-04-08T00:00:00.000Z",
       dumpAllowlistPatterns: ["\\.svg$"]
@@ -57,11 +66,13 @@ describe("project config helpers", () => {
 
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
     });
     await root.ensureOrigin({ topOrigin: "https://app.example.com" });
     await root.ensureOrigin({ topOrigin: "https://admin.example.com" });
@@ -88,7 +99,11 @@ describe("project config helpers", () => {
       sites: "bad"
     });
 
-    await expect(readProjectConfig(root.rootPath)).rejects.toThrow(PROJECT_CONFIG_RELATIVE_PATH);
-    await expect(readProjectConfig(root.rootPath)).rejects.toThrow("unsupported schemaVersion");
+    await expect(readProjectConfig(root.rootPath)).rejects.toThrow(
+      PROJECT_CONFIG_RELATIVE_PATH
+    );
+    await expect(readProjectConfig(root.rootPath)).rejects.toThrow(
+      "unsupported schemaVersion"
+    );
   });
 });

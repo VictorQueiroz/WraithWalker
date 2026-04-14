@@ -1,7 +1,11 @@
 import { vi } from "vitest";
 
 import { createBackgroundAuthority } from "../../src/lib/background-authority.js";
-import { createBackgroundState, createChromeApi, createMockServerClient } from "./background-service-test-helpers.js";
+import {
+  createBackgroundState,
+  createChromeApi,
+  createMockServerClient
+} from "./background-service-test-helpers.js";
 
 export function createAuthorityHarness({
   stateOverrides = {},
@@ -10,7 +14,11 @@ export function createAuthorityHarness({
   getSiteConfigs = vi.fn().mockResolvedValue([]),
   getLegacySiteConfigs = vi.fn().mockResolvedValue([]),
   getLegacySiteConfigsMigrated = vi.fn().mockResolvedValue(true),
-  getNativeHostConfig = vi.fn().mockResolvedValue({ hostName: "", launchPath: "", editorLaunchOverrides: {} }),
+  getNativeHostConfig = vi.fn().mockResolvedValue({
+    hostName: "",
+    launchPath: "",
+    editorLaunchOverrides: {}
+  }),
   getOrCreateExtensionClientId = vi.fn().mockResolvedValue("client-1"),
   setLegacySiteConfigsMigrated = vi.fn().mockResolvedValue(undefined),
   setLastSessionSnapshot = vi.fn().mockResolvedValue(undefined),
@@ -34,10 +42,14 @@ export function createAuthorityHarness({
   syncTraceBindings?: ReturnType<typeof vi.fn>;
   reconcileTabs?: ReturnType<typeof vi.fn>;
 } = {}) {
-  const state = createBackgroundState(stateOverrides as Parameters<typeof createBackgroundState>[0]);
-  const appliedSetLastError = setLastError ?? vi.fn((message: string) => {
-    state.lastError = message;
-  });
+  const state = createBackgroundState(
+    stateOverrides as Parameters<typeof createBackgroundState>[0]
+  );
+  const appliedSetLastError =
+    setLastError ??
+    vi.fn((message: string) => {
+      state.lastError = message;
+    });
   const serverClient = createMockServerClient(
     serverClientOverrides as Parameters<typeof createMockServerClient>[0]
   );

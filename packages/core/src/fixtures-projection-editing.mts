@@ -1,6 +1,10 @@
 import { createProjectedFixturePayload } from "./fixture-presentation.mjs";
 import { createFixtureRootFs, resolveWithinRoot } from "./root-fs.mjs";
-import { flattenStaticResourceManifest, readOriginInfo, readSiteConfigs } from "./fixtures-discovery.mjs";
+import {
+  flattenStaticResourceManifest,
+  readOriginInfo,
+  readSiteConfigs
+} from "./fixtures-discovery.mjs";
 import {
   applyLinePatch,
   createProjectionEditError,
@@ -10,7 +14,10 @@ import {
   normalizeSearchPath,
   readTextFixture
 } from "./fixtures-shared.mjs";
-import type { ResponseMeta, StaticResourceManifestEntry } from "./fixture-layout.mjs";
+import type {
+  ResponseMeta,
+  StaticResourceManifestEntry
+} from "./fixture-layout.mjs";
 import type {
   PatchProjectionFileOptions,
   ProjectionFileInfo
@@ -33,7 +40,10 @@ async function findProjectionAsset(
   for (const config of configs) {
     const info = await readOriginInfo(rootPath, config);
     for (const asset of flattenStaticResourceManifest(info.manifest)) {
-      if (asset.projectionPath && normalizeSearchPath(asset.projectionPath) === normalizedTarget) {
+      if (
+        asset.projectionPath &&
+        normalizeSearchPath(asset.projectionPath) === normalizedTarget
+      ) {
         return asset;
       }
     }
@@ -46,7 +56,10 @@ async function resolveProjectionFileDetails(
   rootPath: string,
   relativePath: string
 ): Promise<ResolvedProjectionFile | null> {
-  if (isHiddenFixturePath(relativePath) || isApiResponseBodyPath(relativePath)) {
+  if (
+    isHiddenFixturePath(relativePath) ||
+    isApiResponseBodyPath(relativePath)
+  ) {
     return null;
   }
 
@@ -79,8 +92,14 @@ async function resolveProjectionFileDetails(
     path: asset.projectionPath,
     canonicalPath: asset.bodyPath,
     metaPath: asset.metaPath,
-    currentText: isEditableProjectionAsset(asset.projectionPath, meta) && currentTextResult.ok ? currentTextResult.text : null,
-    editable: isEditableProjectionAsset(asset.projectionPath, meta) && projectionPayload.bodyEncoding === "utf8",
+    currentText:
+      isEditableProjectionAsset(asset.projectionPath, meta) &&
+      currentTextResult.ok
+        ? currentTextResult.text
+        : null,
+    editable:
+      isEditableProjectionAsset(asset.projectionPath, meta) &&
+      projectionPayload.bodyEncoding === "utf8",
     projectionPayload
   };
 }
@@ -91,7 +110,9 @@ async function requireProjectionFile(
 ): Promise<ResolvedProjectionFile> {
   const resolvedPath = resolveWithinRoot(rootPath, relativePath);
   if (!resolvedPath) {
-    throw new Error(`Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`);
+    throw new Error(
+      `Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`
+    );
   }
 
   const details = await resolveProjectionFileDetails(rootPath, relativePath);
@@ -149,7 +170,9 @@ export async function patchProjectionFile(
     throw new Error(`Projection file is not text-editable: ${options.path}`);
   }
   if (details.currentText === null) {
-    throw new Error(`Projection file is missing or not currently readable as UTF-8 text: ${options.path}`);
+    throw new Error(
+      `Projection file is missing or not currently readable as UTF-8 text: ${options.path}`
+    );
   }
 
   const nextText = applyLinePatch(details.currentText, options);
@@ -168,15 +191,19 @@ export async function restoreProjectionFile(
   relativePath: string
 ): Promise<ProjectionFileInfo> {
   const details = await requireProjectionFile(rootPath, relativePath);
-  await createFixtureRootFs(rootPath).writeBody(details.path, details.projectionPayload);
+  await createFixtureRootFs(rootPath).writeBody(
+    details.path,
+    details.projectionPayload
+  );
 
   return {
     path: details.path,
     canonicalPath: details.canonicalPath,
     metaPath: details.metaPath,
-    currentText: details.projectionPayload.bodyEncoding === "utf8"
-      ? details.projectionPayload.body
-      : null,
+    currentText:
+      details.projectionPayload.bodyEncoding === "utf8"
+        ? details.projectionPayload.body
+        : null,
     editable: details.projectionPayload.bodyEncoding === "utf8"
   };
 }

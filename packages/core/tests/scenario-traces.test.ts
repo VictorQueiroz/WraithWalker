@@ -11,10 +11,14 @@ import {
 } from "../src/scenario-traces.mts";
 import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalker-fixture-root.mts";
 
-function createStorage(rootFs: FixtureRootFs): ScenarioTraceStorage<FixtureRootFs> {
+function createStorage(
+  rootFs: FixtureRootFs
+): ScenarioTraceStorage<FixtureRootFs> {
   return {
-    readOptionalJson: (root, relativePath) => root.readOptionalJson(relativePath),
-    writeJson: (root, relativePath, value) => root.writeJson(relativePath, value),
+    readOptionalJson: (root, relativePath) =>
+      root.readOptionalJson(relativePath),
+    writeJson: (root, relativePath, value) =>
+      root.writeJson(relativePath, value),
     listDirectory: (root, relativePath) => root.listDirectory(relativePath)
   };
 }
@@ -153,13 +157,18 @@ describe("scenario trace store", () => {
     });
     expect(duplicateLink.linked).toBe(false);
 
-    const completedTrace = await store.stopTrace("trace_1", "2026-04-08T00:00:06.000Z");
+    const completedTrace = await store.stopTrace(
+      "trace_1",
+      "2026-04-08T00:00:06.000Z"
+    );
     expect(completedTrace).toMatchObject({
       status: "completed",
       endedAt: "2026-04-08T00:00:06.000Z"
     });
     expect(await store.getActiveTrace()).toBeNull();
-    expect(await root.readJson(".wraithwalker/scenario-traces/active.json")).toEqual({
+    expect(
+      await root.readJson(".wraithwalker/scenario-traces/active.json")
+    ).toEqual({
       traceId: null,
       updatedAt: "2026-04-08T00:00:06.000Z"
     });
@@ -171,7 +180,10 @@ describe("scenario trace store", () => {
       createdAt: "2026-04-08T00:01:00.000Z"
     });
     expect(armedOnly.startedAt).toBeUndefined();
-    const stoppedArmedOnly = await store.stopTrace("trace_armed_only", "2026-04-08T00:01:05.000Z");
+    const stoppedArmedOnly = await store.stopTrace(
+      "trace_armed_only",
+      "2026-04-08T00:01:05.000Z"
+    );
     expect(stoppedArmedOnly).toEqual(
       expect.objectContaining({
         status: "completed",
@@ -201,11 +213,15 @@ describe("scenario trace store", () => {
       ensureReady: () => createRoot(root.rootPath)
     });
 
-    await expect(store.startTrace({
-      traceId: "../bad",
-      selectedOrigins: [],
-      extensionClientId: "client-1"
-    })).rejects.toThrow("Trace ID must be 1-128 alphanumeric, hyphen, or underscore characters.");
+    await expect(
+      store.startTrace({
+        traceId: "../bad",
+        selectedOrigins: [],
+        extensionClientId: "client-1"
+      })
+    ).rejects.toThrow(
+      "Trace ID must be 1-128 alphanumeric, hyphen, or underscore characters."
+    );
 
     await store.startTrace({
       traceId: "trace_2",
@@ -214,37 +230,43 @@ describe("scenario trace store", () => {
       createdAt: "2026-04-08T00:00:00.000Z"
     });
 
-    await expect(store.startTrace({
-      traceId: "trace_3",
-      selectedOrigins: [],
-      extensionClientId: "client-2"
-    })).rejects.toThrow('Trace "trace_2" is already active.');
+    await expect(
+      store.startTrace({
+        traceId: "trace_3",
+        selectedOrigins: [],
+        extensionClientId: "client-2"
+      })
+    ).rejects.toThrow('Trace "trace_2" is already active.');
 
-    expect(await store.recordClick({
-      traceId: "trace_missing",
-      step: {
-        stepId: "step-missing",
+    expect(
+      await store.recordClick({
+        traceId: "trace_missing",
+        step: {
+          stepId: "step-missing",
+          tabId: 1,
+          recordedAt: "2026-04-08T00:00:00.000Z",
+          pageUrl: "https://app.example.com",
+          topOrigin: "https://app.example.com",
+          selector: "#missing",
+          tagName: "div",
+          textSnippet: ""
+        }
+      })
+    ).toBeNull();
+
+    expect(
+      await store.linkFixture({
+        traceId: "trace_2",
         tabId: 1,
-        recordedAt: "2026-04-08T00:00:00.000Z",
-        pageUrl: "https://app.example.com",
-        topOrigin: "https://app.example.com",
-        selector: "#missing",
-        tagName: "div",
-        textSnippet: ""
-      }
-    })).toBeNull();
-
-    expect(await store.linkFixture({
-      traceId: "trace_2",
-      tabId: 1,
-      requestedAt: "not-a-date",
-      fixture: {
-        bodyPath: "cdn.example.com/assets/app.js",
-        requestUrl: "https://cdn.example.com/assets/app.js",
-        resourceType: "Script",
-        capturedAt: "2026-04-08T00:00:04.000Z"
-      }
-    })).toEqual({
+        requestedAt: "not-a-date",
+        fixture: {
+          bodyPath: "cdn.example.com/assets/app.js",
+          requestUrl: "https://cdn.example.com/assets/app.js",
+          resourceType: "Script",
+          capturedAt: "2026-04-08T00:00:04.000Z"
+        }
+      })
+    ).toEqual({
       linked: false,
       trace: expect.objectContaining({ traceId: "trace_2" })
     });
@@ -303,17 +325,19 @@ describe("scenario trace store", () => {
       }
     });
 
-    expect(await store.linkFixture({
-      traceId: "trace_2",
-      tabId: 1,
-      requestedAt: "2026-04-08T00:00:08.500Z",
-      fixture: {
-        bodyPath: "cdn.example.com/assets/late.js",
-        requestUrl: "https://cdn.example.com/assets/late.js",
-        resourceType: "Script",
-        capturedAt: "2026-04-08T00:00:08.500Z"
-      }
-    })).toEqual({
+    expect(
+      await store.linkFixture({
+        traceId: "trace_2",
+        tabId: 1,
+        requestedAt: "2026-04-08T00:00:08.500Z",
+        fixture: {
+          bodyPath: "cdn.example.com/assets/late.js",
+          requestUrl: "https://cdn.example.com/assets/late.js",
+          resourceType: "Script",
+          capturedAt: "2026-04-08T00:00:08.500Z"
+        }
+      })
+    ).toEqual({
       linked: false,
       trace: expect.objectContaining({ traceId: "trace_2" })
     });
@@ -330,29 +354,39 @@ describe("scenario trace store", () => {
       }
     });
     expect(linkedFirstStep.linked).toBe(true);
-    expect(linkedFirstStep.trace?.steps.find((step) => step.stepId === "step-2")?.linkedFixtures).toEqual([
+    expect(
+      linkedFirstStep.trace?.steps.find((step) => step.stepId === "step-2")
+        ?.linkedFixtures
+    ).toEqual([
       expect.objectContaining({
         bodyPath: "cdn.example.com/assets/first.js"
       })
     ]);
-    expect(linkedFirstStep.trace?.steps.find((step) => step.stepId === "step-3")?.linkedFixtures).toEqual([]);
+    expect(
+      linkedFirstStep.trace?.steps.find((step) => step.stepId === "step-3")
+        ?.linkedFixtures
+    ).toEqual([]);
 
-    expect(await store.linkFixture({
-      traceId: "trace_missing",
-      tabId: 1,
-      requestedAt: "2026-04-08T00:00:03.000Z",
-      fixture: {
-        bodyPath: "cdn.example.com/assets/missing.js",
-        requestUrl: "https://cdn.example.com/assets/missing.js",
-        resourceType: "Script",
-        capturedAt: "2026-04-08T00:00:03.000Z"
-      }
-    })).toEqual({
+    expect(
+      await store.linkFixture({
+        traceId: "trace_missing",
+        tabId: 1,
+        requestedAt: "2026-04-08T00:00:03.000Z",
+        fixture: {
+          bodyPath: "cdn.example.com/assets/missing.js",
+          requestUrl: "https://cdn.example.com/assets/missing.js",
+          resourceType: "Script",
+          capturedAt: "2026-04-08T00:00:03.000Z"
+        }
+      })
+    ).toEqual({
       linked: false,
       trace: null
     });
 
-    await expect(store.stopTrace("trace_missing")).rejects.toThrow('Trace "trace_missing" does not exist.');
+    await expect(store.stopTrace("trace_missing")).rejects.toThrow(
+      'Trace "trace_missing" does not exist.'
+    );
   });
 
   it("normalizes legacy traces and keeps agent summaries stable across schema versions", async () => {
@@ -366,33 +400,40 @@ describe("scenario trace store", () => {
       ensureReady: () => createRoot(root.rootPath)
     });
 
-    await root.writeJson(".wraithwalker/scenario-traces/legacy_trace/trace.json", {
-      schemaVersion: 1,
-      traceId: "legacy_trace",
-      name: "Legacy walkthrough",
-      status: "recording",
-      createdAt: "2026-04-07T00:00:00.000Z",
-      startedAt: "2026-04-07T00:00:02.000Z",
-      rootId: "root-legacy",
-      selectedOrigins: ["https://legacy.example.com"],
-      extensionClientId: "client-legacy",
-      steps: [{
-        stepId: "legacy-step-1",
-        tabId: 4,
-        recordedAt: "2026-04-07T00:00:02.000Z",
-        pageUrl: "https://legacy.example.com/dashboard",
-        topOrigin: "https://legacy.example.com",
-        selector: "#legacy",
-        tagName: "button",
-        textSnippet: "Legacy",
-        linkedFixtures: [{
-          bodyPath: "cdn.example.com/assets/legacy.css",
-          requestUrl: "https://cdn.example.com/assets/legacy.css",
-          resourceType: "Stylesheet",
-          capturedAt: "2026-04-07T00:00:02.500Z"
-        }]
-      }]
-    });
+    await root.writeJson(
+      ".wraithwalker/scenario-traces/legacy_trace/trace.json",
+      {
+        schemaVersion: 1,
+        traceId: "legacy_trace",
+        name: "Legacy walkthrough",
+        status: "recording",
+        createdAt: "2026-04-07T00:00:00.000Z",
+        startedAt: "2026-04-07T00:00:02.000Z",
+        rootId: "root-legacy",
+        selectedOrigins: ["https://legacy.example.com"],
+        extensionClientId: "client-legacy",
+        steps: [
+          {
+            stepId: "legacy-step-1",
+            tabId: 4,
+            recordedAt: "2026-04-07T00:00:02.000Z",
+            pageUrl: "https://legacy.example.com/dashboard",
+            topOrigin: "https://legacy.example.com",
+            selector: "#legacy",
+            tagName: "button",
+            textSnippet: "Legacy",
+            linkedFixtures: [
+              {
+                bodyPath: "cdn.example.com/assets/legacy.css",
+                requestUrl: "https://cdn.example.com/assets/legacy.css",
+                resourceType: "Stylesheet",
+                capturedAt: "2026-04-07T00:00:02.500Z"
+              }
+            ]
+          }
+        ]
+      }
+    );
 
     const legacy = await store.readTrace("legacy_trace");
 
@@ -430,16 +471,18 @@ describe("scenario trace store", () => {
         }
       })
     );
-    expect(normalizeScenarioTraceRecord({
-      schemaVersion: 1,
-      traceId: "legacy_direct",
-      status: "armed",
-      createdAt: "2026-04-07T00:00:00.000Z",
-      rootId: "root-legacy",
-      selectedOrigins: [],
-      extensionClientId: "client-legacy",
-      steps: []
-    })).toEqual(
+    expect(
+      normalizeScenarioTraceRecord({
+        schemaVersion: 1,
+        traceId: "legacy_direct",
+        status: "armed",
+        createdAt: "2026-04-07T00:00:00.000Z",
+        rootId: "root-legacy",
+        selectedOrigins: [],
+        extensionClientId: "client-legacy",
+        steps: []
+      })
+    ).toEqual(
       expect.objectContaining({
         schemaVersion: 1,
         traceId: "legacy_direct",

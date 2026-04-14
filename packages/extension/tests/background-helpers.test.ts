@@ -16,12 +16,21 @@ describe("background helpers", () => {
     expect(isHttpUrl("https://app.example.com")).toBe(true);
     expect(isHttpUrl("http://app.example.com")).toBe(true);
     expect(isHttpUrl("data:text/plain,hello")).toBe(false);
-    expect(extractOrigin("https://app.example.com/path")).toBe("https://app.example.com");
+    expect(extractOrigin("https://app.example.com/path")).toBe(
+      "https://app.example.com"
+    );
     expect(extractOrigin("chrome://extensions")).toBeNull();
     expect(
-      findMatchingOrigin("https://app.example.com/dashboard", ["https://app.example.com", "https://preview.example.com"])
+      findMatchingOrigin("https://app.example.com/dashboard", [
+        "https://app.example.com",
+        "https://preview.example.com"
+      ])
     ).toBe("https://app.example.com");
-    expect(findMatchingOrigin("https://cdn.example.com/app.js", ["https://app.example.com"])).toBeNull();
+    expect(
+      findMatchingOrigin("https://cdn.example.com/app.js", [
+        "https://app.example.com"
+      ])
+    ).toBeNull();
   });
 
   it("normalizes header collections", () => {
@@ -140,12 +149,16 @@ describe("background helpers", () => {
 
     entry.url = "https://api.example.com/graphql";
     entry.method = "POST";
-    entry.requestHeaders = [{ name: "Content-Type", value: "application/json" }];
+    entry.requestHeaders = [
+      { name: "Content-Type", value: "application/json" }
+    ];
     entry.requestBody = '{"query":"{viewer{id}}"}';
     entry.descriptor = { bodyHash: "body123", queryHash: "query456" } as any;
     entry.responseStatus = 201;
     entry.responseStatusText = "Created";
-    entry.responseHeaders = [{ name: "Content-Type", value: "application/json" }];
+    entry.responseHeaders = [
+      { name: "Content-Type", value: "application/json" }
+    ];
     entry.mimeType = "application/json";
     entry.resourceType = "XHR";
 
@@ -161,7 +174,9 @@ describe("background helpers", () => {
       capturedAt: "2026-04-02T20:10:00.000Z"
     });
 
-    expect(buildResponseMeta(entry, "utf8", "2026-04-02T20:10:00.000Z")).toEqual({
+    expect(
+      buildResponseMeta(entry, "utf8", "2026-04-02T20:10:00.000Z")
+    ).toEqual({
       status: 201,
       statusText: "Created",
       headers: [{ name: "Content-Type", value: "application/json" }],

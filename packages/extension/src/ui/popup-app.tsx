@@ -1,6 +1,10 @@
 import * as React from "react";
 
-import type { BackgroundMessage, ErrorResult, NativeOpenResult } from "../lib/messages.js";
+import type {
+  BackgroundMessage,
+  ErrorResult,
+  NativeOpenResult
+} from "../lib/messages.js";
 import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
 import {
   deriveCaptureRootState,
@@ -28,7 +32,9 @@ export interface PopupAppProps {
   getNativeHostConfig: () => Promise<NativeHostConfig>;
   getPreferredEditorId?: () => Promise<string>;
   loadStoredRootHandle: () => Promise<FileSystemDirectoryHandle | undefined>;
-  queryRootPermission: (rootHandle?: FileSystemDirectoryHandle | null) => Promise<PermissionState>;
+  queryRootPermission: (
+    rootHandle?: FileSystemDirectoryHandle | null
+  ) => Promise<PermissionState>;
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
   refreshIntervalMs?: number;
@@ -39,14 +45,22 @@ function getErrorMessage(result: { error?: string }): string {
   return result.error || "Unknown error.";
 }
 
-function sendMessage<T>(runtime: RuntimeApi, message: BackgroundMessage): Promise<T> {
+function sendMessage<T>(
+  runtime: RuntimeApi,
+  message: BackgroundMessage
+): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;
 }
 
-function resolvePreferredEditor(editorId: string, editorPresets: EditorPreset[]): EditorPreset {
-  return editorPresets.find((preset) => preset.id === editorId)
-    ?? editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID)
-    ?? editorPresets[0];
+function resolvePreferredEditor(
+  editorId: string,
+  editorPresets: EditorPreset[]
+): EditorPreset {
+  return (
+    editorPresets.find((preset) => preset.id === editorId) ??
+    editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID) ??
+    editorPresets[0]
+  );
 }
 
 export function PopupApp({
@@ -60,10 +74,16 @@ export function PopupApp({
   editorPresets = EDITOR_PRESETS
 }: PopupAppProps) {
   const [snapshot, setSnapshot] = React.useState<SessionSnapshot | null>(null);
-  const [nativeHostConfig, setNativeHostConfig] = React.useState<NativeHostConfig>(DEFAULT_NATIVE_HOST_CONFIG);
-  const [captureRootState, setCaptureRootState] = React.useState<CaptureRootState>({ kind: "missing_handle" });
-  const [actionAlert, setActionAlert] = React.useState<PopupAlertState | null>(null);
-  const [busyAction, setBusyAction] = React.useState<"toggle" | "open" | "reveal" | null>(null);
+  const [nativeHostConfig, setNativeHostConfig] =
+    React.useState<NativeHostConfig>(DEFAULT_NATIVE_HOST_CONFIG);
+  const [captureRootState, setCaptureRootState] =
+    React.useState<CaptureRootState>({ kind: "missing_handle" });
+  const [actionAlert, setActionAlert] = React.useState<PopupAlertState | null>(
+    null
+  );
+  const [busyAction, setBusyAction] = React.useState<
+    "toggle" | "open" | "reveal" | null
+  >(null);
   const preferredEditor = React.useMemo(
     () => resolvePreferredEditor(DEFAULT_EDITOR_ID, editorPresets),
     [editorPresets]
@@ -95,14 +115,19 @@ export function PopupApp({
     };
   }, [getNativeHostConfig, loadStoredRootHandle, queryRootPermission]);
 
-  const refreshState = React.useCallback(async (clearActionAlert = true) => {
-    const nextSnapshot = await sendMessage<SessionSnapshot>(runtime, { type: "session.getState" });
-    setSnapshot(nextSnapshot);
-    if (clearActionAlert) {
-      setActionAlert(null);
-    }
-    return nextSnapshot;
-  }, [runtime]);
+  const refreshState = React.useCallback(
+    async (clearActionAlert = true) => {
+      const nextSnapshot = await sendMessage<SessionSnapshot>(runtime, {
+        type: "session.getState"
+      });
+      setSnapshot(nextSnapshot);
+      if (clearActionAlert) {
+        setActionAlert(null);
+      }
+      return nextSnapshot;
+    },
+    [runtime]
+  );
 
   React.useEffect(() => {
     let active = true;
@@ -120,7 +145,13 @@ export function PopupApp({
       active = false;
       clearIntervalFn(intervalId);
     };
-  }, [clearIntervalFn, refreshEnvironment, refreshIntervalMs, refreshState, setIntervalFn]);
+  }, [
+    clearIntervalFn,
+    refreshEnvironment,
+    refreshIntervalMs,
+    refreshState,
+    setIntervalFn
+  ]);
 
   const alert = resolvePopupAlert({
     snapshot,
@@ -132,7 +163,11 @@ export function PopupApp({
   async function handleToggleSession() {
     setBusyAction("toggle");
     try {
-      const currentSnapshot = snapshot ?? await sendMessage<SessionSnapshot>(runtime, { type: "session.getState" });
+      const currentSnapshot =
+        snapshot ??
+        (await sendMessage<SessionSnapshot>(runtime, {
+          type: "session.getState"
+        }));
       const nextSnapshot = await sendMessage<SessionSnapshot>(runtime, {
         type: currentSnapshot.sessionActive ? "session.stop" : "session.start"
       });
@@ -158,8 +193,9 @@ export function PopupApp({
         editorId: DEFAULT_EDITOR_ID
       });
       const nextSnapshot = await refreshState(false);
-      const openedServerRoot = nextSnapshot?.captureDestination === "server"
-        || snapshot?.captureDestination === "server";
+      const openedServerRoot =
+        nextSnapshot?.captureDestination === "server" ||
+        snapshot?.captureDestination === "server";
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
@@ -206,14 +242,20 @@ export function PopupApp({
       <div className="extension-shell">
         <div className="extension-panel grid gap-4 p-5">
           <div className="space-y-2">
-            <h1 className="text-lg font-semibold tracking-tight">WraithWalker</h1>
+            <h1 className="text-lg font-semibold tracking-tight">
+              WraithWalker
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Start capture, open the remembered root, or jump straight to Settings.
+              Start capture, open the remembered root, or jump straight to
+              Settings.
             </p>
             {snapshot?.captureDestination === "server" ? (
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-emerald-600">Connected.</span> Using local WraithWalker server root.
+                  <span className="font-medium text-emerald-600">
+                    Connected.
+                  </span>{" "}
+                  Using local WraithWalker server root.
                 </p>
                 <p className="text-xs break-all text-muted-foreground">
                   {snapshot.captureRootPath}
@@ -238,7 +280,9 @@ export function PopupApp({
               disabled={busyAction !== null}
               onClick={handleOpenEditor}
             >
-              {busyAction === "open" ? "Opening..." : `Open in ${preferredEditor.label}`}
+              {busyAction === "open"
+                ? "Opening..."
+                : `Open in ${preferredEditor.label}`}
             </Button>
             {snapshot?.captureDestination === "server" ? (
               <Button
@@ -250,7 +294,11 @@ export function PopupApp({
                 {busyAction === "reveal" ? "Opening..." : "Open in folder"}
               </Button>
             ) : null}
-            <Button type="button" variant="ghost" onClick={() => runtime.openOptionsPage()}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => runtime.openOptionsPage()}
+            >
               Settings
             </Button>
           </div>

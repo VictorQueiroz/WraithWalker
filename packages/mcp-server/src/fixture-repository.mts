@@ -3,7 +3,10 @@ import {
   type FixtureRepositoryStorage
 } from "@wraithwalker/core/fixture-repository";
 import type { RootSentinel } from "@wraithwalker/core/root";
-import { createFixtureRootFs, type FixtureRootFs } from "@wraithwalker/core/root-fs";
+import {
+  createFixtureRootFs,
+  type FixtureRootFs
+} from "@wraithwalker/core/root-fs";
 
 interface FixtureRepositoryDependencies {
   rootPath: string;
@@ -18,9 +21,12 @@ export function createFixtureRepository({
 }: FixtureRepositoryDependencies) {
   const storage: FixtureRepositoryStorage<FixtureRootFs> = {
     exists: (root, relativePath) => root.exists(relativePath),
-    writeJson: (root, relativePath, value) => root.writeJson(relativePath, value),
-    writeBody: (root, relativePath, payload) => root.writeBody(relativePath, payload),
-    readOptionalJson: (root, relativePath) => root.readOptionalJson(relativePath),
+    writeJson: (root, relativePath, value) =>
+      root.writeJson(relativePath, value),
+    writeBody: (root, relativePath, payload) =>
+      root.writeBody(relativePath, payload),
+    readOptionalJson: (root, relativePath) =>
+      root.readOptionalJson(relativePath),
     readBody: async (root, relativePath) => {
       const stats = await root.stat(relativePath);
       if (!stats || !stats.isFile()) {

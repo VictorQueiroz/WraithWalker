@@ -1,6 +1,9 @@
 import path from "node:path";
 
-import { importHarFile, type ImportHarFileResult } from "@wraithwalker/core/har-import";
+import {
+  importHarFile,
+  type ImportHarFileResult
+} from "@wraithwalker/core/har-import";
 
 import type { CommandSpec } from "../lib/command.mjs";
 import { UsageError } from "../lib/command.mjs";
@@ -11,20 +14,25 @@ interface ImportHarArgs {
   topOrigin?: string;
 }
 
-function groupSkipReasons(result: ImportHarFileResult): Array<[string, number]> {
+function groupSkipReasons(
+  result: ImportHarFileResult
+): Array<[string, number]> {
   const counts = new Map<string, number>();
 
   for (const skipped of result.skipped) {
     counts.set(skipped.reason, (counts.get(skipped.reason) || 0) + 1);
   }
 
-  return [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return [...counts.entries()].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0])
+  );
 }
 
 export const command: CommandSpec<ImportHarArgs, ImportHarFileResult> = {
   name: "import-har",
   summary: "Populate a fixture root from a HAR file",
-  usage: "Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]",
+  usage:
+    "Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]",
   parse(argv) {
     let topOrigin: string | undefined;
     const positionals: string[] = [];
@@ -34,7 +42,9 @@ export const command: CommandSpec<ImportHarArgs, ImportHarFileResult> = {
       if (arg === "--top-origin") {
         topOrigin = argv[index + 1];
         if (!topOrigin) {
-          throw new UsageError("Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]");
+          throw new UsageError(
+            "Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]"
+          );
         }
         index++;
         continue;
@@ -44,7 +54,9 @@ export const command: CommandSpec<ImportHarArgs, ImportHarFileResult> = {
     }
 
     if (!positionals[0] || positionals.length > 2) {
-      throw new UsageError("Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]");
+      throw new UsageError(
+        "Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]"
+      );
     }
 
     return {
@@ -64,7 +76,8 @@ export const command: CommandSpec<ImportHarArgs, ImportHarFileResult> = {
     });
   },
   render(output, result) {
-    const topOrigins = result.topOrigins.length > 0 ? result.topOrigins : [result.topOrigin];
+    const topOrigins =
+      result.topOrigins.length > 0 ? result.topOrigins : [result.topOrigin];
 
     output.success(`Imported HAR into ${result.dir}`);
     if (topOrigins.length === 1) {

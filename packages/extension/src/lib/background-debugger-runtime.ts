@@ -27,16 +27,30 @@ interface BackgroundDebuggerRuntimeDependencies {
   persistSnapshot: () => Promise<void>;
   stopSession: () => Promise<void>;
   requestLifecycle: () => RequestLifecycleApi;
-  traceService: Pick<BackgroundTraceServiceApi, "handleBindingCalled" | "disarmTraceForTab" | "syncTraceBindings">;
+  traceService: Pick<
+    BackgroundTraceServiceApi,
+    "handleBindingCalled" | "disarmTraceForTab" | "syncTraceBindings"
+  >;
 }
 
 export interface BackgroundDebuggerRuntimeApi {
   clearTrackedTabState(tabId: number): void;
-  sendDebuggerCommand<T = unknown>(tabId: number, method: string, params?: Record<string, unknown>): Promise<T>;
+  sendDebuggerCommand<T = unknown>(
+    tabId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ): Promise<T>;
   attachTab(tabId: number, topOrigin: string): Promise<void>;
   detachTab(tabId: number): Promise<void>;
-  handleDebuggerEvent(source: DebuggeeTarget, method: string, params: unknown): Promise<void>;
-  handleDebuggerDetach(source: DebuggeeTarget, reason: DetachReason): Promise<void>;
+  handleDebuggerEvent(
+    source: DebuggeeTarget,
+    method: string,
+    params: unknown
+  ): Promise<void>;
+  handleDebuggerDetach(
+    source: DebuggeeTarget,
+    reason: DetachReason
+  ): Promise<void>;
 }
 
 export function createBackgroundDebuggerRuntime({
@@ -64,17 +78,27 @@ export function createBackgroundDebuggerRuntime({
   ): Promise<T> {
     try {
       if (typeof params === "undefined") {
-        return await chromeApi.debugger.sendCommand<T>(debuggerTarget(tabId), method);
+        return await chromeApi.debugger.sendCommand<T>(
+          debuggerTarget(tabId),
+          method
+        );
       }
 
-      return await chromeApi.debugger.sendCommand<T>(debuggerTarget(tabId), method, params);
+      return await chromeApi.debugger.sendCommand<T>(
+        debuggerTarget(tabId),
+        method,
+        params
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (isDetachedDebuggerCommandMessage(message, tabId)) {
         clearTrackedTabState(tabId);
         throw new DetachedDebuggerCommandError(tabId, method, message);
       }
-      if (isFetchResolutionCommand(method) && isInvalidFetchRequestMessage(message)) {
+      if (
+        isFetchResolutionCommand(method) &&
+        isInvalidFetchRequestMessage(message)
+      ) {
         throw new StaleFetchRequestCommandError(tabId, method, message);
       }
 
@@ -83,15 +107,19 @@ export function createBackgroundDebuggerRuntime({
   }
 
   function recordConsoleEntry(tabId: number, params: unknown): void {
-    const entry = toBrowserConsoleEntry(tabId, params, extractOrigin, state.attachedTabs.get(tabId));
+    const entry = toBrowserConsoleEntry(
+      tabId,
+      params,
+      extractOrigin,
+      state.attachedTabs.get(tabId)
+    );
     if (!entry) {
       return;
     }
 
-    state.recentConsoleEntries = [
-      ...state.recentConsoleEntries,
-      entry
-    ].slice(-MAX_RECENT_CONSOLE_ENTRIES);
+    state.recentConsoleEntries = [...state.recentConsoleEntries, entry].slice(
+      -MAX_RECENT_CONSOLE_ENTRIES
+    );
   }
 
   async function attachTab(tabId: number, topOrigin: string): Promise<void> {
@@ -108,7 +136,9 @@ export function createBackgroundDebuggerRuntime({
       await sendDebuggerCommand(tabId, "Runtime.enable");
       await sendDebuggerCommand(tabId, "Log.enable");
       await sendDebuggerCommand(tabId, "Page.enable");
-      await sendDebuggerCommand(tabId, "Network.setCacheDisabled", { cacheDisabled: true });
+      await sendDebuggerCommand(tabId, "Network.setCacheDisabled", {
+        cacheDisabled: true
+      });
       await sendDebuggerCommand(tabId, "Fetch.enable", {
         patterns: [{ urlPattern: "*" }]
       });
@@ -142,7 +172,11 @@ export function createBackgroundDebuggerRuntime({
     }
   }
 
-  async function handleDebuggerEvent(source: DebuggeeTarget, method: string, params: unknown): Promise<void> {
+  async function handleDebuggerEvent(
+    source: DebuggeeTarget,
+    method: string,
+    params: unknown
+  ): Promise<void> {
     try {
       if (method === "Runtime.bindingCalled" && source.tabId) {
         if (await traceService.handleBindingCalled(source.tabId, params)) {
@@ -181,8 +215,8 @@ export function createBackgroundDebuggerRuntime({
       }
     } catch (error) {
       if (
-        error instanceof DetachedDebuggerCommandError
-        || error instanceof StaleFetchRequestCommandError
+        error instanceof DetachedDebuggerCommandError ||
+        error instanceof StaleFetchRequestCommandError
       ) {
         return;
       }
@@ -191,14 +225,19 @@ export function createBackgroundDebuggerRuntime({
     }
   }
 
-  async function handleDebuggerDetach(source: DebuggeeTarget, reason: DetachReason): Promise<void> {
+  async function handleDebuggerDetach(
+    source: DebuggeeTarget,
+    reason: DetachReason
+  ): Promise<void> {
     if (!source.tabId) {
       return;
     }
 
     if (reason === "canceled_by_user" && state.sessionActive) {
       await stopSession();
-      setLastError("Debugger session was canceled by the user. Session stopped.");
+      setLastError(
+        "Debugger session was canceled by the user. Session stopped."
+      );
       await persistSnapshot();
       return;
     }

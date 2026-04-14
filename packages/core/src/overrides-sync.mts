@@ -5,7 +5,7 @@ import ignore from "ignore";
 import {
   CAPTURE_ASSETS_DIR,
   MANIFESTS_DIR,
-  STATIC_RESOURCE_MANIFEST_FILE,
+  STATIC_RESOURCE_MANIFEST_FILE
 } from "./constants.mjs";
 import {
   STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION,
@@ -79,9 +79,9 @@ function parseOverrideHost(segment: string): string | null {
 
   const candidate = new URL(candidateUrl);
   if (
-    candidate.hostname !== "localhost"
-    && !candidate.hostname.includes(".")
-    && !candidate.hostname.includes(":")
+    candidate.hostname !== "localhost" &&
+    !candidate.hostname.includes(".") &&
+    !candidate.hostname.includes(":")
   ) {
     return null;
   }
@@ -95,9 +95,7 @@ function escapeRegex(pattern: string): string {
 function detectBodyEncoding(buffer: Buffer): "utf8" | "base64" {
   try {
     const decoded = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
-    return Buffer.from(decoded, "utf8").equals(buffer)
-      ? "utf8"
-      : "base64";
+    return Buffer.from(decoded, "utf8").equals(buffer) ? "utf8" : "base64";
   } catch {
     return "base64";
   }
@@ -120,7 +118,10 @@ function inferResourceTypeFromMime(mimeType: string): string {
   if (lowerMimeType.startsWith("font/")) {
     return "Font";
   }
-  if (lowerMimeType.startsWith("audio/") || lowerMimeType.startsWith("video/")) {
+  if (
+    lowerMimeType.startsWith("audio/") ||
+    lowerMimeType.startsWith("video/")
+  ) {
     return "Media";
   }
   return "Other";
@@ -161,30 +162,40 @@ function buildRequestPathFromOverridePath(decodedParts: string[]): string {
   return decodedParts.join("/");
 }
 
-function buildRequestUrl(host: string, requestPath: string, scheme: "http" | "https"): URL {
+function buildRequestUrl(
+  host: string,
+  requestPath: string,
+  scheme: "http" | "https"
+): URL {
   const relative = requestPath.slice(host.length);
   const pathWithLeadingSlash = `/${relative.replace(/^\/+/, "")}`;
 
   const queryIndex = pathWithLeadingSlash.indexOf("?");
-  const pathname = queryIndex >= 0 ? pathWithLeadingSlash.slice(0, queryIndex) : pathWithLeadingSlash;
+  const pathname =
+    queryIndex >= 0
+      ? pathWithLeadingSlash.slice(0, queryIndex)
+      : pathWithLeadingSlash;
   const search = queryIndex >= 0 ? pathWithLeadingSlash.slice(queryIndex) : "";
 
   return new URL(`${scheme}://${host}${pathname}${search}`);
 }
 
-function isHeaderOverrideRecord(value: unknown): value is { applyTo: string; headers: HeaderEntry[] } {
+function isHeaderOverrideRecord(
+  value: unknown
+): value is { applyTo: string; headers: HeaderEntry[] } {
   return Boolean(
-    value
-    && typeof value === "object"
-    && typeof (value as { applyTo?: unknown }).applyTo === "string"
-    && Array.isArray((value as { headers?: unknown }).headers)
-    && (value as { headers: unknown[] }).headers.length > 0
-    && (value as { headers: unknown[] }).headers.every((header) => (
-      header
-      && typeof header === "object"
-      && typeof (header as { name?: unknown }).name === "string"
-      && typeof (header as { value?: unknown }).value === "string"
-    ))
+    value &&
+    typeof value === "object" &&
+    typeof (value as { applyTo?: unknown }).applyTo === "string" &&
+    Array.isArray((value as { headers?: unknown }).headers) &&
+    (value as { headers: unknown[] }).headers.length > 0 &&
+    (value as { headers: unknown[] }).headers.every(
+      (header) =>
+        header &&
+        typeof header === "object" &&
+        typeof (header as { name?: unknown }).name === "string" &&
+        typeof (header as { value?: unknown }).value === "string"
+    )
   );
 }
 
@@ -192,9 +203,14 @@ function createHeaderMatcher(rule: HeaderOverrideRule): RegExp {
   return new RegExp(`^${escapeRegex(`${rule.basePath}${rule.applyTo}`)}$`);
 }
 
-function mergeHeaders(baseHeaders: HeaderEntry[], overrideHeaders: HeaderEntry[]): HeaderEntry[] {
+function mergeHeaders(
+  baseHeaders: HeaderEntry[],
+  overrideHeaders: HeaderEntry[]
+): HeaderEntry[] {
   const replacementHeaders = new Map<string, HeaderEntry>();
-  const appendedSetCookies = overrideHeaders.filter((header) => header.name.toLowerCase() === "set-cookie");
+  const appendedSetCookies = overrideHeaders.filter(
+    (header) => header.name.toLowerCase() === "set-cookie"
+  );
 
   for (const header of overrideHeaders) {
     const name = header.name.toLowerCase();
@@ -237,7 +253,10 @@ function applyHeaderOverrides(
   };
 }
 
-function normalizeIgnorePath(relativePath: string, isDirectory = false): string {
+function normalizeIgnorePath(
+  relativePath: string,
+  isDirectory = false
+): string {
   const normalized = relativePath
     .split(path.sep)
     .join("/")
@@ -248,12 +267,14 @@ function normalizeIgnorePath(relativePath: string, isDirectory = false): string 
     return "";
   }
 
-  return isDirectory
-    ? `${normalized}/`
-    : normalized;
+  return isDirectory ? `${normalized}/` : normalized;
 }
 
-function relativeIgnorePath(baseDir: string, relativePath: string, isDirectory: boolean): string {
+function relativeIgnorePath(
+  baseDir: string,
+  relativePath: string,
+  isDirectory: boolean
+): string {
   const normalizedBaseDir = normalizeIgnorePath(baseDir);
   const normalizedRelativePath = normalizeIgnorePath(relativePath);
   const candidate = normalizedBaseDir
@@ -273,7 +294,11 @@ function isIgnoredByContexts(
   let ignored = false;
 
   for (const context of contexts) {
-    const candidate = relativeIgnorePath(context.baseDir, relativePath, isDirectory);
+    const candidate = relativeIgnorePath(
+      context.baseDir,
+      relativePath,
+      isDirectory
+    );
     const result = context.matcher.test(candidate);
     if (result.ignored) {
       ignored = true;
@@ -301,29 +326,43 @@ async function ensureExistingOverrideDirectory(dir: string): Promise<void> {
   }
 }
 
-async function walkOverrideDirectory(
-  dir: string
-): Promise<{ visibleFiles: string[]; rules: HeaderOverrideRule[]; skipped: HarSkippedEntry[] }> {
+async function walkOverrideDirectory(dir: string): Promise<{
+  visibleFiles: string[];
+  rules: HeaderOverrideRule[];
+  skipped: HarSkippedEntry[];
+}> {
   const visibleFiles: string[] = [];
   const rules: HeaderOverrideRule[] = [];
   const skipped: HarSkippedEntry[] = [];
   let nextRuleOrder = 0;
 
-  async function visit(relativeDir = "", inheritedContexts: IgnoreContext[] = []): Promise<void> {
+  async function visit(
+    relativeDir = "",
+    inheritedContexts: IgnoreContext[] = []
+  ): Promise<void> {
     const absoluteDir = path.resolve(dir, relativeDir);
-    const entries: Dirent[] = await fs.readdir(absoluteDir, { withFileTypes: true });
+    const entries: Dirent[] = await fs.readdir(absoluteDir, {
+      withFileTypes: true
+    });
     const contexts = [...inheritedContexts];
-    const gitignoreEntry = entries.find((entry) => entry.isFile() && entry.name === ".gitignore");
+    const gitignoreEntry = entries.find(
+      (entry) => entry.isFile() && entry.name === ".gitignore"
+    );
 
     if (gitignoreEntry) {
-      const gitignoreContent = await fs.readFile(path.resolve(absoluteDir, gitignoreEntry.name), "utf8");
+      const gitignoreContent = await fs.readFile(
+        path.resolve(absoluteDir, gitignoreEntry.name),
+        "utf8"
+      );
       contexts.push({
         baseDir: relativeDir,
         matcher: ignore().add(gitignoreContent)
       });
     }
 
-    for (const entry of [...entries].sort((left, right) => left.name.localeCompare(right.name))) {
+    for (const entry of [...entries].sort((left, right) =>
+      left.name.localeCompare(right.name)
+    )) {
       const relativePath = relativeDir
         ? joinRelativePath(relativeDir, entry.name)
         : entry.name;
@@ -346,7 +385,10 @@ async function walkOverrideDirectory(
 
       if (entry.name === ".headers") {
         try {
-          const content = await fs.readFile(path.resolve(dir, relativePath), "utf8");
+          const content = await fs.readFile(
+            path.resolve(dir, relativePath),
+            "utf8"
+          );
           const parsed = JSON.parse(content) as unknown;
           if (!Array.isArray(parsed) || !parsed.every(isHeaderOverrideRecord)) {
             throw new Error("Invalid .headers JSON payload");
@@ -358,9 +400,8 @@ async function walkOverrideDirectory(
           const baseParts = parentRelative
             ? parentRelative.split("/").map(decodeOverrideSegment)
             : [];
-          const basePath = baseParts.length > 0
-            ? `${baseParts.join("/")}/`
-            : "";
+          const basePath =
+            baseParts.length > 0 ? `${baseParts.join("/")}/` : "";
 
           for (const rule of parsed) {
             rules.push({
@@ -386,10 +427,10 @@ async function walkOverrideDirectory(
   }
 
   await visit();
-  rules.sort((left, right) => (
-    left.basePath.length - right.basePath.length
-    || left.order - right.order
-  ));
+  rules.sort(
+    (left, right) =>
+      left.basePath.length - right.basePath.length || left.order - right.order
+  );
 
   return { visibleFiles, rules, skipped };
 }
@@ -437,7 +478,8 @@ async function buildOverrideCandidates(
       skipped.push({
         requestUrl: relativePath,
         method: "GET",
-        reason: "Cannot reconstruct original URLs from DevTools longurls overrides"
+        reason:
+          "Cannot reconstruct original URLs from DevTools longurls overrides"
       });
       continue;
     }
@@ -482,12 +524,21 @@ export async function syncOverridesDirectory(
   await ensureExistingOverrideDirectory(dir);
   const sentinel = await createRoot(dir);
   const rootFs = createFixtureRootFs(dir);
-  const { visibleFiles, rules, skipped: scanSkipped } = await walkOverrideDirectory(dir);
-  const { prepared, skipped: candidateSkipped } = await buildOverrideCandidates(dir, visibleFiles);
+  const {
+    visibleFiles,
+    rules,
+    skipped: scanSkipped
+  } = await walkOverrideDirectory(dir);
+  const { prepared, skipped: candidateSkipped } = await buildOverrideCandidates(
+    dir,
+    visibleFiles
+  );
   const skipped = [...scanSkipped, ...candidateSkipped];
   const imported: HarImportedEntry[] = [];
   const manifests = new Map<string, StaticResourceManifest>();
-  const topOrigins = [...new Set(prepared.map((candidate) => candidate.topOrigin))].sort();
+  const topOrigins = [
+    ...new Set(prepared.map((candidate) => candidate.topOrigin))
+  ].sort();
   const topOrigin = topOrigins[0] || "";
 
   if (options.onEvent) {
@@ -518,8 +569,15 @@ export async function syncOverridesDirectory(
     const requestUrl = new URL(candidate.requestUrl);
     const mimeType = deriveMimeTypeFromPathname(requestUrl.pathname);
     const resourceType = inferResourceTypeFromMime(mimeType);
-    const { headers, hasExplicitOverrides } = applyHeaderOverrides(candidate.requestPath, mimeType, rules);
-    const metadataPaths = getMetadataPaths(candidate.topOrigin, candidate.relativePath);
+    const { headers, hasExplicitOverrides } = applyHeaderOverrides(
+      candidate.requestPath,
+      mimeType,
+      rules
+    );
+    const metadataPaths = getMetadataPaths(
+      candidate.topOrigin,
+      candidate.relativePath
+    );
     const queryHash = await shortHash(requestUrl.search || "");
     const bodyHash = await shortHash("");
     const completedEntries = index;
@@ -538,49 +596,63 @@ export async function syncOverridesDirectory(
       });
     }
 
-    await rootFs.writeJson(metadataPaths.requestPath, buildRequestPayload({
-      topOrigin: candidate.topOrigin,
-      url: candidate.requestUrl,
-      method: "GET",
-      requestHeaders: [],
-      requestBody: "",
-      requestBodyEncoding: "utf8",
-      descriptor: {
-        bodyHash,
-        queryHash
-      }
-    }, candidate.capturedAt));
+    await rootFs.writeJson(
+      metadataPaths.requestPath,
+      buildRequestPayload(
+        {
+          topOrigin: candidate.topOrigin,
+          url: candidate.requestUrl,
+          method: "GET",
+          requestHeaders: [],
+          requestBody: "",
+          requestBodyEncoding: "utf8",
+          descriptor: {
+            bodyHash,
+            queryHash
+          }
+        },
+        candidate.capturedAt
+      )
+    );
 
     await rootFs.writeJson(metadataPaths.metaPath, {
-      ...buildResponseMeta({
-        responseStatus: 200,
-        responseStatusText: "OK",
-        responseHeaders: headers,
-        mimeType,
-        resourceType,
-        url: candidate.requestUrl,
-        method: "GET"
-      }, candidate.bodyEncoding, candidate.capturedAt),
+      ...buildResponseMeta(
+        {
+          responseStatus: 200,
+          responseStatusText: "OK",
+          responseHeaders: headers,
+          mimeType,
+          resourceType,
+          url: candidate.requestUrl,
+          method: "GET"
+        },
+        candidate.bodyEncoding,
+        candidate.capturedAt
+      ),
       headerStrategy: hasExplicitOverrides ? "stored" : "live"
     });
 
     await rootFs.copyRecursive(candidate.relativePath, metadataPaths.bodyPath);
 
-    const manifest = manifests.get(metadataPaths.manifestPath)
-      || createManifest(candidate.topOrigin);
-    manifests.set(metadataPaths.manifestPath, upsertStaticResourceManifest(manifest, {
-      requestUrl: candidate.requestUrl,
-      requestOrigin: candidate.topOrigin,
-      pathname: requestUrl.pathname,
-      search: requestUrl.search,
-      bodyPath: metadataPaths.bodyPath,
-      projectionPath: metadataPaths.projectionPath,
-      requestPath: metadataPaths.requestPath,
-      metaPath: metadataPaths.metaPath,
-      mimeType,
-      resourceType,
-      capturedAt: candidate.capturedAt
-    }));
+    const manifest =
+      manifests.get(metadataPaths.manifestPath) ||
+      createManifest(candidate.topOrigin);
+    manifests.set(
+      metadataPaths.manifestPath,
+      upsertStaticResourceManifest(manifest, {
+        requestUrl: candidate.requestUrl,
+        requestOrigin: candidate.topOrigin,
+        pathname: requestUrl.pathname,
+        search: requestUrl.search,
+        bodyPath: metadataPaths.bodyPath,
+        projectionPath: metadataPaths.projectionPath,
+        requestPath: metadataPaths.requestPath,
+        metaPath: metadataPaths.metaPath,
+        mimeType,
+        resourceType,
+        capturedAt: candidate.capturedAt
+      })
+    );
 
     imported.push({
       requestUrl: candidate.requestUrl,

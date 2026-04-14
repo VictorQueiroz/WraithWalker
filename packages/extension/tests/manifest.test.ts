@@ -26,13 +26,12 @@ describe("extension manifest", () => {
   });
 
   it("declares the permissions required for host whitelisting from the page context menu", () => {
-    expect(manifest.permissions).toEqual(expect.arrayContaining([
-      "contextMenus"
-    ]));
+    expect(manifest.permissions).toEqual(
+      expect.arrayContaining(["contextMenus"])
+    );
     expect(manifest.permissions).not.toContain("permissions");
-    expect(manifest.optional_host_permissions).toEqual(expect.arrayContaining([
-      "http://*/*",
-      "https://*/*"
-    ]));
+    expect(manifest.optional_host_permissions).toEqual(
+      expect.arrayContaining(["http://*/*", "https://*/*"])
+    );
   });
 });

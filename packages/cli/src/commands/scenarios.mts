@@ -45,11 +45,15 @@ export const command: CommandSpec<ScenarioArgs, ScenarioResult> = {
         return { action: "switch", name: rest[0] };
       case "diff":
         if (!rest[0] || !rest[1]) {
-          throw new UsageError("Usage: wraithwalker scenarios diff <scenarioA> <scenarioB>");
+          throw new UsageError(
+            "Usage: wraithwalker scenarios diff <scenarioA> <scenarioB>"
+          );
         }
         return { action: "diff", scenarioA: rest[0], scenarioB: rest[1] };
       default:
-        throw new UsageError("Usage: wraithwalker scenarios {list|save|switch|diff}");
+        throw new UsageError(
+          "Usage: wraithwalker scenarios {list|save|switch|diff}"
+        );
     }
   },
   async execute(context, args) {
@@ -84,7 +88,11 @@ export const command: CommandSpec<ScenarioArgs, ScenarioResult> = {
         };
       }
       case "diff": {
-        const diff = await diffScenarios(rootPath, args.scenarioA, args.scenarioB);
+        const diff = await diffScenarios(
+          rootPath,
+          args.scenarioA,
+          args.scenarioB
+        );
         return {
           action: "diff",
           markdown: renderDiffMarkdown(diff)

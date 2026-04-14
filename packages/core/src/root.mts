@@ -1,6 +1,9 @@
 import path from "node:path";
 
-import { ROOT_SENTINEL_RELATIVE_PATH, ROOT_SENTINEL_SCHEMA_VERSION } from "./constants.mjs";
+import {
+  ROOT_SENTINEL_RELATIVE_PATH,
+  ROOT_SENTINEL_SCHEMA_VERSION
+} from "./constants.mjs";
 import { createFixtureRootFs } from "./root-fs.mjs";
 
 export interface RootSentinel {
@@ -10,10 +13,14 @@ export interface RootSentinel {
 }
 
 export async function readSentinel(rootPath: string): Promise<RootSentinel> {
-  return createFixtureRootFs(rootPath).readJson<RootSentinel>(ROOT_SENTINEL_RELATIVE_PATH);
+  return createFixtureRootFs(rootPath).readJson<RootSentinel>(
+    ROOT_SENTINEL_RELATIVE_PATH
+  );
 }
 
-export async function findRoot(startDir?: string): Promise<{ rootPath: string; sentinel: RootSentinel }> {
+export async function findRoot(
+  startDir?: string
+): Promise<{ rootPath: string; sentinel: RootSentinel }> {
   let current = path.resolve(startDir || process.cwd());
 
   while (true) {
@@ -34,7 +41,9 @@ export async function findRoot(startDir?: string): Promise<{ rootPath: string; s
 
 export async function createRoot(dir: string): Promise<RootSentinel> {
   const rootFs = createFixtureRootFs(dir);
-  const existing = await rootFs.readOptionalJson<RootSentinel>(ROOT_SENTINEL_RELATIVE_PATH);
+  const existing = await rootFs.readOptionalJson<RootSentinel>(
+    ROOT_SENTINEL_RELATIVE_PATH
+  );
   if (existing) {
     return existing;
   }

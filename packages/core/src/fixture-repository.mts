@@ -27,7 +27,10 @@ export interface FixtureRepositoryStorage<TRoot> {
     payload: { body: string; bodyEncoding: "utf8" | "base64" }
   ): Promise<void>;
   readOptionalJson<T>(root: TRoot, relativePath: string): Promise<T | null>;
-  readBody(root: TRoot, relativePath: string): Promise<{ bodyBase64: string; size: number }>;
+  readBody(
+    root: TRoot,
+    relativePath: string
+  ): Promise<{ bodyBase64: string; size: number }>;
 }
 
 interface FixtureRepositoryDependencies<TRoot> {
@@ -41,7 +44,9 @@ export function createFixtureRepository<TRoot>({
   sentinel,
   storage
 }: FixtureRepositoryDependencies<TRoot>) {
-  function createFallbackRequest(descriptor: FixtureDescriptor): RequestPayload {
+  function createFallbackRequest(
+    descriptor: FixtureDescriptor
+  ): RequestPayload {
     return {
       topOrigin: descriptor.topOrigin,
       url: descriptor.requestUrl,
@@ -79,7 +84,9 @@ export function createFixtureRepository<TRoot>({
     return storage.exists(root, descriptor.metaPath);
   }
 
-  async function read(descriptor: FixtureDescriptor): Promise<StoredFixture | null> {
+  async function read(
+    descriptor: FixtureDescriptor
+  ): Promise<StoredFixture | null> {
     const [bodyExists, projectionExists, meta] = await Promise.all([
       storage.exists(root, descriptor.bodyPath),
       descriptor.projectionPath
@@ -94,9 +101,10 @@ export function createFixtureRepository<TRoot>({
       return null;
     }
 
-    const preferredBodyPath = projectionExists && descriptor.projectionPath
-      ? descriptor.projectionPath
-      : descriptor.bodyPath;
+    const preferredBodyPath =
+      projectionExists && descriptor.projectionPath
+        ? descriptor.projectionPath
+        : descriptor.bodyPath;
 
     const [request, body] = await Promise.all([
       storage.readOptionalJson<RequestPayload>(root, descriptor.requestPath),
@@ -115,16 +123,21 @@ export function createFixtureRepository<TRoot>({
     descriptor: FixtureDescriptor;
     request: RequestPayload;
     response: FixtureResponsePayload;
-  }): Promise<{ written: boolean; descriptor: FixtureDescriptor; sentinel: RootSentinel }> {
+  }): Promise<{
+    written: boolean;
+    descriptor: FixtureDescriptor;
+    sentinel: RootSentinel;
+  }> {
     const { descriptor, request, response } = payload;
-    const [bodyExists, requestExists, metaExists, projectionExists] = await Promise.all([
-      storage.exists(root, descriptor.bodyPath),
-      storage.exists(root, descriptor.requestPath),
-      storage.exists(root, descriptor.metaPath),
-      descriptor.projectionPath
-        ? storage.exists(root, descriptor.projectionPath)
-        : Promise.resolve(false)
-    ]);
+    const [bodyExists, requestExists, metaExists, projectionExists] =
+      await Promise.all([
+        storage.exists(root, descriptor.bodyPath),
+        storage.exists(root, descriptor.requestPath),
+        storage.exists(root, descriptor.metaPath),
+        descriptor.projectionPath
+          ? storage.exists(root, descriptor.projectionPath)
+          : Promise.resolve(false)
+      ]);
 
     const writes: Promise<void>[] = [];
     let shouldWriteProjection = false;
@@ -143,13 +156,15 @@ export function createFixtureRepository<TRoot>({
 
     if (descriptor.projectionPath && !projectionExists) {
       shouldWriteProjection = true;
-      writes.push((async () => {
-        await storage.writeBody(
-          root,
-          descriptor.projectionPath!,
-          await createProjectionPayload(descriptor.projectionPath!, response)
-        );
-      })());
+      writes.push(
+        (async () => {
+          await storage.writeBody(
+            root,
+            descriptor.projectionPath!,
+            await createProjectionPayload(descriptor.projectionPath!, response)
+          );
+        })()
+      );
     }
 
     if (writes.length === 0) {
@@ -165,11 +180,17 @@ export function createFixtureRepository<TRoot>({
     if (descriptor.assetLike) {
       const manifestPath = getStaticResourceManifestPath(descriptor);
       if (manifestPath) {
-        const currentManifest = await storage.readOptionalJson<StaticResourceManifest>(root, manifestPath);
+        const currentManifest =
+          await storage.readOptionalJson<StaticResourceManifest>(
+            root,
+            manifestPath
+          );
         const nextManifest = upsertStaticResourceManifest(
           currentManifest || createStaticResourceManifest(descriptor),
           createStaticResourceManifestEntry(descriptor, response.meta, {
-            projectionPath: shouldWriteProjection ? descriptor.projectionPath! : null
+            projectionPath: shouldWriteProjection
+              ? descriptor.projectionPath!
+              : null
           })
         );
         await storage.writeJson(root, manifestPath, nextManifest);

@@ -30,18 +30,22 @@ describe("fixture readers", () => {
       topOriginKey: "https__app.example.com",
       generatedAt: "2026-04-03T00:00:00.000Z",
       resourcesByPathname: {
-        "/app.js": [{
-          requestUrl: "https://cdn.example.com/app.js",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/app.js",
-          search: "",
-          bodyPath: "cdn.example.com/app.js",
-          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
-          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
-          mimeType: "application/javascript",
-          resourceType: "Script",
-          capturedAt: "2026-04-03T00:00:00.000Z"
-        }]
+        "/app.js": [
+          {
+            requestUrl: "https://cdn.example.com/app.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/app.js",
+            search: "",
+            bodyPath: "cdn.example.com/app.js",
+            requestPath:
+              ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+            metaPath:
+              ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-03T00:00:00.000Z"
+          }
+        ]
       }
     };
 
@@ -88,7 +92,8 @@ describe("fixture readers", () => {
         method: "GET",
         pathname: "users",
         status: 204,
-        fixtureDir: ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
+        fixtureDir:
+          ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
       })
     ]);
   });
@@ -125,11 +130,18 @@ describe("fixture readers", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
     });
-    await root.writeText("cdn.example.com/assets/app.js", "console.log('hello');");
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "console.log('hello');"
+    );
 
-    expect(await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js")).toBe("console.log('hello');");
+    expect(
+      await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js")
+    ).toBe("console.log('hello');");
     expect(await readFixtureBody(root.rootPath, "missing.js")).toBeNull();
-    expect(resolveFixturePath(root.rootPath, "cdn.example.com/assets/app.js")).toBe(root.resolve("cdn.example.com/assets/app.js"));
+    expect(
+      resolveFixturePath(root.rootPath, "cdn.example.com/assets/app.js")
+    ).toBe(root.resolve("cdn.example.com/assets/app.js"));
     expect(resolveFixturePath(root.rootPath, "../package.json")).toBeNull();
     expect(await readFixtureBody(root.rootPath, "../package.json")).toBeNull();
   });
@@ -147,24 +159,28 @@ describe("fixture readers", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/chunk.js": [{
-            requestUrl: "https://cdn.example.com/assets/chunk.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/chunk.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/chunk.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/chunk.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/chunk.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/chunk.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/chunk.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/chunk.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
     await root.writeText(
       "cdn.example.com/assets/chunk.js",
-      "function renderDropdown(){if(animated){return{theme:\"dark\"}}return null}"
+      'function renderDropdown(){if(animated){return{theme:"dark"}}return null}'
     );
 
     const apiFixture = await root.writeApiFixture({
@@ -181,16 +197,26 @@ describe("fixture readers", () => {
         method: "GET",
         capturedAt: "2026-04-06T00:00:00.000Z"
       },
-      body: "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
+      body: '{"users":[{"id":1}],"dropdownTheme":"dark"}'
     });
 
-    expect(await readFixtureBody(root.rootPath, "cdn.example.com/assets/chunk.js", { pretty: true })).toBe(
-      "function renderDropdown() {\n  if (animated) {\n    return { theme: \"dark\" };\n  }\n  return null;\n}"
+    expect(
+      await readFixtureBody(root.rootPath, "cdn.example.com/assets/chunk.js", {
+        pretty: true
+      })
+    ).toBe(
+      'function renderDropdown() {\n  if (animated) {\n    return { theme: "dark" };\n  }\n  return null;\n}'
     );
-    expect(await readFixtureBody(root.rootPath, apiFixture.bodyPath, { pretty: true })).toBe(
-      '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
-    );
-    expect(await readApiFixture(root.rootPath, apiFixture.fixtureDir, { pretty: true })).toEqual({
+    expect(
+      await readFixtureBody(root.rootPath, apiFixture.bodyPath, {
+        pretty: true
+      })
+    ).toBe('{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }');
+    expect(
+      await readApiFixture(root.rootPath, apiFixture.fixtureDir, {
+        pretty: true
+      })
+    ).toEqual({
       fixtureDir: apiFixture.fixtureDir,
       metaPath: apiFixture.metaPath,
       bodyPath: apiFixture.bodyPath,
@@ -201,24 +227,30 @@ describe("fixture readers", () => {
       body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
     });
 
-    const snippet = await readFixtureSnippet(root.rootPath, "cdn.example.com/assets/chunk.js", {
-      pretty: true,
-      startLine: 2,
-      lineCount: 3
-    });
+    const snippet = await readFixtureSnippet(
+      root.rootPath,
+      "cdn.example.com/assets/chunk.js",
+      {
+        pretty: true,
+        startLine: 2,
+        lineCount: 3
+      }
+    );
     expect(snippet).toEqual({
       path: "cdn.example.com/assets/chunk.js",
       startLine: 2,
       endLine: 4,
       truncated: false,
-      text: "  if (animated) {\n    return { theme: \"dark\" };\n  }"
+      text: '  if (animated) {\n    return { theme: "dark" };\n  }'
     });
 
-    expect(await fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")).toBe(
-      "function renderDropdown(){if(animated){return{theme:\"dark\"}}return null}"
+    expect(
+      await fs.readFile(root.resolve("cdn.example.com/assets/chunk.js"), "utf8")
+    ).toBe(
+      'function renderDropdown(){if(animated){return{theme:"dark"}}return null}'
     );
     expect(await fs.readFile(root.resolve(apiFixture.bodyPath), "utf8")).toBe(
-      "{\"users\":[{\"id\":1}],\"dropdownTheme\":\"dark\"}"
+      '{"users":[{"id":1}],"dropdownTheme":"dark"}'
     );
   });
 
@@ -240,7 +272,7 @@ describe("fixture readers", () => {
         method: "POST",
         capturedAt: "2026-04-03T00:00:00.000Z"
       },
-      body: "{\"created\":true}"
+      body: '{"created":true}'
     });
 
     expect(await readApiFixture(root.rootPath, fixture.fixtureDir)).toEqual({
@@ -252,7 +284,7 @@ describe("fixture readers", () => {
         method: "POST",
         url: "https://api.example.com/orders"
       }),
-      body: "{\"created\":true}"
+      body: '{"created":true}'
     });
     expect(await readApiFixture(root.rootPath, "../escape")).toBeNull();
   });
@@ -270,42 +302,54 @@ describe("fixture readers", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-05T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/app.css": [{
-            requestUrl: "https://cdn.example.com/assets/app.css",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/app.css",
-            search: "",
-            bodyPath: "cdn.example.com/assets/app.css",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.css.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.css.__response.json",
-            mimeType: "text/css",
-            resourceType: "Stylesheet",
-            capturedAt: "2026-04-05T00:00:00.000Z"
-          }],
-          "/assets/app.js": [{
-            requestUrl: "https://cdn.example.com/assets/app.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/app.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-05T00:00:00.000Z"
-          }],
-          "/images/logo.svg": [{
-            requestUrl: "https://images.example.com/logo.svg",
-            requestOrigin: "https://images.example.com",
-            pathname: "/images/logo.svg",
-            search: "",
-            bodyPath: "images.example.com/logo.svg",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/images.example.com/logo.svg.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/images.example.com/logo.svg.__response.json",
-            mimeType: "image/svg+xml",
-            resourceType: "Image",
-            capturedAt: "2026-04-05T00:00:00.000Z"
-          }]
+          "/assets/app.css": [
+            {
+              requestUrl: "https://cdn.example.com/assets/app.css",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/app.css",
+              search: "",
+              bodyPath: "cdn.example.com/assets/app.css",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.css.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.css.__response.json",
+              mimeType: "text/css",
+              resourceType: "Stylesheet",
+              capturedAt: "2026-04-05T00:00:00.000Z"
+            }
+          ],
+          "/assets/app.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/app.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/app.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/app.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-05T00:00:00.000Z"
+            }
+          ],
+          "/images/logo.svg": [
+            {
+              requestUrl: "https://images.example.com/logo.svg",
+              requestOrigin: "https://images.example.com",
+              pathname: "/images/logo.svg",
+              search: "",
+              bodyPath: "images.example.com/logo.svg",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/images.example.com/logo.svg.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/images.example.com/logo.svg.__response.json",
+              mimeType: "image/svg+xml",
+              resourceType: "Image",
+              capturedAt: "2026-04-05T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -318,30 +362,42 @@ describe("fixture readers", () => {
         topOriginKey: "https__admin.example.com",
         generatedAt: "2026-04-05T00:00:00.000Z",
         resourcesByPathname: {
-          "/panel.js": [{
-            requestUrl: "https://cdn.example.com/panel.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/panel.js",
-            search: "",
-            bodyPath: "cdn.example.com/panel.js",
-            requestPath: "https__admin.example.com/panel.js.__request.json",
-            metaPath: "https__admin.example.com/panel.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-05T00:00:00.000Z"
-          }]
+          "/panel.js": [
+            {
+              requestUrl: "https://cdn.example.com/panel.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/panel.js",
+              search: "",
+              bodyPath: "cdn.example.com/panel.js",
+              requestPath: "https__admin.example.com/panel.js.__request.json",
+              metaPath: "https__admin.example.com/panel.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-05T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
     await root.writeText("cdn.example.com/assets/app.css", "");
-    await root.writeText("cdn.example.com/assets/app.js", "console.log('ready');");
-    await root.writeText("cdn.example.com/panel.js", "export const panel = true;");
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "console.log('ready');"
+    );
+    await root.writeText(
+      "cdn.example.com/panel.js",
+      "export const panel = true;"
+    );
 
-    const firstPage = await listAssets(root.rootPath, {
-      origin: "https://app.example.com"
-    }, {
-      limit: 2
-    });
+    const firstPage = await listAssets(
+      root.rootPath,
+      {
+        origin: "https://app.example.com"
+      },
+      {
+        limit: 2
+      }
+    );
     expect(firstPage.totalMatched).toBe(3);
     expect(firstPage.matchedOrigins).toEqual(["https://app.example.com"]);
     expect(firstPage.items.map((item) => item.pathname)).toEqual([
@@ -350,26 +406,34 @@ describe("fixture readers", () => {
     ]);
     expect(firstPage.nextCursor).not.toBeNull();
 
-    const secondPage = await listAssets(root.rootPath, {
-      origin: "https://app.example.com"
-    }, {
-      limit: 2,
-      cursor: firstPage.nextCursor ?? undefined
-    });
+    const secondPage = await listAssets(
+      root.rootPath,
+      {
+        origin: "https://app.example.com"
+      },
+      {
+        limit: 2,
+        cursor: firstPage.nextCursor ?? undefined
+      }
+    );
     expect(secondPage.totalMatched).toBe(3);
     expect(secondPage.items.map((item) => item.pathname)).toEqual([
       "/images/logo.svg"
     ]);
     expect(secondPage.nextCursor).toBeNull();
 
-    const filtered = await listAssets(root.rootPath, {
-      origin: "https://app.example.com"
-    }, {
-      resourceTypes: ["Script"],
-      mimeTypes: ["application/javascript"],
-      pathnameContains: "app",
-      requestOrigin: "https://cdn.example.com"
-    });
+    const filtered = await listAssets(
+      root.rootPath,
+      {
+        origin: "https://app.example.com"
+      },
+      {
+        resourceTypes: ["Script"],
+        mimeTypes: ["application/javascript"],
+        pathnameContains: "app",
+        requestOrigin: "https://cdn.example.com"
+      }
+    );
     expect(filtered.items).toEqual([
       expect.objectContaining({
         origin: "https://app.example.com",
@@ -426,22 +490,29 @@ describe("fixture readers", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-05T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/app.js": [{
-            requestUrl: "https://cdn.example.com/assets/app.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/app.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/app.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-05T00:00:00.000Z"
-          }]
+          "/assets/app.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/app.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/app.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/app.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-05T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
-    await root.writeText("cdn.example.com/assets/app.js", "renderDropdown({ animated: true });");
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "renderDropdown({ animated: true });"
+    );
 
     await root.writeApiFixture({
       topOrigin: "https://app.example.com",
@@ -457,20 +528,36 @@ describe("fixture readers", () => {
         method: "GET",
         capturedAt: "2026-04-05T00:00:00.000Z"
       },
-      body: "{\"dropdownTheme\":\"dark\"}"
+      body: '{"dropdownTheme":"dark"}'
     });
 
-    await root.writeText("notes/ui-guidelines.txt", "Dropdown guidance lives here.");
-    await root.writeText(".wraithwalker/cli.json", "{\"note\":\"metadata only dropdown\"}");
-    await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
+    await root.writeText(
+      "notes/ui-guidelines.txt",
+      "Dropdown guidance lives here."
+    );
+    await root.writeText(
+      ".wraithwalker/cli.json",
+      '{"note":"metadata only dropdown"}'
+    );
+    await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), {
+      recursive: true
+    });
     await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
 
     const matches = await searchFixtureContent(root.rootPath, {
       query: "dropdown"
     });
     expect(matches.matchedOrigins).toEqual(["https://app.example.com"]);
-    expect(matches.items.map((item) => item.sourceKind)).toEqual(["endpoint", "asset", "file"]);
-    expect(matches.items.map((item) => item.matchKind)).toEqual(["body", "body", "body"]);
+    expect(matches.items.map((item) => item.sourceKind)).toEqual([
+      "endpoint",
+      "asset",
+      "file"
+    ]);
+    expect(matches.items.map((item) => item.matchKind)).toEqual([
+      "body",
+      "body",
+      "body"
+    ]);
     expect(matches.items.map((item) => item.matchCount)).toEqual([1, 1, 1]);
     expect(matches.items.map((item) => item.path)).toEqual([
       ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/menu__q-abc__b-def/response.body",
@@ -492,7 +579,9 @@ describe("fixture readers", () => {
       cursor: firstSearchPage.nextCursor ?? undefined
     });
     expect(secondSearchPage.items).toHaveLength(1);
-    expect(secondSearchPage.items[0].path).toBe("cdn.example.com/assets/app.js");
+    expect(secondSearchPage.items[0].path).toBe(
+      "cdn.example.com/assets/app.js"
+    );
 
     const assetOnly = await searchFixtureContent(root.rootPath, {
       query: "dropdown",
@@ -549,47 +638,65 @@ describe("fixture readers", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/hierarchy.chunk.js": [{
-            requestUrl: "https://cdn.example.com/assets/hierarchy.chunk.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/hierarchy.chunk.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }],
-          "/assets/hierarchy-shell.js": [{
-            requestUrl: "https://cdn.example.com/assets/hierarchy-shell.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/hierarchy-shell.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/hierarchy-shell.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy-shell.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy-shell.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }],
-          "/assets/tree-view.js": [{
-            requestUrl: "https://cdn.example.com/assets/tree-view.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/tree-view.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/tree-view.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/tree-view.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/tree-view.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/hierarchy.chunk.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/hierarchy.chunk.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/hierarchy.chunk.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/hierarchy.chunk.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy.chunk.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ],
+          "/assets/hierarchy-shell.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/hierarchy-shell.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/hierarchy-shell.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/hierarchy-shell.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy-shell.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/hierarchy-shell.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ],
+          "/assets/tree-view.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/tree-view.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/tree-view.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/tree-view.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/tree-view.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/tree-view.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
-    await root.writeText("cdn.example.com/assets/hierarchy-shell.js", "console.log('ready');");
-    await root.writeText("cdn.example.com/assets/tree-view.js", "console.log('ready');");
+    await root.writeText(
+      "cdn.example.com/assets/hierarchy-shell.js",
+      "console.log('ready');"
+    );
+    await root.writeText(
+      "cdn.example.com/assets/tree-view.js",
+      "console.log('ready');"
+    );
     await root.writeApiFixture({
       topOrigin: "https://app.example.com",
       requestOrigin: "https://api.example.com",
@@ -651,18 +758,22 @@ describe("fixture readers", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/dropdown.js": [{
-            requestUrl: "https://cdn.example.com/assets/dropdown.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/dropdown.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/dropdown.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/dropdown.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/dropdown.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/dropdown.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/dropdown.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/dropdown.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -697,18 +808,22 @@ describe("fixture readers", () => {
         topOriginKey: "http__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/http.js": [{
-            requestUrl: "http://cdn.example.com/assets/http.js",
-            requestOrigin: "http://cdn.example.com",
-            pathname: "/assets/http.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/http.js",
-            requestPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/http.js": [
+            {
+              requestUrl: "http://cdn.example.com/assets/http.js",
+              requestOrigin: "http://cdn.example.com",
+              pathname: "/assets/http.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/http.js",
+              requestPath:
+                ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/http__app.example.com/cdn.example.com/http.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -720,18 +835,22 @@ describe("fixture readers", () => {
         topOriginKey: "https__app.example.com",
         generatedAt: "2026-04-06T00:00:00.000Z",
         resourcesByPathname: {
-          "/assets/https.js": [{
-            requestUrl: "https://cdn.example.com/assets/https.js",
-            requestOrigin: "https://cdn.example.com",
-            pathname: "/assets/https.js",
-            search: "",
-            bodyPath: "cdn.example.com/assets/https.js",
-            requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/https.js.__request.json",
-            metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/https.js.__response.json",
-            mimeType: "application/javascript",
-            resourceType: "Script",
-            capturedAt: "2026-04-06T00:00:00.000Z"
-          }]
+          "/assets/https.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/https.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/https.js",
+              search: "",
+              bodyPath: "cdn.example.com/assets/https.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/https.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/https.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-06T00:00:00.000Z"
+            }
+          ]
         }
       }
     });
@@ -747,7 +866,7 @@ describe("fixture readers", () => {
         url: "http://api.example.com/status",
         method: "GET"
       },
-      body: "{\"scheme\":\"http\"}"
+      body: '{"scheme":"http"}'
     });
     await root.writeApiFixture({
       topOrigin: "https://app.example.com",
@@ -761,10 +880,16 @@ describe("fixture readers", () => {
         url: "https://api.example.com/status",
         method: "GET"
       },
-      body: "{\"scheme\":\"https\"}"
+      body: '{"scheme":"https"}'
     });
-    await root.writeText("cdn.example.com/assets/http.js", "console.log('http');");
-    await root.writeText("cdn.example.com/assets/https.js", "console.log('https');");
+    await root.writeText(
+      "cdn.example.com/assets/http.js",
+      "console.log('http');"
+    );
+    await root.writeText(
+      "cdn.example.com/assets/https.js",
+      "console.log('https');"
+    );
 
     const matchedConfigs = matchSiteConfigsByOrigin(
       await readSiteConfigs(root.rootPath),
@@ -819,15 +944,24 @@ describe("fixture readers", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
     });
-    const lines = Array.from({ length: 200 }, (_, index) => `line-${index + 1}`).join("\n");
+    const lines = Array.from(
+      { length: 200 },
+      (_, index) => `line-${index + 1}`
+    ).join("\n");
     await root.writeText("cdn.example.com/assets/app.js", lines);
-    await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), { recursive: true });
+    await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), {
+      recursive: true
+    });
     await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
 
-    const snippet = await readFixtureSnippet(root.rootPath, "cdn.example.com/assets/app.js", {
-      startLine: 120,
-      lineCount: 3
-    });
+    const snippet = await readFixtureSnippet(
+      root.rootPath,
+      "cdn.example.com/assets/app.js",
+      {
+        startLine: 120,
+        lineCount: 3
+      }
+    );
     expect(snippet).toEqual({
       path: "cdn.example.com/assets/app.js",
       startLine: 120,
@@ -836,18 +970,30 @@ describe("fixture readers", () => {
       text: "line-120\nline-121\nline-122"
     });
 
-    const truncated = await readFixtureSnippet(root.rootPath, "cdn.example.com/assets/app.js", {
-      startLine: 1,
-      lineCount: 10,
-      maxBytes: 12
-    });
+    const truncated = await readFixtureSnippet(
+      root.rootPath,
+      "cdn.example.com/assets/app.js",
+      {
+        startLine: 1,
+        lineCount: 10,
+        maxBytes: 12
+      }
+    );
     expect(truncated.truncated).toBe(true);
     expect(Buffer.byteLength(truncated.text, "utf8")).toBeLessThanOrEqual(12);
 
-    await expect(readFixtureSnippet(root.rootPath, "../escape")).rejects.toThrow("Invalid fixture path");
-    await expect(readFixtureSnippet(root.rootPath, "missing.txt")).rejects.toThrow("File not found");
-    await expect(readFixtureSnippet(root.rootPath, "bin/blob.bin")).rejects.toThrow("Fixture is not a text file");
-    await expect(readFixtureSnippet(root.rootPath, "bin/blob.bin", { pretty: true })).rejects.toThrow("Fixture is not a text file");
+    await expect(
+      readFixtureSnippet(root.rootPath, "../escape")
+    ).rejects.toThrow("Invalid fixture path");
+    await expect(
+      readFixtureSnippet(root.rootPath, "missing.txt")
+    ).rejects.toThrow("File not found");
+    await expect(
+      readFixtureSnippet(root.rootPath, "bin/blob.bin")
+    ).rejects.toThrow("Fixture is not a text file");
+    await expect(
+      readFixtureSnippet(root.rootPath, "bin/blob.bin", { pretty: true })
+    ).rejects.toThrow("Fixture is not a text file");
   });
 
   it("rejects oversized full reads and points agents to bounded snippet reads", async () => {
@@ -872,16 +1018,24 @@ describe("fixture readers", () => {
       body: largeBody
     });
 
-    await expect(readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")).rejects.toThrow(
+    await expect(
+      readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")
+    ).rejects.toThrow(
       "File is too large to read in full: cdn.example.com/assets/huge.js"
     );
-    await expect(readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")).rejects.toThrow(
+    await expect(
+      readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")
+    ).rejects.toThrow(
       "Use read-file-snippet with this path and specify startLine and lineCount."
     );
-    await expect(readApiFixture(root.rootPath, endpointFixture.fixtureDir)).rejects.toThrow(
+    await expect(
+      readApiFixture(root.rootPath, endpointFixture.fixtureDir)
+    ).rejects.toThrow(
       `Endpoint fixture body is too large to read in full: ${endpointFixture.bodyPath}`
     );
-    await expect(readApiFixture(root.rootPath, endpointFixture.fixtureDir)).rejects.toThrow(
+    await expect(
+      readApiFixture(root.rootPath, endpointFixture.fixtureDir)
+    ).rejects.toThrow(
       `Use read-file-snippet with path "${endpointFixture.bodyPath}" and specify startLine and lineCount.`
     );
   });
@@ -901,7 +1055,10 @@ describe("fixture readers", () => {
   });
 
   it("returns no site configs when the root path does not exist", async () => {
-    const missingRoot = path.join(os.tmpdir(), `wraithwalker-core-fixtures-missing-${Date.now()}`);
+    const missingRoot = path.join(
+      os.tmpdir(),
+      `wraithwalker-core-fixtures-missing-${Date.now()}`
+    );
     await expect(readSiteConfigs(missingRoot)).resolves.toEqual([]);
   });
 });

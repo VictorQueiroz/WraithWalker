@@ -20,11 +20,7 @@ import {
   STATIC_RESOURCE_MANIFEST_FILE
 } from "../src/lib/constants.mts";
 import { generateContext } from "../src/lib/context-generator.mts";
-import {
-  createRoot,
-  findRoot,
-  readSentinel
-} from "../src/lib/root.mts";
+import { createRoot, findRoot, readSentinel } from "../src/lib/root.mts";
 import { UsageError } from "../src/lib/command.mts";
 import { wraithwalkerTheme } from "../src/lib/wraithwalker-theme.mts";
 
@@ -102,8 +98,14 @@ describe("cli entrypoints and re-exports", () => {
       API_REQUEST: "request.json",
       API_META: "response.meta.json"
     });
-    expect(EDITOR_CONTEXT_FILES["cursor"]).toEqual(["CLAUDE.md", ".cursorrules"]);
-    expect(EDITOR_CONTEXT_FILES["windsurf"]).toEqual(["CLAUDE.md", ".windsurfrules"]);
+    expect(EDITOR_CONTEXT_FILES["cursor"]).toEqual([
+      "CLAUDE.md",
+      ".cursorrules"
+    ]);
+    expect(EDITOR_CONTEXT_FILES["windsurf"]).toEqual([
+      "CLAUDE.md",
+      ".windsurfrules"
+    ]);
     expect(DEFAULT_CONTEXT_FILES).toEqual(["CLAUDE.md"]);
   });
 
@@ -129,7 +131,10 @@ describe("cli entrypoints and re-exports", () => {
     process.exitCode = undefined;
 
     try {
-      const { runCli } = await loadCliEntrypoint("success", vi.fn().mockResolvedValue(7));
+      const { runCli } = await loadCliEntrypoint(
+        "success",
+        vi.fn().mockResolvedValue(7)
+      );
       expect(runCli).toHaveBeenCalledWith(["status", "--verbose"]);
       expect(process.exitCode).toBe(7);
     } finally {

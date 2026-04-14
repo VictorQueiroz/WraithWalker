@@ -13,10 +13,7 @@
     "nativeMessaging",
     "contextMenus"
   ],
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -39,14 +36,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "offscreen.html",
-        "offscreen.js",
-        "app.css"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["offscreen.html", "offscreen.js", "app.css"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

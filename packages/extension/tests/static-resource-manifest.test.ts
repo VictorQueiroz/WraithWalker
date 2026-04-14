@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { STATIC_RESOURCE_MANIFEST_FILE, STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION } from "../src/lib/constants.js";
+import {
+  STATIC_RESOURCE_MANIFEST_FILE,
+  STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION
+} from "../src/lib/constants.js";
 import { createFixtureDescriptor } from "../src/lib/fixture-mapper.js";
 import {
   createStaticResourceManifest,
@@ -13,7 +16,7 @@ import type { AssetFixtureDescriptor } from "../src/lib/types.js";
 async function createAssetDescriptor(
   payload: Parameters<typeof createFixtureDescriptor>[0]
 ): Promise<AssetFixtureDescriptor> {
-  return await createFixtureDescriptor(payload) as AssetFixtureDescriptor;
+  return (await createFixtureDescriptor(payload)) as AssetFixtureDescriptor;
 }
 
 describe("static resource manifest", () => {
@@ -58,7 +61,9 @@ describe("static resource manifest", () => {
     });
 
     const manifest = createStaticResourceManifest(descriptor);
-    expect(manifest.schemaVersion).toBe(STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION);
+    expect(manifest.schemaVersion).toBe(
+      STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION
+    );
 
     const firstEntry = createStaticResourceManifestEntry(descriptor, {
       status: 200,
@@ -79,7 +84,9 @@ describe("static resource manifest", () => {
     );
 
     const updatedManifest = upsertStaticResourceManifest(manifest, firstEntry);
-    expect(updatedManifest.resourcesByPathname["/static/app.js"]).toEqual([firstEntry]);
+    expect(updatedManifest.resourcesByPathname["/static/app.js"]).toEqual([
+      firstEntry
+    ]);
 
     const replacementEntry = {
       ...firstEntry,
@@ -87,8 +94,13 @@ describe("static resource manifest", () => {
       bodyPath: firstEntry.bodyPath.replace("__q-", "__q-next-")
     };
 
-    const replacementManifest = upsertStaticResourceManifest(updatedManifest, replacementEntry);
-    expect(replacementManifest.resourcesByPathname["/static/app.js"]).toEqual([replacementEntry]);
+    const replacementManifest = upsertStaticResourceManifest(
+      updatedManifest,
+      replacementEntry
+    );
+    expect(replacementManifest.resourcesByPathname["/static/app.js"]).toEqual([
+      replacementEntry
+    ]);
     expect(replacementManifest.generatedAt).toBe("2026-04-03T12:05:00.000Z");
   });
 
@@ -166,8 +178,14 @@ describe("static resource manifest", () => {
       entryB
     );
 
-    expect(updatedManifest.resourcesByPathname["/static/theme.css"]).toHaveLength(2);
-    expect(updatedManifest.resourcesByPathname["/static/theme.css"][0].requestUrl).toBe(descriptorA.requestUrl);
-    expect(updatedManifest.resourcesByPathname["/static/theme.css"][1].requestUrl).toBe(descriptorB.requestUrl);
+    expect(
+      updatedManifest.resourcesByPathname["/static/theme.css"]
+    ).toHaveLength(2);
+    expect(
+      updatedManifest.resourcesByPathname["/static/theme.css"][0].requestUrl
+    ).toBe(descriptorA.requestUrl);
+    expect(
+      updatedManifest.resourcesByPathname["/static/theme.css"][1].requestUrl
+    ).toBe(descriptorB.requestUrl);
   });
 });

@@ -12,10 +12,16 @@ async function loadHostModule() {
 
   const mocks = {
     verifyRoot: vi.fn().mockResolvedValue({ ok: true, via: "verifyRoot" }),
-    openDirectory: vi.fn().mockResolvedValue({ ok: true, via: "openDirectory" }),
-    revealDirectory: vi.fn().mockResolvedValue({ ok: true, via: "revealDirectory" }),
+    openDirectory: vi
+      .fn()
+      .mockResolvedValue({ ok: true, via: "openDirectory" }),
+    revealDirectory: vi
+      .fn()
+      .mockResolvedValue({ ok: true, via: "revealDirectory" }),
     saveScenario: vi.fn().mockResolvedValue({ ok: true, via: "saveScenario" }),
-    switchScenario: vi.fn().mockResolvedValue({ ok: true, via: "switchScenario" }),
+    switchScenario: vi
+      .fn()
+      .mockResolvedValue({ ok: true, via: "switchScenario" }),
     listScenarios: vi.fn().mockResolvedValue({ ok: true, via: "listScenarios" })
   };
 
@@ -46,7 +52,9 @@ afterEach(() => {
 describe("native host entrypoint", () => {
   it("writes length-prefixed JSON payloads to stdout", async () => {
     const { host } = await loadHostModule();
-    const stdoutWrite = vi.spyOn(process.stdout, "write").mockReturnValue(true as never);
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true as never);
 
     host.writeMessage({ ok: true, message: "hello" });
 
@@ -65,54 +73,90 @@ describe("native host entrypoint", () => {
   it("dispatches known message types to the matching lib helpers", async () => {
     const { host, mocks } = await loadHostModule();
 
-    await expect(host.handleMessage({ type: "verifyRoot" })).resolves.toEqual({ ok: true, via: "verifyRoot" });
-    await expect(host.handleMessage({ type: "openDirectory" })).resolves.toEqual({ ok: true, via: "openDirectory" });
-    await expect(host.handleMessage({ type: "revealDirectory" })).resolves.toEqual({ ok: true, via: "revealDirectory" });
-    await expect(host.handleMessage({ type: "saveScenario" })).resolves.toEqual({ ok: true, via: "saveScenario" });
-    await expect(host.handleMessage({ type: "switchScenario" })).resolves.toEqual({ ok: true, via: "switchScenario" });
-    await expect(host.handleMessage({ type: "listScenarios" })).resolves.toEqual({ ok: true, via: "listScenarios" });
+    await expect(host.handleMessage({ type: "verifyRoot" })).resolves.toEqual({
+      ok: true,
+      via: "verifyRoot"
+    });
+    await expect(
+      host.handleMessage({ type: "openDirectory" })
+    ).resolves.toEqual({ ok: true, via: "openDirectory" });
+    await expect(
+      host.handleMessage({ type: "revealDirectory" })
+    ).resolves.toEqual({ ok: true, via: "revealDirectory" });
+    await expect(host.handleMessage({ type: "saveScenario" })).resolves.toEqual(
+      { ok: true, via: "saveScenario" }
+    );
+    await expect(
+      host.handleMessage({ type: "switchScenario" })
+    ).resolves.toEqual({ ok: true, via: "switchScenario" });
+    await expect(
+      host.handleMessage({ type: "listScenarios" })
+    ).resolves.toEqual({ ok: true, via: "listScenarios" });
 
     expect(mocks.verifyRoot).toHaveBeenCalledWith({ type: "verifyRoot" });
     expect(mocks.openDirectory).toHaveBeenCalledWith({ type: "openDirectory" });
-    expect(mocks.revealDirectory).toHaveBeenCalledWith({ type: "revealDirectory" });
+    expect(mocks.revealDirectory).toHaveBeenCalledWith({
+      type: "revealDirectory"
+    });
     expect(mocks.saveScenario).toHaveBeenCalledWith({ type: "saveScenario" });
-    expect(mocks.switchScenario).toHaveBeenCalledWith({ type: "switchScenario" });
+    expect(mocks.switchScenario).toHaveBeenCalledWith({
+      type: "switchScenario"
+    });
     expect(mocks.listScenarios).toHaveBeenCalledWith({ type: "listScenarios" });
   });
 
   it("rejects unknown message types", async () => {
     const { host } = await loadHostModule();
 
-    await expect(host.handleMessage({ type: "mystery" })).rejects.toThrow("Unknown message type: mystery");
+    await expect(host.handleMessage({ type: "mystery" })).rejects.toThrow(
+      "Unknown message type: mystery"
+    );
   });
 
   it("parses length-prefixed input and writes the handler response", async () => {
     const { host } = await loadHostModule();
-    const handleMessageImpl = vi.fn().mockResolvedValue({ ok: true, result: 42 });
+    const handleMessageImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, result: 42 });
     const writeMessageImpl = vi.fn();
 
     await host.main({
-      stdin: [createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" })],
+      stdin: [
+        createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" })
+      ],
       handleMessageImpl,
       writeMessageImpl
     });
 
-    expect(handleMessageImpl).toHaveBeenCalledWith({ type: "verifyRoot", expectedRootId: "root-123" });
+    expect(handleMessageImpl).toHaveBeenCalledWith({
+      type: "verifyRoot",
+      expectedRootId: "root-123"
+    });
     expect(writeMessageImpl).toHaveBeenCalledWith({ ok: true, result: 42 });
   });
 
   it("accepts string chunks when reading the native host message body", async () => {
     const { host } = await loadHostModule();
-    const handleMessageImpl = vi.fn().mockResolvedValue({ ok: true, result: 7 });
+    const handleMessageImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, result: 7 });
     const writeMessageImpl = vi.fn();
 
     await host.main({
-      stdin: [createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" }).toString("utf8")],
+      stdin: [
+        createNativeMessage({
+          type: "verifyRoot",
+          expectedRootId: "root-123"
+        }).toString("utf8")
+      ],
       handleMessageImpl,
       writeMessageImpl
     });
 
-    expect(handleMessageImpl).toHaveBeenCalledWith({ type: "verifyRoot", expectedRootId: "root-123" });
+    expect(handleMessageImpl).toHaveBeenCalledWith({
+      type: "verifyRoot",
+      expectedRootId: "root-123"
+    });
     expect(writeMessageImpl).toHaveBeenCalledWith({ ok: true, result: 7 });
   });
 
@@ -127,7 +171,11 @@ describe("native host entrypoint", () => {
   it("rejects truncated length-prefixed messages", async () => {
     const { host } = await loadHostModule();
 
-    await expect(host.main({ stdin: [createNativeMessage({ type: "verifyRoot" }).subarray(0, 8)] })).rejects.toThrow(
+    await expect(
+      host.main({
+        stdin: [createNativeMessage({ type: "verifyRoot" }).subarray(0, 8)]
+      })
+    ).rejects.toThrow(
       "Native host received a truncated length-prefixed message."
     );
   });
@@ -149,11 +197,15 @@ describe("native host entrypoint", () => {
 
   it("passes successful entrypoint responses through without rewriting them", async () => {
     const { host } = await loadHostModule();
-    const handleMessageImpl = vi.fn().mockResolvedValue({ ok: true, result: "done" });
+    const handleMessageImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, result: "done" });
     const writeMessageImpl = vi.fn();
 
     await host.runEntrypoint({
-      stdin: [createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" })],
+      stdin: [
+        createNativeMessage({ type: "verifyRoot", expectedRootId: "root-123" })
+      ],
       handleMessageImpl,
       writeMessageImpl
     });
@@ -163,7 +215,9 @@ describe("native host entrypoint", () => {
 
   it("falls back to the default native host writer when no custom writer is provided", async () => {
     const { host } = await loadHostModule();
-    const stdoutWrite = vi.spyOn(process.stdout, "write").mockReturnValue(true as never);
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true as never);
 
     await host.runEntrypoint({
       stdin: [Buffer.from("bad")]
@@ -199,7 +253,9 @@ describe("native host entrypoint", () => {
   });
 
   it("does not auto-run when imported without an entrypoint argv", async () => {
-    const stdoutWrite = vi.spyOn(process.stdout, "write").mockReturnValue(true as never);
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockReturnValue(true as never);
 
     await loadHostModuleWithArgv([process.argv[0] ?? "node"]);
 

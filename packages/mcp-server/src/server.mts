@@ -30,7 +30,10 @@ import {
 } from "./server-http.mjs";
 import { createConnectedServer } from "./server-tool-registration.mjs";
 import { createExtensionSessionTracker } from "./extension-session.mjs";
-import { appendVaryHeader, buildLocalServerCorsHeaders } from "./local-server-cors.mjs";
+import {
+  appendVaryHeader,
+  buildLocalServerCorsHeaders
+} from "./local-server-cors.mjs";
 import { createServerRootRuntime } from "./root-runtime.mjs";
 import { createWraithwalkerRouter, HTTP_TRPC_PATH } from "./trpc.mjs";
 
@@ -74,7 +77,10 @@ export async function startServer(
     getActiveTrace: () => runtime.getActiveTrace(),
     getEffectiveSiteConfigs: () => runtime.readEffectiveSiteConfigs()
   });
-  const server = createConnectedServer(rootPath, { runtime, extensionSessions });
+  const server = createConnectedServer(rootPath, {
+    runtime,
+    extensionSessions
+  });
   const transport = options.transport ?? new StdioServerTransport();
   await server.connect(transport);
   return server;
@@ -87,7 +93,9 @@ export async function startHttpServer(
   const host = options.host ?? DEFAULT_HTTP_HOST;
   const port = options.port ?? DEFAULT_HTTP_PORT;
   if (!isLoopbackHost(host)) {
-    throw new Error(`Refusing to start WraithWalker HTTP server on non-loopback host "${host}". Use 127.0.0.1, localhost, or ::1.`);
+    throw new Error(
+      `Refusing to start WraithWalker HTTP server on non-loopback host "${host}". Use 127.0.0.1, localhost, or ::1.`
+    );
   }
 
   const sentinel = await createRoot(rootPath);
@@ -120,15 +128,16 @@ export async function startHttpServer(
   });
 
   app.use(HTTP_TRPC_PATH, (req, res, next) => {
-    const origin = typeof req.headers.origin === "string"
-      ? req.headers.origin
-      : undefined;
-    const requestedHeaders = typeof req.headers["access-control-request-headers"] === "string"
-      ? req.headers["access-control-request-headers"]
-      : undefined;
-    const requestedPrivateNetwork = typeof req.headers["access-control-request-private-network"] === "string"
-      ? req.headers["access-control-request-private-network"]
-      : undefined;
+    const origin =
+      typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+    const requestedHeaders =
+      typeof req.headers["access-control-request-headers"] === "string"
+        ? req.headers["access-control-request-headers"]
+        : undefined;
+    const requestedPrivateNetwork =
+      typeof req.headers["access-control-request-private-network"] === "string"
+        ? req.headers["access-control-request-private-network"]
+        : undefined;
     const corsHeaders = buildLocalServerCorsHeaders({
       origin,
       requestedHeaders,
@@ -154,35 +163,50 @@ export async function startHttpServer(
     next();
   });
 
-  app.use(HTTP_TRPC_PATH, trpcExpress.createExpressMiddleware({
-    router: trpcRouter,
-    createContext: () => ({}),
-    allowMethodOverride: true,
-    maxBodySize: DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES
-  }));
+  app.use(
+    HTTP_TRPC_PATH,
+    trpcExpress.createExpressMiddleware({
+      router: trpcRouter,
+      createContext: () => ({}),
+      allowMethodOverride: true,
+      maxBodySize: DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES
+    })
+  );
 
   app.use(HTTP_MCP_PATH, express.json());
 
   app.all(HTTP_MCP_PATH, async (req, res) => {
     const sessionId = getSessionId(req.headers["mcp-session-id"]);
-    let session = sessionId
-      ? sessions.get(sessionId)
-      : undefined;
+    let session = sessionId ? sessions.get(sessionId) : undefined;
     let createdSession = false;
 
     try {
       if (!session) {
         if (sessionId) {
-          res.status(404).json(createJsonRpcError(-32000, `Session "${sessionId}" not found.`));
+          res
+            .status(404)
+            .json(
+              createJsonRpcError(-32000, `Session "${sessionId}" not found.`)
+            );
           return;
         }
 
         if (req.method !== "POST" || !isInitializeRequest(req.body)) {
-          res.status(400).json(createJsonRpcError(-32000, "Bad Request: No valid session ID provided."));
+          res
+            .status(400)
+            .json(
+              createJsonRpcError(
+                -32000,
+                "Bad Request: No valid session ID provided."
+              )
+            );
           return;
         }
 
-        const server = createConnectedServer(rootPath, { runtime, extensionSessions });
+        const server = createConnectedServer(rootPath, {
+          runtime,
+          extensionSessions
+        });
         let initializedSessionId: string | undefined;
         let transport: StreamableHTTPServerTransport;
 
@@ -217,7 +241,11 @@ export async function startHttpServer(
 
       if (!res.headersSent) {
         const message = error instanceof Error ? error.message : String(error);
-        res.status(500).json(createJsonRpcError(-32603, `Internal server error: ${message}`));
+        res
+          .status(500)
+          .json(
+            createJsonRpcError(-32603, `Internal server error: ${message}`)
+          );
       }
     }
   });
@@ -249,7 +277,9 @@ export async function startHttpServer(
       const activeSessions = Array.from(sessions.values());
       sessions.clear();
 
-      await Promise.allSettled(activeSessions.map((session) => closeHttpSession(session)));
+      await Promise.allSettled(
+        activeSessions.map((session) => closeHttpSession(session))
+      );
       await closeHttpListener(listener);
     }
   };

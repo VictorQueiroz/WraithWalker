@@ -72,11 +72,13 @@ describe("serve command", () => {
     const cases: Array<{ argv: string[]; message: string }> = [
       {
         argv: ["serve", "--host"],
-        message: "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
+        message:
+          "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
       },
       {
         argv: ["serve", "--port"],
-        message: "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
+        message:
+          "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
       },
       {
         argv: ["serve", "--port", "0"],
@@ -84,23 +86,27 @@ describe("serve command", () => {
       },
       {
         argv: ["serve", "--bogus"],
-        message: "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
+        message:
+          "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
       },
       {
         argv: ["serve", "fixtures-a", "fixtures-b"],
-        message: "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
+        message:
+          "Usage: wraithwalker serve [dir] [--http] [--host <host>] [--port <port>]"
       }
     ];
 
     for (const { argv, message } of cases) {
       const capture = consoleCapture();
-      expect(await runCli(argv, {
-        cwd: await tmpdir(),
-        env: {},
-        homeDir: await tmpdir(),
-        platform: "linux",
-        isTTY: false
-      })).toBe(1);
+      expect(
+        await runCli(argv, {
+          cwd: await tmpdir(),
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        })
+      ).toBe(1);
       expect(capture.errors.join("\n")).toContain(message);
       vi.restoreAllMocks();
     }
@@ -123,13 +129,26 @@ describe("serve command", () => {
     });
     const capture = consoleCapture();
 
-    expect(await runCli(["serve", "--http", "--host", "0.0.0.0", "--port", "9876", root.rootPath], {
-      cwd: await tmpdir(),
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(
+        [
+          "serve",
+          "--http",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          "9876",
+          root.rootPath
+        ],
+        {
+          cwd: await tmpdir(),
+          env: {},
+          homeDir: await tmpdir(),
+          platform: "linux",
+          isTTY: false
+        }
+      )
+    ).toBe(0);
 
     expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
       host: "0.0.0.0",

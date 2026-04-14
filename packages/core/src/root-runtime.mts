@@ -51,11 +51,16 @@ export interface RootRuntimeDirectoryEntry {
   kind: "file" | "directory";
 }
 
-export interface RootRuntimeStorage<TRoot> extends FixtureRepositoryStorage<TRoot> {
+export interface RootRuntimeStorage<
+  TRoot
+> extends FixtureRepositoryStorage<TRoot> {
   ensureSentinel(root: TRoot): Promise<RootSentinel>;
   readText(root: TRoot, relativePath: string): Promise<string>;
   writeText(root: TRoot, relativePath: string, content: string): Promise<void>;
-  listDirectory(root: TRoot, relativePath: string): Promise<RootRuntimeDirectoryEntry[]>;
+  listDirectory(
+    root: TRoot,
+    relativePath: string
+  ): Promise<RootRuntimeDirectoryEntry[]>;
 }
 
 export type {
@@ -110,7 +115,8 @@ export function inferJsonShape(value: unknown, indent = 0): string {
     const pad = "  ".repeat(indent + 1);
     const closePad = "  ".repeat(indent);
     const lines = entries.map(
-      ([key, entryValue]) => `${pad}${key}: ${inferJsonShape(entryValue, indent + 1)}`
+      ([key, entryValue]) =>
+        `${pad}${key}: ${inferJsonShape(entryValue, indent + 1)}`
     );
     return `{\n${lines.join(";\n")};\n${closePad}}`;
   }
@@ -138,7 +144,10 @@ async function collectApiEndpoints<TRoot>(
 
     let fixtures: RootRuntimeDirectoryEntry[];
     try {
-      fixtures = await storage.listDirectory(root, `${httpPath}/${methodEntry.name}`);
+      fixtures = await storage.listDirectory(
+        root,
+        `${httpPath}/${methodEntry.name}`
+      );
     } catch {
       continue;
     }
@@ -229,7 +238,11 @@ async function collectOriginSummary<TRoot>(
     for (const entry of originDirs) {
       if (entry.kind !== "directory" || entry.name === originKey) continue;
       apiEndpoints.push(
-        ...(await collectApiEndpoints(storage, root, `${originsPath}/${entry.name}`))
+        ...(await collectApiEndpoints(
+          storage,
+          root,
+          `${originsPath}/${entry.name}`
+        ))
       );
     }
   } catch {
@@ -253,21 +266,39 @@ function renderContextMarkdown(data: ContextData): string {
   lines.push("");
   lines.push(`Generated: ${data.generatedAt}`);
   lines.push("");
-  lines.push("This file describes the captured network fixtures in this directory.");
+  lines.push(
+    "This file describes the captured network fixtures in this directory."
+  );
   lines.push("It is auto-generated when you open the fixture root in Cursor.");
   lines.push("");
   lines.push("## Cursor Agent Brief");
   lines.push("");
-  lines.push("This root folder is a WraithWalker fixture workspace, not the source repository for the site.");
-  lines.push("It contains dumped assets, static resource manifests, API fixtures, and replay metadata for the selected origins.");
-  lines.push(originList ? `Selected origins: ${originList}` : "Selected origins: none yet.");
+  lines.push(
+    "This root folder is a WraithWalker fixture workspace, not the source repository for the site."
+  );
+  lines.push(
+    "It contains dumped assets, static resource manifests, API fixtures, and replay metadata for the selected origins."
+  );
+  lines.push(
+    originList
+      ? `Selected origins: ${originList}`
+      : "Selected origins: none yet."
+  );
   lines.push("");
   lines.push("When working in this root:");
   lines.push("");
-  lines.push("- Prettify minified or dumped contents before reasoning about them.");
-  lines.push("- Start by understanding the structure of the website across the selected origins below.");
-  lines.push("- Use RESOURCE_MANIFEST.json files, sidecar metadata, and API fixtures to map how requests and assets fit together.");
-  lines.push("- Treat captured files as fixture data unless the task is explicitly to rewrite or replace them.");
+  lines.push(
+    "- Prettify minified or dumped contents before reasoning about them."
+  );
+  lines.push(
+    "- Start by understanding the structure of the website across the selected origins below."
+  );
+  lines.push(
+    "- Use RESOURCE_MANIFEST.json files, sidecar metadata, and API fixtures to map how requests and assets fit together."
+  );
+  lines.push(
+    "- Treat captured files as fixture data unless the task is explicitly to rewrite or replace them."
+  );
   lines.push("");
 
   for (const origin of data.origins) {
@@ -280,16 +311,22 @@ function renderContextMarkdown(data: ContextData): string {
       lines.push("| Method | Path | Status | Content Type |");
       lines.push("|--------|------|--------|--------------|");
       for (const endpoint of origin.apiEndpoints) {
-        lines.push(`| ${endpoint.method} | ${endpoint.pathname} | ${endpoint.status} | ${endpoint.mimeType} |`);
+        lines.push(
+          `| ${endpoint.method} | ${endpoint.pathname} | ${endpoint.status} | ${endpoint.mimeType} |`
+        );
       }
       lines.push("");
 
-      const jsonEndpoints = origin.apiEndpoints.filter((endpoint) => endpoint.responseShape);
+      const jsonEndpoints = origin.apiEndpoints.filter(
+        (endpoint) => endpoint.responseShape
+      );
       if (jsonEndpoints.length > 0) {
         lines.push("### Response Shapes");
         lines.push("");
         for (const endpoint of jsonEndpoints) {
-          lines.push(`#### ${endpoint.method} ${endpoint.pathname} (${endpoint.status})`);
+          lines.push(
+            `#### ${endpoint.method} ${endpoint.pathname} (${endpoint.status})`
+          );
           lines.push("");
           lines.push("```typescript");
           lines.push(endpoint.responseShape!);
@@ -318,14 +355,24 @@ function renderContextMarkdown(data: ContextData): string {
   if (data.origins.some((origin) => origin.apiEndpoints.length > 0)) {
     lines.push("## Suggested Agent Tasks");
     lines.push("");
-    const firstApiOrigin = data.origins.find((origin) => origin.apiEndpoints.length > 0);
+    const firstApiOrigin = data.origins.find(
+      (origin) => origin.apiEndpoints.length > 0
+    );
     if (firstApiOrigin) {
       const endpoint = firstApiOrigin.apiEndpoints[0];
-      lines.push(`- Modify the \`${endpoint.method} ${endpoint.pathname}\` fixture to return an error status and test error handling`);
-      lines.push(`- Change response data in \`${endpoint.method} ${endpoint.pathname}\` to test edge cases (empty arrays, null fields, large payloads)`);
+      lines.push(
+        `- Modify the \`${endpoint.method} ${endpoint.pathname}\` fixture to return an error status and test error handling`
+      );
+      lines.push(
+        `- Change response data in \`${endpoint.method} ${endpoint.pathname}\` to test edge cases (empty arrays, null fields, large payloads)`
+      );
     }
-    lines.push("- Add new fixture files for endpoints that don't exist yet to support offline development");
-    lines.push("- Generate TypeScript interfaces from the response shapes above");
+    lines.push(
+      "- Add new fixture files for endpoints that don't exist yet to support offline development"
+    );
+    lines.push(
+      "- Generate TypeScript interfaces from the response shapes above"
+    );
     lines.push("");
   }
 
@@ -340,17 +387,25 @@ async function generateTypes<TRoot>(
   const moduleNames: string[] = [];
 
   for (const origin of data.origins) {
-    const typedEndpoints = origin.apiEndpoints.filter((endpoint) => endpoint.typeNode !== null);
+    const typedEndpoints = origin.apiEndpoints.filter(
+      (endpoint) => endpoint.typeNode !== null
+    );
     if (typedEndpoints.length === 0) continue;
 
     const declarations = new Map<string, { name: string; node: TypeNode }>();
     for (const endpoint of typedEndpoints) {
-      const interfaceName = pathToInterfaceName(endpoint.method, endpoint.pathname);
+      const interfaceName = pathToInterfaceName(
+        endpoint.method,
+        endpoint.pathname
+      );
       const existing = declarations.get(interfaceName);
       if (existing && endpoint.typeNode) {
         existing.node = mergeTypeNodes(existing.node, endpoint.typeNode);
       } else if (endpoint.typeNode) {
-        declarations.set(interfaceName, { name: interfaceName, node: endpoint.typeNode });
+        declarations.set(interfaceName, {
+          name: interfaceName,
+          node: endpoint.typeNode
+        });
       }
     }
 
@@ -404,7 +459,9 @@ export function createWraithwalkerRootRuntime<TRoot>({
     return (await createRepository()).exists(descriptor);
   }
 
-  async function read(descriptor: FixtureDescriptor): Promise<StoredFixture | null> {
+  async function read(
+    descriptor: FixtureDescriptor
+  ): Promise<StoredFixture | null> {
     return (await createRepository()).read(descriptor);
   }
 
@@ -435,7 +492,8 @@ export function createWraithwalkerRootRuntime<TRoot>({
       origins
     };
     const markdown = renderContextMarkdown(data);
-    const fileNames = EDITOR_CONTEXT_FILES[editorId || ""] || DEFAULT_CONTEXT_FILES;
+    const fileNames =
+      EDITOR_CONTEXT_FILES[editorId || ""] || DEFAULT_CONTEXT_FILES;
 
     for (const fileName of fileNames) {
       await storage.writeText(root, fileName, markdown);
@@ -450,12 +508,26 @@ export function createWraithwalkerRootRuntime<TRoot>({
     has,
     read,
     writeIfAbsent,
-    readProjectConfig: projectConfigStore.readProjectConfig as () => Promise<ProjectConfigFile>,
-    writeProjectConfig: projectConfigStore.writeProjectConfig as (config: ProjectConfigFile) => Promise<ProjectConfigFile>,
-    readConfiguredSiteConfigs: projectConfigStore.readConfiguredSiteConfigs as () => Promise<SiteConfig[]>,
-    writeConfiguredSiteConfigs: projectConfigStore.writeConfiguredSiteConfigs as (siteConfigs: SiteConfig[]) => Promise<ProjectConfigFile>,
-    resolveConfiguredSite: projectConfigStore.resolveConfiguredSite as (origin: string) => Promise<SiteConfig | null>,
-    readEffectiveSiteConfigs: projectConfigStore.readEffectiveSiteConfigs as () => Promise<SiteConfig[]>,
+    readProjectConfig:
+      projectConfigStore.readProjectConfig as () => Promise<ProjectConfigFile>,
+    writeProjectConfig: projectConfigStore.writeProjectConfig as (
+      config: ProjectConfigFile
+    ) => Promise<ProjectConfigFile>,
+    readConfiguredSiteConfigs:
+      projectConfigStore.readConfiguredSiteConfigs as () => Promise<
+        SiteConfig[]
+      >,
+    writeConfiguredSiteConfigs:
+      projectConfigStore.writeConfiguredSiteConfigs as (
+        siteConfigs: SiteConfig[]
+      ) => Promise<ProjectConfigFile>,
+    resolveConfiguredSite: projectConfigStore.resolveConfiguredSite as (
+      origin: string
+    ) => Promise<SiteConfig | null>,
+    readEffectiveSiteConfigs:
+      projectConfigStore.readEffectiveSiteConfigs as () => Promise<
+        SiteConfig[]
+      >,
     generateContext,
     getActiveTrace: scenarioTraceStore.getActiveTrace,
     listTraces: scenarioTraceStore.listTraces,

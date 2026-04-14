@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBackgroundTraceService, TRACE_BINDING_NAME } from "../src/lib/background-trace-service.js";
+import {
+  createBackgroundTraceService,
+  TRACE_BINDING_NAME
+} from "../src/lib/background-trace-service.js";
 import { DetachedDebuggerCommandError } from "../src/lib/background-runtime-shared.js";
 import type { FixtureDescriptor, RequestEntry } from "../src/lib/types.js";
-import { createBackgroundState, createMockServerClient } from "./helpers/background-service-test-helpers.js";
+import {
+  createBackgroundState,
+  createMockServerClient
+} from "./helpers/background-service-test-helpers.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -25,7 +31,9 @@ function createActiveTrace(overrides: Record<string, unknown> = {}) {
 
 describe("background trace service", () => {
   it("records trace binding payloads and updates the active trace", async () => {
-    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("00000000-0000-0000-0000-000000000001");
+    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(
+      "00000000-0000-0000-0000-000000000001"
+    );
     const state = createBackgroundState({
       serverInfo: {
         rootPath: "/tmp/server-root",
@@ -35,11 +43,16 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[7, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          7,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     const nextTrace = createActiveTrace({ traceId: "trace-2" });
     const serverClient = createMockServerClient({
@@ -94,14 +107,18 @@ describe("background trace service", () => {
       markServerOffline: vi.fn()
     });
 
-    await expect(service.handleBindingCalled(1, {
-      name: "other",
-      payload: JSON.stringify({ selector: "#save" })
-    })).resolves.toBe(false);
-    await expect(service.handleBindingCalled(1, {
-      name: TRACE_BINDING_NAME,
-      payload: 42
-    })).resolves.toBe(false);
+    await expect(
+      service.handleBindingCalled(1, {
+        name: "other",
+        payload: JSON.stringify({ selector: "#save" })
+      })
+    ).resolves.toBe(false);
+    await expect(
+      service.handleBindingCalled(1, {
+        name: TRACE_BINDING_NAME,
+        payload: 42
+      })
+    ).resolves.toBe(false);
   });
 
   it("skips trace work when the server, trace, or request context is incomplete", async () => {
@@ -109,11 +126,16 @@ describe("background trace service", () => {
     const sendDebuggerCommand = vi.fn();
     const service = createBackgroundTraceService({
       state: createBackgroundState({
-        attachedTabs: new Map([[2, {
-          topOrigin: "https://app.example.com",
-          traceScriptIdentifier: null,
-          traceArmedForTraceId: null
-        }]])
+        attachedTabs: new Map([
+          [
+            2,
+            {
+              topOrigin: "https://app.example.com",
+              traceScriptIdentifier: null,
+              traceArmedForTraceId: null
+            }
+          ]
+        ])
       }),
       serverClient,
       sendDebuggerCommand,
@@ -164,11 +186,16 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[3, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          3,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     const service = createBackgroundTraceService({
       state,
@@ -271,18 +298,25 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[8, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          8,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
-    const sendDebuggerCommand = vi.fn(async <T = unknown>(_tabId: number, method: string) => {
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        return { identifier: "trace-script-1" } as T;
+    const sendDebuggerCommand = vi.fn(
+      async <T = unknown>(_tabId: number, method: string) => {
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          return { identifier: "trace-script-1" } as T;
+        }
+        return undefined as T;
       }
-      return undefined as T;
-    }) as <T = unknown>(
+    ) as <T = unknown>(
       tabId: number,
       method: string,
       params?: Record<string, unknown>
@@ -331,14 +365,23 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[6, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          6,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     const sendDebuggerCommand = vi.fn(async () => {
-      throw new DetachedDebuggerCommandError(6, "Runtime.addBinding", "Debugger is not attached to the tab with id: 6.");
+      throw new DetachedDebuggerCommandError(
+        6,
+        "Runtime.addBinding",
+        "Debugger is not attached to the tab with id: 6."
+      );
     });
     const service = createBackgroundTraceService({
       state,
@@ -366,25 +409,32 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[10, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: "trace-script-old",
-        traceArmedForTraceId: null
-      }]])
-    });
-    const sendDebuggerCommand = vi.fn(async <T = unknown>(_tabId: number, method: string) => {
-      if (method === "Runtime.addBinding") {
-        return undefined as T;
-      }
-      if (method === "Page.removeScriptToEvaluateOnNewDocument") {
-        throw new DetachedDebuggerCommandError(
+      attachedTabs: new Map([
+        [
           10,
-          method,
-          "Debugger is not attached to the tab with id: 10."
-        );
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: "trace-script-old",
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
+    });
+    const sendDebuggerCommand = vi.fn(
+      async <T = unknown>(_tabId: number, method: string) => {
+        if (method === "Runtime.addBinding") {
+          return undefined as T;
+        }
+        if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+          throw new DetachedDebuggerCommandError(
+            10,
+            method,
+            "Debugger is not attached to the tab with id: 10."
+          );
+        }
+        throw new Error(`Unexpected method: ${method}`);
       }
-      throw new Error(`Unexpected method: ${method}`);
-    }) as <T = unknown>(
+    ) as <T = unknown>(
       tabId: number,
       method: string,
       params?: Record<string, unknown>
@@ -415,25 +465,32 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[11, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          11,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
-    const sendDebuggerCommand = vi.fn(async <T = unknown>(_tabId: number, method: string) => {
-      if (method === "Runtime.addBinding") {
+    const sendDebuggerCommand = vi.fn(
+      async <T = unknown>(_tabId: number, method: string) => {
+        if (method === "Runtime.addBinding") {
+          return undefined as T;
+        }
+        if (method === "Page.addScriptToEvaluateOnNewDocument") {
+          throw new DetachedDebuggerCommandError(
+            11,
+            method,
+            "Debugger is not attached to the tab with id: 11."
+          );
+        }
         return undefined as T;
       }
-      if (method === "Page.addScriptToEvaluateOnNewDocument") {
-        throw new DetachedDebuggerCommandError(
-          11,
-          method,
-          "Debugger is not attached to the tab with id: 11."
-        );
-      }
-      return undefined as T;
-    }) as <T = unknown>(
+    ) as <T = unknown>(
       tabId: number,
       method: string,
       params?: Record<string, unknown>
@@ -464,11 +521,16 @@ describe("background trace service", () => {
         trpcUrl: "http://127.0.0.1:4319/trpc"
       },
       activeTrace: createActiveTrace(),
-      attachedTabs: new Map([[12, {
-        topOrigin: "https://app.example.com",
-        traceScriptIdentifier: null,
-        traceArmedForTraceId: null
-      }]])
+      attachedTabs: new Map([
+        [
+          12,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: null,
+            traceArmedForTraceId: null
+          }
+        ]
+      ])
     });
     const service = createBackgroundTraceService({
       state,
@@ -486,7 +548,9 @@ describe("background trace service", () => {
       markServerOffline: vi.fn()
     });
 
-    await expect(service.armTraceForTab(12)).rejects.toThrow("Script injection failed.");
+    await expect(service.armTraceForTab(12)).rejects.toThrow(
+      "Script injection failed."
+    );
   });
 
   it("syncs trace bindings by disarming attached tabs when tracing is inactive", async () => {
@@ -495,16 +559,22 @@ describe("background trace service", () => {
       activeTrace: null,
       serverInfo: null,
       attachedTabs: new Map([
-        [1, {
-          topOrigin: "https://app.example.com",
-          traceScriptIdentifier: "trace-script-1",
-          traceArmedForTraceId: "trace-1"
-        }],
-        [2, {
-          topOrigin: "https://app.example.com",
-          traceScriptIdentifier: "trace-script-2",
-          traceArmedForTraceId: "trace-1"
-        }]
+        [
+          1,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: "trace-script-1",
+            traceArmedForTraceId: "trace-1"
+          }
+        ],
+        [
+          2,
+          {
+            topOrigin: "https://app.example.com",
+            traceScriptIdentifier: "trace-script-2",
+            traceArmedForTraceId: "trace-1"
+          }
+        ]
       ])
     });
     const sendDebuggerCommand = vi.fn(async () => undefined);
@@ -518,12 +588,20 @@ describe("background trace service", () => {
 
     await service.syncTraceBindings();
 
-    expect(sendDebuggerCommand).toHaveBeenCalledWith(1, "Page.removeScriptToEvaluateOnNewDocument", {
-      identifier: "trace-script-1"
-    });
-    expect(sendDebuggerCommand).toHaveBeenCalledWith(2, "Page.removeScriptToEvaluateOnNewDocument", {
-      identifier: "trace-script-2"
-    });
+    expect(sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Page.removeScriptToEvaluateOnNewDocument",
+      {
+        identifier: "trace-script-1"
+      }
+    );
+    expect(sendDebuggerCommand).toHaveBeenCalledWith(
+      2,
+      "Page.removeScriptToEvaluateOnNewDocument",
+      {
+        identifier: "trace-script-2"
+      }
+    );
     expect(sendDebuggerCommand).toHaveBeenCalledWith(1, "Runtime.evaluate", {
       expression: "globalThis.__wraithwalkerDisableTrace?.()",
       awaitPromise: false,

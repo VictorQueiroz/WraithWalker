@@ -106,7 +106,9 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(capture.errors.join("\n")).toContain("Usage: wraithwalker <command>");
+    expect(capture.errors.join("\n")).toContain(
+      "Usage: wraithwalker <command>"
+    );
     expect(capture.errors.join("\n")).toContain("import-har <har-file> [dir]");
     expect(capture.errors.join("\n")).toContain("doctor [dir] [--json]");
   });
@@ -115,7 +117,12 @@ describe("cli runner", () => {
     const { runCli } = await loadRunner();
     const homeDir = await tmpdir();
     const targetDir = await tmpdir();
-    const configPath = path.join(homeDir, ".config", "wraithwalker", "config.json");
+    const configPath = path.join(
+      homeDir,
+      ".config",
+      "wraithwalker",
+      "config.json"
+    );
     await writeJson(configPath, {
       theme: {
         overrides: {
@@ -137,7 +144,12 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(await fs.readFile(path.join(targetDir, ".wraithwalker", "root.json"), "utf8")).toContain("rootId");
+    expect(
+      await fs.readFile(
+        path.join(targetDir, ".wraithwalker", "root.json"),
+        "utf8"
+      )
+    ).toContain("rootId");
     expect(capture.logs.join("\n")).toContain("From global theme");
   });
 
@@ -179,7 +191,9 @@ describe("cli runner", () => {
     });
 
     expect(statusCode).toBe(0);
-    expect(statusCapture.logs).toContain(`Root${" ".repeat(17)}${root.rootPath}`);
+    expect(statusCapture.logs).toContain(
+      `Root${" ".repeat(17)}${root.rootPath}`
+    );
   });
 
   it("reports invalid project config paths on root commands", async () => {
@@ -206,11 +220,13 @@ describe("cli runner", () => {
     const root = await createFixtureRoot();
     await root.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-09T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
     });
     await root.writeText("CLAUDE.md", "# WraithWalker Fixture Context");
     const capture = consoleCapture();
@@ -250,7 +266,9 @@ describe("cli runner", () => {
     expect(exitCode).toBe(0);
     expect(capture.logs.join("\n")).toContain('"rootFound": false');
     expect(capture.logs.join("\n")).toContain('"issues": [');
-    expect(capture.logs.join("\n")).toContain('No .wraithwalker/root.json was found at the resolved root path.');
+    expect(capture.logs.join("\n")).toContain(
+      "No .wraithwalker/root.json was found at the resolved root path."
+    );
   });
 
   it("runs context and scenario commands with existing behavior", async () => {
@@ -276,38 +294,48 @@ describe("cli runner", () => {
     });
     await root.writeText("cdn.example.com/assets/app.js", "console.log('v1');");
 
-    expect(await runCli(["context", "--editor", "cursor"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
-    expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain("WraithWalker");
+    expect(
+      await runCli(["context", "--editor", "cursor"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
+    expect(await fs.readFile(root.resolve(".cursorrules"), "utf8")).toContain(
+      "WraithWalker"
+    );
 
-    expect(await runCli(["scenarios", "save", "baseline"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
-    expect(await runCli(["scenarios", "switch", "baseline"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["scenarios", "save", "baseline"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
+    expect(
+      await runCli(["scenarios", "switch", "baseline"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
 
     const capture = consoleCapture();
-    expect(await runCli(["scenarios", "diff", "baseline", "baseline"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    })).toBe(0);
+    expect(
+      await runCli(["scenarios", "diff", "baseline", "baseline"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
     expect(capture.logs.join("\n")).toContain("No differences found.");
   });
 
@@ -325,7 +353,9 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(capture.errors.join("\n")).toContain("Usage: wraithwalker scenarios save <name>");
+    expect(capture.errors.join("\n")).toContain(
+      "Usage: wraithwalker scenarios save <name>"
+    );
   });
 
   it("starts the MCP server through the exported API", async () => {
@@ -342,10 +372,13 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(path.join(homeDir, ".local", "share", "wraithwalker"), {
-      host: "127.0.0.1",
-      port: 4319
-    });
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(
+      path.join(homeDir, ".local", "share", "wraithwalker"),
+      {
+        host: "127.0.0.1",
+        port: 4319
+      }
+    );
   });
 
   it("reuses the current WraithWalker root when serve is run inside one", async () => {
@@ -403,12 +436,18 @@ describe("cli runner", () => {
       host: "127.0.0.1",
       port: 4319
     });
-    expect(capture.logs.join("\n")).toContain("one loopback port, two local surfaces, one shared root");
+    expect(capture.logs.join("\n")).toContain(
+      "one loopback port, two local surfaces, one shared root"
+    );
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/mcp");
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/trpc");
-    expect(capture.logs.join("\n")).toContain("Agents and MCP clients talk to http://127.0.0.1:4319/mcp");
+    expect(capture.logs.join("\n")).toContain(
+      "Agents and MCP clients talk to http://127.0.0.1:4319/mcp"
+    );
     expect(capture.logs.join("\n")).toContain("list-sites");
-    expect(capture.logs.join("\n")).toContain("Press Ctrl+C to close the local server.");
+    expect(capture.logs.join("\n")).toContain(
+      "Press Ctrl+C to close the local server."
+    );
   });
 
   it("accepts custom HTTP host and port values when a root dir is explicit", async () => {
@@ -426,13 +465,16 @@ describe("cli runner", () => {
     });
     const capture = consoleCapture();
 
-    const exitCode = await runCli(["serve", root.rootPath, "--http", "--host", "0.0.0.0", "--port", "8321"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    });
+    const exitCode = await runCli(
+      ["serve", root.rootPath, "--http", "--host", "0.0.0.0", "--port", "8321"],
+      {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      }
+    );
 
     expect(exitCode).toBe(0);
     expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
@@ -458,13 +500,16 @@ describe("cli runner", () => {
       close: vi.fn().mockResolvedValue(undefined)
     });
 
-    const exitCode = await runCli(["serve", root.rootPath, "--host", "127.0.0.1", "--port", "5000"], {
-      cwd: root.rootPath,
-      env: {},
-      homeDir: await tmpdir(),
-      platform: "linux",
-      isTTY: false
-    });
+    const exitCode = await runCli(
+      ["serve", root.rootPath, "--host", "127.0.0.1", "--port", "5000"],
+      {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      }
+    );
 
     expect(exitCode).toBe(0);
     expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {

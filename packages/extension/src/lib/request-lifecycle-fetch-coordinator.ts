@@ -13,12 +13,21 @@ import type { RequestLifecycleTrackerApi } from "./request-lifecycle-tracker.js"
 
 interface RequestLifecycleFetchCoordinatorDependencies {
   state: RequestLifecycleState;
-  sendDebuggerCommand: <T = unknown>(tabId: number, method: string, params?: Record<string, unknown>) => Promise<T>;
+  sendDebuggerCommand: <T = unknown>(
+    tabId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ) => Promise<T>;
   setLastError: (message: string) => void;
-  tracker: Pick<RequestLifecycleTrackerApi, "ensureRequestEntry" | "clearTrackedRequest">;
+  tracker: Pick<
+    RequestLifecycleTrackerApi,
+    "ensureRequestEntry" | "clearTrackedRequest"
+  >;
   middleware: Pick<
     RequestLifecycleMiddleware,
-    "loadReplayFixture" | "shouldReplayWithLiveResponseHeaders" | "fulfillReplay"
+    | "loadReplayFixture"
+    | "shouldReplayWithLiveResponseHeaders"
+    | "fulfillReplay"
   >;
 }
 
@@ -28,7 +37,10 @@ export interface RequestLifecycleFetchCoordinatorApi {
     requestId: string,
     fallbackRequest?: { postData?: string }
   ): Promise<PostDataResult>;
-  handleFetchRequestPaused(source: LifecycleSource, params: FetchRequestPausedParams): Promise<void>;
+  handleFetchRequestPaused(
+    source: LifecycleSource,
+    params: FetchRequestPausedParams
+  ): Promise<void>;
 }
 
 export function createRequestLifecycleFetchCoordinator({
@@ -111,7 +123,8 @@ export function createRequestLifecycleFetchCoordinator({
     tabId: number,
     params: FetchRequestPausedParams
   ): void {
-    entry.topOrigin = state.attachedTabs.get(tabId)?.topOrigin || entry.topOrigin;
+    entry.topOrigin =
+      state.attachedTabs.get(tabId)?.topOrigin || entry.topOrigin;
     entry.method = params.request.method.toUpperCase();
     entry.url = params.request.url;
     entry.requestHeaders = arrayifyHeaders(params.request.headers);
@@ -125,13 +138,7 @@ export function createRequestLifecycleFetchCoordinator({
     networkRequestId: string;
     params: FetchRequestPausedParams;
   }): Promise<void> {
-    const {
-      entry,
-      tabId,
-      pausedRequestId,
-      networkRequestId,
-      params
-    } = args;
+    const { entry, tabId, pausedRequestId, networkRequestId, params } = args;
 
     if (params.responseStatusCode) {
       entry.responseStatus = params.responseStatusCode;
@@ -188,13 +195,7 @@ export function createRequestLifecycleFetchCoordinator({
     networkRequestId: string;
     params: FetchRequestPausedParams;
   }): Promise<void> {
-    const {
-      entry,
-      tabId,
-      pausedRequestId,
-      networkRequestId,
-      params
-    } = args;
+    const { entry, tabId, pausedRequestId, networkRequestId, params } = args;
 
     try {
       const replayFixture = await middleware.loadReplayFixture({
@@ -232,7 +233,10 @@ export function createRequestLifecycleFetchCoordinator({
     }
   }
 
-  async function handleFetchRequestPaused(source: LifecycleSource, params: FetchRequestPausedParams): Promise<void> {
+  async function handleFetchRequestPaused(
+    source: LifecycleSource,
+    params: FetchRequestPausedParams
+  ): Promise<void> {
     const tabId = source.tabId;
     if (!tabId || !state.sessionActive || !state.attachedTabs.has(tabId)) {
       return;

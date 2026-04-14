@@ -3,7 +3,10 @@ import {
   type RootRuntimeStorage
 } from "@wraithwalker/core/root-runtime";
 import { createRoot, type RootSentinel } from "@wraithwalker/core/root";
-import { createFixtureRootFs, type FixtureRootFs } from "@wraithwalker/core/root-fs";
+import {
+  createFixtureRootFs,
+  type FixtureRootFs
+} from "@wraithwalker/core/root-fs";
 
 interface CreateServerRootRuntimeDependencies {
   rootPath: string;
@@ -19,10 +22,14 @@ export function createServerRootRuntime({
   const storage: RootRuntimeStorage<FixtureRootFs> = {
     ensureSentinel: async (root) => sentinel ?? createRoot(root.rootPath),
     exists: (root, relativePath) => root.exists(relativePath),
-    writeText: (root, relativePath, content) => root.writeText(relativePath, content),
-    writeJson: (root, relativePath, value) => root.writeJson(relativePath, value),
-    writeBody: (root, relativePath, payload) => root.writeBody(relativePath, payload),
-    readOptionalJson: (root, relativePath) => root.readOptionalJson(relativePath),
+    writeText: (root, relativePath, content) =>
+      root.writeText(relativePath, content),
+    writeJson: (root, relativePath, value) =>
+      root.writeJson(relativePath, value),
+    writeBody: (root, relativePath, payload) =>
+      root.writeBody(relativePath, payload),
+    readOptionalJson: (root, relativePath) =>
+      root.readOptionalJson(relativePath),
     readBody: async (root, relativePath) => {
       const stats = await root.stat(relativePath);
       if (!stats || !stats.isFile()) {

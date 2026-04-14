@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "lint": "prettier . --check",
+    "lint:fix": "prettier . --write",
     "test": "npm run coverage",
     "test:versioning": "node --test scripts/versioning.test.mjs scripts/check-changeset.test.mjs scripts/extension-release.test.mjs",
     "test:workspaces": "turbo run test",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
+    "prettier": "^3.6.2",
     "turbo": "^2.5.4",
     "typescript": "^6.0.2"
   }

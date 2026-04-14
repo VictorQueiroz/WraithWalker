@@ -14,7 +14,8 @@ import type {
   SiteConfig
 } from "./types.js";
 
-export const DEFAULT_WRAITHWALKER_SERVER_TRPC_URL = "http://127.0.0.1:4319/trpc";
+export const DEFAULT_WRAITHWALKER_SERVER_TRPC_URL =
+  "http://127.0.0.1:4319/trpc";
 export const WRAITHWALKER_SERVER_CACHE_TTL_MS = 5_000;
 export const WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS = 750;
 export const WRAITHWALKER_SERVER_SOURCE_HEADER = "wraithwalker-extension";
@@ -33,7 +34,9 @@ export interface ServerFixtureReadResultFound {
   sentinel: RootSentinel;
 }
 
-export type ServerFixtureReadResult = ServerFixtureReadResultMissing | ServerFixtureReadResultFound;
+export type ServerFixtureReadResult =
+  | ServerFixtureReadResultMissing
+  | ServerFixtureReadResultFound;
 
 export interface ServerScenarioTraceLinkedFixture {
   bodyPath: string;
@@ -118,10 +121,14 @@ export interface WraithWalkerServerClient {
     recentConsoleEntries?: BrowserConsoleEntry[];
     completedCommands?: ExtensionServerCommandResult[];
   }): Promise<ServerHeartbeatInfo>;
-  hasFixture(descriptor: FixtureDescriptor): Promise<{ exists: boolean; sentinel: RootSentinel }>;
+  hasFixture(
+    descriptor: FixtureDescriptor
+  ): Promise<{ exists: boolean; sentinel: RootSentinel }>;
   readConfiguredSiteConfigs(): Promise<TrpcSiteConfigsInfo>;
   readEffectiveSiteConfigs(): Promise<TrpcSiteConfigsInfo>;
-  writeConfiguredSiteConfigs(siteConfigs: SiteConfig[]): Promise<TrpcSiteConfigsInfo>;
+  writeConfiguredSiteConfigs(
+    siteConfigs: SiteConfig[]
+  ): Promise<TrpcSiteConfigsInfo>;
   readFixture(descriptor: FixtureDescriptor): Promise<ServerFixtureReadResult>;
   writeFixtureIfAbsent(payload: {
     descriptor: FixtureDescriptor;
@@ -131,12 +138,22 @@ export interface WraithWalkerServerClient {
       bodyEncoding: "utf8" | "base64";
       meta: ResponseMeta;
     };
-  }): Promise<{ written: boolean; descriptor: FixtureDescriptor; sentinel: RootSentinel }>;
-  generateContext(payload: { siteConfigs: SiteConfig[]; editorId?: string }): Promise<{ ok: true }>;
+  }): Promise<{
+    written: boolean;
+    descriptor: FixtureDescriptor;
+    sentinel: RootSentinel;
+  }>;
+  generateContext(payload: {
+    siteConfigs: SiteConfig[];
+    editorId?: string;
+  }): Promise<{ ok: true }>;
   recordTraceClick(payload: {
     traceId: string;
     step: Omit<ServerScenarioTraceStep, "linkedFixtures">;
-  }): Promise<{ recorded: boolean; activeTrace: ServerScenarioTraceRecord | null }>;
+  }): Promise<{
+    recorded: boolean;
+    activeTrace: ServerScenarioTraceRecord | null;
+  }>;
   linkTraceFixture(payload: {
     traceId: string;
     tabId: number;
@@ -198,10 +215,12 @@ export function createWraithWalkerServerClient(
 ): WraithWalkerServerClient {
   const trpc = createTRPCClient<AppRouter>({
     links: [
-      httpBatchLink(createWraithWalkerServerTransportOptions(url, {
-        timeoutMs,
-        fetchImpl
-      }))
+      httpBatchLink(
+        createWraithWalkerServerTransportOptions(url, {
+          timeoutMs,
+          fetchImpl
+        })
+      )
     ]
   }) as any;
 
@@ -210,22 +229,34 @@ export function createWraithWalkerServerClient(
       return trpc.system.info.query() as Promise<TrpcSystemInfo>;
     },
     revealRoot() {
-      return trpc.system.revealRoot.mutate() as Promise<{ ok: true; command: string }>;
+      return trpc.system.revealRoot.mutate() as Promise<{
+        ok: true;
+        command: string;
+      }>;
     },
     listScenarios() {
       return trpc.scenarios.list.query() as Promise<TrpcScenarioListInfo>;
     },
     saveScenario(name) {
-      return trpc.scenarios.save.mutate({ name }) as Promise<TrpcScenarioResult>;
+      return trpc.scenarios.save.mutate({
+        name
+      }) as Promise<TrpcScenarioResult>;
     },
     switchScenario(name) {
-      return trpc.scenarios.switch.mutate({ name }) as Promise<TrpcScenarioResult>;
+      return trpc.scenarios.switch.mutate({
+        name
+      }) as Promise<TrpcScenarioResult>;
     },
     heartbeat(payload) {
-      return trpc.extension.heartbeat.mutate(payload) as Promise<ServerHeartbeatInfo>;
+      return trpc.extension.heartbeat.mutate(
+        payload
+      ) as Promise<ServerHeartbeatInfo>;
     },
     hasFixture(descriptor) {
-      return trpc.fixtures.has.query({ descriptor }) as Promise<{ exists: boolean; sentinel: RootSentinel }>;
+      return trpc.fixtures.has.query({ descriptor }) as Promise<{
+        exists: boolean;
+        sentinel: RootSentinel;
+      }>;
     },
     readConfiguredSiteConfigs() {
       return trpc.config.readConfiguredSiteConfigs.query() as Promise<TrpcSiteConfigsInfo>;
@@ -234,10 +265,14 @@ export function createWraithWalkerServerClient(
       return trpc.config.readEffectiveSiteConfigs.query() as Promise<TrpcSiteConfigsInfo>;
     },
     writeConfiguredSiteConfigs(siteConfigs) {
-      return trpc.config.writeConfiguredSiteConfigs.mutate({ siteConfigs }) as Promise<TrpcSiteConfigsInfo>;
+      return trpc.config.writeConfiguredSiteConfigs.mutate({
+        siteConfigs
+      }) as Promise<TrpcSiteConfigsInfo>;
     },
     readFixture(descriptor) {
-      return trpc.fixtures.read.query({ descriptor }) as Promise<ServerFixtureReadResult>;
+      return trpc.fixtures.read.query({
+        descriptor
+      }) as Promise<ServerFixtureReadResult>;
     },
     writeFixtureIfAbsent(payload) {
       return trpc.fixtures.writeIfAbsent.mutate(payload) as Promise<{
@@ -247,7 +282,9 @@ export function createWraithWalkerServerClient(
       }>;
     },
     generateContext(payload) {
-      return trpc.fixtures.generateContext.mutate(payload) as Promise<{ ok: true }>;
+      return trpc.fixtures.generateContext.mutate(payload) as Promise<{
+        ok: true;
+      }>;
     },
     recordTraceClick(payload) {
       return trpc.scenarioTraces.recordClick.mutate(payload) as Promise<{

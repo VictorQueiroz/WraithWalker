@@ -108,11 +108,17 @@ interface CreateScenarioTraceStoreDependencies<TRoot> {
   ensureReady: () => Promise<RootSentinel>;
 }
 
-interface StoredScenarioTraceStep extends Omit<ScenarioTraceStep, "linkedFixtures"> {
+interface StoredScenarioTraceStep extends Omit<
+  ScenarioTraceStep,
+  "linkedFixtures"
+> {
   linkedFixtures?: ScenarioTraceLinkedFixture[];
 }
 
-interface StoredScenarioTraceRecord extends Omit<ScenarioTraceRecord, "schemaVersion" | "steps"> {
+interface StoredScenarioTraceRecord extends Omit<
+  ScenarioTraceRecord,
+  "schemaVersion" | "steps"
+> {
   schemaVersion?: number;
   steps?: StoredScenarioTraceStep[];
 }
@@ -120,7 +126,9 @@ interface StoredScenarioTraceRecord extends Omit<ScenarioTraceRecord, "schemaVer
 function validateTraceId(traceId: string): string {
   const trimmed = traceId.trim();
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(trimmed)) {
-    throw new Error("Trace ID must be 1-128 alphanumeric, hyphen, or underscore characters.");
+    throw new Error(
+      "Trace ID must be 1-128 alphanumeric, hyphen, or underscore characters."
+    );
   }
   return trimmed;
 }
@@ -130,16 +138,21 @@ function tracePath(traceId: string): string {
 }
 
 function normalizeTraceGoal(goal: unknown): string | undefined {
-  return typeof goal === "string" && goal.trim()
-    ? goal.trim()
-    : undefined;
+  return typeof goal === "string" && goal.trim() ? goal.trim() : undefined;
 }
 
-function getLinkedFixtureCount(trace: Pick<ScenarioTraceRecord, "steps">): number {
-  return trace.steps.reduce((count, step) => count + step.linkedFixtures.length, 0);
+function getLinkedFixtureCount(
+  trace: Pick<ScenarioTraceRecord, "steps">
+): number {
+  return trace.steps.reduce(
+    (count, step) => count + step.linkedFixtures.length,
+    0
+  );
 }
 
-function getLastRecordedStep(trace: Pick<ScenarioTraceRecord, "steps">): ScenarioTraceStep | undefined {
+function getLastRecordedStep(
+  trace: Pick<ScenarioTraceRecord, "steps">
+): ScenarioTraceStep | undefined {
   return trace.steps[trace.steps.length - 1];
 }
 
@@ -158,14 +171,17 @@ function buildRecentSteps(
   }));
 }
 
-export function normalizeScenarioTraceRecord(trace: StoredScenarioTraceRecord): ScenarioTraceRecord {
+export function normalizeScenarioTraceRecord(
+  trace: StoredScenarioTraceRecord
+): ScenarioTraceRecord {
   return {
-    schemaVersion: typeof trace.schemaVersion === "number"
-      ? trace.schemaVersion
-      : 1,
+    schemaVersion:
+      typeof trace.schemaVersion === "number" ? trace.schemaVersion : 1,
     traceId: trace.traceId,
     ...(trace.name ? { name: trace.name } : {}),
-    ...(normalizeTraceGoal(trace.goal) ? { goal: normalizeTraceGoal(trace.goal) } : {}),
+    ...(normalizeTraceGoal(trace.goal)
+      ? { goal: normalizeTraceGoal(trace.goal) }
+      : {}),
     status: trace.status,
     createdAt: trace.createdAt,
     ...(trace.startedAt ? { startedAt: trace.startedAt } : {}),
@@ -229,7 +245,9 @@ export function summarizeScenarioTraceForRead(
   trace: ScenarioTraceRecord,
   recentStepLimit = 5
 ): ScenarioTraceReadSummary {
-  const linkedFixtureCountsByResourceType = trace.steps.reduce<Record<string, number>>((counts, step) => {
+  const linkedFixtureCountsByResourceType = trace.steps.reduce<
+    Record<string, number>
+  >((counts, step) => {
     for (const fixture of step.linkedFixtures) {
       const resourceType = fixture.resourceType || "Other";
       counts[resourceType] = (counts[resourceType] || 0) + 1;
@@ -273,7 +291,9 @@ function findLinkedStepIndex(
     const nextStep = trace.steps
       .slice(index + 1)
       .find((candidate) => candidate.tabId === tabId);
-    const nextStepMs = nextStep ? Date.parse(nextStep.recordedAt) : Number.POSITIVE_INFINITY;
+    const nextStepMs = nextStep
+      ? Date.parse(nextStep.recordedAt)
+      : Number.POSITIVE_INFINITY;
     const withinClickWindow = requestedAtMs - recordedAtMs <= 5_000;
 
     if (requestedAtMs < nextStepMs && withinClickWindow) {
@@ -288,7 +308,10 @@ async function readActiveTraceId<TRoot>(
   storage: ScenarioTraceStorage<TRoot>,
   root: TRoot
 ): Promise<string | null> {
-  const active = await storage.readOptionalJson<ActiveScenarioTraceRef>(root, SCENARIO_TRACE_ACTIVE_FILE);
+  const active = await storage.readOptionalJson<ActiveScenarioTraceRef>(
+    root,
+    SCENARIO_TRACE_ACTIVE_FILE
+  );
   return active?.traceId ?? null;
 }
 
@@ -297,19 +320,29 @@ export function createScenarioTraceStore<TRoot>({
   storage,
   ensureReady
 }: CreateScenarioTraceStoreDependencies<TRoot>) {
-  async function readTrace(traceId: string): Promise<ScenarioTraceRecord | null> {
+  async function readTrace(
+    traceId: string
+  ): Promise<ScenarioTraceRecord | null> {
     await ensureReady();
-    const trace = await storage.readOptionalJson<StoredScenarioTraceRecord>(root, tracePath(validateTraceId(traceId)));
-    return trace
-      ? normalizeScenarioTraceRecord(trace)
-      : null;
+    const trace = await storage.readOptionalJson<StoredScenarioTraceRecord>(
+      root,
+      tracePath(validateTraceId(traceId))
+    );
+    return trace ? normalizeScenarioTraceRecord(trace) : null;
   }
 
   async function writeTrace(trace: ScenarioTraceRecord): Promise<void> {
-    await storage.writeJson(root, tracePath(validateTraceId(trace.traceId)), trace);
+    await storage.writeJson(
+      root,
+      tracePath(validateTraceId(trace.traceId)),
+      trace
+    );
   }
 
-  async function setActiveTraceId(traceId: string | null, updatedAt = new Date().toISOString()): Promise<void> {
+  async function setActiveTraceId(
+    traceId: string | null,
+    updatedAt = new Date().toISOString()
+  ): Promise<void> {
     await storage.writeJson(root, SCENARIO_TRACE_ACTIVE_FILE, {
       traceId,
       updatedAt
@@ -388,7 +421,10 @@ export function createScenarioTraceStore<TRoot>({
     return trace;
   }
 
-  async function stopTrace(traceId: string, endedAt = new Date().toISOString()): Promise<ScenarioTraceRecord> {
+  async function stopTrace(
+    traceId: string,
+    endedAt = new Date().toISOString()
+  ): Promise<ScenarioTraceRecord> {
     const trace = await readTrace(traceId);
     if (!trace) {
       throw new Error(`Trace "${traceId}" does not exist.`);
@@ -460,25 +496,26 @@ export function createScenarioTraceStore<TRoot>({
     }
 
     const targetStep = trace.steps[stepIndex];
-    const alreadyLinked = targetStep.linkedFixtures.some((candidate) => (
-      candidate.bodyPath === fixture.bodyPath
-      && candidate.requestUrl === fixture.requestUrl
-      && candidate.capturedAt === fixture.capturedAt
-    ));
+    const alreadyLinked = targetStep.linkedFixtures.some(
+      (candidate) =>
+        candidate.bodyPath === fixture.bodyPath &&
+        candidate.requestUrl === fixture.requestUrl &&
+        candidate.capturedAt === fixture.capturedAt
+    );
     if (alreadyLinked) {
       return { linked: false, trace };
     }
 
     const nextTrace: ScenarioTraceRecord = {
       ...trace,
-      steps: trace.steps.map((step, index) => (
+      steps: trace.steps.map((step, index) =>
         index === stepIndex
           ? {
               ...step,
               linkedFixtures: [...step.linkedFixtures, fixture]
             }
           : step
-      ))
+      )
     };
 
     await writeTrace(nextTrace);

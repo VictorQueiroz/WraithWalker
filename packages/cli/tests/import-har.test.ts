@@ -60,13 +60,22 @@ describe("import-har command", () => {
       dir: undefined,
       topOrigin: undefined
     });
-    expect(command.parse(["capture.har", "fixtures", "--top-origin", "app.example.com"])).toEqual({
+    expect(
+      command.parse([
+        "capture.har",
+        "fixtures",
+        "--top-origin",
+        "app.example.com"
+      ])
+    ).toEqual({
       harFile: "capture.har",
       dir: "fixtures",
       topOrigin: "app.example.com"
     });
 
-    expect(() => command.parse([])).toThrow("Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]");
+    expect(() => command.parse([])).toThrow(
+      "Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]"
+    );
     expect(() => command.parse(["capture.har", "fixtures", "extra"])).toThrow(
       "Usage: wraithwalker import-har <har-file> [dir] [--top-origin <origin>]"
     );
@@ -87,12 +96,14 @@ describe("import-har command", () => {
       },
       topOrigin: "https://app.example.com",
       topOrigins: ["https://app.example.com"],
-      imported: [{
-        requestUrl: "https://app.example.com/",
-        bodyPath: "app.example.com/index",
-        method: "GET",
-        topOrigin: "https://app.example.com"
-      }],
+      imported: [
+        {
+          requestUrl: "https://app.example.com/",
+          bodyPath: "app.example.com/index",
+          method: "GET",
+          topOrigin: "https://app.example.com"
+        }
+      ],
       skipped: []
     };
 
@@ -108,56 +119,63 @@ describe("import-har command", () => {
       return result;
     });
 
-    const executed = await command.execute({
-      cwd: "/repo",
-      env: {},
-      output: recorder.output,
-      cliConfig: {
-        theme: {
-          name: "test",
-          styles: {
-            success: [],
-            error: [],
-            warn: [],
-            heading: [],
-            label: [],
-            muted: [],
-            accent: [],
-            usage: []
-          },
-          icons: {
-            success: "+",
-            error: "x",
-            warn: "!",
-            bullet: "*"
-          },
-          banner: {
-            art: [],
-            phrases: [""]
-          },
-          indent: "  ",
-          labelWidth: 8
+    const executed = await command.execute(
+      {
+        cwd: "/repo",
+        env: {},
+        output: recorder.output,
+        cliConfig: {
+          theme: {
+            name: "test",
+            styles: {
+              success: [],
+              error: [],
+              warn: [],
+              heading: [],
+              label: [],
+              muted: [],
+              accent: [],
+              usage: []
+            },
+            icons: {
+              success: "+",
+              error: "x",
+              warn: "!",
+              bullet: "*"
+            },
+            banner: {
+              art: [],
+              phrases: [""]
+            },
+            indent: "  ",
+            labelWidth: 8
+          }
         }
+      } as never,
+      {
+        harFile: "captures/app.har",
+        topOrigin: "https://app.example.com"
       }
-    } as never, {
-      harFile: "captures/app.har",
-      topOrigin: "https://app.example.com"
-    });
+    );
 
-    expect(mocks.importHarFile).toHaveBeenCalledWith(expect.objectContaining({
-      harPath: path.resolve("/repo", "captures/app.har"),
-      dir: path.resolve("/repo", "."),
-      topOrigin: "https://app.example.com",
-      onEvent: expect.any(Function)
-    }));
-    expect(recorder.calls.progress).toEqual([{
-      type: "entry-complete",
-      topOrigin: "https://app.example.com",
-      requestUrl: "https://app.example.com/",
-      bodyPath: "app.example.com/index",
-      completedEntries: 1,
-      totalEntries: 1
-    }]);
+    expect(mocks.importHarFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        harPath: path.resolve("/repo", "captures/app.har"),
+        dir: path.resolve("/repo", "."),
+        topOrigin: "https://app.example.com",
+        onEvent: expect.any(Function)
+      })
+    );
+    expect(recorder.calls.progress).toEqual([
+      {
+        type: "entry-complete",
+        topOrigin: "https://app.example.com",
+        requestUrl: "https://app.example.com/",
+        bodyPath: "app.example.com/index",
+        completedEntries: 1,
+        totalEntries: 1
+      }
+    ]);
     expect(executed).toBe(result);
   });
 
@@ -196,7 +214,9 @@ describe("import-har command", () => {
       ]
     });
 
-    expect(recorder.calls.success).toEqual(["Imported HAR into /repo/fixtures"]);
+    expect(recorder.calls.success).toEqual([
+      "Imported HAR into /repo/fixtures"
+    ]);
     expect(recorder.calls.keyValue).toEqual([
       ["Top Origin", "https://app.example.com"],
       ["Imported", 2],
@@ -243,10 +263,7 @@ describe("import-har command", () => {
         createdAt: "2026-04-06T00:00:00.000Z"
       },
       topOrigin: "https://admin.example.com",
-      topOrigins: [
-        "https://admin.example.com",
-        "https://app.example.com"
-      ],
+      topOrigins: ["https://admin.example.com", "https://app.example.com"],
       imported: [],
       skipped: []
     });

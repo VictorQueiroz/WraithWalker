@@ -1,12 +1,23 @@
 import { SERVER_HEARTBEAT_INTERVAL_MS } from "./constants.js";
-import type { BackgroundServerInfo, BackgroundState, ChromeApi } from "./background-runtime-shared.js";
-import { isServerCacheFresh, type ExtensionServerCommand, type ExtensionServerCommandResult, type WraithWalkerServerClient } from "./wraithwalker-server.js";
+import type {
+  BackgroundServerInfo,
+  BackgroundState,
+  ChromeApi
+} from "./background-runtime-shared.js";
+import {
+  isServerCacheFresh,
+  type ExtensionServerCommand,
+  type ExtensionServerCommandResult,
+  type WraithWalkerServerClient
+} from "./wraithwalker-server.js";
 import type { SiteConfig } from "./types.js";
 
 const HEARTBEAT_ALARM_NAME = "wraithwalker-server-heartbeat";
 
 export interface BackgroundAuthorityServerSyncApi {
-  refreshServerInfo(opts?: { force?: boolean }): Promise<BackgroundServerInfo | null>;
+  refreshServerInfo(opts?: {
+    force?: boolean;
+  }): Promise<BackgroundServerInfo | null>;
   queueServerRefresh(opts?: { force?: boolean }): void;
   scheduleHeartbeat(): void;
   markServerOffline(): void;
@@ -41,11 +52,18 @@ export function createBackgroundAuthorityServerSync({
 }: BackgroundAuthorityServerSyncDependencies): BackgroundAuthorityServerSyncApi {
   let serverRefreshPromise: Promise<BackgroundServerInfo | null> | null = null;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
-  const bufferedCommandResults = new Map<string, ExtensionServerCommandResult>();
+  const bufferedCommandResults = new Map<
+    string,
+    ExtensionServerCommandResult
+  >();
   const runningCommandIds = new Set<string>();
 
   function shouldKeepHeartbeatAlive(): boolean {
-    return state.sessionActive || Boolean(state.activeTrace) || Boolean(state.serverInfo);
+    return (
+      state.sessionActive ||
+      Boolean(state.activeTrace) ||
+      Boolean(state.serverInfo)
+    );
   }
 
   function clearHeartbeatTimer(): void {
@@ -100,7 +118,9 @@ export function createBackgroundAuthorityServerSync({
     }
   }
 
-  async function runServerCommand(command: ExtensionServerCommand): Promise<ExtensionServerCommandResult> {
+  async function runServerCommand(
+    command: ExtensionServerCommand
+  ): Promise<ExtensionServerCommandResult> {
     try {
       switch (command.type) {
         case "refresh_config":
@@ -128,7 +148,9 @@ export function createBackgroundAuthorityServerSync({
     }
   }
 
-  async function processServerCommands(commands: ExtensionServerCommand[]): Promise<boolean> {
+  async function processServerCommands(
+    commands: ExtensionServerCommand[]
+  ): Promise<boolean> {
     let producedNewResults = false;
 
     for (const command of commands) {
@@ -164,14 +186,17 @@ export function createBackgroundAuthorityServerSync({
       ...(completedCommands.length > 0 ? { completedCommands } : {})
     });
 
-    const redeliveredCommandIds = new Set((info.commands ?? []).map((command) => command.commandId));
+    const redeliveredCommandIds = new Set(
+      (info.commands ?? []).map((command) => command.commandId)
+    );
     for (const result of completedCommands) {
       if (!redeliveredCommandIds.has(result.commandId)) {
         bufferedCommandResults.delete(result.commandId);
       }
     }
 
-    const previousTraceId = (state.activeTrace as { traceId?: string } | null)?.traceId || null;
+    const previousTraceId =
+      (state.activeTrace as { traceId?: string } | null)?.traceId || null;
     const siteConfigsChanged = applyEffectiveSiteConfigs(
       info.siteConfigs ?? [...state.localSiteConfigsByOrigin.values()]
     );
@@ -200,7 +225,9 @@ export function createBackgroundAuthorityServerSync({
     return state.serverInfo;
   }
 
-  async function refreshServerInfo({ force = false }: { force?: boolean } = {}): Promise<BackgroundServerInfo | null> {
+  async function refreshServerInfo({
+    force = false
+  }: { force?: boolean } = {}): Promise<BackgroundServerInfo | null> {
     if (!force && isServerCacheFresh(state.serverCheckedAt)) {
       return state.serverInfo;
     }
@@ -226,7 +253,9 @@ export function createBackgroundAuthorityServerSync({
     return serverRefreshPromise;
   }
 
-  function queueServerRefresh({ force = false }: { force?: boolean } = {}): void {
+  function queueServerRefresh({
+    force = false
+  }: { force?: boolean } = {}): void {
     if (!force && isServerCacheFresh(state.serverCheckedAt)) {
       return;
     }

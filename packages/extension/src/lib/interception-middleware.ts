@@ -1,5 +1,17 @@
-import { buildRequestPayload, buildResponseMeta, replayResponseHeaders } from "./background-helpers.js";
-import type { FixtureDescriptor, HeaderEntry, RequestEntry, RequestPayload, ResponseMeta, SiteConfig, StoredFixture } from "./types.js";
+import {
+  buildRequestPayload,
+  buildResponseMeta,
+  replayResponseHeaders
+} from "./background-helpers.js";
+import type {
+  FixtureDescriptor,
+  HeaderEntry,
+  RequestEntry,
+  RequestPayload,
+  ResponseMeta,
+  SiteConfig,
+  StoredFixture
+} from "./types.js";
 
 interface PostDataResult {
   body: string;
@@ -12,9 +24,7 @@ interface ResponseBodyResponse {
 }
 
 function normalizeReplayStatusCode(value: number): number {
-  return Number.isInteger(value) && value >= 100 && value <= 999
-    ? value
-    : 200;
+  return Number.isInteger(value) && value >= 100 && value <= 999 ? value : 200;
 }
 
 function normalizeResponsePhrase(value: string): string | undefined {
@@ -23,15 +33,17 @@ function normalizeResponsePhrase(value: string): string | undefined {
     return undefined;
   }
 
-  return /^[\t\x20-\x7E]+$/.test(trimmed)
-    ? trimmed
-    : undefined;
+  return /^[\t\x20-\x7E]+$/.test(trimmed) ? trimmed : undefined;
 }
 
 interface InterceptionMiddlewareDependencies {
   capturePolicy: {
     getSiteConfig: (topOrigin: string) => SiteConfig | undefined;
-    shouldPersist: (context: { topOrigin: string; method: string; url: string }) => boolean;
+    shouldPersist: (context: {
+      topOrigin: string;
+      method: string;
+      url: string;
+    }) => boolean;
   };
   storageLayout: {
     describeRequest: (
@@ -66,15 +78,25 @@ interface InterceptionMiddlewareDependencies {
     requestId: string,
     fallbackRequest?: { postData?: string }
   ) => Promise<PostDataResult>;
-  continueRequest: (tabId: number, requestId: string, options?: { interceptResponse?: boolean }) => Promise<void>;
-  fulfillRequest: (tabId: number, payload: {
-    requestId: string;
-    responseCode: number;
-    responseHeaders: HeaderEntry[];
-    body: string;
-    responsePhrase?: string;
-  }) => Promise<void>;
-  getResponseBody: (tabId: number, requestId: string) => Promise<ResponseBodyResponse>;
+  continueRequest: (
+    tabId: number,
+    requestId: string,
+    options?: { interceptResponse?: boolean }
+  ) => Promise<void>;
+  fulfillRequest: (
+    tabId: number,
+    payload: {
+      requestId: string;
+      responseCode: number;
+      responseHeaders: HeaderEntry[];
+      body: string;
+      responsePhrase?: string;
+    }
+  ) => Promise<void>;
+  getResponseBody: (
+    tabId: number,
+    requestId: string
+  ) => Promise<ResponseBodyResponse>;
   setLastError: (message: string) => void;
   onFixturePersisted?: (payload: {
     descriptor: FixtureDescriptor;
@@ -104,12 +126,18 @@ export function createInterceptionMiddleware({
       return;
     }
 
-    const requestData = await populatePostData(tabId, requestId, fallbackRequest);
+    const requestData = await populatePostData(
+      tabId,
+      requestId,
+      fallbackRequest
+    );
     entry.requestBody = requestData.body;
     entry.requestBodyEncoding = requestData.encoding;
   }
 
-  async function ensureDescriptor(entry: RequestEntry): Promise<FixtureDescriptor> {
+  async function ensureDescriptor(
+    entry: RequestEntry
+  ): Promise<FixtureDescriptor> {
     if (entry.descriptor) {
       return entry.descriptor;
     }
@@ -141,7 +169,10 @@ export function createInterceptionMiddleware({
     tabId: number;
     networkRequestId: string;
     fallbackRequest?: { postData?: string };
-  }): Promise<{ descriptor: FixtureDescriptor; fixture: StoredFixture } | null> {
+  }): Promise<{
+    descriptor: FixtureDescriptor;
+    fixture: StoredFixture;
+  } | null> {
     await ensureRequestBody(entry, tabId, networkRequestId, fallbackRequest);
     const descriptor = await ensureDescriptor(entry);
     const fixtureExists = await repository.exists(descriptor);
@@ -194,8 +225,12 @@ export function createInterceptionMiddleware({
     entry.replayed = true;
     entry.replayOnResponse = false;
 
-    const responseCode = normalizeReplayStatusCode(liveResponse?.status ?? fixture.meta.status);
-    const responsePhrase = normalizeResponsePhrase(liveResponse?.statusText ?? fixture.meta.statusText);
+    const responseCode = normalizeReplayStatusCode(
+      liveResponse?.status ?? fixture.meta.status
+    );
+    const responsePhrase = normalizeResponsePhrase(
+      liveResponse?.statusText ?? fixture.meta.statusText
+    );
     const responseHeaders = liveResponse?.headers?.length
       ? liveResponse.headers
       : fixture.meta.headers;
@@ -219,13 +254,13 @@ export function createInterceptionMiddleware({
     pausedRequestId,
     networkRequestId,
     fallbackRequest
-    }: {
-      entry: RequestEntry;
-      tabId: number;
-      pausedRequestId: string;
-      networkRequestId: string;
-      fallbackRequest?: { postData?: string };
-    }): Promise<void> {
+  }: {
+    entry: RequestEntry;
+    tabId: number;
+    pausedRequestId: string;
+    networkRequestId: string;
+    fallbackRequest?: { postData?: string };
+  }): Promise<void> {
     try {
       const replayFixture = await loadReplayFixture({
         entry,
@@ -260,11 +295,13 @@ export function createInterceptionMiddleware({
     tabId: number;
     requestId: string;
   }): Promise<void> {
-    if (!capturePolicy.shouldPersist({
-      topOrigin: entry.topOrigin,
-      method: entry.method,
-      url: entry.url
-    })) {
+    if (
+      !capturePolicy.shouldPersist({
+        topOrigin: entry.topOrigin,
+        method: entry.method,
+        url: entry.url
+      })
+    ) {
       return;
     }
 

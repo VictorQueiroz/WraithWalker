@@ -57,12 +57,16 @@ function parseJson<T>(raw: string, errorPrefix: string): T {
   try {
     return JSON.parse(raw) as T;
   } catch (error) {
-    throw new Error(`${errorPrefix}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `${errorPrefix}: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
 function sortSites(sites: SiteConfig[]): SiteConfig[] {
-  return [...sites].sort((left, right) => left.origin.localeCompare(right.origin));
+  return [...sites].sort((left, right) =>
+    left.origin.localeCompare(right.origin)
+  );
 }
 
 function findSiteIndex(sites: SiteConfig[], origin: string): number {
@@ -105,8 +109,8 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
     "",
     "Examples:",
     "  wraithwalker config list",
-    "  wraithwalker config add site.\"https://app.example.com\"",
-    "  wraithwalker config add site.\"https://app.example.com\".dumpAllowlistPatterns \"\\\\.svg$\""
+    '  wraithwalker config add site."https://app.example.com"',
+    '  wraithwalker config add site."https://app.example.com".dumpAllowlistPatterns "\\\\.svg$"'
   ].join("\n"),
   parse(argv) {
     const [action, key, value] = argv;
@@ -135,13 +139,15 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
         }
         return { action: "unset", key };
       default:
-        throw new UsageError([
-          "Usage: wraithwalker config {list|get|set|add|unset}",
-          "",
-          "Examples:",
-          "  wraithwalker config add site.\"https://app.example.com\"",
-          "  wraithwalker config add site.\"https://app.example.com\".dumpAllowlistPatterns \"\\\\.svg$\""
-        ].join("\n"));
+        throw new UsageError(
+          [
+            "Usage: wraithwalker config {list|get|set|add|unset}",
+            "",
+            "Examples:",
+            '  wraithwalker config add site."https://app.example.com"',
+            '  wraithwalker config add site."https://app.example.com".dumpAllowlistPatterns "\\\\.svg$"'
+          ].join("\n")
+        );
     }
   },
   async execute(context, args) {
@@ -163,13 +169,21 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
         const key = parseConfigKey(args.key);
         switch (key.kind) {
           case "sites":
-            return { action: "get", value: stringifyValue(sortSites(explicitSites)) };
+            return {
+              action: "get",
+              value: stringifyValue(sortSites(explicitSites))
+            };
           case "site":
-            return { action: "get", value: stringifyValue(requireSite(explicitSites, key.origin)) };
+            return {
+              action: "get",
+              value: stringifyValue(requireSite(explicitSites, key.origin))
+            };
           case "site-patterns":
             return {
               action: "get",
-              value: stringifyValue(requireSite(explicitSites, key.origin).dumpAllowlistPatterns)
+              value: stringifyValue(
+                requireSite(explicitSites, key.origin).dumpAllowlistPatterns
+              )
             };
         }
       }
@@ -178,12 +192,17 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
 
         switch (key.kind) {
           case "sites": {
-            const nextSites = normalizeSiteConfigs(parseJson<Array<Partial<SiteConfig> & { origin: string }>>(
-              args.value,
-              "sites must be a JSON array"
-            ) as Array<Partial<SiteConfig> & { origin: string }>);
+            const nextSites = normalizeSiteConfigs(
+              parseJson<Array<Partial<SiteConfig> & { origin: string }>>(
+                args.value,
+                "sites must be a JSON array"
+              ) as Array<Partial<SiteConfig> & { origin: string }>
+            );
             await writeConfiguredSiteConfigs(rootPath, nextSites);
-            return { action: "set", message: `Updated ${nextSites.length} site entries.` };
+            return {
+              action: "set",
+              message: `Updated ${nextSites.length} site entries.`
+            };
           }
           case "site": {
             const parsed = parseJson<Partial<SiteConfig> & { origin?: string }>(
@@ -195,7 +214,9 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
               origin: key.origin
             } as Partial<SiteConfig> & { origin: string });
             const nextSites = sortSites([
-              ...explicitSites.filter((site) => site.origin !== nextSite.origin),
+              ...explicitSites.filter(
+                (site) => site.origin !== nextSite.origin
+              ),
               nextSite
             ]);
             await writeConfiguredSiteConfigs(rootPath, nextSites);
@@ -207,7 +228,9 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
               `dumpAllowlistPatterns for "${key.origin}" must be a JSON array of regex strings`
             );
             const origin = normalizeSiteConfig({ origin: key.origin }).origin;
-            const existing = explicitSites[findSiteIndex(explicitSites, origin)] ?? createSiteConfig(origin);
+            const existing =
+              explicitSites[findSiteIndex(explicitSites, origin)] ??
+              createSiteConfig(origin);
             const nextSite = normalizeSiteConfig({
               ...existing,
               dumpAllowlistPatterns: patterns
@@ -217,7 +240,10 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
               nextSite
             ]);
             await writeConfiguredSiteConfigs(rootPath, nextSites);
-            return { action: "set", message: `Replaced dump patterns for ${origin}.` };
+            return {
+              action: "set",
+              message: `Replaced dump patterns for ${origin}.`
+            };
           }
         }
       }
@@ -225,25 +251,39 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
         const key = parseConfigKey(args.key);
         switch (key.kind) {
           case "sites":
-            throw new UsageError("Use `wraithwalker config set sites '<json-array>'` to replace all sites.");
+            throw new UsageError(
+              "Use `wraithwalker config set sites '<json-array>'` to replace all sites."
+            );
           case "site": {
             const origin = normalizeSiteConfig({ origin: key.origin }).origin;
             if (!explicitSites.some((site) => site.origin === origin)) {
-              await writeConfiguredSiteConfigs(rootPath, sortSites([...explicitSites, createSiteConfig(origin)]));
+              await writeConfiguredSiteConfigs(
+                rootPath,
+                sortSites([...explicitSites, createSiteConfig(origin)])
+              );
             }
-            return { action: "add", message: `Ensured config entry for ${origin}.` };
+            return {
+              action: "add",
+              message: `Ensured config entry for ${origin}.`
+            };
           }
           case "site-patterns": {
             if (!args.value) {
-              throw new UsageError("Usage: wraithwalker config add site.\"<origin>\".dumpAllowlistPatterns <regex>");
+              throw new UsageError(
+                'Usage: wraithwalker config add site."<origin>".dumpAllowlistPatterns <regex>'
+              );
             }
             if (!isValidDumpAllowlistPattern(args.value)) {
               throw new Error(`Invalid regular expression: ${args.value}`);
             }
 
             const origin = normalizeSiteConfig({ origin: key.origin }).origin;
-            const existing = explicitSites[findSiteIndex(explicitSites, origin)] ?? createSiteConfig(origin);
-            const nextPatterns = existing.dumpAllowlistPatterns.includes(args.value)
+            const existing =
+              explicitSites[findSiteIndex(explicitSites, origin)] ??
+              createSiteConfig(origin);
+            const nextPatterns = existing.dumpAllowlistPatterns.includes(
+              args.value
+            )
               ? existing.dumpAllowlistPatterns
               : [...existing.dumpAllowlistPatterns, args.value];
             const nextSite = {
@@ -255,7 +295,10 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
               nextSite
             ]);
             await writeConfiguredSiteConfigs(rootPath, nextSites);
-            return { action: "add", message: `Added dump pattern for ${origin}.` };
+            return {
+              action: "add",
+              message: `Added dump pattern for ${origin}.`
+            };
           }
         }
       }
@@ -264,7 +307,10 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
         switch (key.kind) {
           case "sites":
             await writeConfiguredSiteConfigs(rootPath, []);
-            return { action: "unset", message: "Cleared all explicit site config entries." };
+            return {
+              action: "unset",
+              message: "Cleared all explicit site config entries."
+            };
           case "site": {
             const origin = normalizeSiteConfig({ origin: key.origin }).origin;
             if (!explicitSites.some((site) => site.origin === origin)) {
@@ -279,14 +325,22 @@ export const command: CommandSpec<ConfigArgs, ConfigResult> = {
           case "site-patterns": {
             const origin = normalizeSiteConfig({ origin: key.origin }).origin;
             const site = requireSite(explicitSites, origin);
-            await writeConfiguredSiteConfigs(rootPath, sortSites([
-              ...explicitSites.filter((candidate) => candidate.origin !== origin),
-              {
-                ...site,
-                dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS]
-              }
-            ]));
-            return { action: "unset", message: `Reset dump patterns for ${origin}.` };
+            await writeConfiguredSiteConfigs(
+              rootPath,
+              sortSites([
+                ...explicitSites.filter(
+                  (candidate) => candidate.origin !== origin
+                ),
+                {
+                  ...site,
+                  dumpAllowlistPatterns: [...DEFAULT_DUMP_ALLOWLIST_PATTERNS]
+                }
+              ])
+            );
+            return {
+              action: "unset",
+              message: `Reset dump patterns for ${origin}.`
+            };
           }
         }
       }

@@ -31,10 +31,7 @@ export {
   readSiteConfigs
 } from "./fixtures-discovery.mjs";
 
-export {
-  listAssets,
-  listApiEndpoints
-} from "./fixtures-listing.mjs";
+export { listAssets, listApiEndpoints } from "./fixtures-listing.mjs";
 
 export {
   readApiFixture,
@@ -43,9 +40,7 @@ export {
   resolveFixturePath
 } from "./fixtures-reading.mjs";
 
-export {
-  searchFixtureContent
-} from "./fixtures-search.mjs";
+export { searchFixtureContent } from "./fixtures-search.mjs";
 
 export {
   patchProjectionFile,

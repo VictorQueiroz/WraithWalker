@@ -8,7 +8,10 @@ import {
   ROOT_SENTINEL_RELATIVE_PATH
 } from "../lib/constants.mjs";
 import { readOriginInfo } from "@wraithwalker/core/fixtures";
-import { readConfiguredSiteConfigs, readEffectiveSiteConfigs } from "@wraithwalker/core/project-config";
+import {
+  readConfiguredSiteConfigs,
+  readEffectiveSiteConfigs
+} from "@wraithwalker/core/project-config";
 import { createFixtureRootFs } from "@wraithwalker/core/root-fs";
 import { readSentinel, type RootSentinel } from "@wraithwalker/core/root";
 import { listScenarios } from "@wraithwalker/core/scenarios";
@@ -55,10 +58,12 @@ function createUsageMessage() {
 }
 
 function buildContextFileList(): string[] {
-  return [...new Set([
-    ...DEFAULT_CONTEXT_FILES,
-    ...Object.values(EDITOR_CONTEXT_FILES).flat()
-  ])];
+  return [
+    ...new Set([
+      ...DEFAULT_CONTEXT_FILES,
+      ...Object.values(EDITOR_CONTEXT_FILES).flat()
+    ])
+  ];
 }
 
 export const command: CommandSpec<DoctorArgs, DoctorResult> = {
@@ -108,39 +113,54 @@ export const command: CommandSpec<DoctorArgs, DoctorResult> = {
 
     if (rootFound) {
       sentinel = await readSentinel(rootPath);
-      const [configuredSiteConfigs, effectiveSiteConfigs, scenarioNames] = await Promise.all([
-        readConfiguredSiteConfigs(rootPath),
-        readEffectiveSiteConfigs(rootPath),
-        listScenarios(rootPath)
-      ]);
+      const [configuredSiteConfigs, effectiveSiteConfigs, scenarioNames] =
+        await Promise.all([
+          readConfiguredSiteConfigs(rootPath),
+          readEffectiveSiteConfigs(rootPath),
+          listScenarios(rootPath)
+        ]);
 
-      configuredOrigins = configuredSiteConfigs.map((siteConfig) => siteConfig.origin);
-      effectiveOrigins = effectiveSiteConfigs.map((siteConfig) => siteConfig.origin);
+      configuredOrigins = configuredSiteConfigs.map(
+        (siteConfig) => siteConfig.origin
+      );
+      effectiveOrigins = effectiveSiteConfigs.map(
+        (siteConfig) => siteConfig.origin
+      );
       scenarios = scenarioNames;
 
       for (const siteConfig of effectiveSiteConfigs) {
         const info = await readOriginInfo(rootPath, siteConfig);
         endpoints += info.apiEndpoints.length;
         if (info.manifest) {
-          assets += Object.values(info.manifest.resourcesByPathname).flat().length;
+          assets += Object.values(info.manifest.resourcesByPathname).flat()
+            .length;
         }
       }
     }
 
-    const [projectConfigExists, capturesAssetsExists, capturesHttpExists, manifestsExists] = await Promise.all([
+    const [
+      projectConfigExists,
+      capturesAssetsExists,
+      capturesHttpExists,
+      manifestsExists
+    ] = await Promise.all([
       rootFs.exists(PROJECT_CONFIG_RELATIVE_PATH),
       rootFs.exists(CAPTURE_ASSETS_DIR),
       rootFs.exists(CAPTURE_HTTP_DIR),
       rootFs.exists(MANIFESTS_DIR)
     ]);
-    const contextFiles = await Promise.all(buildContextFileList().map(async (relativePath) => ({
-      path: relativePath,
-      exists: await rootFs.exists(relativePath)
-    })));
+    const contextFiles = await Promise.all(
+      buildContextFileList().map(async (relativePath) => ({
+        path: relativePath,
+        exists: await rootFs.exists(relativePath)
+      }))
+    );
 
     const issues = new Set<string>();
     if (!rootFound) {
-      issues.add(`No ${ROOT_SENTINEL_RELATIVE_PATH} was found at the resolved root path.`);
+      issues.add(
+        `No ${ROOT_SENTINEL_RELATIVE_PATH} was found at the resolved root path.`
+      );
     }
     if (rootFound && !projectConfigExists) {
       issues.add("Project config is missing.");
@@ -186,19 +206,38 @@ export const command: CommandSpec<DoctorArgs, DoctorResult> = {
     output.keyValue("Root", result.report.rootPath);
     output.keyValue("Root Found", result.report.rootFound ? "yes" : "no");
     output.keyValue("Root ID", result.report.sentinel?.rootId ?? "missing");
-    output.keyValue("Project Config", result.report.projectConfigExists ? "yes" : "no");
-    output.keyValue("Configured Origins", result.report.configuredOrigins.length);
+    output.keyValue(
+      "Project Config",
+      result.report.projectConfigExists ? "yes" : "no"
+    );
+    output.keyValue(
+      "Configured Origins",
+      result.report.configuredOrigins.length
+    );
     output.keyValue("Effective Origins", result.report.effectiveOrigins.length);
     output.keyValue("Endpoints", result.report.endpoints);
     output.keyValue("Assets", result.report.assets);
-    output.keyValue("Scenarios", result.report.scenarios.length ? result.report.scenarios.join(", ") : "none");
-    output.keyValue("Captures Assets", result.report.capturesAssetsExists ? "yes" : "no");
-    output.keyValue("Captures HTTP", result.report.capturesHttpExists ? "yes" : "no");
+    output.keyValue(
+      "Scenarios",
+      result.report.scenarios.length
+        ? result.report.scenarios.join(", ")
+        : "none"
+    );
+    output.keyValue(
+      "Captures Assets",
+      result.report.capturesAssetsExists ? "yes" : "no"
+    );
+    output.keyValue(
+      "Captures HTTP",
+      result.report.capturesHttpExists ? "yes" : "no"
+    );
     output.keyValue("Manifests", result.report.manifestsExists ? "yes" : "no");
 
     output.heading("Context Files");
     for (const contextFile of result.report.contextFiles) {
-      output.listItem(`${contextFile.path} (${contextFile.exists ? "present" : "missing"})`);
+      output.listItem(
+        `${contextFile.path} (${contextFile.exists ? "present" : "missing"})`
+      );
     }
 
     output.heading("Issues");

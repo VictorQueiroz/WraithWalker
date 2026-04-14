@@ -16,7 +16,10 @@ describe("background authority diagnostics", () => {
       if (message?.type === "fs.ensureRoot") {
         return { ok: false, error: "No root directory selected." };
       }
-      if (message?.type === "fs.readConfiguredSiteConfigs" || message?.type === "fs.readEffectiveSiteConfigs") {
+      if (
+        message?.type === "fs.readConfiguredSiteConfigs" ||
+        message?.type === "fs.readEffectiveSiteConfigs"
+      ) {
         return {
           ok: true,
           siteConfigs: [],
@@ -30,7 +33,11 @@ describe("background authority diagnostics", () => {
       chromeApi,
       stateOverrides: {
         lastError: "transport unavailable",
-        nativeHostConfig: { hostName: "", launchPath: "", editorLaunchOverrides: {} }
+        nativeHostConfig: {
+          hostName: "",
+          launchPath: "",
+          editorLaunchOverrides: {}
+        }
       },
       serverClientOverrides: {
         heartbeat: vi.fn().mockRejectedValue(new Error("offline"))
@@ -39,13 +46,15 @@ describe("background authority diagnostics", () => {
 
     const report = await authority.getDiagnosticsReport();
 
-    expect(report.issues).toEqual(expect.arrayContaining([
-      "No active capture root is ready.",
-      "No enabled origins are configured.",
-      "Native host name is not configured.",
-      "Local WraithWalker server is not connected.",
-      "Last runtime error: transport unavailable"
-    ]));
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        "No active capture root is ready.",
+        "No enabled origins are configured.",
+        "Native host name is not configured.",
+        "Local WraithWalker server is not connected.",
+        "Last runtime error: transport unavailable"
+      ])
+    );
   });
 
   it("returns diagnostics for configured/effective config failures and local-root permission errors", async () => {
@@ -76,11 +85,13 @@ describe("background authority diagnostics", () => {
 
     const report = await authority.getDiagnosticsReport();
 
-    expect(report.issues).toEqual(expect.arrayContaining([
-      "Configured-site read failed: configured read failed",
-      "Effective-site read failed: effective read failed",
-      "Local root check failed: Permission denied."
-    ]));
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        "Configured-site read failed: configured read failed",
+        "Effective-site read failed: effective read failed",
+        "Local root check failed: Permission denied."
+      ])
+    );
     expect(report.config.configuredSiteError).toBe("configured read failed");
     expect(report.config.effectiveSiteError).toBe("effective read failed");
   });

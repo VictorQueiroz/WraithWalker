@@ -5,9 +5,16 @@ import {
   summarizeScenarioTraceForRead
 } from "@wraithwalker/core/scenario-traces";
 
-import { buildTraceStatusView, type createExtensionSessionTracker } from "./extension-session.mjs";
+import {
+  buildTraceStatusView,
+  type createExtensionSessionTracker
+} from "./extension-session.mjs";
 import type { createServerRootRuntime } from "./root-runtime.mjs";
-import { renderJson, renderUnknownError, renderErrorMessage } from "./server-responses.mjs";
+import {
+  renderJson,
+  renderUnknownError,
+  renderErrorMessage
+} from "./server-responses.mjs";
 
 export function registerTraceTools(
   server: McpServer,
@@ -23,18 +30,34 @@ export function registerTraceTools(
     "start-trace",
     "Start a guided click-trace that the extension will record into the current WraithWalker root",
     {
-      name: z.string().trim().min(1).optional().describe("Optional human-friendly name for the trace"),
-      goal: z.string().trim().min(1).optional().describe("Optional agent-facing goal for what the trace should capture")
+      name: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe("Optional human-friendly name for the trace"),
+      goal: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          "Optional agent-facing goal for what the trace should capture"
+        )
     },
     async ({ name, goal }) => {
       const status = await extensionSessions.getStatus();
       if (!status.connected) {
-        return renderErrorMessage("No connected extension is available for guided tracing.");
+        return renderErrorMessage(
+          "No connected extension is available for guided tracing."
+        );
       }
 
       const activeTrace = await runtime.getActiveTrace();
       if (activeTrace) {
-        return renderErrorMessage(`Trace "${activeTrace.traceId}" is already active. Stop it before starting another trace.`);
+        return renderErrorMessage(
+          `Trace "${activeTrace.traceId}" is already active. Stop it before starting another trace.`
+        );
       }
 
       const trace = await runtime.startTrace({
@@ -85,7 +108,9 @@ export function registerTraceTools(
     "read-trace",
     "Read a stored guided scenario trace by ID",
     {
-      traceId: z.string().describe("Trace ID returned by start-trace or list-traces")
+      traceId: z
+        .string()
+        .describe("Trace ID returned by start-trace or list-traces")
     },
     async ({ traceId }) => {
       const trace = await runtime.readTrace(traceId);

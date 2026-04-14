@@ -1,5 +1,10 @@
 import { findMatchingOrigin } from "./background-helpers.js";
-import type { AttachedTabState, RequestEntry, RootSentinel, SessionSnapshot } from "./types.js";
+import type {
+  AttachedTabState,
+  RequestEntry,
+  RootSentinel,
+  SessionSnapshot
+} from "./types.js";
 
 interface BrowserTab {
   id?: number;
@@ -26,7 +31,9 @@ interface SessionControllerDependencies {
   attachTab: (tabId: number, topOrigin: string) => Promise<void>;
   detachTab: (tabId: number) => Promise<void>;
   refreshStoredConfig: () => Promise<void>;
-  ensureRootReady: (opts?: { requestPermission?: boolean }) => Promise<RootReadyResult>;
+  ensureRootReady: (opts?: {
+    requestPermission?: boolean;
+  }) => Promise<RootReadyResult>;
   closeOffscreenDocument: () => Promise<void>;
   persistSnapshot: () => Promise<void>;
   setLastError: (message: string) => void;
@@ -103,13 +110,18 @@ export function createSessionController({
     state.requests.clear();
     setLastError("");
 
-    await Promise.all([...state.attachedTabs.keys()].map((tabId) => detachTab(tabId)));
+    await Promise.all(
+      [...state.attachedTabs.keys()].map((tabId) => detachTab(tabId))
+    );
     await closeOffscreenDocument();
     await persistSnapshot();
     return snapshotState();
   }
 
-  async function handleTabStateChange(tabId: number, tab?: BrowserTab): Promise<void> {
+  async function handleTabStateChange(
+    tabId: number,
+    tab?: BrowserTab
+  ): Promise<void> {
     if (!state.sessionActive) {
       return;
     }

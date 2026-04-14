@@ -181,10 +181,7 @@ interface PreparedHarEntry {
   };
 }
 
-const DOCUMENT_MIME_TYPES = new Set([
-  "text/html",
-  "application/xhtml+xml"
-]);
+const DOCUMENT_MIME_TYPES = new Set(["text/html", "application/xhtml+xml"]);
 
 const TIMING_FIELDS = [
   "blocked",
@@ -197,12 +194,16 @@ const TIMING_FIELDS = [
 ] as const;
 
 function isRecordArray(value: unknown): value is HarValueRecord[] {
-  return Array.isArray(value) && value.every((item) => (
-    item !== null &&
-    typeof item === "object" &&
-    typeof item.name === "string" &&
-    typeof item.value === "string"
-  ));
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        item !== null &&
+        typeof item === "object" &&
+        typeof item.name === "string" &&
+        typeof item.value === "string"
+    )
+  );
 }
 
 function asHeaders(headers: unknown): HeaderEntry[] {
@@ -212,13 +213,17 @@ function asHeaders(headers: unknown): HeaderEntry[] {
 }
 
 function getMimeTypeFromHeaders(headers: HeaderEntry[]): string {
-  const contentType = headers.find((header) => header.name.toLowerCase() === "content-type");
+  const contentType = headers.find(
+    (header) => header.name.toLowerCase() === "content-type"
+  );
   return contentType?.value.split(";")[0]?.trim() || "";
 }
 
 function getNormalizedMimeType(entry: HarEntry): string {
-  return entry.response.content?.mimeType?.split(";")[0]?.trim()
-    || getMimeTypeFromHeaders(asHeaders(entry.response.headers));
+  return (
+    entry.response.content?.mimeType?.split(";")[0]?.trim() ||
+    getMimeTypeFromHeaders(asHeaders(entry.response.headers))
+  );
 }
 
 function inferResourceType(entry: HarEntry, mimeType: string): string {
@@ -238,7 +243,10 @@ function inferResourceType(entry: HarEntry, mimeType: string): string {
   if (lowerMimeType.startsWith("font/")) {
     return "Font";
   }
-  if (lowerMimeType.startsWith("audio/") || lowerMimeType.startsWith("video/")) {
+  if (
+    lowerMimeType.startsWith("audio/") ||
+    lowerMimeType.startsWith("video/")
+  ) {
     return "Media";
   }
   if (entry.request.method.toUpperCase() !== "GET") {
@@ -252,16 +260,24 @@ function validateTimingValue(value: unknown, label: string, url: string): void {
     return;
   }
 
-  const numericValue = typeof value === "string" && value.trim()
-    ? Number(value)
-    : value;
+  const numericValue =
+    typeof value === "string" && value.trim() ? Number(value) : value;
 
-  if (typeof numericValue !== "number" || !Number.isFinite(numericValue) || numericValue < -1) {
-    throw new Error(`Invalid HAR timing "${label}" for ${url}. Timings must be numbers >= -1.`);
+  if (
+    typeof numericValue !== "number" ||
+    !Number.isFinite(numericValue) ||
+    numericValue < -1
+  ) {
+    throw new Error(
+      `Invalid HAR timing "${label}" for ${url}. Timings must be numbers >= -1.`
+    );
   }
 }
 
-function validateHarEntry(entry: unknown, index: number): asserts entry is HarEntry {
+function validateHarEntry(
+  entry: unknown,
+  index: number
+): asserts entry is HarEntry {
   if (!entry || typeof entry !== "object") {
     throw new Error(`HAR entry ${index} must be an object.`);
   }
@@ -274,30 +290,49 @@ function validateHarEntry(entry: unknown, index: number): asserts entry is HarEn
     timings?: Record<string, unknown>;
   };
 
-  if (typeof candidate.startedDateTime !== "string" || Number.isNaN(Date.parse(candidate.startedDateTime))) {
+  if (
+    typeof candidate.startedDateTime !== "string" ||
+    Number.isNaN(Date.parse(candidate.startedDateTime))
+  ) {
     throw new Error(`HAR entry ${index} is missing a valid startedDateTime.`);
   }
 
-  const totalTime = typeof candidate.time === "string" && candidate.time.trim()
-    ? Number(candidate.time)
-    : candidate.time;
+  const totalTime =
+    typeof candidate.time === "string" && candidate.time.trim()
+      ? Number(candidate.time)
+      : candidate.time;
 
-  if (totalTime !== undefined && (typeof totalTime !== "number" || !Number.isFinite(totalTime) || totalTime < 0)) {
+  if (
+    totalTime !== undefined &&
+    (typeof totalTime !== "number" ||
+      !Number.isFinite(totalTime) ||
+      totalTime < 0)
+  ) {
     throw new Error(`HAR entry ${index} has an invalid time value.`);
   }
 
   if (!candidate.request || typeof candidate.request !== "object") {
     throw new Error(`HAR entry ${index} is missing a request object.`);
   }
-  if (typeof candidate.request.method !== "string" || typeof candidate.request.url !== "string") {
-    throw new Error(`HAR entry ${index} request must include method and url strings.`);
+  if (
+    typeof candidate.request.method !== "string" ||
+    typeof candidate.request.url !== "string"
+  ) {
+    throw new Error(
+      `HAR entry ${index} request must include method and url strings.`
+    );
   }
 
   if (!candidate.response || typeof candidate.response !== "object") {
     throw new Error(`HAR entry ${index} is missing a response object.`);
   }
-  if (typeof candidate.response.status !== "number" || typeof candidate.response.statusText !== "string") {
-    throw new Error(`HAR entry ${index} response must include status and statusText.`);
+  if (
+    typeof candidate.response.status !== "number" ||
+    typeof candidate.response.statusText !== "string"
+  ) {
+    throw new Error(
+      `HAR entry ${index} response must include status and statusText.`
+    );
   }
 
   const url = candidate.request.url;
@@ -316,7 +351,13 @@ export function parseHarArchive(content: string): HarArchive {
     throw new Error("Failed to parse HAR JSON.");
   }
 
-  if (!parsed || typeof parsed !== "object" || !("log" in parsed) || !parsed.log || typeof parsed.log !== "object") {
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("log" in parsed) ||
+    !parsed.log ||
+    typeof parsed.log !== "object"
+  ) {
     throw new Error("HAR file must contain a top-level log object.");
   }
 
@@ -332,9 +373,10 @@ export function parseHarArchive(content: string): HarArchive {
 }
 
 function sortEntriesByStartedDateTime(entries: HarEntry[]): HarEntry[] {
-  return [...entries].sort((left, right) => (
-    Date.parse(left.startedDateTime) - Date.parse(right.startedDateTime)
-  ));
+  return [...entries].sort(
+    (left, right) =>
+      Date.parse(left.startedDateTime) - Date.parse(right.startedDateTime)
+  );
 }
 
 function getHttpOrigin(candidate: unknown): string | null {
@@ -401,9 +443,15 @@ function resolveUngroupedEntriesTopOrigin(
   return resolveSingleTopOrigin(entries);
 }
 
-function resolveEntryTopOrigins(entries: HarEntry[], pages?: HarPage[], explicitTopOrigin?: string): ResolvedHarEntry[] {
+function resolveEntryTopOrigins(
+  entries: HarEntry[],
+  pages?: HarPage[],
+  explicitTopOrigin?: string
+): ResolvedHarEntry[] {
   if (!entries.length) {
-    throw new Error("Unable to infer a top origin from an empty HAR entry set.");
+    throw new Error(
+      "Unable to infer a top origin from an empty HAR entry set."
+    );
   }
 
   if (explicitTopOrigin) {
@@ -428,7 +476,11 @@ function resolveEntryTopOrigins(entries: HarEntry[], pages?: HarPage[], explicit
   const ungroupedEntries: HarEntry[] = [];
 
   for (const entry of entries) {
-    if (typeof entry.pageref === "string" && entry.pageref && pageById.has(entry.pageref)) {
+    if (
+      typeof entry.pageref === "string" &&
+      entry.pageref &&
+      pageById.has(entry.pageref)
+    ) {
       const pageEntries = entriesByPage.get(entry.pageref) || [];
       pageEntries.push(entry);
       entriesByPage.set(entry.pageref, pageEntries);
@@ -443,7 +495,8 @@ function resolveEntryTopOrigins(entries: HarEntry[], pages?: HarPage[], explicit
 
   for (const [pageId, pageEntries] of entriesByPage) {
     const page = pageById.get(pageId);
-    const topOrigin = getHttpOrigin(page?.title) || resolveSingleTopOrigin(pageEntries);
+    const topOrigin =
+      getHttpOrigin(page?.title) || resolveSingleTopOrigin(pageEntries);
     resolvedPageOrigins.add(topOrigin);
 
     for (const entry of pageEntries) {
@@ -452,7 +505,10 @@ function resolveEntryTopOrigins(entries: HarEntry[], pages?: HarPage[], explicit
   }
 
   if (ungroupedEntries.length > 0) {
-    const topOrigin = resolveUngroupedEntriesTopOrigin(ungroupedEntries, resolvedPageOrigins);
+    const topOrigin = resolveUngroupedEntriesTopOrigin(
+      ungroupedEntries,
+      resolvedPageOrigins
+    );
     for (const entry of ungroupedEntries) {
       resolved.push({ entry, topOrigin });
     }
@@ -470,67 +526,82 @@ interface PlannedWrite {
 
 function isMetadataWritePath(relativePath: string): boolean {
   const fileName = path.basename(relativePath);
-  return fileName === "request.json"
-    || fileName === "response.meta.json"
-    || fileName.endsWith(".__request.json")
-    || fileName.endsWith(".__response.json");
+  return (
+    fileName === "request.json" ||
+    fileName === "response.meta.json" ||
+    fileName.endsWith(".__request.json") ||
+    fileName.endsWith(".__response.json")
+  );
 }
 
-async function createPlannedWrites(preparedEntries: PreparedHarEntry[]): Promise<PlannedWrite[]> {
-  const plannedWrites = await Promise.all(preparedEntries.map(async (prepared) => {
-    const requestBuffer = Buffer.from(JSON.stringify(prepared.request, null, 2), "utf8");
-    const metaBuffer = Buffer.from(JSON.stringify(prepared.response.meta, null, 2), "utf8");
-    const bodyBuffer = prepared.response.bodyEncoding === "base64"
-      ? Buffer.from(prepared.response.body, "base64")
-      : Buffer.from(prepared.response.body, "utf8");
-    const projectionPayload = prepared.descriptor.projectionPath
-      ? await createProjectedFixturePayload({
-        relativePath: prepared.descriptor.projectionPath,
-        payload: {
-          body: prepared.response.body,
-          bodyEncoding: prepared.response.bodyEncoding
-        },
-        mimeType: prepared.response.meta.mimeType,
-        resourceType: prepared.response.meta.resourceType
-      })
-      : null;
-    const projectionBuffer = projectionPayload
-      ? projectionPayload.bodyEncoding === "base64"
-        ? Buffer.from(projectionPayload.body, "base64")
-        : Buffer.from(projectionPayload.body, "utf8")
-      : null;
+async function createPlannedWrites(
+  preparedEntries: PreparedHarEntry[]
+): Promise<PlannedWrite[]> {
+  const plannedWrites = await Promise.all(
+    preparedEntries.map(async (prepared) => {
+      const requestBuffer = Buffer.from(
+        JSON.stringify(prepared.request, null, 2),
+        "utf8"
+      );
+      const metaBuffer = Buffer.from(
+        JSON.stringify(prepared.response.meta, null, 2),
+        "utf8"
+      );
+      const bodyBuffer =
+        prepared.response.bodyEncoding === "base64"
+          ? Buffer.from(prepared.response.body, "base64")
+          : Buffer.from(prepared.response.body, "utf8");
+      const projectionPayload = prepared.descriptor.projectionPath
+        ? await createProjectedFixturePayload({
+            relativePath: prepared.descriptor.projectionPath,
+            payload: {
+              body: prepared.response.body,
+              bodyEncoding: prepared.response.bodyEncoding
+            },
+            mimeType: prepared.response.meta.mimeType,
+            resourceType: prepared.response.meta.resourceType
+          })
+        : null;
+      const projectionBuffer = projectionPayload
+        ? projectionPayload.bodyEncoding === "base64"
+          ? Buffer.from(projectionPayload.body, "base64")
+          : Buffer.from(projectionPayload.body, "utf8")
+        : null;
 
-    const writes: PlannedWrite[] = [
-      {
-        relativePath: prepared.descriptor.requestPath,
-        content: requestBuffer,
-        topOrigin: prepared.topOrigin,
-        kind: "request"
-      },
-      {
-        relativePath: prepared.descriptor.metaPath,
-        content: metaBuffer,
-        topOrigin: prepared.topOrigin,
-        kind: "meta"
-      },
-      {
-        relativePath: prepared.descriptor.bodyPath,
-        content: bodyBuffer,
-        topOrigin: prepared.topOrigin,
-        kind: "body"
-      },
-      ...(prepared.descriptor.projectionPath && projectionBuffer
-        ? [{
-          relativePath: prepared.descriptor.projectionPath,
-          content: projectionBuffer,
+      const writes: PlannedWrite[] = [
+        {
+          relativePath: prepared.descriptor.requestPath,
+          content: requestBuffer,
           topOrigin: prepared.topOrigin,
-          kind: "projection" as const
-        }]
-        : [])
-    ];
+          kind: "request"
+        },
+        {
+          relativePath: prepared.descriptor.metaPath,
+          content: metaBuffer,
+          topOrigin: prepared.topOrigin,
+          kind: "meta"
+        },
+        {
+          relativePath: prepared.descriptor.bodyPath,
+          content: bodyBuffer,
+          topOrigin: prepared.topOrigin,
+          kind: "body"
+        },
+        ...(prepared.descriptor.projectionPath && projectionBuffer
+          ? [
+              {
+                relativePath: prepared.descriptor.projectionPath,
+                content: projectionBuffer,
+                topOrigin: prepared.topOrigin,
+                kind: "projection" as const
+              }
+            ]
+          : [])
+      ];
 
-    return writes;
-  }));
+      return writes;
+    })
+  );
 
   return plannedWrites.flat();
 }
@@ -557,7 +628,9 @@ async function assertPlannedWritesAreCompatible(
       }
 
       if (!existingPlanned.content.equals(write.content)) {
-        throw new Error(`Cannot import HAR because multiple entries would write different content to ${write.relativePath}.`);
+        throw new Error(
+          `Cannot import HAR because multiple entries would write different content to ${write.relativePath}.`
+        );
       }
       continue;
     }
@@ -572,7 +645,9 @@ async function assertPlannedWritesAreCompatible(
     }
 
     if (existingStat.isDirectory()) {
-      throw new Error(`Cannot import HAR because ${relativePath} already exists as a directory.`);
+      throw new Error(
+        `Cannot import HAR because ${relativePath} already exists as a directory.`
+      );
     }
 
     if (isMetadataWritePath(relativePath)) {
@@ -582,12 +657,16 @@ async function assertPlannedWritesAreCompatible(
     const absolutePath = rootFs.resolve(relativePath)!;
     const existingContent = await fs.readFile(absolutePath);
     if (!existingContent.equals(write.content)) {
-      throw new Error(`Cannot import HAR because ${relativePath} already exists with different content.`);
+      throw new Error(
+        `Cannot import HAR because ${relativePath} already exists with different content.`
+      );
     }
   }
 }
 
-function resolveRequestBody(entry: HarEntry): { body: string; bodyEncoding: string } | null {
+function resolveRequestBody(
+  entry: HarEntry
+): { body: string; bodyEncoding: string } | null {
   if (entry.request.method.toUpperCase() === "GET") {
     return { body: "", bodyEncoding: "utf8" };
   }
@@ -604,13 +683,23 @@ function resolveRequestBody(entry: HarEntry): { body: string; bodyEncoding: stri
     };
   }
 
-  if (postData.mimeType === "application/x-www-form-urlencoded" && Array.isArray(postData.params)) {
+  if (
+    postData.mimeType === "application/x-www-form-urlencoded" &&
+    Array.isArray(postData.params)
+  ) {
     const params = new URLSearchParams();
     for (const param of postData.params) {
-      if (!param || typeof param !== "object" || typeof param.name !== "string") {
+      if (
+        !param ||
+        typeof param !== "object" ||
+        typeof param.name !== "string"
+      ) {
         return null;
       }
-      params.append(param.name, typeof param.value === "string" ? param.value : "");
+      params.append(
+        param.name,
+        typeof param.value === "string" ? param.value : ""
+      );
     }
     return {
       body: params.toString(),
@@ -621,7 +710,9 @@ function resolveRequestBody(entry: HarEntry): { body: string; bodyEncoding: stri
   return null;
 }
 
-function resolveResponseBody(entry: HarEntry): { body: string; bodyEncoding: "utf8" | "base64" } | null {
+function resolveResponseBody(
+  entry: HarEntry
+): { body: string; bodyEncoding: "utf8" | "base64" } | null {
   const content = entry.response.content;
   if (!content || typeof content.text !== "string") {
     return null;
@@ -643,15 +734,21 @@ function createResponseMetaForEntry(
   mimeType: string,
   resourceType: string
 ): ResponseMeta {
-  return buildResponseMeta({
-    responseStatus: entry.response.status,
-    responseStatusText: entry.response.statusText,
-    responseHeaders: sanitizeResponseHeaders(asHeaders(entry.response.headers)),
-    mimeType,
-    resourceType,
-    url: entry.request.url,
-    method: entry.request.method.toUpperCase()
-  }, bodyEncoding, entry.startedDateTime);
+  return buildResponseMeta(
+    {
+      responseStatus: entry.response.status,
+      responseStatusText: entry.response.statusText,
+      responseHeaders: sanitizeResponseHeaders(
+        asHeaders(entry.response.headers)
+      ),
+      mimeType,
+      resourceType,
+      url: entry.request.url,
+      method: entry.request.method.toUpperCase()
+    },
+    bodyEncoding,
+    entry.startedDateTime
+  );
 }
 
 async function prepareHarEntries(
@@ -668,12 +765,22 @@ async function prepareHarEntries(
     try {
       requestUrl = new URL(entry.request.url);
     } catch {
-      skipped.push({ requestUrl: entry.request.url, method, reason: "Invalid request URL", topOrigin });
+      skipped.push({
+        requestUrl: entry.request.url,
+        method,
+        reason: "Invalid request URL",
+        topOrigin
+      });
       continue;
     }
 
     if (!["http:", "https:"].includes(requestUrl.protocol)) {
-      skipped.push({ requestUrl: entry.request.url, method, reason: "Unsupported request protocol", topOrigin });
+      skipped.push({
+        requestUrl: entry.request.url,
+        method,
+        reason: "Unsupported request protocol",
+        topOrigin
+      });
       continue;
     }
 
@@ -715,19 +822,27 @@ async function prepareHarEntries(
       entry,
       topOrigin,
       descriptor,
-      request: buildRequestPayload({
-        topOrigin,
-        url: entry.request.url,
-        method,
-        requestHeaders: asHeaders(entry.request.headers),
-        requestBody: requestBody.body,
-        requestBodyEncoding: requestBody.bodyEncoding,
-        descriptor
-      }, entry.startedDateTime),
+      request: buildRequestPayload(
+        {
+          topOrigin,
+          url: entry.request.url,
+          method,
+          requestHeaders: asHeaders(entry.request.headers),
+          requestBody: requestBody.body,
+          requestBodyEncoding: requestBody.bodyEncoding,
+          descriptor
+        },
+        entry.startedDateTime
+      ),
       response: {
         body: responseBody.body,
         bodyEncoding: responseBody.bodyEncoding,
-        meta: createResponseMetaForEntry(entry, responseBody.bodyEncoding, mimeType, resourceType)
+        meta: createResponseMetaForEntry(
+          entry,
+          responseBody.bodyEncoding,
+          mimeType,
+          resourceType
+        )
       }
     });
   }
@@ -749,9 +864,10 @@ async function writePreparedEntries(
     const displayPath = descriptor.projectionPath ?? descriptor.bodyPath;
     const completedEntries = index;
     const totalEntries = preparedEntries.length;
-    const bodyBufferSize = response.bodyEncoding === "base64"
-      ? Buffer.byteLength(response.body, "base64")
-      : Buffer.byteLength(response.body, "utf8");
+    const bodyBufferSize =
+      response.bodyEncoding === "base64"
+        ? Buffer.byteLength(response.body, "base64")
+        : Buffer.byteLength(response.body, "utf8");
 
     if (onEvent) {
       await onEvent({
@@ -770,21 +886,25 @@ async function writePreparedEntries(
     await rootFs.writeJson(descriptor.metaPath, response.meta);
     await rootFs.writeBody(descriptor.bodyPath, response, {
       onProgress: onEvent
-        ? (writtenBytes, totalBytes) => onEvent({
-            type: "entry-progress",
-            topOrigin: prepared.topOrigin,
-            requestUrl: entry.request.url,
-            bodyPath: displayPath,
-            completedEntries,
-            totalEntries,
-            writtenBytes,
-            totalBytes
-          })
+        ? (writtenBytes, totalBytes) =>
+            onEvent({
+              type: "entry-progress",
+              topOrigin: prepared.topOrigin,
+              requestUrl: entry.request.url,
+              bodyPath: displayPath,
+              completedEntries,
+              totalEntries,
+              writtenBytes,
+              totalBytes
+            })
         : undefined
     });
 
     let projectionPath: string | null = null;
-    if (descriptor.projectionPath && !(await rootFs.exists(descriptor.projectionPath))) {
+    if (
+      descriptor.projectionPath &&
+      !(await rootFs.exists(descriptor.projectionPath))
+    ) {
       projectionPath = descriptor.projectionPath;
       await rootFs.writeBody(
         descriptor.projectionPath,
@@ -801,16 +921,25 @@ async function writePreparedEntries(
     }
 
     if (descriptor.assetLike) {
-      const manifestPath = getStaticResourceManifestPath(descriptor as AssetFixtureDescriptor);
+      const manifestPath = getStaticResourceManifestPath(
+        descriptor as AssetFixtureDescriptor
+      );
       if (manifestPath) {
-        const cachedManifest = manifestCache.get(manifestPath)
-          || await rootFs.readOptionalJson<StaticResourceManifest>(manifestPath)
-          || createStaticResourceManifest(descriptor as AssetFixtureDescriptor);
+        const cachedManifest =
+          manifestCache.get(manifestPath) ||
+          (await rootFs.readOptionalJson<StaticResourceManifest>(
+            manifestPath
+          )) ||
+          createStaticResourceManifest(descriptor as AssetFixtureDescriptor);
         const nextManifest = upsertStaticResourceManifest(
           cachedManifest,
-          createStaticResourceManifestEntry(descriptor as AssetFixtureDescriptor, response.meta, {
-            projectionPath
-          })
+          createStaticResourceManifestEntry(
+            descriptor as AssetFixtureDescriptor,
+            response.meta,
+            {
+              projectionPath
+            }
+          )
         );
         manifestCache.set(manifestPath, nextManifest);
       }
@@ -842,15 +971,23 @@ async function writePreparedEntries(
   return imported;
 }
 
-export async function importHarFile(options: ImportHarFileOptions): Promise<ImportHarFileResult> {
+export async function importHarFile(
+  options: ImportHarFileOptions
+): Promise<ImportHarFileResult> {
   const dir = path.resolve(options.dir);
   const harPath = path.resolve(options.harPath);
   const content = await fs.readFile(harPath, "utf8");
   const archive = parseHarArchive(content);
   const sortedEntries = sortEntriesByStartedDateTime(archive.log.entries);
   const sentinel = await ensureWritableRoot(dir);
-  const resolvedEntries = resolveEntryTopOrigins(sortedEntries, archive.log.pages, options.topOrigin);
-  const topOrigins = [...new Set(resolvedEntries.map((resolved) => resolved.topOrigin))].sort();
+  const resolvedEntries = resolveEntryTopOrigins(
+    sortedEntries,
+    archive.log.pages,
+    options.topOrigin
+  );
+  const topOrigins = [
+    ...new Set(resolvedEntries.map((resolved) => resolved.topOrigin))
+  ].sort();
   const topOrigin = topOrigins[0]!;
   const { prepared, skipped } = await prepareHarEntries(resolvedEntries);
   await assertPlannedWritesAreCompatible(dir, prepared);

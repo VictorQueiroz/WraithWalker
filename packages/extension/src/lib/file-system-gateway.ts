@@ -1,4 +1,7 @@
-import { arrayBufferToBase64 as defaultArrayBufferToBase64, base64ToBytes as defaultBase64ToBytes } from "./encoding.js";
+import {
+  arrayBufferToBase64 as defaultArrayBufferToBase64,
+  base64ToBytes as defaultBase64ToBytes
+} from "./encoding.js";
 
 interface FileBodyPayload {
   body: string;
@@ -14,7 +17,10 @@ export function createFileSystemGateway({
   base64ToBytes = defaultBase64ToBytes,
   arrayBufferToBase64 = defaultArrayBufferToBase64
 }: FileSystemGatewayDependencies = {}) {
-  async function ensureDirectory(rootHandle: FileSystemDirectoryHandle, parts: string[]): Promise<FileSystemDirectoryHandle> {
+  async function ensureDirectory(
+    rootHandle: FileSystemDirectoryHandle,
+    parts: string[]
+  ): Promise<FileSystemDirectoryHandle> {
     let current = rootHandle;
     for (const part of parts) {
       current = await current.getDirectoryHandle(part, { create: true });
@@ -37,7 +43,10 @@ export function createFileSystemGateway({
     return directory.getFileHandle(fileName, { create });
   }
 
-  async function exists(rootHandle: FileSystemDirectoryHandle, relativePath: string): Promise<boolean> {
+  async function exists(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string
+  ): Promise<boolean> {
     try {
       await resolveFileHandle(rootHandle, relativePath, false);
       return true;
@@ -46,7 +55,11 @@ export function createFileSystemGateway({
     }
   }
 
-  async function writeJson(rootHandle: FileSystemDirectoryHandle, relativePath: string, value: unknown): Promise<void> {
+  async function writeJson(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string,
+    value: unknown
+  ): Promise<void> {
     await writeText(rootHandle, relativePath, JSON.stringify(value, null, 2));
   }
 
@@ -71,7 +84,10 @@ export function createFileSystemGateway({
 
     if (payload.bodyEncoding === "base64") {
       const bytes = base64ToBytes(payload.body);
-      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength
+      ) as ArrayBuffer;
       await writer.write(buffer);
     } else {
       await writer.write(payload.body);
@@ -80,13 +96,19 @@ export function createFileSystemGateway({
     await writer.close();
   }
 
-  async function readJson<T>(rootHandle: FileSystemDirectoryHandle, relativePath: string): Promise<T> {
+  async function readJson<T>(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string
+  ): Promise<T> {
     const handle = await resolveFileHandle(rootHandle, relativePath, false);
     const file = await handle.getFile();
     return JSON.parse(await file.text()) as T;
   }
 
-  async function readOptionalJson<T>(rootHandle: FileSystemDirectoryHandle, relativePath: string): Promise<T | null> {
+  async function readOptionalJson<T>(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string
+  ): Promise<T | null> {
     const fileExists = await exists(rootHandle, relativePath);
     if (!fileExists) {
       return null;
@@ -95,7 +117,10 @@ export function createFileSystemGateway({
     return readJson<T>(rootHandle, relativePath);
   }
 
-  async function readBody(rootHandle: FileSystemDirectoryHandle, relativePath: string): Promise<{ bodyBase64: string; size: number }> {
+  async function readBody(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string
+  ): Promise<{ bodyBase64: string; size: number }> {
     const handle = await resolveFileHandle(rootHandle, relativePath, false);
     const file = await handle.getFile();
 
@@ -105,7 +130,10 @@ export function createFileSystemGateway({
     };
   }
 
-  async function readText(rootHandle: FileSystemDirectoryHandle, relativePath: string): Promise<string> {
+  async function readText(
+    rootHandle: FileSystemDirectoryHandle,
+    relativePath: string
+  ): Promise<string> {
     const handle = await resolveFileHandle(rootHandle, relativePath, false);
     const file = await handle.getFile();
     return file.text();
@@ -122,7 +150,9 @@ export function createFileSystemGateway({
     }
 
     const entries: Array<{ name: string; kind: "file" | "directory" }> = [];
-    for await (const [name, handle] of current as unknown as AsyncIterable<[string, { kind: string }]>) {
+    for await (const [name, handle] of current as unknown as AsyncIterable<
+      [string, { kind: string }]
+    >) {
       entries.push({ name, kind: handle.kind as "file" | "directory" });
     }
     return entries;

@@ -130,8 +130,12 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
 
     output.heading("Flow");
     output.listItem(`Agents and MCP clients talk to ${result.url}`);
-    output.listItem(`The extension streams capture and context through ${result.trpcUrl}`);
-    output.listItem("While this server is running, the extension automatically prefers this root.");
+    output.listItem(
+      `The extension streams capture and context through ${result.trpcUrl}`
+    );
+    output.listItem(
+      "While this server is running, the extension automatically prefers this root."
+    );
 
     output.heading("Tools");
     for (const tool of result.tools) {

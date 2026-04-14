@@ -102,7 +102,15 @@ describe("sync command", () => {
       harFile: undefined,
       topOrigin: undefined
     });
-    expect(command.parse(["fixtures", "--har", "capture.har", "--top-origin", "https://app.example.com"])).toEqual({
+    expect(
+      command.parse([
+        "fixtures",
+        "--har",
+        "capture.har",
+        "--top-origin",
+        "https://app.example.com"
+      ])
+    ).toEqual({
       dir: "fixtures",
       harFile: "capture.har",
       topOrigin: "https://app.example.com"
@@ -117,9 +125,9 @@ describe("sync command", () => {
     expect(() => command.parse(["--top-origin"])).toThrow(
       "Usage: wraithwalker sync [dir] [--har <har-file>] [--top-origin <origin>]"
     );
-    expect(() => command.parse(["fixtures", "--top-origin", "https://app.example.com"])).toThrow(
-      "--top-origin can only be used together with --har."
-    );
+    expect(() =>
+      command.parse(["fixtures", "--top-origin", "https://app.example.com"])
+    ).toThrow("--top-origin can only be used together with --har.");
   });
 
   it("syncs a Chrome Overrides directory by default and forwards progress events", async () => {
@@ -157,25 +165,30 @@ describe("sync command", () => {
       return result;
     });
 
-    const executed = await command.execute({
-      ...commandContext,
-      output: recorder.output
-    } as never, {
-      dir: "fixtures"
-    });
+    const executed = await command.execute(
+      {
+        ...commandContext,
+        output: recorder.output
+      } as never,
+      {
+        dir: "fixtures"
+      }
+    );
 
     expect(mocks.syncOverridesDirectory).toHaveBeenCalledWith({
       dir: path.resolve("/repo", "fixtures"),
       onEvent: expect.any(Function)
     });
-    expect(recorder.calls.progress).toEqual([{
-      type: "entry-complete",
-      topOrigin: "https://app.example.com",
-      requestUrl: "https://app.example.com/index.html",
-      bodyPath: "app.example.com/index.html",
-      completedEntries: 1,
-      totalEntries: 2
-    }]);
+    expect(recorder.calls.progress).toEqual([
+      {
+        type: "entry-complete",
+        topOrigin: "https://app.example.com",
+        requestUrl: "https://app.example.com/index.html",
+        bodyPath: "app.example.com/index.html",
+        completedEntries: 1,
+        totalEntries: 2
+      }
+    ]);
     expect(executed).toEqual({
       source: "overrides",
       ...result
@@ -198,10 +211,13 @@ describe("sync command", () => {
       skipped: []
     });
 
-    await command.execute({
-      ...commandContext,
-      output: createOutputRecorder().output
-    } as never, {});
+    await command.execute(
+      {
+        ...commandContext,
+        output: createOutputRecorder().output
+      } as never,
+      {}
+    );
 
     expect(mocks.syncOverridesDirectory).toHaveBeenCalledWith({
       dir: path.resolve("/repo", "."),
@@ -237,14 +253,17 @@ describe("sync command", () => {
       return result;
     });
 
-    const executed = await command.execute({
-      ...commandContext,
-      output: recorder.output
-    } as never, {
-      dir: "fixtures",
-      harFile: "captures/app.har",
-      topOrigin: "https://app.example.com"
-    });
+    const executed = await command.execute(
+      {
+        ...commandContext,
+        output: recorder.output
+      } as never,
+      {
+        dir: "fixtures",
+        harFile: "captures/app.har",
+        topOrigin: "https://app.example.com"
+      }
+    );
 
     expect(mocks.importHarFile).toHaveBeenCalledWith({
       harPath: path.resolve("/repo", "captures/app.har"),
@@ -252,14 +271,16 @@ describe("sync command", () => {
       topOrigin: "https://app.example.com",
       onEvent: expect.any(Function)
     });
-    expect(recorder.calls.progress).toEqual([{
-      type: "entry-complete",
-      topOrigin: "https://app.example.com",
-      requestUrl: "https://app.example.com/",
-      bodyPath: "app.example.com/index.html",
-      completedEntries: 1,
-      totalEntries: 1
-    }]);
+    expect(recorder.calls.progress).toEqual([
+      {
+        type: "entry-complete",
+        topOrigin: "https://app.example.com",
+        requestUrl: "https://app.example.com/",
+        bodyPath: "app.example.com/index.html",
+        completedEntries: 1,
+        totalEntries: 1
+      }
+    ]);
     expect(executed).toEqual({
       source: "har",
       ...result
@@ -279,20 +300,23 @@ describe("sync command", () => {
         createdAt: "2026-04-06T00:00:00.000Z"
       },
       topOrigin: "http://app.example.com",
-      topOrigins: [
-        "http://app.example.com",
-        "https://app.example.com"
-      ],
+      topOrigins: ["http://app.example.com", "https://app.example.com"],
       imported: [],
       skipped: [
         { requestUrl: "a", method: "GET", reason: "Missing body" },
         { requestUrl: "b", method: "GET", reason: "Missing body" },
         { requestUrl: "c", method: "GET", reason: "Alpha issue" },
-        { requestUrl: "c", method: "GET", reason: "Unsupported request protocol" }
+        {
+          requestUrl: "c",
+          method: "GET",
+          reason: "Unsupported request protocol"
+        }
       ]
     });
 
-    expect(recorder.calls.success).toEqual(["Synced fixture root at /repo/fixtures"]);
+    expect(recorder.calls.success).toEqual([
+      "Synced fixture root at /repo/fixtures"
+    ]);
     expect(recorder.calls.keyValue).toEqual([
       ["Source", "Chrome Overrides"],
       ["Top Origins", 2],

@@ -18,7 +18,9 @@ function randomId(): string {
   return crypto.randomUUID();
 }
 
-export async function loadStoredRootHandle(): Promise<FileSystemDirectoryHandle | undefined> {
+export async function loadStoredRootHandle(): Promise<
+  FileSystemDirectoryHandle | undefined
+> {
   return idbGet<FileSystemDirectoryHandle>(ROOT_HANDLE_KEY);
 }
 
@@ -37,7 +39,9 @@ export function createRootDirectoryPickerOptions(
       };
 }
 
-export async function persistRootHandle(rootHandle: FileSystemDirectoryHandle): Promise<void> {
+export async function persistRootHandle(
+  rootHandle: FileSystemDirectoryHandle
+): Promise<void> {
   await idbSet(ROOT_HANDLE_KEY, rootHandle);
 }
 
@@ -46,7 +50,10 @@ async function readJsonFile<T>(fileHandle: FileSystemFileHandle): Promise<T> {
   return JSON.parse(await file.text()) as T;
 }
 
-async function writeJsonFile(fileHandle: FileSystemFileHandle, data: unknown): Promise<void> {
+async function writeJsonFile(
+  fileHandle: FileSystemFileHandle,
+  data: unknown
+): Promise<void> {
   const writer = await fileHandle.createWritable();
   await writer.write(JSON.stringify(data, null, 2));
   await writer.close();
@@ -56,11 +63,15 @@ async function getSentinelFileHandle(
   rootHandle: FileSystemDirectoryHandle,
   create = false
 ): Promise<FileSystemFileHandle> {
-  const metaDirectory = await rootHandle.getDirectoryHandle(ROOT_SENTINEL_DIR, { create });
+  const metaDirectory = await rootHandle.getDirectoryHandle(ROOT_SENTINEL_DIR, {
+    create
+  });
   return metaDirectory.getFileHandle(ROOT_SENTINEL_FILE, { create });
 }
 
-export async function ensureRootSentinel(rootHandle: FileSystemDirectoryHandle): Promise<RootSentinel> {
+export async function ensureRootSentinel(
+  rootHandle: FileSystemDirectoryHandle
+): Promise<RootSentinel> {
   try {
     const fileHandle = await getSentinelFileHandle(rootHandle, false);
     const existing = await readJsonFile<RootSentinel>(fileHandle);
@@ -83,7 +94,9 @@ export async function queryRootPermission(
   if (!rootHandle) {
     return "prompt";
   }
-  return rootHandle.queryPermission ? rootHandle.queryPermission({ mode: "readwrite" }) : "prompt";
+  return rootHandle.queryPermission
+    ? rootHandle.queryPermission({ mode: "readwrite" })
+    : "prompt";
 }
 
 export async function requestRootPermission(
@@ -92,10 +105,14 @@ export async function requestRootPermission(
   if (!rootHandle) {
     return "prompt";
   }
-  return rootHandle.requestPermission ? rootHandle.requestPermission({ mode: "readwrite" }) : "prompt";
+  return rootHandle.requestPermission
+    ? rootHandle.requestPermission({ mode: "readwrite" })
+    : "prompt";
 }
 
-export async function storeRootHandleWithSentinel(rootHandle: FileSystemDirectoryHandle): Promise<RootSentinel> {
+export async function storeRootHandleWithSentinel(
+  rootHandle: FileSystemDirectoryHandle
+): Promise<RootSentinel> {
   const sentinel = await ensureRootSentinel(rootHandle);
   await persistRootHandle(rootHandle);
   return sentinel;

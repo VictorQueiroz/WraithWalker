@@ -3,7 +3,13 @@ import {
   buildResponseMeta as defaultBuildResponseMeta,
   replayResponseHeaders as defaultReplayResponseHeaders
 } from "@wraithwalker/core/fixture-layout";
-import type { HeaderEntry, RequestEntry, RequestPayload, ResponseMeta, SessionSnapshot } from "./types.js";
+import type {
+  HeaderEntry,
+  RequestEntry,
+  RequestPayload,
+  ResponseMeta,
+  SessionSnapshot
+} from "./types.js";
 
 type HeaderCollection = HeaderEntry[] | Record<string, unknown>;
 interface ReplayResponseHeaderOptions {
@@ -12,9 +18,14 @@ interface ReplayResponseHeaderOptions {
   topOrigin?: string;
 }
 
-function findHeader(headers: HeaderEntry[], targetName: string): HeaderEntry | undefined {
+function findHeader(
+  headers: HeaderEntry[],
+  targetName: string
+): HeaderEntry | undefined {
   const normalizedTarget = targetName.toLowerCase();
-  return headers.find((header) => header.name.toLowerCase() === normalizedTarget);
+  return headers.find(
+    (header) => header.name.toLowerCase() === normalizedTarget
+  );
 }
 
 function hasVaryToken(headerValue: string, token: string): boolean {
@@ -36,17 +47,17 @@ function withOriginVary(headers: HeaderEntry[]): HeaderEntry[] {
     return headers;
   }
 
-  return headers.map((header) => (
+  return headers.map((header) =>
     header === varyHeader
       ? { ...header, value: `${header.value}, Origin` }
       : header
-  ));
+  );
 }
 
 function isCredentialedAssetRequest(headers: HeaderEntry[]): boolean {
   return Boolean(
-    findHeader(headers, "Cookie")?.value.trim()
-    || findHeader(headers, "Authorization")?.value.trim()
+    findHeader(headers, "Cookie")?.value.trim() ||
+    findHeader(headers, "Authorization")?.value.trim()
   );
 }
 
@@ -63,14 +74,20 @@ export function extractOrigin(url: string): string | null {
   return isHttpUrl(url) ? new URL(url).origin : null;
 }
 
-export function findMatchingOrigin(url: string, enabledOrigins: string[]): string | null {
+export function findMatchingOrigin(
+  url: string,
+  enabledOrigins: string[]
+): string | null {
   const origin = extractOrigin(url);
   return origin && enabledOrigins.includes(origin) ? origin : null;
 }
 
 export function arrayifyHeaders(headers: HeaderCollection = {}): HeaderEntry[] {
   if (Array.isArray(headers)) {
-    return headers.map((header) => ({ name: header.name, value: String(header.value ?? "") }));
+    return headers.map((header) => ({
+      name: header.name,
+      value: String(header.value ?? "")
+    }));
   }
 
   return Object.entries(headers).map(([name, value]) => ({
@@ -84,12 +101,20 @@ export function replayResponseHeaders(
   options: ReplayResponseHeaderOptions = {}
 ): HeaderEntry[] {
   const replayedHeaders = defaultReplayResponseHeaders(headers);
-  if (!options.assetLike || findHeader(replayedHeaders, "Access-Control-Allow-Origin")) {
+  if (
+    !options.assetLike ||
+    findHeader(replayedHeaders, "Access-Control-Allow-Origin")
+  ) {
     return replayedHeaders;
   }
 
-  const requestOrigin = findHeader(options.requestHeaders || [], "Origin")?.value.trim();
-  const fetchMode = findHeader(options.requestHeaders || [], "Sec-Fetch-Mode")?.value.trim().toLowerCase();
+  const requestOrigin = findHeader(
+    options.requestHeaders || [],
+    "Origin"
+  )?.value.trim();
+  const fetchMode = findHeader(options.requestHeaders || [], "Sec-Fetch-Mode")
+    ?.value.trim()
+    .toLowerCase();
   if (!requestOrigin && fetchMode !== "cors") {
     return replayedHeaders;
   }
@@ -105,7 +130,10 @@ export function replayResponseHeaders(
   ];
 
   if (isCredentialedAssetRequest(options.requestHeaders || [])) {
-    synthesizedHeaders.push({ name: "Access-Control-Allow-Credentials", value: "true" });
+    synthesizedHeaders.push({
+      name: "Access-Control-Allow-Credentials",
+      value: "true"
+    });
   }
 
   return withOriginVary(synthesizedHeaders);
@@ -152,37 +180,45 @@ export function createRequestEntry({
   topOrigin: string;
   requestedAt?: string;
 }): RequestEntry {
-  return existingEntry || {
-    tabId,
-    requestId,
-    requestedAt,
-    topOrigin,
-    method: "GET",
-    url: "",
-    requestHeaders: [],
-    requestBody: "",
-    requestBodyEncoding: "utf8",
-    descriptor: null,
-    resourceType: "",
-    mimeType: "",
-    replayed: false,
-    replayOnResponse: false,
-    responseStatus: 200,
-    responseStatusText: "OK",
-    responseHeaders: []
-  };
+  return (
+    existingEntry || {
+      tabId,
+      requestId,
+      requestedAt,
+      topOrigin,
+      method: "GET",
+      url: "",
+      requestHeaders: [],
+      requestBody: "",
+      requestBodyEncoding: "utf8",
+      descriptor: null,
+      resourceType: "",
+      mimeType: "",
+      replayed: false,
+      replayOnResponse: false,
+      responseStatus: 200,
+      responseStatusText: "OK",
+      responseHeaders: []
+    }
+  );
 }
 
-export function buildRequestPayload(entry: RequestEntry, capturedAt = new Date().toISOString()): RequestPayload {
-  return defaultBuildRequestPayload({
-    topOrigin: entry.topOrigin,
-    url: entry.url,
-    method: entry.method,
-    requestHeaders: entry.requestHeaders,
-    requestBody: entry.requestBody,
-    requestBodyEncoding: entry.requestBodyEncoding,
-    descriptor: entry.descriptor
-  }, capturedAt);
+export function buildRequestPayload(
+  entry: RequestEntry,
+  capturedAt = new Date().toISOString()
+): RequestPayload {
+  return defaultBuildRequestPayload(
+    {
+      topOrigin: entry.topOrigin,
+      url: entry.url,
+      method: entry.method,
+      requestHeaders: entry.requestHeaders,
+      requestBody: entry.requestBody,
+      requestBodyEncoding: entry.requestBodyEncoding,
+      descriptor: entry.descriptor
+    },
+    capturedAt
+  );
 }
 
 export function buildResponseMeta(
@@ -190,13 +226,17 @@ export function buildResponseMeta(
   bodyEncoding: string,
   capturedAt = new Date().toISOString()
 ): ResponseMeta {
-  return defaultBuildResponseMeta({
-    responseStatus: entry.responseStatus,
-    responseStatusText: entry.responseStatusText,
-    responseHeaders: entry.responseHeaders,
-    mimeType: entry.mimeType,
-    resourceType: entry.resourceType,
-    url: entry.url,
-    method: entry.method
-  }, bodyEncoding, capturedAt);
+  return defaultBuildResponseMeta(
+    {
+      responseStatus: entry.responseStatus,
+      responseStatusText: entry.responseStatusText,
+      responseHeaders: entry.responseHeaders,
+      mimeType: entry.mimeType,
+      resourceType: entry.resourceType,
+      url: entry.url,
+      method: entry.method
+    },
+    bodyEncoding,
+    capturedAt
+  );
 }

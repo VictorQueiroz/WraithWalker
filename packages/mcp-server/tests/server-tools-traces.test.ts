@@ -13,7 +13,12 @@ type ToolHandler = (args: Record<string, unknown>) => Promise<ToolResult>;
 function createToolRegistry() {
   const handlers = new Map<string, ToolHandler>();
   const server = {
-    tool(name: string, _description: string, _schema: unknown, handler: ToolHandler) {
+    tool(
+      name: string,
+      _description: string,
+      _schema: unknown,
+      handler: ToolHandler
+    ) {
       handlers.set(name, handler);
     }
   } as unknown as McpServer;
@@ -62,7 +67,9 @@ describe("trace tool registration", () => {
       extensionSessions: extensionSessions as never
     });
 
-    const result = await registry.callTool("start-trace", { name: "Duplicate trace" });
+    const result = await registry.callTool("start-trace", {
+      name: "Duplicate trace"
+    });
 
     expect(result.isError).toBe(true);
     expect(readText(result)).toContain('Trace "trace-1" is already active.');
@@ -84,7 +91,9 @@ describe("trace tool registration", () => {
       } as never
     });
 
-    const result = await registry.callTool("stop-trace", { traceId: "trace-1" });
+    const result = await registry.callTool("stop-trace", {
+      traceId: "trace-1"
+    });
 
     expect(result.isError).toBe(true);
     expect(readText(result)).toBe("trace stop failed");
@@ -104,7 +113,9 @@ describe("trace tool registration", () => {
       } as never
     });
 
-    const readResult = await registry.callTool("read-trace", { traceId: "missing-trace" });
+    const readResult = await registry.callTool("read-trace", {
+      traceId: "missing-trace"
+    });
     expect(readResult.isError).toBe(true);
     expect(readText(readResult)).toBe('Trace "missing-trace" not found.');
 

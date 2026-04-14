@@ -45,6 +45,8 @@ describe("root helpers", () => {
 
   it("throws when no root exists", async () => {
     const dir = await tmpdir();
-    await expect(findRoot(dir)).rejects.toThrow("No .wraithwalker/root.json found");
+    await expect(findRoot(dir)).rejects.toThrow(
+      "No .wraithwalker/root.json found"
+    );
   });
 });

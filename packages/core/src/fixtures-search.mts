@@ -28,14 +28,15 @@ import type {
 } from "./fixtures-types.mjs";
 import { createFixtureRootFs } from "./root-fs.mjs";
 
-function createExcerpt(text: string, matchIndex: number, queryLength: number): string {
+function createExcerpt(
+  text: string,
+  matchIndex: number,
+  queryLength: number
+): string {
   const contextRadius = 60;
   const start = Math.max(0, matchIndex - contextRadius);
   const end = Math.min(text.length, matchIndex + queryLength + contextRadius);
-  const excerpt = text
-    .slice(start, end)
-    .replace(/\s+/g, " ")
-    .trim();
+  const excerpt = text.slice(start, end).replace(/\s+/g, " ").trim();
 
   return `${start > 0 ? "..." : ""}${excerpt}${end < text.length ? "..." : ""}`;
 }
@@ -45,7 +46,15 @@ function findSubstringMatch(
   query: string
 ): Omit<
   SearchContentMatch,
-  "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType" | "editable" | "canonicalPath"
+  | "path"
+  | "sourceKind"
+  | "matchKind"
+  | "origin"
+  | "pathname"
+  | "mimeType"
+  | "resourceType"
+  | "editable"
+  | "canonicalPath"
 > | null {
   const lowerText = text.toLowerCase();
   const lowerQuery = query.toLowerCase();
@@ -83,10 +92,19 @@ function findPathMatch(
   query: string
 ): Omit<
   SearchContentMatch,
-  "path" | "sourceKind" | "matchKind" | "origin" | "pathname" | "mimeType" | "resourceType" | "editable" | "canonicalPath"
+  | "path"
+  | "sourceKind"
+  | "matchKind"
+  | "origin"
+  | "pathname"
+  | "mimeType"
+  | "resourceType"
+  | "editable"
+  | "canonicalPath"
 > | null {
-  const candidates = [entry.pathname, entry.path]
-    .filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = [entry.pathname, entry.path].filter(
+    (candidate): candidate is string => Boolean(candidate)
+  );
 
   for (const candidate of candidates) {
     const match = findSubstringMatch(candidate, query);
@@ -105,21 +123,28 @@ function findPathMatch(
   return null;
 }
 
-async function listAllFiles(rootPath: string, relativeDir = ""): Promise<string[]> {
+async function listAllFiles(
+  rootPath: string,
+  relativeDir = ""
+): Promise<string[]> {
   const rootFs = createFixtureRootFs(rootPath);
   const entries = await rootFs.listOptionalDirectory(relativeDir);
   const files: string[] = [];
 
-  for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of [...entries].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  )) {
     const relativePath = relativeDir
       ? path.join(relativeDir, entry.name)
       : entry.name;
 
     if (entry.kind === "directory") {
-      if (normalizeSearchPath(relativePath) === normalizeSearchPath(SCENARIOS_DIR)) {
+      if (
+        normalizeSearchPath(relativePath) === normalizeSearchPath(SCENARIOS_DIR)
+      ) {
         continue;
       }
-      files.push(...await listAllFiles(rootPath, relativePath));
+      files.push(...(await listAllFiles(rootPath, relativePath)));
       continue;
     }
 
@@ -129,10 +154,13 @@ async function listAllFiles(rootPath: string, relativeDir = ""): Promise<string[
   return files;
 }
 
-async function buildSearchableFixtureEntries(rootPath: string): Promise<SearchableFixtureEntry[]> {
+async function buildSearchableFixtureEntries(
+  rootPath: string
+): Promise<SearchableFixtureEntry[]> {
   const entries = new Map<string, SearchableFixtureEntry>();
-  const configs = [...await readSiteConfigs(rootPath)]
-    .sort((a, b) => a.origin.localeCompare(b.origin));
+  const configs = [...(await readSiteConfigs(rootPath))].sort((a, b) =>
+    a.origin.localeCompare(b.origin)
+  );
 
   for (const config of configs) {
     const info = await readOriginInfo(rootPath, config);
@@ -153,7 +181,9 @@ async function buildSearchableFixtureEntries(rootPath: string): Promise<Searchab
       }
     }
 
-    for (const endpoint of [...info.apiEndpoints].sort((a, b) => a.bodyPath.localeCompare(b.bodyPath))) {
+    for (const endpoint of [...info.apiEndpoints].sort((a, b) =>
+      a.bodyPath.localeCompare(b.bodyPath)
+    )) {
       if (!entries.has(endpoint.bodyPath)) {
         entries.set(endpoint.bodyPath, {
           path: endpoint.bodyPath,
@@ -202,19 +232,36 @@ export async function searchFixtureContent(
   const matchedConfigs = options.origin
     ? matchSiteConfigsByOrigin(configs, options.origin)
     : configs;
-  const matchedOriginSet = new Set(matchedConfigs.map((config) => config.origin));
+  const matchedOriginSet = new Set(
+    matchedConfigs.map((config) => config.origin)
+  );
   const normalizedPathContains = options.pathContains?.toLowerCase();
-  const searchableEntries = (await buildSearchableFixtureEntries(rootPath)).filter((entry) => {
-    if (options.origin && (!entry.origin || !matchedOriginSet.has(entry.origin))) {
+  const searchableEntries = (
+    await buildSearchableFixtureEntries(rootPath)
+  ).filter((entry) => {
+    if (
+      options.origin &&
+      (!entry.origin || !matchedOriginSet.has(entry.origin))
+    ) {
       return false;
     }
-    if (normalizedPathContains && !entry.path.toLowerCase().includes(normalizedPathContains)) {
+    if (
+      normalizedPathContains &&
+      !entry.path.toLowerCase().includes(normalizedPathContains)
+    ) {
       return false;
     }
-    if (options.mimeTypes?.length && (!entry.mimeType || !options.mimeTypes.includes(entry.mimeType))) {
+    if (
+      options.mimeTypes?.length &&
+      (!entry.mimeType || !options.mimeTypes.includes(entry.mimeType))
+    ) {
       return false;
     }
-    if (options.resourceTypes?.length && (!entry.resourceType || !options.resourceTypes.includes(entry.resourceType))) {
+    if (
+      options.resourceTypes?.length &&
+      (!entry.resourceType ||
+        !options.resourceTypes.includes(entry.resourceType))
+    ) {
       return false;
     }
 
@@ -270,7 +317,11 @@ export async function searchFixtureContent(
   }
 
   return {
-    ...paginateItems(matches, normalizeLimit(options.limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT), options.cursor),
+    ...paginateItems(
+      matches,
+      normalizeLimit(options.limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT),
+      options.cursor
+    ),
     matchedOrigins: options.origin
       ? uniqueOrigins(matchedConfigs.map((config) => config.origin))
       : uniqueOrigins(matches.map((match) => match.origin))

@@ -24,14 +24,20 @@ export function createRequestLifecycle({
   requestKey = (tabId: number, requestId: string) => `${tabId}:${requestId}`,
   onFixturePersisted
 }: RequestLifecycleDependencies) {
-  const repository = repositoryOverride || createDefaultRequestLifecycleRepository({
-    sendOffscreenMessage
-  });
+  const repository =
+    repositoryOverride ||
+    createDefaultRequestLifecycleRepository({
+      sendOffscreenMessage
+    });
 
   const capturePolicy = createCapturePolicy({ getSiteConfigForOrigin });
-  const storageLayout = createStorageLayoutResolver({ createFixtureDescriptor });
+  const storageLayout = createStorageLayoutResolver({
+    createFixtureDescriptor
+  });
 
-  let fetchCoordinator!: ReturnType<typeof createRequestLifecycleFetchCoordinator>;
+  let fetchCoordinator!: ReturnType<
+    typeof createRequestLifecycleFetchCoordinator
+  >;
 
   const middleware = createInterceptionMiddleware({
     capturePolicy,
@@ -41,17 +47,17 @@ export function createRequestLifecycle({
       tabId: number,
       requestId: string,
       fallbackRequest?: { postData?: string }
-    ): Promise<PostDataResult> => (
-      fetchCoordinator.populatePostData(tabId, requestId, fallbackRequest)
-    ),
+    ): Promise<PostDataResult> =>
+      fetchCoordinator.populatePostData(tabId, requestId, fallbackRequest),
     continueRequest: (
       tabId: number,
       requestId: string,
       options?: { interceptResponse?: boolean }
-    ) => sendDebuggerCommand(tabId, "Fetch.continueRequest", {
-      requestId,
-      ...(options?.interceptResponse ? { interceptResponse: true } : {})
-    }),
+    ) =>
+      sendDebuggerCommand(tabId, "Fetch.continueRequest", {
+        requestId,
+        ...(options?.interceptResponse ? { interceptResponse: true } : {})
+      }),
     fulfillRequest: (
       tabId: number,
       payload: {
@@ -62,9 +68,8 @@ export function createRequestLifecycle({
         responsePhrase?: string;
       }
     ) => sendDebuggerCommand(tabId, "Fetch.fulfillRequest", payload),
-    getResponseBody: (tabId: number, requestId: string) => (
-      sendDebuggerCommand(tabId, "Network.getResponseBody", { requestId })
-    ),
+    getResponseBody: (tabId: number, requestId: string) =>
+      sendDebuggerCommand(tabId, "Network.getResponseBody", { requestId }),
     setLastError,
     onFixturePersisted
   }) as RequestLifecycleMiddleware;
@@ -87,7 +92,8 @@ export function createRequestLifecycle({
   return {
     ensureRequestEntry: tracker.ensureRequestEntry,
     populatePostData: fetchCoordinator.populatePostData,
-    ensureDescriptor: (entry: RequestEntry) => middleware.ensureDescriptor(entry),
+    ensureDescriptor: (entry: RequestEntry) =>
+      middleware.ensureDescriptor(entry),
     handleFetchRequestPaused: fetchCoordinator.handleFetchRequestPaused,
     handleNetworkRequestWillBeSent: tracker.handleNetworkRequestWillBeSent,
     handleNetworkResponseReceived: tracker.handleNetworkResponseReceived,

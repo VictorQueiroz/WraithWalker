@@ -9,7 +9,11 @@ import {
 
 export interface FsGateway {
   readText(rootPath: string, relativePath: string): Promise<string>;
-  writeText(rootPath: string, relativePath: string, content: string): Promise<void>;
+  writeText(
+    rootPath: string,
+    relativePath: string,
+    content: string
+  ): Promise<void>;
 }
 
 function createRootRuntimeStorage(
@@ -20,9 +24,12 @@ function createRootRuntimeStorage(
   return {
     ensureSentinel: (root) => createRoot(root.rootPath),
     exists: (root, relativePath) => root.exists(relativePath),
-    writeJson: (root, relativePath, value) => root.writeJson(relativePath, value),
-    writeBody: (root, relativePath, payload) => root.writeBody(relativePath, payload),
-    readOptionalJson: (root, relativePath) => root.readOptionalJson(relativePath),
+    writeJson: (root, relativePath, value) =>
+      root.writeJson(relativePath, value),
+    writeBody: (root, relativePath, payload) =>
+      root.writeBody(relativePath, payload),
+    readOptionalJson: (root, relativePath) =>
+      root.readOptionalJson(relativePath),
     readBody: async (root, relativePath) => {
       const stats = await root.stat(relativePath);
       if (!stats || !stats.isFile()) {
@@ -35,7 +42,8 @@ function createRootRuntimeStorage(
       };
     },
     readText: (_root, relativePath) => gateway.readText(rootPath, relativePath),
-    writeText: (_root, relativePath, content) => gateway.writeText(rootPath, relativePath, content),
+    writeText: (_root, relativePath, content) =>
+      gateway.writeText(rootPath, relativePath, content),
     listDirectory: (root, relativePath) => root.listDirectory(relativePath)
   };
 }
@@ -54,6 +62,6 @@ export async function generateContext(
 
   return runtime.generateContext({
     editorId,
-    siteConfigs: siteConfigsOverride ?? await readSiteConfigs(rootPath)
+    siteConfigs: siteConfigsOverride ?? (await readSiteConfigs(rootPath))
   });
 }

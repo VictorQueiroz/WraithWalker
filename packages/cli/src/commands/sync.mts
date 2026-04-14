@@ -1,7 +1,13 @@
 import path from "node:path";
 
-import { importHarFile, type ImportHarFileResult } from "@wraithwalker/core/har-import";
-import { syncOverridesDirectory, type SyncOverridesDirectoryResult } from "@wraithwalker/core/overrides-sync";
+import {
+  importHarFile,
+  type ImportHarFileResult
+} from "@wraithwalker/core/har-import";
+import {
+  syncOverridesDirectory,
+  type SyncOverridesDirectoryResult
+} from "@wraithwalker/core/overrides-sync";
 
 import type { CommandSpec } from "../lib/command.mjs";
 import { UsageError } from "../lib/command.mjs";
@@ -16,24 +22,31 @@ type SyncCommandResult =
   | ({ source: "har" } & ImportHarFileResult)
   | ({ source: "overrides" } & SyncOverridesDirectoryResult);
 
-function groupSkipReasons(result: { skipped: Array<{ reason: string }> }): Array<[string, number]> {
+function groupSkipReasons(result: {
+  skipped: Array<{ reason: string }>;
+}): Array<[string, number]> {
   const counts = new Map<string, number>();
 
   for (const skipped of result.skipped) {
     counts.set(skipped.reason, (counts.get(skipped.reason) || 0) + 1);
   }
 
-  return [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return [...counts.entries()].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0])
+  );
 }
 
 function usage(): never {
-  throw new UsageError("Usage: wraithwalker sync [dir] [--har <har-file>] [--top-origin <origin>]");
+  throw new UsageError(
+    "Usage: wraithwalker sync [dir] [--har <har-file>] [--top-origin <origin>]"
+  );
 }
 
 export const command: CommandSpec<SyncArgs, SyncCommandResult> = {
   name: "sync",
   summary: "Populate or refresh .wraithwalker metadata from overrides or a HAR",
-  usage: "Usage: wraithwalker sync [dir] [--har <har-file>] [--top-origin <origin>]",
+  usage:
+    "Usage: wraithwalker sync [dir] [--har <har-file>] [--top-origin <origin>]",
   parse(argv) {
     let harFile: string | undefined;
     let topOrigin: string | undefined;
@@ -67,7 +80,9 @@ export const command: CommandSpec<SyncArgs, SyncCommandResult> = {
     }
 
     if (topOrigin && !harFile) {
-      throw new UsageError("--top-origin can only be used together with --har.");
+      throw new UsageError(
+        "--top-origin can only be used together with --har."
+      );
     }
 
     return {
@@ -107,12 +122,18 @@ export const command: CommandSpec<SyncArgs, SyncCommandResult> = {
     };
   },
   render(output, result) {
-    const topOrigins = result.topOrigins.length > 0
-      ? result.topOrigins
-      : (result.topOrigin ? [result.topOrigin] : []);
+    const topOrigins =
+      result.topOrigins.length > 0
+        ? result.topOrigins
+        : result.topOrigin
+          ? [result.topOrigin]
+          : [];
 
     output.success(`Synced fixture root at ${result.dir}`);
-    output.keyValue("Source", result.source === "har" ? "HAR" : "Chrome Overrides");
+    output.keyValue(
+      "Source",
+      result.source === "har" ? "HAR" : "Chrome Overrides"
+    );
     if (topOrigins.length === 1) {
       output.keyValue("Top Origin", topOrigins[0]);
     } else if (topOrigins.length > 1) {
@@ -134,4 +155,3 @@ export const command: CommandSpec<SyncArgs, SyncCommandResult> = {
     }
   }
 };
-

@@ -20,10 +20,13 @@ const rootCoverageThresholds = {
 };
 
 function discoverPackages() {
-  return fs.readdirSync(packagesDir, { withFileTypes: true })
+  return fs
+    .readdirSync(packagesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .filter((name) => fs.existsSync(path.join(packagesDir, name, "package.json")))
+    .filter((name) =>
+      fs.existsSync(path.join(packagesDir, name, "package.json"))
+    )
     .sort();
 }
 
@@ -42,10 +45,15 @@ function formatPercent(covered, total) {
 function assertRootCoverageThresholds(summary) {
   const failures = Object.entries(rootCoverageThresholds)
     .filter(([key, minimum]) => summary[key].pct < minimum)
-    .map(([key, minimum]) => `${key}: expected >= ${minimum.toFixed(2)}%, received ${summary[key].pct.toFixed(2)}%`);
+    .map(
+      ([key, minimum]) =>
+        `${key}: expected >= ${minimum.toFixed(2)}%, received ${summary[key].pct.toFixed(2)}%`
+    );
 
   if (failures.length > 0) {
-    throw new Error(`Merged repo coverage is below the enforced thresholds:\n${failures.join("\n")}`);
+    throw new Error(
+      `Merged repo coverage is below the enforced thresholds:\n${failures.join("\n")}`
+    );
   }
 }
 
@@ -102,28 +110,47 @@ const context = createContext({
 });
 
 reports.create("lcov", { projectRoot: repoRoot }).execute(context);
-reports.create("json-summary", { file: "coverage-summary.json" }).execute(context);
+reports
+  .create("json-summary", { file: "coverage-summary.json" })
+  .execute(context);
 reports.create("text").execute(context);
 
 const mergedSummary = coverageMap.getCoverageSummary().toJSON();
 const repoSummary = {
   statements: {
-    pct: Number(formatPercent(mergedSummary.statements.covered, mergedSummary.statements.total)),
+    pct: Number(
+      formatPercent(
+        mergedSummary.statements.covered,
+        mergedSummary.statements.total
+      )
+    ),
     covered: mergedSummary.statements.covered,
     total: mergedSummary.statements.total
   },
   branches: {
-    pct: Number(formatPercent(mergedSummary.branches.covered, mergedSummary.branches.total)),
+    pct: Number(
+      formatPercent(
+        mergedSummary.branches.covered,
+        mergedSummary.branches.total
+      )
+    ),
     covered: mergedSummary.branches.covered,
     total: mergedSummary.branches.total
   },
   functions: {
-    pct: Number(formatPercent(mergedSummary.functions.covered, mergedSummary.functions.total)),
+    pct: Number(
+      formatPercent(
+        mergedSummary.functions.covered,
+        mergedSummary.functions.total
+      )
+    ),
     covered: mergedSummary.functions.covered,
     total: mergedSummary.functions.total
   },
   lines: {
-    pct: Number(formatPercent(mergedSummary.lines.covered, mergedSummary.lines.total)),
+    pct: Number(
+      formatPercent(mergedSummary.lines.covered, mergedSummary.lines.total)
+    ),
     covered: mergedSummary.lines.covered,
     total: mergedSummary.lines.total
   }
@@ -135,5 +162,7 @@ fs.writeFileSync(
 );
 
 console.log("");
-console.log("Merged package coverage into coverage/lcov-report/index.html and coverage/lcov.info");
+console.log(
+  "Merged package coverage into coverage/lcov-report/index.html and coverage/lcov.info"
+);
 assertRootCoverageThresholds(repoSummary);

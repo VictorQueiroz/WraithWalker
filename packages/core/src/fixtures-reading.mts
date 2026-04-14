@@ -2,7 +2,11 @@ import path from "node:path";
 
 import { getFixtureDisplayPath, type ResponseMeta } from "./fixture-layout.mjs";
 import { prettifyFixtureText } from "./fixture-presentation.mjs";
-import { createFixtureRootFs, resolveWithinRoot, type FixtureRootFs } from "./root-fs.mjs";
+import {
+  createFixtureRootFs,
+  resolveWithinRoot,
+  type FixtureRootFs
+} from "./root-fs.mjs";
 import {
   flattenStaticResourceManifest,
   readOriginInfo,
@@ -71,8 +75,14 @@ async function resolveFixturePresentationContext(
   relativePath: string
 ): Promise<FixturePresentationContext | null> {
   if (path.basename(relativePath) === "response.body") {
-    const metaPath = path.join(path.dirname(relativePath), "response.meta.json");
-    const meta = await createFixtureRootFs(rootPath).readOptionalJson<ResponseMeta>(metaPath);
+    const metaPath = path.join(
+      path.dirname(relativePath),
+      "response.meta.json"
+    );
+    const meta =
+      await createFixtureRootFs(rootPath).readOptionalJson<ResponseMeta>(
+        metaPath
+      );
     if (meta) {
       return {
         mimeType: meta.mimeType,
@@ -95,7 +105,9 @@ async function maybePrettifyFixtureText(
     return text;
   }
 
-  const resolvedContext = context ?? await resolveFixturePresentationContext(rootPath, relativePath);
+  const resolvedContext =
+    context ??
+    (await resolveFixturePresentationContext(rootPath, relativePath));
   return prettifyFixtureText({
     relativePath,
     text,
@@ -104,7 +116,10 @@ async function maybePrettifyFixtureText(
   });
 }
 
-export function resolveFixturePath(rootPath: string, relativePath: string): string | null {
+export function resolveFixturePath(
+  rootPath: string,
+  relativePath: string
+): string | null {
   return resolveWithinRoot(rootPath, relativePath);
 }
 
@@ -114,12 +129,15 @@ export async function readFixtureBody(
   options: FixtureReadOptions = {}
 ): Promise<string | null> {
   const rootFs = createFixtureRootFs(rootPath);
-  await assertWithinFullReadLimit(rootFs, relativePath, (byteLength, limit) => (
-    new Error(
-      `File is too large to read in full: ${relativePath} (${byteLength} bytes; limit ${limit} bytes). `
-      + "Use read-file-snippet with this path and specify startLine and lineCount."
-    )
-  ));
+  await assertWithinFullReadLimit(
+    rootFs,
+    relativePath,
+    (byteLength, limit) =>
+      new Error(
+        `File is too large to read in full: ${relativePath} (${byteLength} bytes; limit ${limit} bytes). ` +
+          "Use read-file-snippet with this path and specify startLine and lineCount."
+      )
+  );
   const text = await rootFs.readOptionalText(relativePath);
   if (text === null) {
     return null;
@@ -149,7 +167,9 @@ export async function readFixtureSnippet(
   if ("reason" in textFixture) {
     switch (textFixture.reason) {
       case "invalid-path":
-        throw new Error(`Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`);
+        throw new Error(
+          `Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`
+        );
       case "missing":
         throw new Error(`File not found: ${relativePath}`);
       case "binary":
@@ -167,14 +187,16 @@ export async function readFixtureSnippet(
   const snippetLines = allLines.slice(startLine - 1, startLine - 1 + lineCount);
   const rawSnippet = snippetLines.join("\n");
   const truncatedSnippet = truncateUtf8(rawSnippet, maxBytes);
-  const renderedLineCount = truncatedSnippet.text === ""
-    ? 0
-    : truncatedSnippet.text.split(/\r\n|\n|\r/).length;
+  const renderedLineCount =
+    truncatedSnippet.text === ""
+      ? 0
+      : truncatedSnippet.text.split(/\r\n|\n|\r/).length;
 
   return {
     path: relativePath,
     startLine,
-    endLine: renderedLineCount > 0 ? startLine + renderedLineCount - 1 : startLine - 1,
+    endLine:
+      renderedLineCount > 0 ? startLine + renderedLineCount - 1 : startLine - 1,
     truncated: truncatedSnippet.truncated,
     text: truncatedSnippet.text
   };
@@ -204,12 +226,15 @@ export async function readApiFixture(
     bodyPath,
     meta,
     body: await (async () => {
-      await assertWithinFullReadLimit(rootFs, bodyPath, (byteLength, limit) => (
-        new Error(
-          `Endpoint fixture body is too large to read in full: ${bodyPath} (${byteLength} bytes; limit ${limit} bytes). `
-          + `Use read-file-snippet with path "${bodyPath}" and specify startLine and lineCount.`
-        )
-      ));
+      await assertWithinFullReadLimit(
+        rootFs,
+        bodyPath,
+        (byteLength, limit) =>
+          new Error(
+            `Endpoint fixture body is too large to read in full: ${bodyPath} (${byteLength} bytes; limit ${limit} bytes). ` +
+              `Use read-file-snippet with path "${bodyPath}" and specify startLine and lineCount.`
+          )
+      );
       const body = await rootFs.readOptionalText(bodyPath);
       if (body === null) {
         return null;

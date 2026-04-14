@@ -41,7 +41,11 @@ describe("request lifecycle integration", () => {
     };
 
     try {
-      await writeOverrideFile(overridesDir, "app.example.com/assets/app.css", "body { color: rebeccapurple; }");
+      await writeOverrideFile(
+        overridesDir,
+        "app.example.com/assets/app.css",
+        "body { color: rebeccapurple; }"
+      );
       await syncOverridesDirectory({
         dir: overridesDir,
         onEvent: undefined
@@ -56,10 +60,15 @@ describe("request lifecycle integration", () => {
         resourceType: "Stylesheet",
         mimeType: "text/css"
       });
-      const syncedMeta = await serverRoot.readJson<{ headerStrategy?: string }>(descriptor.metaPath);
+      const syncedMeta = await serverRoot.readJson<{ headerStrategy?: string }>(
+        descriptor.metaPath
+      );
       expect(syncedMeta.headerStrategy).toBe("live");
 
-      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+      const harness = createServerBackedLifecycleHarness({
+        serverClient,
+        siteConfig
+      });
 
       await harness.lifecycle.handleFetchRequestPaused(
         { tabId: 1 },
@@ -96,7 +105,7 @@ describe("request lifecycle integration", () => {
             statusText: "OK",
             headers: {
               "Content-Type": "text/css",
-              ETag: "\"live-v1\""
+              ETag: '"live-v1"'
             },
             mimeType: "text/css"
           },
@@ -121,7 +130,7 @@ describe("request lifecycle integration", () => {
           responseStatusCode: 200,
           responseHeaders: {
             "Content-Type": "text/css",
-            ETag: "\"live-v1\""
+            ETag: '"live-v1"'
           }
         })
       );
@@ -134,7 +143,7 @@ describe("request lifecycle integration", () => {
           responseCode: 200,
           responseHeaders: [
             { name: "Content-Type", value: "text/css" },
-            { name: "ETag", value: "\"live-v1\"" },
+            { name: "ETag", value: '"live-v1"' },
             { name: "Access-Control-Allow-Origin", value: siteConfig.origin },
             { name: "Vary", value: "Origin" }
           ]
@@ -167,17 +176,25 @@ describe("request lifecycle integration", () => {
       await writeOverrideFile(
         overridesDir,
         "app.example.com/scripts/.headers",
-        JSON.stringify([
-          {
-            applyTo: "*.js",
-            headers: [
-              { name: "Content-Type", value: "application/x-custom-js" },
-              { name: "Cache-Control", value: "no-store" }
-            ]
-          }
-        ], null, 2)
+        JSON.stringify(
+          [
+            {
+              applyTo: "*.js",
+              headers: [
+                { name: "Content-Type", value: "application/x-custom-js" },
+                { name: "Cache-Control", value: "no-store" }
+              ]
+            }
+          ],
+          null,
+          2
+        )
       );
-      await writeOverrideFile(overridesDir, "app.example.com/scripts/app.js", "console.log('synced script');");
+      await writeOverrideFile(
+        overridesDir,
+        "app.example.com/scripts/app.js",
+        "console.log('synced script');"
+      );
       await syncOverridesDirectory({
         dir: overridesDir,
         onEvent: undefined
@@ -192,10 +209,15 @@ describe("request lifecycle integration", () => {
         resourceType: "Script",
         mimeType: "application/javascript"
       });
-      const syncedMeta = await serverRoot.readJson<{ headerStrategy?: string }>(descriptor.metaPath);
+      const syncedMeta = await serverRoot.readJson<{ headerStrategy?: string }>(
+        descriptor.metaPath
+      );
       expect(syncedMeta.headerStrategy).toBe("stored");
 
-      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+      const harness = createServerBackedLifecycleHarness({
+        serverClient,
+        siteConfig
+      });
 
       await harness.lifecycle.handleFetchRequestPaused(
         { tabId: 1 },
@@ -223,7 +245,7 @@ describe("request lifecycle integration", () => {
           requestId: "fetch-synced-stored",
           responseHeaders: [
             { name: "Content-Type", value: "application/x-custom-js" },
-            { name: "Cache-Control", value: "no-store" },
+            { name: "Cache-Control", value: "no-store" }
           ]
         })
       );
@@ -256,28 +278,35 @@ describe("request lifecycle integration", () => {
       attachedTabs: new Map([[1, { topOrigin: "https://app.example.com" }]]),
       requests: new Map<string, any>()
     };
-    const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
-      if (method === "Network.getResponseBody") {
-        return {
-          body: "console.log('from live server');",
-          base64Encoded: false
-        };
+    const sendDebuggerCommandMock = vi.fn(
+      async (
+        _tabId: number,
+        method: string,
+        params?: Record<string, unknown>
+      ) => {
+        if (method === "Network.getResponseBody") {
+          return {
+            body: "console.log('from live server');",
+            base64Encoded: false
+          };
+        }
+        return { method, params };
       }
-      return { method, params };
-    });
+    );
 
     const lifecycle = createRequestLifecycle({
       state,
-      sendDebuggerCommand: ((tabId, method, params) => sendDebuggerCommandMock(tabId, method, params) as Promise<any>),
-      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+      sendDebuggerCommand: (tabId, method, params) =>
+        sendDebuggerCommandMock(tabId, method, params) as Promise<any>,
+      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<
+        typeof createRequestLifecycle
+      >[0]["sendOffscreenMessage"],
       setLastError: vi.fn(),
       repository: createServerBackedRepository(serverClient),
       createFixtureDescriptor: realCreateFixtureDescriptor,
-      getSiteConfigForOrigin: vi.fn((topOrigin) => (
-        topOrigin === "https://app.example.com"
-          ? siteConfig
-          : undefined
-      ))
+      getSiteConfigForOrigin: vi.fn((topOrigin) =>
+        topOrigin === "https://app.example.com" ? siteConfig : undefined
+      )
     });
     const descriptor = await realCreateFixtureDescriptor({
       topOrigin: "https://app.example.com",
@@ -314,27 +343,46 @@ describe("request lifecycle integration", () => {
         }
       );
 
-      await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-live-server" });
+      await lifecycle.handleNetworkLoadingFinished(
+        { tabId: 1 },
+        { requestId: "req-live-server" }
+      );
 
-      expect(await fs.readFile(serverRoot.resolve(descriptor.bodyPath), "utf8")).toBe("console.log('from live server');");
-      expect(await serverRoot.readJson(descriptor.requestPath)).toEqual(expect.objectContaining({
-        topOrigin: "https://app.example.com",
-        url: descriptor.requestUrl,
-        method: "GET"
-      }));
-      expect(await serverRoot.readJson(descriptor.metaPath)).toEqual(expect.objectContaining({
-        status: 200,
-        mimeType: "application/javascript",
-        resourceType: "Script"
-      }));
-      expect(await serverClient.hasFixture(descriptor)).toEqual(expect.objectContaining({
-        exists: true
-      }));
-      await expect(fs.access(localRoot.resolve(descriptor.bodyPath))).rejects.toThrow();
-      await expect(fs.access(localRoot.resolve(descriptor.requestPath))).rejects.toThrow();
-      await expect(fs.access(localRoot.resolve(descriptor.metaPath))).rejects.toThrow();
+      expect(
+        await fs.readFile(serverRoot.resolve(descriptor.bodyPath), "utf8")
+      ).toBe("console.log('from live server');");
+      expect(await serverRoot.readJson(descriptor.requestPath)).toEqual(
+        expect.objectContaining({
+          topOrigin: "https://app.example.com",
+          url: descriptor.requestUrl,
+          method: "GET"
+        })
+      );
+      expect(await serverRoot.readJson(descriptor.metaPath)).toEqual(
+        expect.objectContaining({
+          status: 200,
+          mimeType: "application/javascript",
+          resourceType: "Script"
+        })
+      );
+      expect(await serverClient.hasFixture(descriptor)).toEqual(
+        expect.objectContaining({
+          exists: true
+        })
+      );
+      await expect(
+        fs.access(localRoot.resolve(descriptor.bodyPath))
+      ).rejects.toThrow();
+      await expect(
+        fs.access(localRoot.resolve(descriptor.requestPath))
+      ).rejects.toThrow();
+      await expect(
+        fs.access(localRoot.resolve(descriptor.metaPath))
+      ).rejects.toThrow();
       if (descriptor.manifestPath) {
-        await expect(fs.access(localRoot.resolve(descriptor.manifestPath))).rejects.toThrow();
+        await expect(
+          fs.access(localRoot.resolve(descriptor.manifestPath))
+        ).rejects.toThrow();
       }
       expect(state.requests.size).toBe(0);
     } finally {
@@ -348,11 +396,13 @@ describe("request lifecycle integration", () => {
     });
     await serverRoot.writeProjectConfig({
       schemaVersion: 1,
-      sites: [{
-        origin: "https://app.example.com",
-        createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
-      }]
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
     });
     const server = await startHttpServer(serverRoot.rootPath, {
       host: "127.0.0.1",
@@ -366,17 +416,25 @@ describe("request lifecycle integration", () => {
       attachedTabs: new Map([[1, { topOrigin: "https://app.example.com" }]]),
       requests: new Map<string, any>()
     };
-    const sendDebuggerCommandMock = vi.fn(async (_tabId: number, method: string, params?: Record<string, unknown>) => {
-      if (method === "Network.getResponseBody") {
-        return {
-          body: "<svg viewBox=\"0 0 10 10\"></svg>",
-          base64Encoded: false
-        };
+    const sendDebuggerCommandMock = vi.fn(
+      async (
+        _tabId: number,
+        method: string,
+        params?: Record<string, unknown>
+      ) => {
+        if (method === "Network.getResponseBody") {
+          return {
+            body: '<svg viewBox="0 0 10 10"></svg>',
+            base64Encoded: false
+          };
+        }
+        return { method, params };
       }
-      return { method, params };
-    });
+    );
     const systemInfo = await serverClient.getSystemInfo();
-    const serverSiteConfig = systemInfo.siteConfigs.find((siteConfig) => siteConfig.origin === "https://app.example.com");
+    const serverSiteConfig = systemInfo.siteConfigs.find(
+      (siteConfig) => siteConfig.origin === "https://app.example.com"
+    );
 
     expect(systemInfo.siteConfigs).toEqual([
       expect.objectContaining({
@@ -388,16 +446,17 @@ describe("request lifecycle integration", () => {
 
     const lifecycle = createRequestLifecycle({
       state,
-      sendDebuggerCommand: ((tabId, method, params) => sendDebuggerCommandMock(tabId, method, params) as Promise<any>),
-      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+      sendDebuggerCommand: (tabId, method, params) =>
+        sendDebuggerCommandMock(tabId, method, params) as Promise<any>,
+      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<
+        typeof createRequestLifecycle
+      >[0]["sendOffscreenMessage"],
       setLastError: vi.fn(),
       repository: createServerBackedRepository(serverClient),
       createFixtureDescriptor: realCreateFixtureDescriptor,
-      getSiteConfigForOrigin: vi.fn((topOrigin) => (
-        topOrigin === "https://app.example.com"
-          ? serverSiteConfig
-          : undefined
-      ))
+      getSiteConfigForOrigin: vi.fn((topOrigin) =>
+        topOrigin === "https://app.example.com" ? serverSiteConfig : undefined
+      )
     });
     const descriptor = await realCreateFixtureDescriptor({
       topOrigin: "https://app.example.com",
@@ -434,17 +493,26 @@ describe("request lifecycle integration", () => {
         }
       );
 
-      await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-server-config" });
+      await lifecycle.handleNetworkLoadingFinished(
+        { tabId: 1 },
+        { requestId: "req-server-config" }
+      );
 
-      expect(await fs.readFile(serverRoot.resolve(descriptor.bodyPath), "utf8")).toBe("<svg viewBox=\"0 0 10 10\"></svg>");
-      expect(await serverRoot.readJson(descriptor.requestPath)).toEqual(expect.objectContaining({
-        topOrigin: "https://app.example.com",
-        url: descriptor.requestUrl
-      }));
-      expect(await serverRoot.readJson(descriptor.metaPath)).toEqual(expect.objectContaining({
-        mimeType: "image/svg+xml",
-        resourceType: "Image"
-      }));
+      expect(
+        await fs.readFile(serverRoot.resolve(descriptor.bodyPath), "utf8")
+      ).toBe('<svg viewBox="0 0 10 10"></svg>');
+      expect(await serverRoot.readJson(descriptor.requestPath)).toEqual(
+        expect.objectContaining({
+          topOrigin: "https://app.example.com",
+          url: descriptor.requestUrl
+        })
+      );
+      expect(await serverRoot.readJson(descriptor.metaPath)).toEqual(
+        expect.objectContaining({
+          mimeType: "image/svg+xml",
+          resourceType: "Image"
+        })
+      );
     } finally {
       await server.close();
     }
@@ -511,7 +579,10 @@ describe("request lifecycle integration", () => {
           }
         }
       });
-      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+      const harness = createServerBackedLifecycleHarness({
+        serverClient,
+        siteConfig
+      });
 
       await harness.lifecycle.handleFetchRequestPaused(
         { tabId: 1 },
@@ -538,10 +609,14 @@ describe("request lifecycle integration", () => {
             { name: "Content-Type", value: "application/javascript" },
             { name: "Set-Cookie", value: "a=b" }
           ],
-          body: Buffer.from("console.log(\"server replay\");", "utf8").toString("base64")
+          body: Buffer.from('console.log("server replay");', "utf8").toString(
+            "base64"
+          )
         }
       );
-      expect(harness.state.requests.get("1:network-live-server-asset")).toMatchObject({
+      expect(
+        harness.state.requests.get("1:network-live-server-asset")
+      ).toMatchObject({
         replayed: true,
         topOrigin: siteConfig.origin,
         url: descriptor.requestUrl
@@ -595,7 +670,9 @@ describe("request lifecycle integration", () => {
           meta: {
             status: 200,
             statusText: "OK",
-            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            headers: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             mimeType: "application/javascript",
             resourceType: "Script",
             url: descriptor.requestUrl,
@@ -606,8 +683,14 @@ describe("request lifecycle integration", () => {
           }
         }
       });
-      await fs.writeFile(serverRoot.resolve(descriptor.projectionPath!), "window.__FROM_PROJECTION__ = true;\n");
-      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+      await fs.writeFile(
+        serverRoot.resolve(descriptor.projectionPath!),
+        "window.__FROM_PROJECTION__ = true;\n"
+      );
+      const harness = createServerBackedLifecycleHarness({
+        serverClient,
+        siteConfig
+      });
 
       await harness.lifecycle.handleFetchRequestPaused(
         { tabId: 1 },
@@ -629,8 +712,13 @@ describe("request lifecycle integration", () => {
         expect.objectContaining({
           requestId: "fetch-live-server-edited-projection",
           responseCode: 200,
-          responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
-          body: Buffer.from("window.__FROM_PROJECTION__ = true;\n", "utf8").toString("base64")
+          responseHeaders: [
+            { name: "Content-Type", value: "application/javascript" }
+          ],
+          body: Buffer.from(
+            "window.__FROM_PROJECTION__ = true;\n",
+            "utf8"
+          ).toString("base64")
         })
       );
     } finally {
@@ -689,7 +777,9 @@ describe("request lifecycle integration", () => {
           meta: {
             status: 200,
             statusText: "OK",
-            headers: [{ name: "Content-Type", value: "application/javascript" }],
+            headers: [
+              { name: "Content-Type", value: "application/javascript" }
+            ],
             mimeType: "application/javascript",
             resourceType: "Script",
             url: firstDescriptor.requestUrl,
@@ -721,7 +811,10 @@ describe("request lifecycle integration", () => {
             statusText: "OK",
             headers: [
               { name: "Content-Type", value: "application/javascript" },
-              { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" },
+              {
+                name: "Access-Control-Allow-Origin",
+                value: "https://domain-b.example.com"
+              },
               { name: "Vary", value: "Origin" }
             ],
             mimeType: "application/javascript",
@@ -734,8 +827,14 @@ describe("request lifecycle integration", () => {
           }
         }
       });
-      await fs.writeFile(serverRoot.resolve(firstDescriptor.projectionPath!), "window.__QUERY_EDIT__ = true;\n");
-      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+      await fs.writeFile(
+        serverRoot.resolve(firstDescriptor.projectionPath!),
+        "window.__QUERY_EDIT__ = true;\n"
+      );
+      const harness = createServerBackedLifecycleHarness({
+        serverClient,
+        siteConfig
+      });
 
       await harness.lifecycle.handleFetchRequestPaused(
         { tabId: 1 },
@@ -759,10 +858,15 @@ describe("request lifecycle integration", () => {
           responseCode: 200,
           responseHeaders: [
             { name: "Content-Type", value: "application/javascript" },
-            { name: "Access-Control-Allow-Origin", value: "https://domain-b.example.com" },
+            {
+              name: "Access-Control-Allow-Origin",
+              value: "https://domain-b.example.com"
+            },
             { name: "Vary", value: "Origin" }
           ],
-          body: Buffer.from("window.__QUERY_EDIT__ = true;\n", "utf8").toString("base64")
+          body: Buffer.from("window.__QUERY_EDIT__ = true;\n", "utf8").toString(
+            "base64"
+          )
         })
       );
     } finally {
@@ -830,7 +934,10 @@ describe("request lifecycle integration", () => {
           }
         }
       });
-      const harness = createServerBackedLifecycleHarness({ serverClient, siteConfig });
+      const harness = createServerBackedLifecycleHarness({
+        serverClient,
+        siteConfig
+      });
 
       await harness.lifecycle.handleFetchRequestPaused(
         { tabId: 1 },
@@ -862,7 +969,9 @@ describe("request lifecycle integration", () => {
           body: Buffer.from(body, "utf8").toString("base64")
         }
       );
-      expect(harness.state.requests.get("1:network-live-server-api")).toMatchObject({
+      expect(
+        harness.state.requests.get("1:network-live-server-api")
+      ).toMatchObject({
         replayed: true,
         resourceType: "XHR",
         url: descriptor.requestUrl

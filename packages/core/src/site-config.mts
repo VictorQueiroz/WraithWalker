@@ -33,16 +33,19 @@ export function isValidDumpAllowlistPatterns(patterns: string[]): boolean {
 export function normalizeDumpAllowlistPatterns(patterns: unknown): string[] {
   if (Array.isArray(patterns)) {
     const valid = patterns.filter(
-      (pattern): pattern is string => (
-        typeof pattern === "string"
-        && pattern.trim() !== ""
-        && isValidDumpAllowlistPattern(pattern)
-      )
+      (pattern): pattern is string =>
+        typeof pattern === "string" &&
+        pattern.trim() !== "" &&
+        isValidDumpAllowlistPattern(pattern)
     );
     return valid.length > 0 ? valid : [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
   }
 
-  if (typeof patterns === "string" && patterns.trim() && isValidDumpAllowlistPattern(patterns)) {
+  if (
+    typeof patterns === "string" &&
+    patterns.trim() &&
+    isValidDumpAllowlistPattern(patterns)
+  ) {
     return [patterns];
   }
 
@@ -50,21 +53,27 @@ export function normalizeDumpAllowlistPatterns(patterns: unknown): string[] {
 }
 
 export function normalizeSiteConfig(
-  siteConfig: Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string }
+  siteConfig: Partial<SiteConfig> & { origin: string } & {
+    dumpAllowlistPattern?: string;
+  }
 ): SiteConfig {
-  const rawPatterns = siteConfig.dumpAllowlistPatterns ?? siteConfig.dumpAllowlistPattern;
+  const rawPatterns =
+    siteConfig.dumpAllowlistPatterns ?? siteConfig.dumpAllowlistPattern;
 
   return {
     origin: normalizeSiteInput(siteConfig.origin),
-    createdAt: typeof siteConfig.createdAt === "string" && siteConfig.createdAt
-      ? siteConfig.createdAt
-      : new Date().toISOString(),
+    createdAt:
+      typeof siteConfig.createdAt === "string" && siteConfig.createdAt
+        ? siteConfig.createdAt
+        : new Date().toISOString(),
     dumpAllowlistPatterns: normalizeDumpAllowlistPatterns(rawPatterns)
   };
 }
 
 export function normalizeSiteConfigs(
-  siteConfigs: Array<Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string }>
+  siteConfigs: Array<
+    Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string }
+  >
 ): SiteConfig[] {
   return siteConfigs
     .map(normalizeSiteConfig)
@@ -84,10 +93,12 @@ export function createConfiguredSiteConfig(originInput: string): SiteConfig {
 
   return {
     ...siteConfig,
-    dumpAllowlistPatterns: [...new Set([
-      ...siteConfig.dumpAllowlistPatterns,
-      ...EXPLICIT_SITE_EXTRA_DUMP_ALLOWLIST_PATTERNS
-    ])]
+    dumpAllowlistPatterns: [
+      ...new Set([
+        ...siteConfig.dumpAllowlistPatterns,
+        ...EXPLICIT_SITE_EXTRA_DUMP_ALLOWLIST_PATTERNS
+      ])
+    ]
   };
 }
 
@@ -119,10 +130,16 @@ export function mergeSiteConfigs(
     });
   }
 
-  return [...merged.values()].sort((left, right) => left.origin.localeCompare(right.origin));
+  return [...merged.values()].sort((left, right) =>
+    left.origin.localeCompare(right.origin)
+  );
 }
 
-export function shouldDumpRequest(siteConfig: SiteConfig, method: string, url: string): boolean {
+export function shouldDumpRequest(
+  siteConfig: SiteConfig,
+  method: string,
+  url: string
+): boolean {
   if (method.toUpperCase() !== "GET") {
     return false;
   }
@@ -138,7 +155,7 @@ export function shouldDumpRequest(siteConfig: SiteConfig, method: string, url: s
     return false;
   }
 
-  return siteConfig.dumpAllowlistPatterns.some(
-    (pattern) => new RegExp(pattern).test(requestUrl.pathname)
+  return siteConfig.dumpAllowlistPatterns.some((pattern) =>
+    new RegExp(pattern).test(requestUrl.pathname)
   );
 }

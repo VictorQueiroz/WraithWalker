@@ -1,7 +1,4 @@
-import type {
-  BackgroundMessage,
-  ErrorResult
-} from "./messages.js";
+import type { BackgroundMessage, ErrorResult } from "./messages.js";
 import type {
   AttachedTabState,
   BrowserConsoleEntry,
@@ -28,9 +25,18 @@ export interface RuntimeApi {
   getURL(path: string): string;
   getManifest?: () => { version?: string };
   sendMessage(message: unknown): Promise<unknown>;
-  sendNativeMessage(hostName: string, message: Record<string, unknown>): Promise<Record<string, unknown>>;
+  sendNativeMessage(
+    hostName: string,
+    message: Record<string, unknown>
+  ): Promise<Record<string, unknown>>;
   onMessage: {
-    addListener(listener: (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean | void): void;
+    addListener(
+      listener: (
+        message: unknown,
+        sender: unknown,
+        sendResponse: (response: unknown) => void
+      ) => boolean | void
+    ): void;
   };
   onStartup: {
     addListener(listener: () => void): void;
@@ -38,7 +44,10 @@ export interface RuntimeApi {
   onInstalled: {
     addListener(listener: () => void): void;
   };
-  getContexts?: (filter: { contextTypes: string[]; documentUrls: string[] }) => Promise<unknown[]>;
+  getContexts?: (filter: {
+    contextTypes: string[];
+    documentUrls: string[];
+  }) => Promise<unknown[]>;
 }
 
 export interface AlarmsApi {
@@ -51,13 +60,25 @@ export interface AlarmsApi {
 
 export interface DebuggerApi {
   attach(target: DebuggeeTarget, version: string): Promise<void>;
-  sendCommand<T = unknown>(target: DebuggeeTarget, method: string, params?: Record<string, unknown>): Promise<T>;
+  sendCommand<T = unknown>(
+    target: DebuggeeTarget,
+    method: string,
+    params?: Record<string, unknown>
+  ): Promise<T>;
   detach(target: DebuggeeTarget): Promise<void>;
   onEvent: {
-    addListener(listener: (source: DebuggeeTarget, method: string, params: unknown) => void): void;
+    addListener(
+      listener: (
+        source: DebuggeeTarget,
+        method: string,
+        params: unknown
+      ) => void
+    ): void;
   };
   onDetach: {
-    addListener(listener: (source: DebuggeeTarget, reason: DetachReason) => void): void;
+    addListener(
+      listener: (source: DebuggeeTarget, reason: DetachReason) => void
+    ): void;
   };
 }
 
@@ -65,7 +86,13 @@ export interface TabsApi {
   query(queryInfo: Record<string, unknown>): Promise<BrowserTab[]>;
   create(createProperties: { url: string }): Promise<{ id?: number }>;
   onUpdated: {
-    addListener(listener: (tabId: number, changeInfo: Record<string, unknown>, tab: BrowserTab) => void): void;
+    addListener(
+      listener: (
+        tabId: number,
+        changeInfo: Record<string, unknown>,
+        tab: BrowserTab
+      ) => void
+    ): void;
   };
   onRemoved: {
     addListener(listener: (tabId: number) => void): void;
@@ -93,13 +120,17 @@ export interface ContextMenusApi {
   }): void;
   removeAll(): Promise<void> | void;
   onClicked: {
-    addListener(listener: (info: ContextMenuOnClickData, tab?: BrowserTab) => void): void;
+    addListener(
+      listener: (info: ContextMenuOnClickData, tab?: BrowserTab) => void
+    ): void;
   };
 }
 
 export interface StorageApi {
   onChanged: {
-    addListener(listener: (changes: Record<string, unknown>, areaName: string) => void): void;
+    addListener(
+      listener: (changes: Record<string, unknown>, areaName: string) => void
+    ): void;
   };
 }
 
@@ -165,12 +196,22 @@ export interface SessionControllerApi {
 
 export interface RequestLifecycleApi {
   ensureRequestEntry?(tabId: number, requestId: string): unknown;
-  populatePostData?(tabId: number, requestId: string, fallbackRequest?: { postData?: string }): Promise<unknown>;
+  populatePostData?(
+    tabId: number,
+    requestId: string,
+    fallbackRequest?: { postData?: string }
+  ): Promise<unknown>;
   ensureDescriptor?(entry: unknown): Promise<unknown>;
-  handleFetchRequestPaused(source: DebuggeeTarget, params: unknown): Promise<void>;
+  handleFetchRequestPaused(
+    source: DebuggeeTarget,
+    params: unknown
+  ): Promise<void>;
   handleNetworkRequestWillBeSent(source: DebuggeeTarget, params: unknown): void;
   handleNetworkResponseReceived(source: DebuggeeTarget, params: unknown): void;
-  handleNetworkLoadingFinished(source: DebuggeeTarget, params: unknown): Promise<void>;
+  handleNetworkLoadingFinished(
+    source: DebuggeeTarget,
+    params: unknown
+  ): Promise<void>;
   handleNetworkLoadingFailed(source: DebuggeeTarget, params: unknown): void;
 }
 
@@ -216,10 +257,15 @@ export class DetachedDebuggerCommandError extends Error {
   }
 }
 
-export function isDetachedDebuggerCommandMessage(message: string, tabId: number): boolean {
+export function isDetachedDebuggerCommandMessage(
+  message: string,
+  tabId: number
+): boolean {
   const normalized = message.toLowerCase();
-  return normalized.includes("debugger is not attached to the tab with id:")
-    && normalized.includes(String(tabId));
+  return (
+    normalized.includes("debugger is not attached to the tab with id:") &&
+    normalized.includes(String(tabId))
+  );
 }
 
 export class StaleFetchRequestCommandError extends Error {
@@ -235,15 +281,19 @@ export class StaleFetchRequestCommandError extends Error {
 
 export function isInvalidFetchRequestMessage(message: string): boolean {
   const normalized = message.toLowerCase();
-  return normalized.includes("invalid interceptionid")
-    || normalized.includes("invalid requestid");
+  return (
+    normalized.includes("invalid interceptionid") ||
+    normalized.includes("invalid requestid")
+  );
 }
 
 export function isFetchResolutionCommand(method: string): boolean {
-  return method === "Fetch.continueRequest"
-    || method === "Fetch.fulfillRequest"
-    || method === "Fetch.failRequest"
-    || method === "Fetch.continueResponse";
+  return (
+    method === "Fetch.continueRequest" ||
+    method === "Fetch.fulfillRequest" ||
+    method === "Fetch.failRequest" ||
+    method === "Fetch.continueResponse"
+  );
 }
 
 export function normalizeConsoleTimestamp(value: unknown): string {
@@ -251,16 +301,12 @@ export function normalizeConsoleTimestamp(value: unknown): string {
     return new Date().toISOString();
   }
 
-  const milliseconds = value >= 1_000_000_000_000
-    ? value
-    : value * 1_000;
+  const milliseconds = value >= 1_000_000_000_000 ? value : value * 1_000;
   return new Date(milliseconds).toISOString();
 }
 
 export function clipConsoleText(value: unknown): string {
-  const text = typeof value === "string"
-    ? value
-    : String(value ?? "");
+  const text = typeof value === "string" ? value : String(value ?? "");
   return text.length > MAX_CONSOLE_ENTRY_TEXT_LENGTH
     ? `${text.slice(0, MAX_CONSOLE_ENTRY_TEXT_LENGTH)}...`
     : text;
@@ -277,34 +323,38 @@ export function toBrowserConsoleEntry(
     return null;
   }
 
-  const topOrigin = tabState?.topOrigin
-    || extractOrigin(entry.url || "")
-    || "";
+  const topOrigin = tabState?.topOrigin || extractOrigin(entry.url || "") || "";
 
   return {
     tabId,
     topOrigin,
-    source: typeof entry.source === "string" && entry.source.trim()
-      ? entry.source
-      : "other",
-    level: typeof entry.level === "string" && entry.level.trim()
-      ? entry.level
-      : "info",
+    source:
+      typeof entry.source === "string" && entry.source.trim()
+        ? entry.source
+        : "other",
+    level:
+      typeof entry.level === "string" && entry.level.trim()
+        ? entry.level
+        : "info",
     text: clipConsoleText(entry.text),
     timestamp: normalizeConsoleTimestamp(entry.timestamp),
     ...(typeof entry.url === "string" && entry.url.trim()
       ? { url: entry.url }
       : {}),
-    ...(typeof entry.lineNumber === "number" && Number.isFinite(entry.lineNumber)
+    ...(typeof entry.lineNumber === "number" &&
+    Number.isFinite(entry.lineNumber)
       ? { lineNumber: entry.lineNumber }
       : {}),
-    ...(typeof entry.columnNumber === "number" && Number.isFinite(entry.columnNumber)
+    ...(typeof entry.columnNumber === "number" &&
+    Number.isFinite(entry.columnNumber)
       ? { columnNumber: entry.columnNumber }
       : {})
   };
 }
 
-export function isBackgroundMessage(message: unknown): message is BackgroundMessage {
+export function isBackgroundMessage(
+  message: unknown
+): message is BackgroundMessage {
   if (!message || typeof message !== "object") {
     return false;
   }
@@ -335,11 +385,11 @@ export function isBackgroundMessage(message: unknown): message is BackgroundMess
 
 export function getErrorMessage(result: unknown): string {
   if (
-    typeof result === "object"
-    && result !== null
-    && "error" in result
-    && typeof (result as { error?: unknown }).error === "string"
-    && (result as { error: string }).error.trim()
+    typeof result === "object" &&
+    result !== null &&
+    "error" in result &&
+    typeof (result as { error?: unknown }).error === "string" &&
+    (result as { error: string }).error.trim()
   ) {
     return (result as { error: string }).error;
   }
@@ -348,6 +398,8 @@ export function getErrorMessage(result: unknown): string {
 }
 
 export function isLocalRootConfigUnavailable(result: ErrorResult): boolean {
-  return result.error === "No root directory selected."
-    || result.error === "Root directory access is not granted.";
+  return (
+    result.error === "No root directory selected." ||
+    result.error === "Root directory access is not granted."
+  );
 }

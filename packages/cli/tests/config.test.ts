@@ -29,7 +29,11 @@ describe("cli config", () => {
 
   it("loads global config from the linux XDG location", async () => {
     const homeDir = await tmpdir();
-    const configPath = getGlobalConfigPath({ platform: "linux", env: {}, homeDir });
+    const configPath = getGlobalConfigPath({
+      platform: "linux",
+      env: {},
+      homeDir
+    });
     await writeJson(configPath, {
       theme: {
         overrides: {
@@ -38,7 +42,11 @@ describe("cli config", () => {
       }
     });
 
-    const config = await loadGlobalCliConfig({ platform: "linux", env: {}, homeDir });
+    const config = await loadGlobalCliConfig({
+      platform: "linux",
+      env: {},
+      homeDir
+    });
     expect(resolveCliConfig(config).theme.indent).toBe(">> ");
   });
 
@@ -89,22 +97,34 @@ describe("cli config", () => {
 
   it("reports invalid JSON with the file path", async () => {
     const homeDir = await tmpdir();
-    const configPath = getGlobalConfigPath({ platform: "linux", env: {}, homeDir });
+    const configPath = getGlobalConfigPath({
+      platform: "linux",
+      env: {},
+      homeDir
+    });
     await fs.mkdir(path.dirname(configPath), { recursive: true });
     await fs.writeFile(configPath, "{not-json", "utf8");
 
-    await expect(loadGlobalCliConfig({ platform: "linux", env: {}, homeDir })).rejects.toThrow(configPath);
+    await expect(
+      loadGlobalCliConfig({ platform: "linux", env: {}, homeDir })
+    ).rejects.toThrow(configPath);
   });
 
   it("reports unknown theme names with the file path", async () => {
     const homeDir = await tmpdir();
-    const configPath = getGlobalConfigPath({ platform: "linux", env: {}, homeDir });
+    const configPath = getGlobalConfigPath({
+      platform: "linux",
+      env: {},
+      homeDir
+    });
     await writeJson(configPath, {
       theme: {
         name: "ghost-theme"
       }
     });
 
-    await expect(loadGlobalCliConfig({ platform: "linux", env: {}, homeDir })).rejects.toThrow(configPath);
+    await expect(
+      loadGlobalCliConfig({ platform: "linux", env: {}, homeDir })
+    ).rejects.toThrow(configPath);
   });
 });

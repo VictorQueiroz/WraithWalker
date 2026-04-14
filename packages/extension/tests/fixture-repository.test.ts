@@ -17,7 +17,11 @@ class MemoryFileHandle {
     const bytes = this.bytes;
     return {
       text: async () => new TextDecoder().decode(bytes),
-      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      arrayBuffer: async () =>
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength
+        ),
       size: bytes.byteLength
     };
   }
@@ -34,7 +38,12 @@ class MemoryFileHandle {
           return;
         }
         if (ArrayBuffer.isView(chunk)) {
-          this.bytes = new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+          this.bytes = new Uint8Array(
+            chunk.buffer.slice(
+              chunk.byteOffset,
+              chunk.byteOffset + chunk.byteLength
+            )
+          );
           return;
         }
         throw new Error(`Unsupported write chunk: ${String(chunk)}`);
@@ -54,7 +63,10 @@ class MemoryDirectoryHandle {
     this.files = new Map();
   }
 
-  async getDirectoryHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getDirectoryHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.directories.has(name)) {
       if (!create) {
         throw new Error(`Missing directory: ${name}`);
@@ -64,7 +76,10 @@ class MemoryDirectoryHandle {
     return this.directories.get(name);
   }
 
-  async getFileHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getFileHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.files.has(name)) {
       if (!create) {
         throw new Error(`Missing file: ${name}`);
@@ -74,7 +89,9 @@ class MemoryDirectoryHandle {
     return this.files.get(name);
   }
 
-  async *[Symbol.asyncIterator](): AsyncIterableIterator<[string, { kind: string }]> {
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<
+    [string, { kind: string }]
+  > {
     for (const [name, handle] of this.directories) {
       yield [name, handle as unknown as { kind: string }];
     }
@@ -84,7 +101,9 @@ class MemoryDirectoryHandle {
   }
 }
 
-function asFileSystemDirectoryHandle(handle: MemoryDirectoryHandle): FileSystemDirectoryHandle {
+function asFileSystemDirectoryHandle(
+  handle: MemoryDirectoryHandle
+): FileSystemDirectoryHandle {
   return handle as unknown as FileSystemDirectoryHandle;
 }
 
@@ -97,7 +116,11 @@ describe("fixture repository", () => {
     });
     const repository = createFixtureRepository({
       rootHandle: asFileSystemDirectoryHandle(rootHandle),
-      sentinel: { rootId: "root-1", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      sentinel: {
+        rootId: "root-1",
+        schemaVersion: 1,
+        createdAt: "2026-04-03T00:00:00.000Z"
+      },
       gateway
     });
     const descriptor = await createFixtureDescriptor({
@@ -172,7 +195,9 @@ describe("fixture repository", () => {
     expect(secondWrite.written).toBe(false);
 
     const storedFixture = await repository.read(descriptor);
-    expect(Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")).toBe("console.log(\"first\");");
+    expect(
+      Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")
+    ).toBe('console.log("first");');
   });
 
   it("serves the edited visible projection over the canonical body when reading fixtures", async () => {
@@ -183,7 +208,11 @@ describe("fixture repository", () => {
     });
     const repository = createFixtureRepository({
       rootHandle: asFileSystemDirectoryHandle(rootHandle),
-      sentinel: { rootId: "root-1b", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      sentinel: {
+        rootId: "root-1b",
+        schemaVersion: 1,
+        createdAt: "2026-04-03T00:00:00.000Z"
+      },
       gateway
     });
     const descriptor = await createFixtureDescriptor({
@@ -222,13 +251,19 @@ describe("fixture repository", () => {
         }
       }
     });
-    await gateway.writeBody(asFileSystemDirectoryHandle(rootHandle), descriptor.projectionPath!, {
-      body: "console.log('edited projection');",
-      bodyEncoding: "utf8"
-    });
+    await gateway.writeBody(
+      asFileSystemDirectoryHandle(rootHandle),
+      descriptor.projectionPath!,
+      {
+        body: "console.log('edited projection');",
+        bodyEncoding: "utf8"
+      }
+    );
 
     const storedFixture = await repository.read(descriptor);
-    expect(Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")).toBe("console.log('edited projection');");
+    expect(
+      Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")
+    ).toBe("console.log('edited projection');");
   });
 
   it("requires canonical metadata for simple-mode assets", async () => {
@@ -239,7 +274,11 @@ describe("fixture repository", () => {
     });
     const repository = createFixtureRepository({
       rootHandle: asFileSystemDirectoryHandle(rootHandle),
-      sentinel: { rootId: "root-2", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      sentinel: {
+        rootId: "root-2",
+        schemaVersion: 1,
+        createdAt: "2026-04-03T00:00:00.000Z"
+      },
       gateway
     });
     const descriptor = await createFixtureDescriptor({
@@ -248,10 +287,14 @@ describe("fixture repository", () => {
       url: "https://cdn.example.com/assets/app.js"
     });
 
-    await gateway.writeBody(asFileSystemDirectoryHandle(rootHandle), descriptor.bodyPath, {
-      body: "console.log('manual');",
-      bodyEncoding: "utf8"
-    });
+    await gateway.writeBody(
+      asFileSystemDirectoryHandle(rootHandle),
+      descriptor.bodyPath,
+      {
+        body: "console.log('manual');",
+        bodyEncoding: "utf8"
+      }
+    );
 
     const fixture = await repository.read(descriptor);
     expect(fixture).toBeNull();
@@ -265,7 +308,11 @@ describe("fixture repository", () => {
     });
     const repository = createFixtureRepository({
       rootHandle: asFileSystemDirectoryHandle(rootHandle),
-      sentinel: { rootId: "root-2b", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      sentinel: {
+        rootId: "root-2b",
+        schemaVersion: 1,
+        createdAt: "2026-04-03T00:00:00.000Z"
+      },
       gateway
     });
     const descriptor = await createFixtureDescriptor({
@@ -274,10 +321,14 @@ describe("fixture repository", () => {
       url: "https://cdn.example.com/assets/app.js?v=1"
     });
 
-    await gateway.writeBody(asFileSystemDirectoryHandle(rootHandle), descriptor.projectionPath!, {
-      body: "console.log('manual');",
-      bodyEncoding: "utf8"
-    });
+    await gateway.writeBody(
+      asFileSystemDirectoryHandle(rootHandle),
+      descriptor.projectionPath!,
+      {
+        body: "console.log('manual');",
+        bodyEncoding: "utf8"
+      }
+    );
 
     await expect(repository.exists(descriptor)).resolves.toBe(false);
     await expect(repository.read(descriptor)).resolves.toBeNull();
@@ -291,7 +342,11 @@ describe("fixture repository", () => {
     });
     const repository = createFixtureRepository({
       rootHandle: asFileSystemDirectoryHandle(rootHandle),
-      sentinel: { rootId: "root-3", schemaVersion: 1, createdAt: "2026-04-03T00:00:00.000Z" },
+      sentinel: {
+        rootId: "root-3",
+        schemaVersion: 1,
+        createdAt: "2026-04-03T00:00:00.000Z"
+      },
       gateway
     });
     const descriptor = await createFixtureDescriptor({
@@ -334,8 +389,12 @@ describe("fixture repository", () => {
 
     const metadataDir = await rootHandle.getDirectoryHandle(".wraithwalker");
     const manifestsDir = await metadataDir.getDirectoryHandle("manifests");
-    const topOriginDir = await manifestsDir.getDirectoryHandle(descriptor.topOriginKey);
-    const manifestHandle = await topOriginDir.getFileHandle(STATIC_RESOURCE_MANIFEST_FILE);
+    const topOriginDir = await manifestsDir.getDirectoryHandle(
+      descriptor.topOriginKey
+    );
+    const manifestHandle = await topOriginDir.getFileHandle(
+      STATIC_RESOURCE_MANIFEST_FILE
+    );
     const manifest = JSON.parse(await (await manifestHandle.getFile()).text());
 
     expect(manifest.resourcesByPathname["/static/app.js"]).toHaveLength(1);
@@ -354,9 +413,16 @@ describe("file system gateway", () => {
     const rootHandle = new MemoryDirectoryHandle();
     const gateway = makeGateway();
 
-    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "data/test.json", { hello: "world" });
+    await gateway.writeJson(
+      asFileSystemDirectoryHandle(rootHandle),
+      "data/test.json",
+      { hello: "world" }
+    );
 
-    const text = await gateway.readText(asFileSystemDirectoryHandle(rootHandle), "data/test.json");
+    const text = await gateway.readText(
+      asFileSystemDirectoryHandle(rootHandle),
+      "data/test.json"
+    );
     expect(JSON.parse(text)).toEqual({ hello: "world" });
   });
 
@@ -364,11 +430,26 @@ describe("file system gateway", () => {
     const rootHandle = new MemoryDirectoryHandle();
     const gateway = makeGateway();
 
-    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "mydir/file-a.json", {});
-    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "mydir/file-b.json", {});
-    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "mydir/sub/nested.json", {});
+    await gateway.writeJson(
+      asFileSystemDirectoryHandle(rootHandle),
+      "mydir/file-a.json",
+      {}
+    );
+    await gateway.writeJson(
+      asFileSystemDirectoryHandle(rootHandle),
+      "mydir/file-b.json",
+      {}
+    );
+    await gateway.writeJson(
+      asFileSystemDirectoryHandle(rootHandle),
+      "mydir/sub/nested.json",
+      {}
+    );
 
-    const entries = await gateway.listDirectory(asFileSystemDirectoryHandle(rootHandle), "mydir");
+    const entries = await gateway.listDirectory(
+      asFileSystemDirectoryHandle(rootHandle),
+      "mydir"
+    );
 
     const names = entries.map((e) => e.name).sort();
     expect(names).toEqual(["file-a.json", "file-b.json", "sub"]);
@@ -383,9 +464,16 @@ describe("file system gateway", () => {
     const rootHandle = new MemoryDirectoryHandle();
     const gateway = makeGateway();
 
-    await gateway.writeJson(asFileSystemDirectoryHandle(rootHandle), "top-level.json", {});
+    await gateway.writeJson(
+      asFileSystemDirectoryHandle(rootHandle),
+      "top-level.json",
+      {}
+    );
 
-    const entries = await gateway.listDirectory(asFileSystemDirectoryHandle(rootHandle), "");
+    const entries = await gateway.listDirectory(
+      asFileSystemDirectoryHandle(rootHandle),
+      ""
+    );
     expect(entries).toEqual([{ name: "top-level.json", kind: "file" }]);
   });
 });

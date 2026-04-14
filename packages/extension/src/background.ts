@@ -34,10 +34,11 @@ import type {
   RequestLifecycleApi,
   SessionControllerApi
 } from "./lib/background-runtime-shared.js";
+import { isBackgroundMessage } from "./lib/background-runtime-shared.js";
 import {
-  isBackgroundMessage
-} from "./lib/background-runtime-shared.js";
-import { createBackgroundAuthority, getRequiredRootId } from "./lib/background-authority.js";
+  createBackgroundAuthority,
+  getRequiredRootId
+} from "./lib/background-authority.js";
 import type { BackgroundAuthorityApi } from "./lib/background-authority.js";
 import { createBackgroundTraceService } from "./lib/background-trace-service.js";
 import type { BackgroundTraceServiceApi } from "./lib/background-trace-service.js";
@@ -59,8 +60,12 @@ interface BackgroundDependencies {
   setLegacySiteConfigsMigrated?: typeof defaultSetLegacySiteConfigsMigrated;
   setLastSessionSnapshot?: typeof defaultSetLastSessionSnapshot;
   createWraithWalkerServerClient?: typeof defaultCreateWraithWalkerServerClient;
-  createSessionController?: (dependencies: Parameters<typeof defaultCreateSessionController>[0]) => SessionControllerApi;
-  createRequestLifecycle?: (dependencies: Parameters<typeof defaultCreateRequestLifecycle>[0]) => RequestLifecycleApi;
+  createSessionController?: (
+    dependencies: Parameters<typeof defaultCreateSessionController>[0]
+  ) => SessionControllerApi;
+  createRequestLifecycle?: (
+    dependencies: Parameters<typeof defaultCreateRequestLifecycle>[0]
+  ) => RequestLifecycleApi;
   normalizeSiteConfigs?: typeof defaultNormalizeSiteConfigs;
   initialState?: Partial<BackgroundState>;
 }
@@ -90,7 +95,10 @@ function createUnavailableServerClient(): WraithWalkerServerClient {
 }
 
 function isTestMode(): boolean {
-  return Boolean((globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean }).__WRAITHWALKER_TEST__);
+  return Boolean(
+    (globalThis as typeof globalThis & { __WRAITHWALKER_TEST__?: boolean })
+      .__WRAITHWALKER_TEST__
+  );
 }
 
 export function createBackgroundRuntime({
@@ -111,8 +119,11 @@ export function createBackgroundRuntime({
 }: BackgroundDependencies = {}) {
   void getPreferredEditorId;
 
-  const resolvedCreateWraithWalkerServerClient = createWraithWalkerServerClient
-    ?? (isTestMode() ? createUnavailableServerClient : defaultCreateWraithWalkerServerClient);
+  const resolvedCreateWraithWalkerServerClient =
+    createWraithWalkerServerClient ??
+    (isTestMode()
+      ? createUnavailableServerClient
+      : defaultCreateWraithWalkerServerClient);
   const state: BackgroundState = {
     sessionActive: false,
     attachedTabs: new Map(),
@@ -170,7 +181,8 @@ export function createBackgroundRuntime({
   traceService = createBackgroundTraceService({
     state,
     serverClient,
-    sendDebuggerCommand: (tabId, method, params) => debuggerRuntime.sendDebuggerCommand(tabId, method, params),
+    sendDebuggerCommand: (tabId, method, params) =>
+      debuggerRuntime.sendDebuggerCommand(tabId, method, params),
     scheduleHeartbeat: () => authority.scheduleHeartbeat(),
     markServerOffline: () => authority.markServerOffline()
   });
@@ -178,7 +190,8 @@ export function createBackgroundRuntime({
   sessionController = createSessionController({
     state,
     listTabs: () => chromeApi.tabs.query({}),
-    attachTab: (tabId, topOrigin) => debuggerRuntime.attachTab(tabId, topOrigin),
+    attachTab: (tabId, topOrigin) =>
+      debuggerRuntime.attachTab(tabId, topOrigin),
     detachTab: (tabId) => debuggerRuntime.detachTab(tabId),
     refreshStoredConfig: authority.refreshStoredConfig,
     ensureRootReady: authority.ensureRootReady,
@@ -190,7 +203,8 @@ export function createBackgroundRuntime({
 
   requestLifecycle = createRequestLifecycle({
     state,
-    sendDebuggerCommand: (tabId, method, params) => debuggerRuntime.sendDebuggerCommand(tabId, method, params),
+    sendDebuggerCommand: (tabId, method, params) =>
+      debuggerRuntime.sendDebuggerCommand(tabId, method, params),
     sendOffscreenMessage: ((type: string, payload?: Record<string, unknown>) =>
       authority.sendOffscreenMessage(type as never, payload)) as <T = unknown>(
       type: string,
@@ -198,7 +212,8 @@ export function createBackgroundRuntime({
     ) => Promise<T>,
     setLastError,
     repository: authority.repository,
-    getSiteConfigForOrigin: (topOrigin: string) => state.siteConfigsByOrigin.get(topOrigin),
+    getSiteConfigForOrigin: (topOrigin: string) =>
+      state.siteConfigsByOrigin.get(topOrigin),
     onFixturePersisted: traceService.linkTraceFixtureIfNeeded
   });
 
@@ -212,13 +227,14 @@ export function createBackgroundRuntime({
     traceService
   });
 
-  const nativeActions: BackgroundNativeActionsApi = createBackgroundNativeActions({
-    state,
-    chromeApi,
-    serverClient,
-    authority,
-    getRequiredRootId
-  });
+  const nativeActions: BackgroundNativeActionsApi =
+    createBackgroundNativeActions({
+      state,
+      chromeApi,
+      serverClient,
+      authority,
+      getRequiredRootId
+    });
 
   contextMenu = createBackgroundContextMenu({
     chromeApi,
@@ -234,10 +250,16 @@ export function createBackgroundRuntime({
     });
   }
 
-  function handleTabUpdated(tabId: number, _changeInfo: Record<string, unknown>, tab: { id?: number; url?: string }): void {
-    sessionController.handleTabStateChange(tabId, tab).catch((error: unknown) => {
-      setLastError(error instanceof Error ? error.message : String(error));
-    });
+  function handleTabUpdated(
+    tabId: number,
+    _changeInfo: Record<string, unknown>,
+    tab: { id?: number; url?: string }
+  ): void {
+    sessionController
+      .handleTabStateChange(tabId, tab)
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
   }
 
   function handleTabRemoved(tabId: number): void {
@@ -252,7 +274,10 @@ export function createBackgroundRuntime({
     void authority.refreshServerInfo({ force: true }).catch(() => undefined);
   }
 
-  function handleStorageChanged(changes: Record<string, unknown>, areaName: string): void {
+  function handleStorageChanged(
+    changes: Record<string, unknown>,
+    areaName: string
+  ): void {
     if (areaName !== "local") {
       return;
     }
@@ -268,7 +293,9 @@ export function createBackgroundRuntime({
       });
   }
 
-  async function handleRuntimeMessage(message: BackgroundMessage): Promise<BackgroundMessageResult> {
+  async function handleRuntimeMessage(
+    message: BackgroundMessage
+  ): Promise<BackgroundMessageResult> {
     switch (message.type) {
       case "session.getState":
         return authority.snapshotState();
@@ -284,7 +311,9 @@ export function createBackgroundRuntime({
       case "config.readEffectiveSiteConfigs":
         return authority.readEffectiveSiteConfigsForAuthority();
       case "config.writeConfiguredSiteConfigs":
-        return authority.writeConfiguredSiteConfigsForAuthority(message.siteConfigs);
+        return authority.writeConfiguredSiteConfigsForAuthority(
+          message.siteConfigs
+        );
       case "session.start": {
         state.recentConsoleEntries = [];
         await authority.refreshServerInfo({ force: true });
@@ -300,17 +329,24 @@ export function createBackgroundRuntime({
         return result;
       }
       case "root.verify": {
-        const result = await authority.ensureRootReady({ requestPermission: true });
+        const result = await authority.ensureRootReady({
+          requestPermission: true
+        });
         await authority.persistSnapshot();
         return result;
       }
       case "native.verify": {
-        const result = await nativeActions.verifyNativeHostRoot({ requestPermission: true });
+        const result = await nativeActions.verifyNativeHostRoot({
+          requestPermission: true
+        });
         await authority.persistSnapshot();
         return result;
       }
       case "native.open": {
-        const result = await nativeActions.openDirectoryInEditor(message.commandTemplate, message.editorId);
+        const result = await nativeActions.openDirectoryInEditor(
+          message.commandTemplate,
+          message.editorId
+        );
         await authority.persistSnapshot();
         return result;
       }
@@ -328,7 +364,11 @@ export function createBackgroundRuntime({
     }
   }
 
-  function handleRuntimeListener(message: unknown, _sender: unknown, sendResponse: (response: unknown) => void): boolean | void {
+  function handleRuntimeListener(
+    message: unknown,
+    _sender: unknown,
+    sendResponse: (response: unknown) => void
+  ): boolean | void {
     if (!isBackgroundMessage(message)) {
       return undefined;
     }
@@ -336,7 +376,8 @@ export function createBackgroundRuntime({
     handleRuntimeMessage(message)
       .then((result) => sendResponse(result))
       .catch((error: unknown) => {
-        const messageText = error instanceof Error ? error.message : String(error);
+        const messageText =
+          error instanceof Error ? error.message : String(error);
         setLastError(messageText);
         sendResponse({ ok: false, error: messageText });
       });
@@ -353,9 +394,11 @@ export function createBackgroundRuntime({
       void debuggerRuntime.handleDebuggerEvent(source, method, params);
     });
     chromeApi.debugger.onDetach.addListener((source, reason) => {
-      void debuggerRuntime.handleDebuggerDetach(source, reason).catch((error: unknown) => {
-        setLastError(error instanceof Error ? error.message : String(error));
-      });
+      void debuggerRuntime
+        .handleDebuggerDetach(source, reason)
+        .catch((error: unknown) => {
+          setLastError(error instanceof Error ? error.message : String(error));
+        });
     });
     chromeApi.tabs.onUpdated.addListener(handleTabUpdated);
     chromeApi.tabs.onRemoved.addListener(handleTabRemoved);
@@ -363,9 +406,11 @@ export function createBackgroundRuntime({
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
     chromeApi.alarms?.onAlarm.addListener(handleAlarm);
     chromeApi.contextMenus?.onClicked.addListener((info, tab) => {
-      void contextMenu.handleContextMenuClicked(info, tab).catch((error: unknown) => {
-        setLastError(error instanceof Error ? error.message : String(error));
-      });
+      void contextMenu
+        .handleContextMenuClicked(info, tab)
+        .catch((error: unknown) => {
+          setLastError(error instanceof Error ? error.message : String(error));
+        });
     });
     chromeApi.runtime.onStartup.addListener(() => {
       authority.refreshStoredConfig().catch((error: unknown) => {

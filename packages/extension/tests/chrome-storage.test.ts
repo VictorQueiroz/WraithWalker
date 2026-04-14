@@ -68,11 +68,15 @@ describe("chrome storage helpers", () => {
     storageGet.mockResolvedValueOnce({});
     await expect(getLegacySiteConfigsMigrated()).resolves.toBe(false);
 
-    storageGet.mockResolvedValueOnce({ [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true });
+    storageGet.mockResolvedValueOnce({
+      [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true
+    });
     await expect(getLegacySiteConfigsMigrated()).resolves.toBe(true);
 
     await setLegacySiteConfigsMigrated(true);
-    expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true });
+    expect(storageSet).toHaveBeenCalledWith({
+      [STORAGE_KEYS.LEGACY_SITES_MIGRATED]: true
+    });
   });
 
   it("merges native host defaults with stored values", async () => {
@@ -116,11 +120,13 @@ describe("chrome storage helpers", () => {
 
   it("persists site configs, native host config, and session snapshots", async () => {
     storageGet.mockResolvedValue({ [STORAGE_KEYS.PREFERRED_EDITOR]: "vscode" });
-    const sites: SiteConfig[] = [{
-      origin: "https://app.example.com",
-      createdAt: "2026-04-03T00:00:00.000Z",
-      dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
-    }];
+    const sites: SiteConfig[] = [
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-03T00:00:00.000Z",
+        dumpAllowlistPatterns: [DEFAULT_DUMP_ALLOWLIST_PATTERN]
+      }
+    ];
     const nativeHostConfig = {
       ...DEFAULT_NATIVE_HOST_CONFIG,
       hostName: "com.example.host",
@@ -144,9 +150,15 @@ describe("chrome storage helpers", () => {
     await setNativeHostConfig(nativeHostConfig);
     await setLastSessionSnapshot(snapshot);
 
-    expect(storageSet).toHaveBeenNthCalledWith(1, { [STORAGE_KEYS.SITES]: sites });
-    expect(storageSet).toHaveBeenNthCalledWith(2, { [STORAGE_KEYS.NATIVE_HOST]: nativeHostConfig });
-    expect(storageSet).toHaveBeenNthCalledWith(3, { [STORAGE_KEYS.LAST_SESSION]: snapshot });
+    expect(storageSet).toHaveBeenNthCalledWith(1, {
+      [STORAGE_KEYS.SITES]: sites
+    });
+    expect(storageSet).toHaveBeenNthCalledWith(2, {
+      [STORAGE_KEYS.NATIVE_HOST]: nativeHostConfig
+    });
+    expect(storageSet).toHaveBeenNthCalledWith(3, {
+      [STORAGE_KEYS.LAST_SESSION]: snapshot
+    });
   });
 
   it("returns the default editor id when none is stored", async () => {
@@ -161,19 +173,27 @@ describe("chrome storage helpers", () => {
 
   it("persists the preferred editor id", async () => {
     await setPreferredEditorId("windsurf");
-    expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.PREFERRED_EDITOR]: "windsurf" });
+    expect(storageSet).toHaveBeenCalledWith({
+      [STORAGE_KEYS.PREFERRED_EDITOR]: "windsurf"
+    });
   });
 
   it("returns the stored extension client id when present", async () => {
-    storageGet.mockResolvedValue({ [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-1" });
+    storageGet.mockResolvedValue({
+      [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-1"
+    });
     await expect(getOrCreateExtensionClientId()).resolves.toBe("client-1");
     expect(storageSet).not.toHaveBeenCalled();
   });
 
   it("creates and persists an extension client id when missing", async () => {
     storageGet.mockResolvedValue({});
-    await expect(getOrCreateExtensionClientId(() => "client-2")).resolves.toBe("client-2");
-    expect(storageSet).toHaveBeenCalledWith({ [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-2" });
+    await expect(getOrCreateExtensionClientId(() => "client-2")).resolves.toBe(
+      "client-2"
+    );
+    expect(storageSet).toHaveBeenCalledWith({
+      [STORAGE_KEYS.EXTENSION_CLIENT_ID]: "client-2"
+    });
   });
 
   it("normalizes native host config with the stored preferred editor when persisting", async () => {

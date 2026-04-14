@@ -8,7 +8,11 @@ import type { SiteConfig } from "@wraithwalker/core/site-config";
 import type { SiteConfigLike } from "@wraithwalker/core/fixtures";
 import type { ScenarioTraceRecord } from "@wraithwalker/core/scenario-traces";
 import type { RootSentinel } from "@wraithwalker/core/root";
-import { listScenarios, saveScenario, switchScenario } from "@wraithwalker/core/scenarios";
+import {
+  listScenarios,
+  saveScenario,
+  switchScenario
+} from "@wraithwalker/core/scenarios";
 import { z } from "zod";
 
 import type {
@@ -20,7 +24,10 @@ import type {
 import { createServerRootRuntime } from "./root-runtime.mjs";
 import { revealRootDirectory } from "./root-reveal.mjs";
 
-export type { ExtensionServerCommand, ExtensionServerCommandResult } from "./extension-session.mjs";
+export type {
+  ExtensionServerCommand,
+  ExtensionServerCommandResult
+} from "./extension-session.mjs";
 
 export const HTTP_TRPC_PATH = "/trpc";
 
@@ -193,30 +200,37 @@ export function createWraithwalkerRouter({
   extensionSessions,
   getServerUrls,
   getSiteConfigs = () => runtime.readEffectiveSiteConfigs(),
-  revealRoot = () => revealRootDirectory({ rootPath, expectedRootId: sentinel.rootId })
+  revealRoot = () =>
+    revealRootDirectory({ rootPath, expectedRootId: sentinel.rootId })
 }: CreateWraithwalkerRouterDependencies) {
   return t.router({
     system: t.router({
-      info: t.procedure.query(async (): Promise<TrpcSystemInfo> => ({
-        serverName,
-        serverVersion,
-        rootPath,
-        sentinel,
-        siteConfigs: await getSiteConfigs(),
-        ...getServerUrls()
-      })),
+      info: t.procedure.query(
+        async (): Promise<TrpcSystemInfo> => ({
+          serverName,
+          serverVersion,
+          rootPath,
+          sentinel,
+          siteConfigs: await getSiteConfigs(),
+          ...getServerUrls()
+        })
+      ),
       revealRoot: t.procedure.mutation(async () => revealRoot())
     }),
     extension: t.router({
       heartbeat: t.procedure
-        .input(z.object({
-          clientId: z.string().min(1),
-          extensionVersion: z.string().min(1),
-          sessionActive: z.boolean(),
-          enabledOrigins: z.array(z.string()),
-          recentConsoleEntries: z.array(consoleEntrySchema).optional(),
-          completedCommands: z.array(extensionServerCommandResultSchema).optional()
-        }))
+        .input(
+          z.object({
+            clientId: z.string().min(1),
+            extensionVersion: z.string().min(1),
+            sessionActive: z.boolean(),
+            enabledOrigins: z.array(z.string()),
+            recentConsoleEntries: z.array(consoleEntrySchema).optional(),
+            completedCommands: z
+              .array(extensionServerCommandResultSchema)
+              .optional()
+          })
+        )
         .mutation(async ({ input }): Promise<TrpcHeartbeatInfo> => {
           const status = await extensionSessions.heartbeat(input);
           return {
@@ -232,22 +246,28 @@ export function createWraithwalkerRouter({
         })
     }),
     config: t.router({
-      readConfiguredSiteConfigs: t.procedure
-        .query(async (): Promise<TrpcSiteConfigsInfo> => ({
+      readConfiguredSiteConfigs: t.procedure.query(
+        async (): Promise<TrpcSiteConfigsInfo> => ({
           siteConfigs: await runtime.readConfiguredSiteConfigs(),
           sentinel
-        })),
-      readEffectiveSiteConfigs: t.procedure
-        .query(async (): Promise<TrpcSiteConfigsInfo> => ({
+        })
+      ),
+      readEffectiveSiteConfigs: t.procedure.query(
+        async (): Promise<TrpcSiteConfigsInfo> => ({
           siteConfigs: await runtime.readEffectiveSiteConfigs(),
           sentinel
-        })),
+        })
+      ),
       writeConfiguredSiteConfigs: t.procedure
-        .input(z.object({
-          siteConfigs: z.array(siteConfigSchema)
-        }))
+        .input(
+          z.object({
+            siteConfigs: z.array(siteConfigSchema)
+          })
+        )
         .mutation(async ({ input }): Promise<TrpcSiteConfigsInfo> => {
-          await runtime.writeConfiguredSiteConfigs(input.siteConfigs as SiteConfig[]);
+          await runtime.writeConfiguredSiteConfigs(
+            input.siteConfigs as SiteConfig[]
+          );
           return {
             siteConfigs: await runtime.readConfiguredSiteConfigs(),
             sentinel
@@ -255,27 +275,39 @@ export function createWraithwalkerRouter({
         })
     }),
     scenarios: t.router({
-      list: t.procedure.query(async (): Promise<TrpcScenarioListInfo> => ({
-        scenarios: await listScenarios(rootPath)
-      })),
+      list: t.procedure.query(
+        async (): Promise<TrpcScenarioListInfo> => ({
+          scenarios: await listScenarios(rootPath)
+        })
+      ),
       save: t.procedure
-        .input(z.object({
-          name: z.string()
-        }))
-        .mutation(async ({ input }): Promise<TrpcScenarioResult> => saveScenario({
-          path: rootPath,
-          expectedRootId: sentinel.rootId,
-          name: input.name
-        })),
+        .input(
+          z.object({
+            name: z.string()
+          })
+        )
+        .mutation(
+          async ({ input }): Promise<TrpcScenarioResult> =>
+            saveScenario({
+              path: rootPath,
+              expectedRootId: sentinel.rootId,
+              name: input.name
+            })
+        ),
       switch: t.procedure
-        .input(z.object({
-          name: z.string()
-        }))
-        .mutation(async ({ input }): Promise<TrpcScenarioResult> => switchScenario({
-          path: rootPath,
-          expectedRootId: sentinel.rootId,
-          name: input.name
-        }))
+        .input(
+          z.object({
+            name: z.string()
+          })
+        )
+        .mutation(
+          async ({ input }): Promise<TrpcScenarioResult> =>
+            switchScenario({
+              path: rootPath,
+              expectedRootId: sentinel.rootId,
+              name: input.name
+            })
+        )
     }),
     fixtures: t.router({
       has: t.procedure
@@ -287,7 +319,9 @@ export function createWraithwalkerRouter({
       read: t.procedure
         .input(z.object({ descriptor: fixtureDescriptorSchema }))
         .query(async ({ input }) => {
-          const fixture = await runtime.read(input.descriptor as FixtureDescriptor);
+          const fixture = await runtime.read(
+            input.descriptor as FixtureDescriptor
+          );
           if (!fixture) {
             return {
               exists: false as const,
@@ -305,21 +339,31 @@ export function createWraithwalkerRouter({
           };
         }),
       writeIfAbsent: t.procedure
-        .input(z.object({
-          descriptor: fixtureDescriptorSchema,
-          request: requestPayloadSchema,
-          response: fixtureResponsePayloadSchema
-        }))
-        .mutation(async ({ input }) => runtime.writeIfAbsent({
-          descriptor: input.descriptor as FixtureDescriptor,
-          request: input.request as RequestPayload,
-          response: input.response as { body: string; bodyEncoding: "utf8" | "base64"; meta: ResponseMeta }
-        })),
+        .input(
+          z.object({
+            descriptor: fixtureDescriptorSchema,
+            request: requestPayloadSchema,
+            response: fixtureResponsePayloadSchema
+          })
+        )
+        .mutation(async ({ input }) =>
+          runtime.writeIfAbsent({
+            descriptor: input.descriptor as FixtureDescriptor,
+            request: input.request as RequestPayload,
+            response: input.response as {
+              body: string;
+              bodyEncoding: "utf8" | "base64";
+              meta: ResponseMeta;
+            }
+          })
+        ),
       generateContext: t.procedure
-        .input(z.object({
-          siteConfigs: z.array(siteConfigSchema),
-          editorId: z.string().optional()
-        }))
+        .input(
+          z.object({
+            siteConfigs: z.array(siteConfigSchema),
+            editorId: z.string().optional()
+          })
+        )
         .mutation(async ({ input }) => {
           await runtime.generateContext({
             editorId: input.editorId,
@@ -330,22 +374,24 @@ export function createWraithwalkerRouter({
     }),
     scenarioTraces: t.router({
       recordClick: t.procedure
-        .input(z.object({
-          traceId: z.string(),
-          step: z.object({
-            stepId: z.string(),
-            tabId: z.number().int().nonnegative(),
-            recordedAt: z.string(),
-            pageUrl: z.string(),
-            topOrigin: z.string(),
-            selector: z.string(),
-            tagName: z.string(),
-            textSnippet: z.string(),
-            role: z.string().optional(),
-            ariaLabel: z.string().optional(),
-            href: z.string().optional()
+        .input(
+          z.object({
+            traceId: z.string(),
+            step: z.object({
+              stepId: z.string(),
+              tabId: z.number().int().nonnegative(),
+              recordedAt: z.string(),
+              pageUrl: z.string(),
+              topOrigin: z.string(),
+              selector: z.string(),
+              tagName: z.string(),
+              textSnippet: z.string(),
+              role: z.string().optional(),
+              ariaLabel: z.string().optional(),
+              href: z.string().optional()
+            })
           })
-        }))
+        )
         .mutation(async ({ input }) => {
           const trace = await runtime.recordClick({
             traceId: input.traceId,
@@ -357,17 +403,19 @@ export function createWraithwalkerRouter({
           };
         }),
       linkFixture: t.procedure
-        .input(z.object({
-          traceId: z.string(),
-          tabId: z.number().int().nonnegative(),
-          requestedAt: z.string(),
-          fixture: z.object({
-            bodyPath: z.string(),
-            requestUrl: z.string(),
-            resourceType: z.string(),
-            capturedAt: z.string()
+        .input(
+          z.object({
+            traceId: z.string(),
+            tabId: z.number().int().nonnegative(),
+            requestedAt: z.string(),
+            fixture: z.object({
+              bodyPath: z.string(),
+              requestUrl: z.string(),
+              resourceType: z.string(),
+              capturedAt: z.string()
+            })
           })
-        }))
+        )
         .mutation(async ({ input }) => runtime.linkFixture(input))
     })
   });

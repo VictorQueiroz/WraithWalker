@@ -16,11 +16,11 @@ describe("request lifecycle fetch flow", () => {
     const harness = createLifecycleHarness();
 
     const result = await harness.lifecycle.populatePostData(1, "req-inline", {
-      postData: "{\"mode\":\"inline\"}"
+      postData: '{"mode":"inline"}'
     });
 
     expect(result).toEqual({
-      body: "{\"mode\":\"inline\"}",
+      body: '{"mode":"inline"}',
       encoding: "utf8"
     });
     expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
@@ -32,7 +32,9 @@ describe("request lifecycle fetch flow", () => {
 
   it("falls back to an empty body when request post data lookup fails", async () => {
     const harness = createLifecycleHarness();
-    harness.sendDebuggerCommand.mockRejectedValueOnce(new Error("request body unavailable"));
+    harness.sendDebuggerCommand.mockRejectedValueOnce(
+      new Error("request body unavailable")
+    );
 
     const result = await harness.lifecycle.populatePostData(1, "req-missing");
 
@@ -44,7 +46,11 @@ describe("request lifecycle fetch flow", () => {
 
   it("reuses an existing descriptor without recreating it", async () => {
     const harness = createLifecycleHarness();
-    const descriptor = { bodyPath: "existing", requestPath: "request", metaPath: "meta" } as any;
+    const descriptor = {
+      bodyPath: "existing",
+      requestPath: "request",
+      metaPath: "meta"
+    } as any;
     const entry = {
       tabId: 1,
       requestId: "req-existing",
@@ -74,14 +80,27 @@ describe("request lifecycle fetch flow", () => {
   it("ignores paused requests with no tab, inactive session, or unattached tab", async () => {
     const harness = createLifecycleHarness();
 
-    await harness.lifecycle.handleFetchRequestPaused({}, createFetchPausedParams());
+    await harness.lifecycle.handleFetchRequestPaused(
+      {},
+      createFetchPausedParams()
+    );
     harness.state.sessionActive = false;
-    await harness.lifecycle.handleFetchRequestPaused({ tabId: 1 }, createFetchPausedParams());
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams()
+    );
     harness.state.sessionActive = true;
     harness.state.attachedTabs.clear();
-    await harness.lifecycle.handleFetchRequestPaused({ tabId: 1 }, createFetchPausedParams());
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams()
+    );
 
-    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Fetch.continueRequest", expect.anything());
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      expect.anything()
+    );
     expect(harness.sendOffscreenMessage).not.toHaveBeenCalled();
   });
 
@@ -93,7 +112,11 @@ describe("request lifecycle fetch flow", () => {
       createFetchPausedParams({ responseStatusCode: 200 })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-1" });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      { requestId: "fetch-1" }
+    );
   });
 
   it("continues paused requests that already have an error reason", async () => {
@@ -104,7 +127,11 @@ describe("request lifecycle fetch flow", () => {
       createFetchPausedParams({ responseErrorReason: "Failed" })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-1" });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      { requestId: "fetch-1" }
+    );
   });
 
   it("continues paused requests for non-http URLs", async () => {
@@ -119,25 +146,32 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-1" });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      { requestId: "fetch-1" }
+    );
   });
 
   it("drops a non-http stale paused request quietly", async () => {
     const harness = createLifecycleHarness();
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (
-        method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-stale-non-http"
-      ) {
-        throw new StaleFetchRequestCommandError(
-          1,
-          method,
-          "{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
-        );
-      }
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-stale-non-http"
+        ) {
+          throw new StaleFetchRequestCommandError(
+            1,
+            method,
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
 
-      return { method, params };
-    });
+        return { method, params };
+      }
+    );
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -157,10 +191,20 @@ describe("request lifecycle fetch flow", () => {
   it("continues the request when no fixture exists", async () => {
     const harness = createLifecycleHarness();
 
-    await harness.lifecycle.handleFetchRequestPaused({ tabId: 1 }, createFetchPausedParams());
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams()
+    );
 
-    expect(harness.sendOffscreenMessage).toHaveBeenCalledWith("fs.hasFixture", expect.any(Object));
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-1" });
+    expect(harness.sendOffscreenMessage).toHaveBeenCalledWith(
+      "fs.hasFixture",
+      expect.any(Object)
+    );
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      { requestId: "fetch-1" }
+    );
   });
 
   it("fulfills the request when a fixture exists", async () => {
@@ -237,11 +281,15 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Network.getRequestPostData", {
-      requestId: "network-post"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Network.getRequestPostData",
+      {
+        requestId: "network-post"
+      }
+    );
     expect(harness.state.requests.get("1:network-post")).toMatchObject({
-      requestBody: "{\"seed\":\"one\"}",
+      requestBody: '{"seed":"one"}',
       requestBodyEncoding: "utf8"
     });
   });
@@ -262,14 +310,20 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Network.getRequestPostData", {
-      requestId: "fetch-post-no-network"
-    });
-    expect(harness.state.requests.get("1:fetch-post-no-network")).toMatchObject({
-      requestId: "fetch-post-no-network",
-      requestBody: "{\"seed\":\"one\"}",
-      requestBodyEncoding: "utf8"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Network.getRequestPostData",
+      {
+        requestId: "fetch-post-no-network"
+      }
+    );
+    expect(harness.state.requests.get("1:fetch-post-no-network")).toMatchObject(
+      {
+        requestId: "fetch-post-no-network",
+        requestBody: '{"seed":"one"}',
+        requestBodyEncoding: "utf8"
+      }
+    );
   });
 
   it("uses the shared fixture pipeline for non-GET simple-mode requests", async () => {
@@ -294,13 +348,24 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Network.getRequestPostData", {
-      requestId: "network-simple-post"
-    });
-    expect(harness.sendOffscreenMessage).toHaveBeenCalledWith("fs.hasFixture", expect.any(Object));
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-simple-post"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Network.getRequestPostData",
+      {
+        requestId: "network-simple-post"
+      }
+    );
+    expect(harness.sendOffscreenMessage).toHaveBeenCalledWith(
+      "fs.hasFixture",
+      expect.any(Object)
+    );
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-simple-post"
+      }
+    );
   });
 
   it("replays simple-mode files even when the dump allowlist would not match", async () => {
@@ -424,7 +489,10 @@ describe("request lifecycle fetch flow", () => {
         responseCode: 200,
         responseHeaders: [
           { name: "Content-Type", value: "text/css" },
-          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          {
+            name: "Access-Control-Allow-Origin",
+            value: "https://app.example.com"
+          },
           { name: "Vary", value: "Origin" }
         ],
         body: Buffer.from("body{color:red}", "utf8").toString("base64")
@@ -492,7 +560,10 @@ describe("request lifecycle fetch flow", () => {
         responseCode: 200,
         responseHeaders: [
           { name: "Content-Type", value: "font/woff2" },
-          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          {
+            name: "Access-Control-Allow-Origin",
+            value: "https://app.example.com"
+          },
           { name: "Access-Control-Allow-Credentials", value: "true" },
           { name: "Vary", value: "Origin" }
         ],
@@ -524,7 +595,9 @@ describe("request lifecycle fetch flow", () => {
             queryHash: "",
             capturedAt: "2026-04-09T00:00:00.000Z"
           },
-          bodyBase64: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64"),
+          bodyBase64: Buffer.from("body{color:rebeccapurple}", "utf8").toString(
+            "base64"
+          ),
           meta: {
             status: 200,
             statusText: "OK",
@@ -553,10 +626,14 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-live-headers-1",
-      interceptResponse: true
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-live-headers-1",
+        interceptResponse: true
+      }
+    );
     expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
       1,
       "Fetch.fulfillRequest",
@@ -572,7 +649,7 @@ describe("request lifecycle fetch flow", () => {
           statusText: "OK",
           headers: {
             "Content-Type": "text/css",
-            ETag: "\"v1\""
+            ETag: '"v1"'
           },
           mimeType: "text/css"
         },
@@ -597,7 +674,7 @@ describe("request lifecycle fetch flow", () => {
         responseStatusCode: 200,
         responseHeaders: {
           "Content-Type": "text/css",
-          ETag: "\"v1\""
+          ETag: '"v1"'
         }
       })
     );
@@ -610,15 +687,23 @@ describe("request lifecycle fetch flow", () => {
         responseCode: 200,
         responseHeaders: [
           { name: "Content-Type", value: "text/css" },
-          { name: "ETag", value: "\"v1\"" },
-          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          { name: "ETag", value: '"v1"' },
+          {
+            name: "Access-Control-Allow-Origin",
+            value: "https://app.example.com"
+          },
           { name: "Vary", value: "Origin" }
         ],
-        body: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64")
+        body: Buffer.from("body{color:rebeccapurple}", "utf8").toString(
+          "base64"
+        )
       })
     );
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "network-live-headers-1" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "network-live-headers-1" }
+    );
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -637,10 +722,14 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-live-headers-2",
-      interceptResponse: true
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-live-headers-2",
+        interceptResponse: true
+      }
+    );
 
     harness.lifecycle.handleNetworkResponseReceived(
       { tabId: 1 },
@@ -651,7 +740,7 @@ describe("request lifecycle fetch flow", () => {
           statusText: "OK",
           headers: {
             "Content-Type": "text/css",
-            ETag: "\"v2\"",
+            ETag: '"v2"',
             "Cache-Control": "max-age=60"
           },
           mimeType: "text/css"
@@ -677,7 +766,7 @@ describe("request lifecycle fetch flow", () => {
         responseStatusCode: 200,
         responseHeaders: {
           "Content-Type": "text/css",
-          ETag: "\"v2\"",
+          ETag: '"v2"',
           "Cache-Control": "max-age=60"
         }
       })
@@ -691,12 +780,17 @@ describe("request lifecycle fetch flow", () => {
         responseCode: 200,
         responseHeaders: [
           { name: "Content-Type", value: "text/css" },
-          { name: "ETag", value: "\"v2\"" },
+          { name: "ETag", value: '"v2"' },
           { name: "Cache-Control", value: "max-age=60" },
-          { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
+          {
+            name: "Access-Control-Allow-Origin",
+            value: "https://app.example.com"
+          },
           { name: "Vary", value: "Origin" }
         ],
-        body: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64")
+        body: Buffer.from("body{color:rebeccapurple}", "utf8").toString(
+          "base64"
+        )
       })
     );
   });
@@ -722,14 +816,21 @@ describe("request lifecycle fetch flow", () => {
     );
 
     expect(harness.setLastError).toHaveBeenCalledWith("fixture read failed");
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-read-fail"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-read-fail"
+      }
+    );
   });
 
   it("falls back to continueRequest when fixture existence lookup fails", async () => {
     const harness = createLifecycleHarness();
-    harness.sendOffscreenMessage.mockResolvedValueOnce({ ok: false, error: "Fixture lookup failed upstream." } as any);
+    harness.sendOffscreenMessage.mockResolvedValueOnce({
+      ok: false,
+      error: "Fixture lookup failed upstream."
+    } as any);
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -739,10 +840,16 @@ describe("request lifecycle fetch flow", () => {
       })
     );
 
-    expect(harness.setLastError).toHaveBeenCalledWith("Fixture lookup failed upstream.");
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-exists-fail"
-    });
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      "Fixture lookup failed upstream."
+    );
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-exists-fail"
+      }
+    );
   });
 
   it("falls back to continueRequest when fixture read returns no payload", async () => {
@@ -769,9 +876,13 @@ describe("request lifecycle fetch flow", () => {
     );
 
     expect(harness.setLastError).toHaveBeenCalledWith("Fixture lookup failed.");
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-read-empty"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-read-empty"
+      }
+    );
   });
 
   it("falls back to continueRequest when fixture read is missing required payload fields", async () => {
@@ -809,14 +920,21 @@ describe("request lifecycle fetch flow", () => {
     );
 
     expect(harness.setLastError).toHaveBeenCalledWith("Fixture lookup failed.");
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-read-partial"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-read-partial"
+      }
+    );
   });
 
   it("records fixture lookup errors and falls back to continueRequest", async () => {
     const harness = createLifecycleHarness();
-    harness.sendOffscreenMessage.mockResolvedValueOnce({ ok: false, error: "disk unavailable" } as any);
+    harness.sendOffscreenMessage.mockResolvedValueOnce({
+      ok: false,
+      error: "disk unavailable"
+    } as any);
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -831,29 +949,36 @@ describe("request lifecycle fetch flow", () => {
     );
 
     expect(harness.setLastError).toHaveBeenCalledWith("disk unavailable");
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", { requestId: "fetch-4" });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      { requestId: "fetch-4" }
+    );
   });
 
   it("retries a failed continueRequest without relying on Chrome-specific detach handling", async () => {
     const harness = createLifecycleHarness();
     let continueAttempts = 0;
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (method === "Network.getRequestPostData") {
-        return { postData: "{\"seed\":\"one\"}", base64Encoded: false };
-      }
-      if (method === "Network.getResponseBody") {
-        return { body: "{\"ok\":true}", base64Encoded: false };
-      }
-      if (
-        method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-continue-retry"
-        && continueAttempts++ === 0
-      ) {
-        throw new Error("transport unavailable");
-      }
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (method === "Network.getRequestPostData") {
+          return { postData: '{"seed":"one"}', base64Encoded: false };
+        }
+        if (method === "Network.getResponseBody") {
+          return { body: '{"ok":true}', base64Encoded: false };
+        }
+        if (
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-continue-retry" &&
+          continueAttempts++ === 0
+        ) {
+          throw new Error("transport unavailable");
+        }
 
-      return { method, params };
-    });
+        return { method, params };
+      }
+    );
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -865,12 +990,16 @@ describe("request lifecycle fetch flow", () => {
 
     expect(harness.setLastError).toHaveBeenCalledWith("transport unavailable");
     expect(
-      harness.sendDebuggerCommand.mock.calls.filter(([, method]) => method === "Fetch.continueRequest")
+      harness.sendDebuggerCommand.mock.calls.filter(
+        ([, method]) => method === "Fetch.continueRequest"
+      )
     ).toEqual([
       [1, "Fetch.continueRequest", { requestId: "fetch-continue-retry" }],
       [1, "Fetch.continueRequest", { requestId: "fetch-continue-retry" }]
     ]);
-    expect(harness.state.requests.get("1:network-continue-retry")).toMatchObject({
+    expect(
+      harness.state.requests.get("1:network-continue-retry")
+    ).toMatchObject({
       requestId: "network-continue-retry",
       url: "https://cdn.example.com/app.js"
     });
@@ -878,20 +1007,23 @@ describe("request lifecycle fetch flow", () => {
 
   it("drops a stale paused request without surfacing a stale fetch resolution error", async () => {
     const harness = createLifecycleHarness();
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (
-        method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-stale-pause"
-      ) {
-        throw new StaleFetchRequestCommandError(
-          1,
-          method,
-          "{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
-        );
-      }
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-stale-pause"
+        ) {
+          throw new StaleFetchRequestCommandError(
+            1,
+            method,
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
 
-      return { method, params };
-    });
+        return { method, params };
+      }
+    );
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -904,7 +1036,9 @@ describe("request lifecycle fetch flow", () => {
     expect(harness.setLastError).not.toHaveBeenCalled();
     expect(harness.state.requests.has("1:network-stale-pause")).toBe(false);
     expect(
-      harness.sendDebuggerCommand.mock.calls.filter(([, method]) => method === "Fetch.continueRequest")
+      harness.sendDebuggerCommand.mock.calls.filter(
+        ([, method]) => method === "Fetch.continueRequest"
+      )
     ).toEqual([
       [1, "Fetch.continueRequest", { requestId: "fetch-stale-pause" }]
     ]);
@@ -935,7 +1069,10 @@ describe("request lifecycle fetch flow", () => {
               queryHash: "",
               capturedAt: "2026-04-09T00:00:00.000Z"
             },
-            bodyBase64: Buffer.from("body{color:rebeccapurple}", "utf8").toString("base64"),
+            bodyBase64: Buffer.from(
+              "body{color:rebeccapurple}",
+              "utf8"
+            ).toString("base64"),
             meta: {
               status: 200,
               statusText: "OK",
@@ -987,9 +1124,13 @@ describe("request lifecycle fetch flow", () => {
     expect(harness.state.requests.get("1:network-live-reset")).toMatchObject({
       replayOnResponse: false
     });
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Fetch.continueRequest", {
-      requestId: "fetch-live-reset-response"
-    });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      {
+        requestId: "fetch-live-reset-response"
+      }
+    );
   });
 
   it("records response-phase replay failures and still cleans up stale continuation safely", async () => {
@@ -1027,28 +1168,31 @@ describe("request lifecycle fetch flow", () => {
       return { ok: true };
     });
     let fulfillAttempts = 0;
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (method === "Network.getRequestPostData") {
-        return { postData: "{\"seed\":\"one\"}", base64Encoded: false };
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (method === "Network.getRequestPostData") {
+          return { postData: '{"seed":"one"}', base64Encoded: false };
+        }
+        if (method === "Network.getResponseBody") {
+          return { body: '{"ok":true}', base64Encoded: false };
+        }
+        if (method === "Fetch.fulfillRequest" && fulfillAttempts++ === 0) {
+          throw new Error("response replay failed");
+        }
+        if (
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-live-error-response"
+        ) {
+          throw new StaleFetchRequestCommandError(
+            1,
+            method,
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
+        return { method, params };
       }
-      if (method === "Network.getResponseBody") {
-        return { body: "{\"ok\":true}", base64Encoded: false };
-      }
-      if (method === "Fetch.fulfillRequest" && fulfillAttempts++ === 0) {
-        throw new Error("response replay failed");
-      }
-      if (
-        method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-live-error-response"
-      ) {
-        throw new StaleFetchRequestCommandError(
-          1,
-          method,
-          "{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
-        );
-      }
-      return { method, params };
-    });
+    );
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -1085,28 +1229,34 @@ describe("request lifecycle fetch flow", () => {
 
   it("drops a request when replay lookup fails and the fallback continue becomes stale", async () => {
     const harness = createLifecycleHarness();
-    harness.sendOffscreenMessage.mockResolvedValueOnce({ ok: false, error: "disk unavailable" } as any);
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (
-        method === "Fetch.continueRequest"
-        && (params as { requestId?: string } | undefined)?.requestId === "fetch-stale-after-error"
-      ) {
-        throw new StaleFetchRequestCommandError(
-          1,
-          method,
-          "{\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
-        );
-      }
+    harness.sendOffscreenMessage.mockResolvedValueOnce({
+      ok: false,
+      error: "disk unavailable"
+    } as any);
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (
+          method === "Fetch.continueRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-stale-after-error"
+        ) {
+          throw new StaleFetchRequestCommandError(
+            1,
+            method,
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
 
-      if (method === "Network.getRequestPostData") {
-        return { postData: "{\"seed\":\"one\"}", base64Encoded: false };
-      }
-      if (method === "Network.getResponseBody") {
-        return { body: "{\"ok\":true}", base64Encoded: false };
-      }
+        if (method === "Network.getRequestPostData") {
+          return { postData: '{"seed":"one"}', base64Encoded: false };
+        }
+        if (method === "Network.getResponseBody") {
+          return { body: '{"ok":true}', base64Encoded: false };
+        }
 
-      return { method, params };
-    });
+        return { method, params };
+      }
+    );
 
     await harness.lifecycle.handleFetchRequestPaused(
       { tabId: 1 },
@@ -1117,6 +1267,8 @@ describe("request lifecycle fetch flow", () => {
     );
 
     expect(harness.setLastError).toHaveBeenCalledWith("disk unavailable");
-    expect(harness.state.requests.has("1:network-stale-after-error")).toBe(false);
+    expect(harness.state.requests.has("1:network-stale-after-error")).toBe(
+      false
+    );
   });
 });

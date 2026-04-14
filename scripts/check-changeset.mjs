@@ -20,8 +20,14 @@ function main() {
       encoding: "utf8"
     }
   );
-  const changedFiles = changedFilesOutput.split("\n").map((value) => value.trim()).filter(Boolean);
-  const changedPackages = getVersionedPackagesFromChangedFiles(changedFiles, process.cwd());
+  const changedFiles = changedFilesOutput
+    .split("\n")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const changedPackages = getVersionedPackagesFromChangedFiles(
+    changedFiles,
+    process.cwd()
+  );
 
   if (changedPackages.length === 0) {
     console.log("No versioned package or extension surfaces changed.");
@@ -33,7 +39,9 @@ function main() {
       getChangedChangesetFiles(changedFiles, process.cwd())
     )
   );
-  const missingPackages = changedPackages.filter((packageName) => !declaredPackages.has(packageName));
+  const missingPackages = changedPackages.filter(
+    (packageName) => !declaredPackages.has(packageName)
+  );
 
   if (missingPackages.length > 0) {
     throw new Error(

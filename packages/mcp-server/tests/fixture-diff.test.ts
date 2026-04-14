@@ -8,7 +8,12 @@ describe("fixture diff", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-diff-"
     });
-    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
+    const meta = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
 
     await root.writeApiFixture({
       scenario: "a",
@@ -16,7 +21,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
     await root.writeApiFixture({
       scenario: "b",
@@ -24,7 +29,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
 
     const diff = await diffScenarios(root.rootPath, "a", "b");
@@ -37,7 +42,12 @@ describe("fixture diff", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-diff-"
     });
-    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
+    const meta = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
 
     await root.ensureScenario("a");
     await root.writeApiFixture({
@@ -46,7 +56,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
 
     const diff = await diffScenarios(root.rootPath, "a", "b");
@@ -59,7 +69,12 @@ describe("fixture diff", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-diff-"
     });
-    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
+    const meta = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
 
     await root.writeApiFixture({
       scenario: "a",
@@ -67,7 +82,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
     await root.ensureScenario("b");
 
@@ -81,8 +96,18 @@ describe("fixture diff", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-diff-"
     });
-    const metaA = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
-    const metaB = { status: 500, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
+    const metaA = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
+    const metaB = {
+      status: 500,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
 
     await root.writeApiFixture({
       scenario: "a",
@@ -90,7 +115,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta: metaA,
-      body: "{\"users\":[]}"
+      body: '{"users":[]}'
     });
     await root.writeApiFixture({
       scenario: "b",
@@ -98,7 +123,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta: metaB,
-      body: "{\"error\":\"internal\"}"
+      body: '{"error":"internal"}'
     });
 
     const diff = await diffScenarios(root.rootPath, "a", "b");
@@ -112,9 +137,31 @@ describe("fixture diff", () => {
     const diff = {
       scenarioA: "v1",
       scenarioB: "v2",
-      added: [{ method: "POST", pathname: "/api/orders", status: 201, mimeType: "application/json" }],
-      removed: [{ method: "DELETE", pathname: "/api/legacy", status: 200, mimeType: "text/plain" }],
-      changed: [{ method: "GET", pathname: "/api/users", statusBefore: 200, statusAfter: 500, bodyChanged: true }]
+      added: [
+        {
+          method: "POST",
+          pathname: "/api/orders",
+          status: 201,
+          mimeType: "application/json"
+        }
+      ],
+      removed: [
+        {
+          method: "DELETE",
+          pathname: "/api/legacy",
+          status: 200,
+          mimeType: "text/plain"
+        }
+      ],
+      changed: [
+        {
+          method: "GET",
+          pathname: "/api/users",
+          statusBefore: 200,
+          statusAfter: 500,
+          bodyChanged: true
+        }
+      ]
     };
 
     const markdown = renderDiffMarkdown(diff);
@@ -145,7 +192,12 @@ describe("fixture diff", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-diff-"
     });
-    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "GET" };
+    const meta = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "GET"
+    };
 
     await root.writeApiFixture({
       scenario: "a",
@@ -153,7 +205,7 @@ describe("fixture diff", () => {
       method: "GET",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"data\":1}"
+      body: '{"data":1}'
     });
     await root.writeApiFixture({
       scenario: "b",
@@ -172,7 +224,12 @@ describe("fixture diff", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-diff-"
     });
-    const meta = { status: 200, mimeType: "application/json", url: "https://api.example.com/users", method: "POST" };
+    const meta = {
+      status: 200,
+      mimeType: "application/json",
+      url: "https://api.example.com/users",
+      method: "POST"
+    };
 
     await root.writeApiFixture({
       scenario: "a",
@@ -181,7 +238,7 @@ describe("fixture diff", () => {
       method: "POST",
       fixtureName: "users__q-abc__b-def",
       meta,
-      body: "{\"created\":true}"
+      body: '{"created":true}'
     });
     await root.ensureScenario("b");
 
@@ -192,7 +249,13 @@ describe("fixture diff", () => {
   });
 
   it("renders no-differences message", () => {
-    const diff = { scenarioA: "a", scenarioB: "b", added: [], removed: [], changed: [] };
+    const diff = {
+      scenarioA: "a",
+      scenarioB: "b",
+      added: [],
+      removed: [],
+      changed: []
+    };
     const markdown = renderDiffMarkdown(diff);
     expect(markdown).toContain("No differences found.");
   });

@@ -1,7 +1,16 @@
 import { DEFAULT_EDITOR_ID } from "./constants.js";
 import type { SiteConfigsResult } from "./messages.js";
-import type { BackgroundServerInfo, BackgroundState, ChromeApi } from "./background-runtime-shared.js";
-import { normalizeSiteConfigsResult, normalizeEffectiveSiteConfigs, toSiteConfigsResult, applyEffectiveSiteConfigs } from "./background-authority-shared.js";
+import type {
+  BackgroundServerInfo,
+  BackgroundState,
+  ChromeApi
+} from "./background-runtime-shared.js";
+import {
+  normalizeSiteConfigsResult,
+  normalizeEffectiveSiteConfigs,
+  toSiteConfigsResult,
+  applyEffectiveSiteConfigs
+} from "./background-authority-shared.js";
 import type { BackgroundAuthorityLocalRootApi } from "./background-authority-local-root.js";
 import type { BackgroundAuthorityServerSyncApi } from "./background-authority-server-sync.js";
 import type {
@@ -27,7 +36,11 @@ export interface BackgroundAuthorityDataApi {
         bodyEncoding: "utf8" | "base64";
         meta: ResponseMeta;
       };
-    }): Promise<{ written: boolean; descriptor: FixtureDescriptor; sentinel: RootSentinel }>;
+    }): Promise<{
+      written: boolean;
+      descriptor: FixtureDescriptor;
+      sentinel: RootSentinel;
+    }>;
   };
   refreshStoredConfig(): Promise<void>;
   withServerFallback<T>(operations: {
@@ -36,7 +49,9 @@ export interface BackgroundAuthorityDataApi {
   }): Promise<T>;
   readConfiguredSiteConfigsForAuthority(): Promise<SiteConfigsResult>;
   readEffectiveSiteConfigsForAuthority(): Promise<SiteConfigsResult>;
-  writeConfiguredSiteConfigsForAuthority(siteConfigs: SiteConfig[]): Promise<SiteConfigsResult>;
+  writeConfiguredSiteConfigsForAuthority(
+    siteConfigs: SiteConfig[]
+  ): Promise<SiteConfigsResult>;
 }
 
 interface BackgroundAuthorityDataDependencies {
@@ -47,7 +62,9 @@ interface BackgroundAuthorityDataDependencies {
   getLegacySiteConfigsMigrated: () => Promise<boolean>;
   getNativeHostConfig: () => Promise<NativeHostConfig>;
   getOrCreateExtensionClientId: () => Promise<string>;
-  normalizeSiteConfigs: (siteConfigs: Array<Partial<SiteConfig> & { origin: string }>) => SiteConfig[];
+  normalizeSiteConfigs: (
+    siteConfigs: Array<Partial<SiteConfig> & { origin: string }>
+  ) => SiteConfig[];
   reconcileTabs: () => Promise<void>;
   localRoot: BackgroundAuthorityLocalRootApi;
   serverSync: BackgroundAuthorityServerSyncApi;
@@ -82,41 +99,56 @@ export function createBackgroundAuthorityData({
       return await remoteOperation(serverInfo);
     } catch (error) {
       serverSync.markServerOffline();
-      const localRootResult = await localRoot.ensureLocalRootReady({ silent: true });
+      const localRootResult = await localRoot.ensureLocalRootReady({
+        silent: true
+      });
       if (localRootResult.ok) {
         return localOperation();
       }
 
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Local WraithWalker server is unavailable and no fallback root is ready. ${message}`);
+      throw new Error(
+        `Local WraithWalker server is unavailable and no fallback root is ready. ${message}`
+      );
     }
   }
 
   async function refreshStoredConfig(): Promise<void> {
-    const [nativeHostConfig, extensionClientId, legacySiteConfigsMigrated] = await Promise.all([
-      getNativeHostConfig(),
-      getOrCreateExtensionClientId(),
-      state.legacySiteConfigsMigrated
-        ? Promise.resolve(true)
-        : getLegacySiteConfigsMigrated()
-    ]);
+    const [nativeHostConfig, extensionClientId, legacySiteConfigsMigrated] =
+      await Promise.all([
+        getNativeHostConfig(),
+        getOrCreateExtensionClientId(),
+        state.legacySiteConfigsMigrated
+          ? Promise.resolve(true)
+          : getLegacySiteConfigsMigrated()
+      ]);
     state.legacySiteConfigsMigrated ||= legacySiteConfigsMigrated;
 
     if (!getSiteConfigs) {
       await localRoot.ensureLegacySiteConfigsMigrated();
     }
 
-    const sites = await (getSiteConfigs ? getSiteConfigs() : localRoot.readLocalEffectiveSiteConfigs());
-    const normalizedSites = normalizeEffectiveSiteConfigs(sites, normalizeSiteConfigs);
+    const sites = await (getSiteConfigs
+      ? getSiteConfigs()
+      : localRoot.readLocalEffectiveSiteConfigs());
+    const normalizedSites = normalizeEffectiveSiteConfigs(
+      sites,
+      normalizeSiteConfigs
+    );
     state.localEnabledOrigins = normalizedSites.map((site) => site.origin);
-    state.localSiteConfigsByOrigin = new Map(normalizedSites.map((site) => [site.origin, site]));
+    state.localSiteConfigsByOrigin = new Map(
+      normalizedSites.map((site) => [site.origin, site])
+    );
     if (!state.serverInfo) {
       applyEffectiveSiteConfigs(state, normalizedSites, normalizeSiteConfigs);
     }
     state.nativeHostConfig = { ...state.nativeHostConfig, ...nativeHostConfig };
     state.preferredEditorId = DEFAULT_EDITOR_ID;
     state.extensionClientId = extensionClientId;
-    state.extensionVersion = chromeApi.runtime.getManifest?.().version || state.extensionVersion || "0.0.0";
+    state.extensionVersion =
+      chromeApi.runtime.getManifest?.().version ||
+      state.extensionVersion ||
+      "0.0.0";
   }
 
   async function readConfiguredSiteConfigsForAuthority(): Promise<SiteConfigsResult> {
@@ -131,10 +163,16 @@ export function createBackgroundAuthorityData({
 
     try {
       const result = await serverClient.readConfiguredSiteConfigs();
-      return toSiteConfigsResult(result.siteConfigs ?? [], result.sentinel, normalizeSiteConfigs);
+      return toSiteConfigsResult(
+        result.siteConfigs ?? [],
+        result.sentinel,
+        normalizeSiteConfigs
+      );
     } catch (error) {
       serverSync.markServerOffline();
-      const localRootResult = await localRoot.ensureLocalRootReady({ silent: true });
+      const localRootResult = await localRoot.ensureLocalRootReady({
+        silent: true
+      });
       if (localRootResult.ok) {
         await localRoot.ensureLegacySiteConfigsMigrated();
         return normalizeSiteConfigsResult(
@@ -163,10 +201,16 @@ export function createBackgroundAuthorityData({
 
     try {
       const result = await serverClient.readEffectiveSiteConfigs();
-      return toSiteConfigsResult(result.siteConfigs ?? [], result.sentinel, normalizeSiteConfigs);
+      return toSiteConfigsResult(
+        result.siteConfigs ?? [],
+        result.sentinel,
+        normalizeSiteConfigs
+      );
     } catch (error) {
       serverSync.markServerOffline();
-      const localRootResult = await localRoot.ensureLocalRootReady({ silent: true });
+      const localRootResult = await localRoot.ensureLocalRootReady({
+        silent: true
+      });
       if (localRootResult.ok) {
         await localRoot.ensureLegacySiteConfigsMigrated();
         return normalizeSiteConfigsResult(
@@ -183,7 +227,9 @@ export function createBackgroundAuthorityData({
     }
   }
 
-  async function writeConfiguredSiteConfigsForAuthority(siteConfigs: SiteConfig[]): Promise<SiteConfigsResult> {
+  async function writeConfiguredSiteConfigsForAuthority(
+    siteConfigs: SiteConfig[]
+  ): Promise<SiteConfigsResult> {
     const serverInfo = await serverSync.refreshServerInfo({ force: true });
     if (!serverInfo) {
       await localRoot.ensureLegacySiteConfigsMigrated();
@@ -203,10 +249,16 @@ export function createBackgroundAuthorityData({
     try {
       const result = await serverClient.writeConfiguredSiteConfigs(siteConfigs);
       await serverSync.refreshServerInfo({ force: true });
-      return toSiteConfigsResult(result.siteConfigs ?? [], result.sentinel, normalizeSiteConfigs);
+      return toSiteConfigsResult(
+        result.siteConfigs ?? [],
+        result.sentinel,
+        normalizeSiteConfigs
+      );
     } catch (error) {
       serverSync.markServerOffline();
-      const localRootResult = await localRoot.ensureLocalRootReady({ silent: true });
+      const localRootResult = await localRoot.ensureLocalRootReady({
+        silent: true
+      });
       if (!localRootResult.ok) {
         const message = error instanceof Error ? error.message : String(error);
         return {
@@ -232,30 +284,34 @@ export function createBackgroundAuthorityData({
 
   return {
     repository: {
-      exists: (descriptor) => withServerFallback({
-        remoteOperation: () => serverClient.hasFixture(descriptor).then((result) => result.exists),
-        localOperation: () => localRoot.localFixtureExists(descriptor)
-      }),
-      read: (descriptor) => withServerFallback({
-        remoteOperation: async () => {
-          const result = await serverClient.readFixture(descriptor);
-          if (!result.exists) {
-            return null;
-          }
+      exists: (descriptor) =>
+        withServerFallback({
+          remoteOperation: () =>
+            serverClient.hasFixture(descriptor).then((result) => result.exists),
+          localOperation: () => localRoot.localFixtureExists(descriptor)
+        }),
+      read: (descriptor) =>
+        withServerFallback({
+          remoteOperation: async () => {
+            const result = await serverClient.readFixture(descriptor);
+            if (!result.exists) {
+              return null;
+            }
 
-          return {
-            request: result.request,
-            meta: result.meta,
-            bodyBase64: result.bodyBase64,
-            size: result.size
-          };
-        },
-        localOperation: () => localRoot.localReadFixture(descriptor)
-      }),
-      writeIfAbsent: (payload) => withServerFallback({
-        remoteOperation: () => serverClient.writeFixtureIfAbsent(payload),
-        localOperation: () => localRoot.localWriteFixture(payload)
-      })
+            return {
+              request: result.request,
+              meta: result.meta,
+              bodyBase64: result.bodyBase64,
+              size: result.size
+            };
+          },
+          localOperation: () => localRoot.localReadFixture(descriptor)
+        }),
+      writeIfAbsent: (payload) =>
+        withServerFallback({
+          remoteOperation: () => serverClient.writeFixtureIfAbsent(payload),
+          localOperation: () => localRoot.localWriteFixture(payload)
+        })
     },
     refreshStoredConfig,
     withServerFallback,

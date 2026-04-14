@@ -18,8 +18,12 @@ describe("background authority local root", () => {
 
     const { authority } = createAuthorityHarness({ chromeApi });
 
-    await authority.sendOffscreenMessage("fs.ensureRoot", { requestPermission: true });
-    await authority.sendOffscreenMessage("fs.ensureRoot", { requestPermission: false });
+    await authority.sendOffscreenMessage("fs.ensureRoot", {
+      requestPermission: true
+    });
+    await authority.sendOffscreenMessage("fs.ensureRoot", {
+      requestPermission: false
+    });
 
     expect(chromeApi.offscreen.createDocument).toHaveBeenCalledTimes(1);
     expect(chromeApi.runtime.sendMessage).toHaveBeenCalledTimes(2);
@@ -39,12 +43,16 @@ describe("background authority local root", () => {
 
     const { authority } = createAuthorityHarness({ chromeApi });
 
-    const firstMessage = authority.sendOffscreenMessage("fs.ensureRoot", { requestPermission: true });
+    const firstMessage = authority.sendOffscreenMessage("fs.ensureRoot", {
+      requestPermission: true
+    });
     await vi.waitFor(() => {
       expect(chromeApi.offscreen.createDocument).toHaveBeenCalledTimes(1);
       expect(finishCreate).not.toBeNull();
     });
-    const secondMessage = authority.sendOffscreenMessage("fs.ensureRoot", { requestPermission: false });
+    const secondMessage = authority.sendOffscreenMessage("fs.ensureRoot", {
+      requestPermission: false
+    });
     finishCreate?.();
 
     await Promise.all([firstMessage, secondMessage]);
@@ -59,11 +67,15 @@ describe("background authority local root", () => {
   it("propagates unexpected offscreen creation errors", async () => {
     const chromeApi = createChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([]);
-    chromeApi.offscreen.createDocument.mockRejectedValue(new Error("Offscreen denied."));
+    chromeApi.offscreen.createDocument.mockRejectedValue(
+      new Error("Offscreen denied.")
+    );
 
     const { authority } = createAuthorityHarness({ chromeApi });
 
-    await expect(authority.sendOffscreenMessage("fs.ensureRoot")).rejects.toThrow("Offscreen denied.");
+    await expect(
+      authority.sendOffscreenMessage("fs.ensureRoot")
+    ).rejects.toThrow("Offscreen denied.");
   });
 
   it("returns local-root errors when no offscreen root result is available", async () => {
@@ -84,10 +96,18 @@ describe("background authority local root", () => {
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
-        return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+        return {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        };
       }
       if (message?.type === "fs.readConfiguredSiteConfigs") {
-        return { ok: true, siteConfigs: [], sentinel: { rootId: "local-root" } };
+        return {
+          ok: true,
+          siteConfigs: [],
+          sentinel: { rootId: "local-root" }
+        };
       }
       if (message?.type === "fs.writeConfiguredSiteConfigs") {
         return null;
@@ -100,14 +120,18 @@ describe("background authority local root", () => {
         heartbeat: vi.fn().mockRejectedValue(new Error("offline"))
       },
       getLegacySiteConfigsMigrated: vi.fn().mockResolvedValue(false),
-      getLegacySiteConfigs: vi.fn().mockResolvedValue([{
-        origin: "https://legacy.example.com",
-        createdAt: "2026-04-09T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }])
+      getLegacySiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://legacy.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ])
     });
 
-    await expect(authority.readConfiguredSiteConfigsForAuthority()).rejects.toThrow("Failed to update root config.");
+    await expect(
+      authority.readConfiguredSiteConfigsForAuthority()
+    ).rejects.toThrow("Failed to update root config.");
   });
 
   it("fails legacy site-config migration when the local write returns an explicit error", async () => {
@@ -115,10 +139,18 @@ describe("background authority local root", () => {
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
-        return { ok: true, sentinel: { rootId: "local-root" }, permission: "granted" };
+        return {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        };
       }
       if (message?.type === "fs.readConfiguredSiteConfigs") {
-        return { ok: true, siteConfigs: [], sentinel: { rootId: "local-root" } };
+        return {
+          ok: true,
+          siteConfigs: [],
+          sentinel: { rootId: "local-root" }
+        };
       }
       if (message?.type === "fs.writeConfiguredSiteConfigs") {
         return { ok: false, error: "Failed to write merged site config." };
@@ -131,15 +163,17 @@ describe("background authority local root", () => {
         heartbeat: vi.fn().mockRejectedValue(new Error("offline"))
       },
       getLegacySiteConfigsMigrated: vi.fn().mockResolvedValue(false),
-      getLegacySiteConfigs: vi.fn().mockResolvedValue([{
-        origin: "https://legacy.example.com",
-        createdAt: "2026-04-09T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.js$"]
-      }])
+      getLegacySiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://legacy.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ])
     });
 
-    await expect(authority.readConfiguredSiteConfigsForAuthority()).rejects.toThrow(
-      "Failed to write merged site config."
-    );
+    await expect(
+      authority.readConfiguredSiteConfigsForAuthority()
+    ).rejects.toThrow("Failed to write merged site config.");
   });
 });

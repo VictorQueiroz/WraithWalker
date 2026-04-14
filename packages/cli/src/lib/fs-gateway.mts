@@ -3,11 +3,25 @@ import { createFixtureRootFs } from "@wraithwalker/core/root-fs";
 export interface FsGateway {
   exists(rootPath: string, relativePath: string): Promise<boolean>;
   readJson<T>(rootPath: string, relativePath: string): Promise<T>;
-  readOptionalJson<T>(rootPath: string, relativePath: string): Promise<T | null>;
+  readOptionalJson<T>(
+    rootPath: string,
+    relativePath: string
+  ): Promise<T | null>;
   readText(rootPath: string, relativePath: string): Promise<string>;
-  writeText(rootPath: string, relativePath: string, content: string): Promise<void>;
-  writeJson(rootPath: string, relativePath: string, value: unknown): Promise<void>;
-  listDirectory(rootPath: string, relativePath: string): Promise<Array<{ name: string; kind: "file" | "directory" }>>;
+  writeText(
+    rootPath: string,
+    relativePath: string,
+    content: string
+  ): Promise<void>;
+  writeJson(
+    rootPath: string,
+    relativePath: string,
+    value: unknown
+  ): Promise<void>;
+  listDirectory(
+    rootPath: string,
+    relativePath: string
+  ): Promise<Array<{ name: string; kind: "file" | "directory" }>>;
 }
 
 export function createFsGateway(): FsGateway {

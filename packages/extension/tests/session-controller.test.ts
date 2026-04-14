@@ -33,7 +33,11 @@ function createControllerHarness(overrides: ControllerHarnessOverrides = {}) {
       state.enabledOrigins = overrides.enabledOrigins;
     }
   });
-  const ensureRootReady = vi.fn().mockResolvedValue(overrides.rootResult || { ok: true, sentinel: { rootId: "root-1" } });
+  const ensureRootReady = vi
+    .fn()
+    .mockResolvedValue(
+      overrides.rootResult || { ok: true, sentinel: { rootId: "root-1" } }
+    );
   const closeOffscreenDocument = vi.fn().mockResolvedValue(undefined);
   const persistSnapshot = vi.fn().mockResolvedValue(undefined);
   const setLastError = vi.fn().mockImplementation((message) => {
@@ -81,7 +85,9 @@ describe("session controller", () => {
       enabledOrigins: ["https://app.example.com"]
     });
 
-    expect(harness.controller.getMatchingOrigin("https://app.example.com/path")).toBe("https://app.example.com");
+    expect(
+      harness.controller.getMatchingOrigin("https://app.example.com/path")
+    ).toBe("https://app.example.com");
     expect(harness.controller.getMatchingOrigin("notaurl")).toBeNull();
   });
 
@@ -89,7 +95,9 @@ describe("session controller", () => {
     const harness = createControllerHarness();
     const snapshot = await harness.controller.startSession();
 
-    expect(harness.setLastError).toHaveBeenCalledWith("Add at least one enabled origin in the options page.");
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      "Add at least one enabled origin in the options page."
+    );
     expect(harness.ensureRootReady).not.toHaveBeenCalled();
     expect(snapshot.sessionActive).toBe(false);
   });
@@ -106,7 +114,10 @@ describe("session controller", () => {
     const snapshot = await harness.controller.startSession();
 
     expect(harness.attachTab).toHaveBeenCalledTimes(1);
-    expect(harness.attachTab).toHaveBeenCalledWith(1, "https://app.example.com");
+    expect(harness.attachTab).toHaveBeenCalledWith(
+      1,
+      "https://app.example.com"
+    );
     expect(harness.persistSnapshot).toHaveBeenCalled();
     expect(snapshot.sessionActive).toBe(true);
   });
@@ -118,7 +129,9 @@ describe("session controller", () => {
 
     await harness.controller.startSession();
 
-    expect(harness.ensureRootReady).toHaveBeenCalledWith({ requestPermission: true });
+    expect(harness.ensureRootReady).toHaveBeenCalledWith({
+      requestPermission: true
+    });
   });
 
   it("returns an idle snapshot when root readiness fails", async () => {
@@ -163,7 +176,10 @@ describe("session controller", () => {
 
     await harness.controller.reconcileTabs();
 
-    expect(harness.attachTab).toHaveBeenCalledWith(5, "https://app.example.com");
+    expect(harness.attachTab).toHaveBeenCalledWith(
+      5,
+      "https://app.example.com"
+    );
     expect(harness.detachTab).toHaveBeenCalledWith(6);
   });
 
@@ -198,7 +214,10 @@ describe("session controller", () => {
     await harness.controller.reconcileTabs();
 
     expect(harness.attachTab).toHaveBeenCalledTimes(1);
-    expect(harness.attachTab).toHaveBeenCalledWith(10, "https://app.example.com");
+    expect(harness.attachTab).toHaveBeenCalledWith(
+      10,
+      "https://app.example.com"
+    );
     expect(harness.detachTab).toHaveBeenCalledTimes(1);
     expect(harness.detachTab).toHaveBeenCalledWith(12);
   });
@@ -225,12 +244,16 @@ describe("session controller", () => {
         { id: 15, url: "https://app.example.com/second" }
       ]
     });
-    harness.attachTab.mockRejectedValueOnce(new Error("attach during start failed"));
+    harness.attachTab.mockRejectedValueOnce(
+      new Error("attach during start failed")
+    );
 
     const snapshot = await harness.controller.startSession();
 
     expect(harness.attachTab).toHaveBeenCalledTimes(2);
-    expect(harness.setLastError).toHaveBeenCalledWith("attach during start failed");
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      "attach during start failed"
+    );
     expect(harness.persistSnapshot).toHaveBeenCalled();
     expect(snapshot.sessionActive).toBe(true);
   });
@@ -241,10 +264,17 @@ describe("session controller", () => {
     state.enabledOrigins = ["https://app.example.com"];
     const harness = createControllerHarness({ state });
 
-    await harness.controller.handleTabStateChange(8, { url: "https://app.example.com/page" });
-    await harness.controller.handleTabStateChange(9, { url: "https://other.example.com/" });
+    await harness.controller.handleTabStateChange(8, {
+      url: "https://app.example.com/page"
+    });
+    await harness.controller.handleTabStateChange(9, {
+      url: "https://other.example.com/"
+    });
 
-    expect(harness.attachTab).toHaveBeenCalledWith(8, "https://app.example.com");
+    expect(harness.attachTab).toHaveBeenCalledWith(
+      8,
+      "https://app.example.com"
+    );
     expect(harness.detachTab).toHaveBeenCalledWith(9);
   });
 
@@ -253,7 +283,9 @@ describe("session controller", () => {
       enabledOrigins: ["https://app.example.com"]
     });
 
-    await harness.controller.handleTabStateChange(10, { url: "https://app.example.com/path" });
+    await harness.controller.handleTabStateChange(10, {
+      url: "https://app.example.com/path"
+    });
 
     expect(harness.attachTab).not.toHaveBeenCalled();
     expect(harness.detachTab).not.toHaveBeenCalled();

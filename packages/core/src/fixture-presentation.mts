@@ -7,30 +7,15 @@ export interface PrettifyFixtureTextOptions {
   resourceType?: string | null;
 }
 
-const JAVASCRIPT_EXTENSIONS = new Set([
-  ".cjs",
-  ".js",
-  ".jsx",
-  ".mjs"
-]);
+const JAVASCRIPT_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs"]);
 
-const TYPESCRIPT_EXTENSIONS = new Set([
-  ".ts",
-  ".tsx"
-]);
+const TYPESCRIPT_EXTENSIONS = new Set([".ts", ".tsx"]);
 
-const JSON_EXTENSIONS = new Set([
-  ".json"
-]);
+const JSON_EXTENSIONS = new Set([".json"]);
 
-const HTML_EXTENSIONS = new Set([
-  ".htm",
-  ".html"
-]);
+const HTML_EXTENSIONS = new Set([".htm", ".html"]);
 
-const CSS_EXTENSIONS = new Set([
-  ".css"
-]);
+const CSS_EXTENSIONS = new Set([".css"]);
 
 const SUPPORTED_EXTENSIONS = new Set([
   ...JAVASCRIPT_EXTENSIONS,
@@ -53,8 +38,12 @@ export interface ProjectionBodyPayloadOptions {
 }
 
 function extname(relativePath: string): string {
-  const lastSlashIndex = Math.max(relativePath.lastIndexOf("/"), relativePath.lastIndexOf("\\"));
-  const baseName = lastSlashIndex >= 0 ? relativePath.slice(lastSlashIndex + 1) : relativePath;
+  const lastSlashIndex = Math.max(
+    relativePath.lastIndexOf("/"),
+    relativePath.lastIndexOf("\\")
+  );
+  const baseName =
+    lastSlashIndex >= 0 ? relativePath.slice(lastSlashIndex + 1) : relativePath;
   const lastDotIndex = baseName.lastIndexOf(".");
   return lastDotIndex > 0 ? baseName.slice(lastDotIndex).toLowerCase() : "";
 }
@@ -84,10 +73,12 @@ function extensionFromMimeType(mimeType: string): string | null {
     return ".ts";
   }
 
-  if (mimeType === "application/javascript"
-    || mimeType === "text/javascript"
-    || mimeType === "application/ecmascript"
-    || mimeType === "text/ecmascript") {
+  if (
+    mimeType === "application/javascript" ||
+    mimeType === "text/javascript" ||
+    mimeType === "application/ecmascript" ||
+    mimeType === "text/ecmascript"
+  ) {
     return ".js";
   }
 
@@ -131,23 +122,29 @@ function extensionFromHeuristics(text: string): string | null {
     }
   }
 
-  if (trimmed.startsWith("<!doctype html")
-    || trimmed.startsWith("<html")
-    || (/^<[a-z!][^>]*>/i.test(trimmed) && trimmed.includes("</"))) {
+  if (
+    trimmed.startsWith("<!doctype html") ||
+    trimmed.startsWith("<html") ||
+    (/^<[a-z!][^>]*>/i.test(trimmed) && trimmed.includes("</"))
+  ) {
     return ".html";
   }
 
   return null;
 }
 
-function resolvePrettyExtension(options: PrettifyFixtureTextOptions): string | null {
+function resolvePrettyExtension(
+  options: PrettifyFixtureTextOptions
+): string | null {
   const mimeType = normalizeMimeType(options.mimeType);
   const resourceType = normalizeResourceType(options.resourceType);
 
-  return extensionFromMimeType(mimeType)
-    || extensionFromResourceType(resourceType)
-    || extensionFromPath(options.relativePath)
-    || extensionFromHeuristics(options.text);
+  return (
+    extensionFromMimeType(mimeType) ||
+    extensionFromResourceType(resourceType) ||
+    extensionFromPath(options.relativePath) ||
+    extensionFromHeuristics(options.text)
+  );
 }
 
 function applyPrettyExtension(relativePath: string, extension: string): string {
@@ -167,21 +164,27 @@ function stripTrailingNewline(text: string): string {
   return text.replace(/\n$/, "");
 }
 
-export function inferPrettyFilepath(options: PrettifyFixtureTextOptions): string | null {
+export function inferPrettyFilepath(
+  options: PrettifyFixtureTextOptions
+): string | null {
   const extension = resolvePrettyExtension(options);
   return extension
     ? applyPrettyExtension(options.relativePath, extension)
     : null;
 }
 
-export async function prettifyFixtureText(options: PrettifyFixtureTextOptions): Promise<string> {
+export async function prettifyFixtureText(
+  options: PrettifyFixtureTextOptions
+): Promise<string> {
   const filepath = inferPrettyFilepath(options);
   if (!filepath) {
     return options.text;
   }
 
   try {
-    return stripTrailingNewline(await prettier.format(options.text, { filepath }));
+    return stripTrailingNewline(
+      await prettier.format(options.text, { filepath })
+    );
   } catch {
     return options.text;
   }
@@ -196,13 +199,17 @@ function decodeBase64(value: string): Uint8Array {
   return Uint8Array.from(Buffer.from(value, "base64"));
 }
 
-export function decodeFixtureBodyText(payload: FixtureBodyPayload): string | null {
+export function decodeFixtureBodyText(
+  payload: FixtureBodyPayload
+): string | null {
   if (payload.bodyEncoding === "utf8") {
     return payload.body;
   }
 
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(decodeBase64(payload.body));
+    return new TextDecoder("utf-8", { fatal: true }).decode(
+      decodeBase64(payload.body)
+    );
   } catch {
     return null;
   }

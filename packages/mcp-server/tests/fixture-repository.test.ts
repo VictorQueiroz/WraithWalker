@@ -47,14 +47,17 @@ describe("fixture repository adapter", () => {
       },
       rootFs: {
         rootPath: "/tmp/unused",
-        exists: async (relativePath: string) => relativePath === descriptor.bodyPath,
+        exists: async (relativePath: string) =>
+          relativePath === descriptor.bodyPath,
         stat: async () => null,
         readOptionalJson: async (relativePath: string) => {
           if (relativePath === descriptor.metaPath) {
             return {
               status: 200,
               statusText: "OK",
-              headers: [{ name: "Content-Type", value: "application/javascript" }],
+              headers: [
+                { name: "Content-Type", value: "application/javascript" }
+              ],
               mimeType: "application/javascript",
               resourceType: "Script",
               url: descriptor.requestUrl,
@@ -68,12 +71,16 @@ describe("fixture repository adapter", () => {
           return null;
         },
         readBodyAsBase64: async () => {
-          throw new Error("readBodyAsBase64 should not be reached when the body stat is missing");
+          throw new Error(
+            "readBodyAsBase64 should not be reached when the body stat is missing"
+          );
         }
       } as never
     });
 
-    await expect(repository.read(descriptor)).rejects.toThrow(`Fixture body not found at ${descriptor.bodyPath}`);
+    await expect(repository.read(descriptor)).rejects.toThrow(
+      `Fixture body not found at ${descriptor.bodyPath}`
+    );
   });
 
   it("surfaces non-file canonical body entries when metadata exists", async () => {
@@ -93,7 +100,8 @@ describe("fixture repository adapter", () => {
       },
       rootFs: {
         rootPath: "/tmp/unused",
-        exists: async (relativePath: string) => relativePath === descriptor.bodyPath,
+        exists: async (relativePath: string) =>
+          relativePath === descriptor.bodyPath,
         stat: async () => ({
           isFile: () => false,
           size: 0
@@ -103,7 +111,9 @@ describe("fixture repository adapter", () => {
             return {
               status: 200,
               statusText: "OK",
-              headers: [{ name: "Content-Type", value: "application/javascript" }],
+              headers: [
+                { name: "Content-Type", value: "application/javascript" }
+              ],
               mimeType: "application/javascript",
               resourceType: "Script",
               url: descriptor.requestUrl,
@@ -117,11 +127,15 @@ describe("fixture repository adapter", () => {
           return null;
         },
         readBodyAsBase64: async () => {
-          throw new Error("readBodyAsBase64 should not be reached when the body stat is not a file");
+          throw new Error(
+            "readBodyAsBase64 should not be reached when the body stat is not a file"
+          );
         }
       } as never
     });
 
-    await expect(repository.read(descriptor)).rejects.toThrow(`Fixture body not found at ${descriptor.bodyPath}`);
+    await expect(repository.read(descriptor)).rejects.toThrow(
+      `Fixture body not found at ${descriptor.bodyPath}`
+    );
   });
 });

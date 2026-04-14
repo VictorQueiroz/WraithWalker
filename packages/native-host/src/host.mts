@@ -3,7 +3,14 @@
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
-import { listScenarios, openDirectory, revealDirectory, saveScenario, switchScenario, verifyRoot } from "./lib.mjs";
+import {
+  listScenarios,
+  openDirectory,
+  revealDirectory,
+  saveScenario,
+  switchScenario,
+  verifyRoot
+} from "./lib.mjs";
 
 interface NativeHostMessage {
   type?: string;
@@ -20,7 +27,9 @@ export function writeMessage(payload: unknown): void {
   process.stdout.write(Buffer.concat([header, content]));
 }
 
-export async function handleMessage(message: NativeHostMessage): Promise<unknown> {
+export async function handleMessage(
+  message: NativeHostMessage
+): Promise<unknown> {
   if (message.type === "verifyRoot") {
     return verifyRoot(message);
   }
@@ -69,7 +78,9 @@ export async function main({
 
   const messageLength = input.readUInt32LE(0);
   if (input.length < 4 + messageLength) {
-    throw new Error("Native host received a truncated length-prefixed message.");
+    throw new Error(
+      "Native host received a truncated length-prefixed message."
+    );
   }
 
   const body = input.subarray(4, 4 + messageLength).toString("utf8");
@@ -78,7 +89,9 @@ export async function main({
   writeMessageImpl(response);
 }
 
-export async function runEntrypoint(options?: Parameters<typeof main>[0]): Promise<void> {
+export async function runEntrypoint(
+  options?: Parameters<typeof main>[0]
+): Promise<void> {
   try {
     await main(options);
   } catch (error) {

@@ -20,9 +20,18 @@ const EXTENSION_RELEASE_ASSET_SCRIPT_PATH = fileURLToPath(
 test("extension release metadata stays aligned with the extension package naming", () => {
   assert.equal(EXTENSION_RELEASE_TAG_PREFIX, "@wraithwalker/extension@");
   assert.equal(EXTENSION_RELEASE_ASSET_NAME, "WraithWalker.zip");
-  assert.equal(getExtensionReleaseTag("0.1.1"), "@wraithwalker/extension@0.1.1");
-  assert.equal(getExtensionReleaseTitle("0.1.1"), "WraithWalker Extension v0.1.1");
-  assert.equal(getExtensionReleaseNotes("0.1.1"), "Packaged Chrome extension build for version 0.1.1.");
+  assert.equal(
+    getExtensionReleaseTag("0.1.1"),
+    "@wraithwalker/extension@0.1.1"
+  );
+  assert.equal(
+    getExtensionReleaseTitle("0.1.1"),
+    "WraithWalker Extension v0.1.1"
+  );
+  assert.equal(
+    getExtensionReleaseNotes("0.1.1"),
+    "Packaged Chrome extension build for version 0.1.1."
+  );
 });
 
 test("create extension release args target a dedicated non-latest extension release", () => {

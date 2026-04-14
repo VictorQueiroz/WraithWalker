@@ -13,14 +13,23 @@ import {
 
 describe("inferTypeNode", () => {
   it("infers primitives", () => {
-    expect(inferTypeNode("hello")).toEqual({ kind: "primitive", value: "string" });
+    expect(inferTypeNode("hello")).toEqual({
+      kind: "primitive",
+      value: "string"
+    });
     expect(inferTypeNode(42)).toEqual({ kind: "primitive", value: "number" });
-    expect(inferTypeNode(true)).toEqual({ kind: "primitive", value: "boolean" });
+    expect(inferTypeNode(true)).toEqual({
+      kind: "primitive",
+      value: "boolean"
+    });
     expect(inferTypeNode(null)).toEqual({ kind: "primitive", value: "null" });
   });
 
   it("infers empty array as unknown[]", () => {
-    expect(inferTypeNode([])).toEqual({ kind: "array", element: { kind: "unknown" } });
+    expect(inferTypeNode([])).toEqual({
+      kind: "array",
+      element: { kind: "unknown" }
+    });
   });
 
   it("infers array of homogeneous primitives", () => {
@@ -127,8 +136,14 @@ describe("mergeTypeNodes", () => {
   });
 
   it("merges two arrays by merging their element types", () => {
-    const a: TypeNode = { kind: "array", element: { kind: "primitive", value: "string" } };
-    const b: TypeNode = { kind: "array", element: { kind: "primitive", value: "number" } };
+    const a: TypeNode = {
+      kind: "array",
+      element: { kind: "primitive", value: "string" }
+    };
+    const b: TypeNode = {
+      kind: "array",
+      element: { kind: "primitive", value: "number" }
+    };
     const result = mergeTypeNodes(a, b);
     expect(result).toEqual({
       kind: "array",
@@ -180,7 +195,9 @@ describe("mergeTypeNodes", () => {
 
 describe("renderTypeNode", () => {
   it("renders primitives", () => {
-    expect(renderTypeNode({ kind: "primitive", value: "string" })).toBe("string");
+    expect(renderTypeNode({ kind: "primitive", value: "string" })).toBe(
+      "string"
+    );
     expect(renderTypeNode({ kind: "primitive", value: "null" })).toBe("null");
   });
 
@@ -189,7 +206,12 @@ describe("renderTypeNode", () => {
   });
 
   it("renders simple arrays", () => {
-    expect(renderTypeNode({ kind: "array", element: { kind: "primitive", value: "number" } })).toBe("number[]");
+    expect(
+      renderTypeNode({
+        kind: "array",
+        element: { kind: "primitive", value: "number" }
+      })
+    ).toBe("number[]");
   });
 
   it("renders union arrays with parens", () => {
@@ -239,9 +261,13 @@ describe("renderTypeNode", () => {
 
 describe("pathToInterfaceName", () => {
   it("converts method and path to PascalCase interface name", () => {
-    expect(pathToInterfaceName("GET", "/api/users")).toBe("GetApiUsersResponse");
+    expect(pathToInterfaceName("GET", "/api/users")).toBe(
+      "GetApiUsersResponse"
+    );
     expect(pathToInterfaceName("POST", "/graphql")).toBe("PostGraphqlResponse");
-    expect(pathToInterfaceName("DELETE", "/api/users/123")).toBe("DeleteApiUsers123Response");
+    expect(pathToInterfaceName("DELETE", "/api/users/123")).toBe(
+      "DeleteApiUsers123Response"
+    );
   });
 
   it("handles root path", () => {
@@ -249,8 +275,12 @@ describe("pathToInterfaceName", () => {
   });
 
   it("handles hyphenated and underscored paths", () => {
-    expect(pathToInterfaceName("GET", "/api/user-profiles")).toBe("GetApiUserProfilesResponse");
-    expect(pathToInterfaceName("GET", "/api/user_settings")).toBe("GetApiUserSettingsResponse");
+    expect(pathToInterfaceName("GET", "/api/user-profiles")).toBe(
+      "GetApiUserProfilesResponse"
+    );
+    expect(pathToInterfaceName("GET", "/api/user_settings")).toBe(
+      "GetApiUserSettingsResponse"
+    );
   });
 });
 
@@ -271,13 +301,19 @@ describe("renderInterfaceDeclaration", () => {
   });
 
   it("renders non-object types as type aliases", () => {
-    const node: TypeNode = { kind: "array", element: { kind: "primitive", value: "string" } };
+    const node: TypeNode = {
+      kind: "array",
+      element: { kind: "primitive", value: "string" }
+    };
     const result = renderInterfaceDeclaration("GetTagsResponse", node);
     expect(result).toBe("export type GetTagsResponse = string[];\n");
   });
 
   it("renders empty object interface", () => {
-    const result = renderInterfaceDeclaration("EmptyResponse", { kind: "object", properties: {} });
+    const result = renderInterfaceDeclaration("EmptyResponse", {
+      kind: "object",
+      properties: {}
+    });
     expect(result).toBe("export interface EmptyResponse {}\n");
   });
 });

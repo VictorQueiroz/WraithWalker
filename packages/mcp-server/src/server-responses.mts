@@ -16,5 +16,7 @@ export function renderErrorMessage(message: string) {
 }
 
 export function renderUnknownError(error: unknown) {
-  return renderErrorMessage(error instanceof Error ? error.message : String(error));
+  return renderErrorMessage(
+    error instanceof Error ? error.message : String(error)
+  );
 }

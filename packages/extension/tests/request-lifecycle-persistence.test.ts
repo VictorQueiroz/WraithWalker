@@ -2,9 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFixtureDescriptor as realCreateFixtureDescriptor } from "../src/lib/fixture-mapper.js";
 import { createRequestLifecycle } from "../src/lib/request-lifecycle.js";
-import {
-  createLifecycleHarness
-} from "./helpers/request-lifecycle-test-helpers.js";
+import { createLifecycleHarness } from "./helpers/request-lifecycle-test-helpers.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -40,10 +38,21 @@ describe("request lifecycle persistence and tracking", () => {
       }
     );
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-3" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-3" }
+    );
 
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Network.getRequestPostData", { requestId: "req-3" });
-    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(1, "Network.getResponseBody", { requestId: "req-3" });
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Network.getRequestPostData",
+      { requestId: "req-3" }
+    );
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Network.getResponseBody",
+      { requestId: "req-3" }
+    );
     expect(harness.sendOffscreenMessage).toHaveBeenCalledWith(
       "fs.writeFixture",
       expect.objectContaining({
@@ -58,21 +67,25 @@ describe("request lifecycle persistence and tracking", () => {
 
   it("preserves base64 request and response bodies when persisting fixtures", async () => {
     const harness = createLifecycleHarness();
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (method === "Network.getRequestPostData") {
-        return {
-          postData: Buffer.from("{\"seed\":\"base64\"}", "utf8").toString("base64"),
-          base64Encoded: true
-        };
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (method === "Network.getRequestPostData") {
+          return {
+            postData: Buffer.from('{"seed":"base64"}', "utf8").toString(
+              "base64"
+            ),
+            base64Encoded: true
+          };
+        }
+        if (method === "Network.getResponseBody") {
+          return {
+            body: Buffer.from('{"ok":true}', "utf8").toString("base64"),
+            base64Encoded: true
+          };
+        }
+        return { method, params };
       }
-      if (method === "Network.getResponseBody") {
-        return {
-          body: Buffer.from("{\"ok\":true}", "utf8").toString("base64"),
-          base64Encoded: true
-        };
-      }
-      return { method, params };
-    });
+    );
 
     harness.lifecycle.handleNetworkRequestWillBeSent(
       { tabId: 1 },
@@ -100,17 +113,20 @@ describe("request lifecycle persistence and tracking", () => {
       }
     );
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-base64" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-base64" }
+    );
 
     expect(harness.sendOffscreenMessage).toHaveBeenCalledWith(
       "fs.writeFixture",
       expect.objectContaining({
         request: expect.objectContaining({
-          body: Buffer.from("{\"seed\":\"base64\"}", "utf8").toString("base64"),
+          body: Buffer.from('{"seed":"base64"}', "utf8").toString("base64"),
           bodyEncoding: "base64"
         }),
         response: expect.objectContaining({
-          body: Buffer.from("{\"ok\":true}", "utf8").toString("base64"),
+          body: Buffer.from('{"ok":true}', "utf8").toString("base64"),
           bodyEncoding: "base64",
           meta: expect.objectContaining({
             bodyEncoding: "base64"
@@ -158,19 +174,33 @@ describe("request lifecycle persistence and tracking", () => {
       }
     );
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-write-fail" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-write-fail" }
+    );
 
-    expect(harness.setLastError).toHaveBeenCalledWith("Fixture write failed remotely.");
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      "Fixture write failed remotely."
+    );
     expect(harness.state.requests.size).toBe(0);
   });
 
   it("ignores loading-finished events without a tab id", async () => {
     const harness = createLifecycleHarness();
-    harness.state.requests.set("1:req-no-tab", { requestId: "req-no-tab" } as any);
+    harness.state.requests.set("1:req-no-tab", {
+      requestId: "req-no-tab"
+    } as any);
 
-    await harness.lifecycle.handleNetworkLoadingFinished({}, { requestId: "req-no-tab" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      {},
+      { requestId: "req-no-tab" }
+    );
 
-    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Network.getResponseBody", expect.anything());
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Network.getResponseBody",
+      expect.anything()
+    );
     expect(harness.state.requests.has("1:req-no-tab")).toBe(true);
   });
 
@@ -210,10 +240,20 @@ describe("request lifecycle persistence and tracking", () => {
       }
     );
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-skip" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-skip" }
+    );
 
-    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Network.getResponseBody", expect.anything());
-    expect(harness.sendOffscreenMessage).not.toHaveBeenCalledWith("fs.writeFixture", expect.anything());
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Network.getResponseBody",
+      expect.anything()
+    );
+    expect(harness.sendOffscreenMessage).not.toHaveBeenCalledWith(
+      "fs.writeFixture",
+      expect.anything()
+    );
     expect(harness.state.requests.size).toBe(0);
   });
 
@@ -286,14 +326,14 @@ describe("request lifecycle persistence and tracking", () => {
           method: "POST",
           url: "https://api.example.com/graphql",
           headers: {},
-          postData: "{\"mode\":\"inline\"}"
+          postData: '{"mode":"inline"}'
         },
         type: "XHR"
       }
     );
 
     expect(harness.state.requests.get("1:req-inline")).toMatchObject({
-      requestBody: "{\"mode\":\"inline\"}",
+      requestBody: '{"mode":"inline"}',
       requestBodyEncoding: "utf8"
     });
   });
@@ -301,25 +341,27 @@ describe("request lifecycle persistence and tracking", () => {
   it("preserves existing topOrigin and resourceType when requestWillBeSent omits them", () => {
     const harness = createLifecycleHarness();
     harness.state.attachedTabs.set(1, { topOrigin: "" });
-    const entry = harness.lifecycle.ensureRequestEntry(1, "req-preserve-request-fields");
+    const entry = harness.lifecycle.ensureRequestEntry(
+      1,
+      "req-preserve-request-fields"
+    );
     entry.topOrigin = "https://app.example.com";
     entry.resourceType = "XHR";
 
-    harness.lifecycle.handleNetworkRequestWillBeSent(
-      { tabId: 1 },
-      {
-        requestId: "req-preserve-request-fields",
-        request: {
-          method: "post",
-          url: "https://api.example.com/graphql",
-          headers: {
-            "X-Trace": "1"
-          }
+    harness.lifecycle.handleNetworkRequestWillBeSent({ tabId: 1 }, {
+      requestId: "req-preserve-request-fields",
+      request: {
+        method: "post",
+        url: "https://api.example.com/graphql",
+        headers: {
+          "X-Trace": "1"
         }
-      } as any
-    );
+      }
+    } as any);
 
-    expect(harness.state.requests.get("1:req-preserve-request-fields")).toMatchObject({
+    expect(
+      harness.state.requests.get("1:req-preserve-request-fields")
+    ).toMatchObject({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com/graphql",
@@ -371,29 +413,31 @@ describe("request lifecycle persistence and tracking", () => {
 
   it("preserves existing mimeType and resourceType when responseReceived omits them", () => {
     const harness = createLifecycleHarness();
-    const entry = harness.lifecycle.ensureRequestEntry(1, "req-preserve-response-fields");
+    const entry = harness.lifecycle.ensureRequestEntry(
+      1,
+      "req-preserve-response-fields"
+    );
     entry.mimeType = "application/javascript";
     entry.resourceType = "Script";
 
-    harness.lifecycle.handleNetworkResponseReceived(
-      { tabId: 1 },
-      {
-        requestId: "req-preserve-response-fields",
-        response: {
-          status: 204,
-          statusText: "No Content",
-          headers: {
-            ETag: "\"abc123\""
-          },
-          mimeType: ""
-        }
-      } as any
-    );
+    harness.lifecycle.handleNetworkResponseReceived({ tabId: 1 }, {
+      requestId: "req-preserve-response-fields",
+      response: {
+        status: 204,
+        statusText: "No Content",
+        headers: {
+          ETag: '"abc123"'
+        },
+        mimeType: ""
+      }
+    } as any);
 
-    expect(harness.state.requests.get("1:req-preserve-response-fields")).toMatchObject({
+    expect(
+      harness.state.requests.get("1:req-preserve-response-fields")
+    ).toMatchObject({
       responseStatus: 204,
       responseStatusText: "No Content",
-      responseHeaders: [{ name: "ETag", value: "\"abc123\"" }],
+      responseHeaders: [{ name: "ETag", value: '"abc123"' }],
       mimeType: "application/javascript",
       resourceType: "Script"
     });
@@ -402,9 +446,16 @@ describe("request lifecycle persistence and tracking", () => {
   it("returns early for loadingFinished when the request entry does not exist", async () => {
     const harness = createLifecycleHarness();
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "missing-entry" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "missing-entry" }
+    );
 
-    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Network.getResponseBody", expect.anything());
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Network.getResponseBody",
+      expect.anything()
+    );
   });
 
   it("clears tracked requests on loadingFailed when a tab id is present", () => {
@@ -413,7 +464,10 @@ describe("request lifecycle persistence and tracking", () => {
       requestId: "req-loading-failed"
     } as any);
 
-    harness.lifecycle.handleNetworkLoadingFailed({ tabId: 1 }, { requestId: "req-loading-failed" });
+    harness.lifecycle.handleNetworkLoadingFailed(
+      { tabId: 1 },
+      { requestId: "req-loading-failed" }
+    );
 
     expect(harness.state.requests.has("1:req-loading-failed")).toBe(false);
   });
@@ -424,9 +478,14 @@ describe("request lifecycle persistence and tracking", () => {
       requestId: "req-loading-failed-missing-tab"
     } as any);
 
-    harness.lifecycle.handleNetworkLoadingFailed({}, { requestId: "req-loading-failed-missing-tab" });
+    harness.lifecycle.handleNetworkLoadingFailed(
+      {},
+      { requestId: "req-loading-failed-missing-tab" }
+    );
 
-    expect(harness.state.requests.has("1:req-loading-failed-missing-tab")).toBe(true);
+    expect(harness.state.requests.has("1:req-loading-failed-missing-tab")).toBe(
+      true
+    );
   });
 
   it("skips fixture writing for replayed requests but still clears the entry", async () => {
@@ -436,24 +495,36 @@ describe("request lifecycle persistence and tracking", () => {
       requestId: "req-replayed"
     });
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-replayed" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-replayed" }
+    );
 
-    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(1, "Network.getResponseBody", expect.anything());
-    expect(harness.sendOffscreenMessage).not.toHaveBeenCalledWith("fs.writeFixture", expect.anything());
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Network.getResponseBody",
+      expect.anything()
+    );
+    expect(harness.sendOffscreenMessage).not.toHaveBeenCalledWith(
+      "fs.writeFixture",
+      expect.anything()
+    );
     expect(harness.state.requests.size).toBe(0);
   });
 
   it("records response body lookup failures during loadingFinished", async () => {
     const harness = createLifecycleHarness();
-    harness.sendDebuggerCommand.mockImplementation(async (_tabId, method, params) => {
-      if (method === "Network.getResponseBody") {
-        throw new Error("response body unavailable");
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (method === "Network.getResponseBody") {
+          throw new Error("response body unavailable");
+        }
+        if (method === "Network.getRequestPostData") {
+          return { postData: '{"seed":"one"}', base64Encoded: false };
+        }
+        return { method, params };
       }
-      if (method === "Network.getRequestPostData") {
-        return { postData: "{\"seed\":\"one\"}", base64Encoded: false };
-      }
-      return { method, params };
-    });
+    );
 
     harness.lifecycle.handleNetworkRequestWillBeSent(
       { tabId: 1 },
@@ -481,9 +552,14 @@ describe("request lifecycle persistence and tracking", () => {
       }
     );
 
-    await harness.lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-response-error" });
+    await harness.lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-response-error" }
+    );
 
-    expect(harness.setLastError).toHaveBeenCalledWith("response body unavailable");
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      "response body unavailable"
+    );
     expect(harness.state.requests.size).toBe(0);
   });
 
@@ -498,14 +574,16 @@ describe("request lifecycle persistence and tracking", () => {
       state,
       sendDebuggerCommand: vi.fn(async (_tabId, method) => {
         if (method === "Network.getResponseBody") {
-          return { body: "{\"ok\":true}", base64Encoded: false };
+          return { body: '{"ok":true}', base64Encoded: false };
         }
         if (method === "Network.getRequestPostData") {
           return { postData: "", base64Encoded: false };
         }
         return undefined;
       }) as Parameters<typeof createRequestLifecycle>[0]["sendDebuggerCommand"],
-      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<typeof createRequestLifecycle>[0]["sendOffscreenMessage"],
+      sendOffscreenMessage: vi.fn(async () => ({ ok: true })) as Parameters<
+        typeof createRequestLifecycle
+      >[0]["sendOffscreenMessage"],
       setLastError,
       repository: {
         exists: vi.fn().mockResolvedValue(false),
@@ -513,7 +591,7 @@ describe("request lifecycle persistence and tracking", () => {
         writeIfAbsent: vi.fn().mockRejectedValue("persist failed")
       },
       createFixtureDescriptor: realCreateFixtureDescriptor,
-      getSiteConfigForOrigin: vi.fn((topOrigin) => (
+      getSiteConfigForOrigin: vi.fn((topOrigin) =>
         topOrigin === "https://app.example.com"
           ? {
               origin: "https://app.example.com",
@@ -521,7 +599,7 @@ describe("request lifecycle persistence and tracking", () => {
               dumpAllowlistPatterns: ["\\.json$"]
             }
           : undefined
-      ))
+      )
     });
 
     lifecycle.handleNetworkRequestWillBeSent(
@@ -549,7 +627,10 @@ describe("request lifecycle persistence and tracking", () => {
         type: "XHR"
       }
     );
-    await lifecycle.handleNetworkLoadingFinished({ tabId: 1 }, { requestId: "req-string-error" });
+    await lifecycle.handleNetworkLoadingFinished(
+      { tabId: 1 },
+      { requestId: "req-string-error" }
+    );
 
     expect(setLastError).toHaveBeenCalledWith("persist failed");
     expect(state.requests.size).toBe(0);

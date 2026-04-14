@@ -1,5 +1,15 @@
-import type { DiagnosticsReport, OffscreenMessage, RootReadyResult, RootReadySuccess, SiteConfigsResult } from "./messages.js";
-import type { BackgroundState, ChromeApi, BackgroundServerInfo } from "./background-runtime-shared.js";
+import type {
+  DiagnosticsReport,
+  OffscreenMessage,
+  RootReadyResult,
+  RootReadySuccess,
+  SiteConfigsResult
+} from "./messages.js";
+import type {
+  BackgroundState,
+  ChromeApi,
+  BackgroundServerInfo
+} from "./background-runtime-shared.js";
 import {
   applyEffectiveSiteConfigs,
   getRequiredRootId,
@@ -33,7 +43,9 @@ interface BackgroundAuthorityDependencies {
   getOrCreateExtensionClientId: () => Promise<string>;
   setLegacySiteConfigsMigrated: (value: boolean) => Promise<void>;
   setLastSessionSnapshot: (snapshot: SessionSnapshot) => Promise<void>;
-  normalizeSiteConfigs: (siteConfigs: Array<Partial<SiteConfig> & { origin: string }>) => SiteConfig[];
+  normalizeSiteConfigs: (
+    siteConfigs: Array<Partial<SiteConfig> & { origin: string }>
+  ) => SiteConfig[];
   setLastError: (message: string) => void;
   syncTraceBindings: () => Promise<void>;
   reconcileTabs: () => Promise<void>;
@@ -56,16 +68,27 @@ export interface BackgroundAuthorityApi {
         bodyEncoding: "utf8" | "base64";
         meta: ResponseMeta;
       };
-    }): Promise<{ written: boolean; descriptor: FixtureDescriptor; sentinel: RootSentinel }>;
+    }): Promise<{
+      written: boolean;
+      descriptor: FixtureDescriptor;
+      sentinel: RootSentinel;
+    }>;
   };
   refreshStoredConfig(): Promise<void>;
   snapshotState(): Promise<SessionSnapshot>;
   persistSnapshot(): Promise<void>;
-  ensureRootReady(opts?: { requestPermission?: boolean }): Promise<RootReadyResult>;
+  ensureRootReady(opts?: {
+    requestPermission?: boolean;
+  }): Promise<RootReadyResult>;
   ensureLocalRootReady(opts?: LocalRootReadyOptions): Promise<RootReadyResult>;
   closeOffscreenDocument(): Promise<void>;
-  sendOffscreenMessage<T>(type: OffscreenMessage["type"], payload?: Record<string, unknown>): Promise<T>;
-  refreshServerInfo(opts?: { force?: boolean }): Promise<BackgroundServerInfo | null>;
+  sendOffscreenMessage<T>(
+    type: OffscreenMessage["type"],
+    payload?: Record<string, unknown>
+  ): Promise<T>;
+  refreshServerInfo(opts?: {
+    force?: boolean;
+  }): Promise<BackgroundServerInfo | null>;
   queueServerRefresh(opts?: { force?: boolean }): void;
   scheduleHeartbeat(): void;
   markServerOffline(): void;
@@ -75,7 +98,9 @@ export interface BackgroundAuthorityApi {
   }): Promise<T>;
   readConfiguredSiteConfigsForAuthority(): Promise<SiteConfigsResult>;
   readEffectiveSiteConfigsForAuthority(): Promise<SiteConfigsResult>;
-  writeConfiguredSiteConfigsForAuthority(siteConfigs: SiteConfig[]): Promise<SiteConfigsResult>;
+  writeConfiguredSiteConfigsForAuthority(
+    siteConfigs: SiteConfig[]
+  ): Promise<SiteConfigsResult>;
   getDiagnosticsReport(): Promise<DiagnosticsReport>;
 }
 
@@ -115,8 +140,10 @@ export function createBackgroundAuthority({
     syncTraceBindings,
     reconcileTabs,
     persistSnapshot: () => persistSnapshot(),
-    applyEffectiveSiteConfigs: (siteConfigs) => applyEffectiveSiteConfigs(state, siteConfigs, normalizeSiteConfigs),
-    restoreLocalEffectiveSiteConfigs: () => restoreLocalEffectiveSiteConfigs(state, normalizeSiteConfigs),
+    applyEffectiveSiteConfigs: (siteConfigs) =>
+      applyEffectiveSiteConfigs(state, siteConfigs, normalizeSiteConfigs),
+    restoreLocalEffectiveSiteConfigs: () =>
+      restoreLocalEffectiveSiteConfigs(state, normalizeSiteConfigs),
     updateEffectiveRootState: () => updateEffectiveRootState(state)
   });
 
@@ -141,14 +168,16 @@ export function createBackgroundAuthority({
     refreshStoredConfig: data.refreshStoredConfig,
     refreshServerInfo: serverSync.refreshServerInfo,
     ensureLocalRootReady: localRoot.ensureLocalRootReady,
-    readConfiguredSiteConfigsForAuthority: data.readConfiguredSiteConfigsForAuthority,
-    readEffectiveSiteConfigsForAuthority: data.readEffectiveSiteConfigsForAuthority
+    readConfiguredSiteConfigsForAuthority:
+      data.readConfiguredSiteConfigsForAuthority,
+    readEffectiveSiteConfigsForAuthority:
+      data.readEffectiveSiteConfigsForAuthority
   });
   persistSnapshot = diagnostics.persistSnapshot;
 
-  async function ensureRootReady(
-    { requestPermission = false }: { requestPermission?: boolean } = {}
-  ): Promise<RootReadyResult> {
+  async function ensureRootReady({
+    requestPermission = false
+  }: { requestPermission?: boolean } = {}): Promise<RootReadyResult> {
     const serverInfo = await serverSync.refreshServerInfo({ force: true });
     if (serverInfo) {
       setLastError("");
@@ -176,9 +205,12 @@ export function createBackgroundAuthority({
     scheduleHeartbeat: serverSync.scheduleHeartbeat,
     markServerOffline: serverSync.markServerOffline,
     withServerFallback: data.withServerFallback,
-    readConfiguredSiteConfigsForAuthority: data.readConfiguredSiteConfigsForAuthority,
-    readEffectiveSiteConfigsForAuthority: data.readEffectiveSiteConfigsForAuthority,
-    writeConfiguredSiteConfigsForAuthority: data.writeConfiguredSiteConfigsForAuthority,
+    readConfiguredSiteConfigsForAuthority:
+      data.readConfiguredSiteConfigsForAuthority,
+    readEffectiveSiteConfigsForAuthority:
+      data.readEffectiveSiteConfigsForAuthority,
+    writeConfiguredSiteConfigsForAuthority:
+      data.writeConfiguredSiteConfigsForAuthority,
     getDiagnosticsReport: diagnostics.getDiagnosticsReport
   };
 }

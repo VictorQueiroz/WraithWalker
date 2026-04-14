@@ -23,18 +23,22 @@ describe("fixture reader", () => {
       topOriginKey: "https__app.example.com",
       generatedAt: "2026-04-03T00:00:00.000Z",
       resourcesByPathname: {
-        "/app.js": [{
-          requestUrl: "https://cdn.example.com/app.js",
-          requestOrigin: "https://cdn.example.com",
-          pathname: "/app.js",
-          search: "",
-          bodyPath: "cdn.example.com/app.js",
-          requestPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
-          metaPath: ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
-          mimeType: "application/javascript",
-          resourceType: "Script",
-          capturedAt: "2026-04-03T00:00:00.000Z"
-        }]
+        "/app.js": [
+          {
+            requestUrl: "https://cdn.example.com/app.js",
+            requestOrigin: "https://cdn.example.com",
+            pathname: "/app.js",
+            search: "",
+            bodyPath: "cdn.example.com/app.js",
+            requestPath:
+              ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__request.json",
+            metaPath:
+              ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/app.js.__response.json",
+            mimeType: "application/javascript",
+            resourceType: "Script",
+            capturedAt: "2026-04-03T00:00:00.000Z"
+          }
+        ]
       }
     };
 
@@ -84,9 +88,15 @@ describe("fixture reader", () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-"
     });
-    await root.writeText("cdn.example.com/assets/app.js", "console.log('hello');");
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "console.log('hello');"
+    );
 
-    const content = await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js");
+    const content = await readFixtureBody(
+      root.rootPath,
+      "cdn.example.com/assets/app.js"
+    );
     expect(content).toBe("console.log('hello');");
   });
 
@@ -117,17 +127,19 @@ describe("fixture reader", () => {
         method: "PUT",
         capturedAt: "2026-04-03T00:00:00.000Z"
       },
-      body: "{\"queued\":true}"
+      body: '{"queued":true}'
     });
 
-    expect(await readApiFixture(root.rootPath, fixture.fixtureDir)).toEqual(expect.objectContaining({
-      fixtureDir: fixture.fixtureDir,
-      body: "{\"queued\":true}",
-      meta: expect.objectContaining({
-        status: 202,
-        method: "PUT"
+    expect(await readApiFixture(root.rootPath, fixture.fixtureDir)).toEqual(
+      expect.objectContaining({
+        fixtureDir: fixture.fixtureDir,
+        body: '{"queued":true}',
+        meta: expect.objectContaining({
+          status: 202,
+          method: "PUT"
+        })
       })
-    }));
+    );
   });
 
   it("lists saved scenarios", async () => {

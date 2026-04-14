@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { createFixtureDescriptor, sanitizeResponseHeaders } from "../src/lib/fixture-mapper.js";
-import { normalizeSiteInput, originToPermissionPattern } from "../src/lib/path-utils.js";
+import {
+  createFixtureDescriptor,
+  sanitizeResponseHeaders
+} from "../src/lib/fixture-mapper.js";
+import {
+  normalizeSiteInput,
+  originToPermissionPattern
+} from "../src/lib/path-utils.js";
 import type { ApiFixtureDescriptor } from "../src/lib/types.js";
 
 describe("fixture mapper", () => {
   it("coerces a plain hostname to an https origin", () => {
-    expect(normalizeSiteInput("app.example.com")).toBe("https://app.example.com");
-    expect(originToPermissionPattern("https://app.example.com")).toBe("https://app.example.com/*");
+    expect(normalizeSiteInput("app.example.com")).toBe(
+      "https://app.example.com"
+    );
+    expect(originToPermissionPattern("https://app.example.com")).toBe(
+      "https://app.example.com/*"
+    );
   });
 
   it("mirrors asset-like GET requests into assets paths", async () => {
@@ -44,7 +54,9 @@ describe("fixture mapper", () => {
     expect(descriptor.metaPath).toMatch(
       /^\.wraithwalker\/captures\/assets\/https__app\.example\.com\/cdn\.example\.com\/assets\/chunk-a\.js\.__q-[a-z0-9]+\.__response\.json$/
     );
-    expect(descriptor.manifestPath).toBe(".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json");
+    expect(descriptor.manifestPath).toBe(
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
     expect(descriptor.metadataOptional).toBe(false);
   });
 
@@ -132,12 +144,12 @@ describe("fixture mapper", () => {
   });
 
   it("hashes query and request body for API requests", async () => {
-    const descriptor = await createFixtureDescriptor({
+    const descriptor = (await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com/graphql?draft=true",
       postData: '{"query":"{viewer{id}}"}'
-    }) as ApiFixtureDescriptor;
+    })) as ApiFixtureDescriptor;
 
     expect(descriptor.storageMode).toBe("api");
     expect(descriptor.directory).toMatch(
@@ -148,12 +160,12 @@ describe("fixture mapper", () => {
   });
 
   it("uses the root slug fallback for API requests with no pathname", async () => {
-    const descriptor = await createFixtureDescriptor({
+    const descriptor = (await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com?draft=true",
       postData: '{"query":"{viewer{id}}"}'
-    }) as ApiFixtureDescriptor;
+    })) as ApiFixtureDescriptor;
 
     expect(descriptor.slug).toBe("root");
     expect(descriptor.directory).toMatch(/\/root__q-/);
@@ -176,12 +188,12 @@ describe("fixture mapper", () => {
   });
 
   it("routes POST requests through the shared API pipeline", async () => {
-    const descriptor = await createFixtureDescriptor({
+    const descriptor = (await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com/graphql",
       postData: '{"query":"{viewer{id}}"}'
-    }) as ApiFixtureDescriptor;
+    })) as ApiFixtureDescriptor;
 
     expect(descriptor.storageMode).toBe("api");
     expect(descriptor.directory).toMatch(
@@ -192,11 +204,11 @@ describe("fixture mapper", () => {
   });
 
   it("routes non-GET requests through the API pipeline", async () => {
-    const descriptor = await createFixtureDescriptor({
+    const descriptor = (await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "PUT",
       url: "https://cdn.example.com/upload/image.png"
-    }) as ApiFixtureDescriptor;
+    })) as ApiFixtureDescriptor;
 
     expect(descriptor.storageMode).toBe("api");
     expect(descriptor.directory).toMatch(
@@ -207,12 +219,12 @@ describe("fixture mapper", () => {
   });
 
   it("API requests have no manifest path", async () => {
-    const descriptor = await createFixtureDescriptor({
+    const descriptor = (await createFixtureDescriptor({
       topOrigin: "https://app.example.com",
       method: "POST",
       url: "https://api.example.com/graphql",
       postData: '{"query":"{viewer{id}}"}'
-    }) as ApiFixtureDescriptor;
+    })) as ApiFixtureDescriptor;
 
     expect(descriptor.storageMode).toBe("api");
     expect(descriptor.directory).toMatch(

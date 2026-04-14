@@ -1,10 +1,16 @@
 interface Window {
-  showDirectoryPicker(options?: { mode?: "read" | "readwrite" }): Promise<FileSystemDirectoryHandle>;
+  showDirectoryPicker(options?: {
+    mode?: "read" | "readwrite";
+  }): Promise<FileSystemDirectoryHandle>;
 }
 
 interface FileSystemHandle {
-  queryPermission?(options?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
-  requestPermission?(options?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
+  queryPermission?(options?: {
+    mode?: "read" | "readwrite";
+  }): Promise<PermissionState>;
+  requestPermission?(options?: {
+    mode?: "read" | "readwrite";
+  }): Promise<PermissionState>;
 }
 
 interface GlobalThis {

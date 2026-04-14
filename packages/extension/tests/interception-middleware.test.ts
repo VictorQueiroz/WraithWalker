@@ -21,14 +21,20 @@ function createEntry(overrides: Partial<RequestEntry> = {}): RequestEntry {
     replayOnResponse: false,
     responseStatus: 200,
     responseStatusText: "OK",
-    responseHeaders: [{ name: "Content-Type", value: "application/javascript" }],
+    responseHeaders: [
+      { name: "Content-Type", value: "application/javascript" }
+    ],
     ...overrides
   };
 }
 
 describe("interception middleware", () => {
   it("fulfills a request from the repository when a fixture exists", async () => {
-    const descriptor = { bodyHash: "", queryHash: "", topOrigin: "https://app.example.com" };
+    const descriptor = {
+      bodyHash: "",
+      queryHash: "",
+      topOrigin: "https://app.example.com"
+    };
     const fulfillRequest = vi.fn();
     const middleware = createInterceptionMiddleware({
       capturePolicy: {
@@ -71,14 +77,22 @@ describe("interception middleware", () => {
     });
 
     expect(entry.replayed).toBe(true);
-    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
-      requestId: "fetch-1",
-      responseCode: 200,
-      responseHeaders: [{ name: "Content-Type", value: "application/javascript" }]
-    }));
-    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
-      responsePhrase: "OK"
-    }));
+    expect(fulfillRequest).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        requestId: "fetch-1",
+        responseCode: 200,
+        responseHeaders: [
+          { name: "Content-Type", value: "application/javascript" }
+        ]
+      })
+    );
+    expect(fulfillRequest).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        responsePhrase: "OK"
+      })
+    );
   });
 
   it("sanitizes invalid replay status codes and omits unsafe response phrases", async () => {
@@ -89,7 +103,11 @@ describe("interception middleware", () => {
         shouldPersist: vi.fn().mockReturnValue(true)
       },
       storageLayout: {
-        describeRequest: vi.fn().mockResolvedValue({ bodyHash: "", queryHash: "", topOrigin: "https://app.example.com" })
+        describeRequest: vi.fn().mockResolvedValue({
+          bodyHash: "",
+          queryHash: "",
+          topOrigin: "https://app.example.com"
+        })
       },
       repository: {
         exists: vi.fn().mockResolvedValue(true),
@@ -119,13 +137,19 @@ describe("interception middleware", () => {
       networkRequestId: "network-invalid"
     });
 
-    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
-      requestId: "fetch-invalid",
-      responseCode: 200
-    }));
-    expect(fulfillRequest).not.toHaveBeenCalledWith(1, expect.objectContaining({
-      responsePhrase: expect.anything()
-    }));
+    expect(fulfillRequest).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        requestId: "fetch-invalid",
+        responseCode: 200
+      })
+    );
+    expect(fulfillRequest).not.toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        responsePhrase: expect.anything()
+      })
+    );
   });
 
   it("omits empty response phrases after trimming", async () => {
@@ -136,7 +160,11 @@ describe("interception middleware", () => {
         shouldPersist: vi.fn().mockReturnValue(true)
       },
       storageLayout: {
-        describeRequest: vi.fn().mockResolvedValue({ bodyHash: "", queryHash: "", topOrigin: "https://app.example.com" })
+        describeRequest: vi.fn().mockResolvedValue({
+          bodyHash: "",
+          queryHash: "",
+          topOrigin: "https://app.example.com"
+        })
       },
       repository: {
         exists: vi.fn().mockResolvedValue(true),
@@ -166,13 +194,19 @@ describe("interception middleware", () => {
       networkRequestId: "network-empty-phrase"
     });
 
-    expect(fulfillRequest).toHaveBeenCalledWith(1, expect.objectContaining({
-      requestId: "fetch-empty-phrase",
-      responseCode: 200
-    }));
-    expect(fulfillRequest).not.toHaveBeenCalledWith(1, expect.objectContaining({
-      responsePhrase: expect.anything()
-    }));
+    expect(fulfillRequest).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        requestId: "fetch-empty-phrase",
+        responseCode: 200
+      })
+    );
+    expect(fulfillRequest).not.toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        responsePhrase: expect.anything()
+      })
+    );
   });
 
   it("continues the request when no fixture exists", async () => {
@@ -183,7 +217,11 @@ describe("interception middleware", () => {
         shouldPersist: vi.fn().mockReturnValue(true)
       },
       storageLayout: {
-        describeRequest: vi.fn().mockResolvedValue({ bodyHash: "", queryHash: "", topOrigin: "https://app.example.com" })
+        describeRequest: vi.fn().mockResolvedValue({
+          bodyHash: "",
+          queryHash: "",
+          topOrigin: "https://app.example.com"
+        })
       },
       repository: {
         exists: vi.fn().mockResolvedValue(false),
@@ -255,19 +293,21 @@ describe("interception middleware", () => {
       requestId: "req-3"
     });
 
-    expect(writeIfAbsent).toHaveBeenCalledWith(expect.objectContaining({
-      request: expect.objectContaining({
-        method: "POST",
-        body: '{"seed":"one"}'
-      }),
-      response: expect.objectContaining({
-        body: '{"ok":true}',
-        meta: expect.objectContaining({
-          status: 201,
-          method: "POST"
+    expect(writeIfAbsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          method: "POST",
+          body: '{"seed":"one"}'
+        }),
+        response: expect.objectContaining({
+          body: '{"ok":true}',
+          meta: expect.objectContaining({
+            status: 201,
+            method: "POST"
+          })
         })
       })
-    }));
+    );
   });
 
   it("notifies the fixture-persisted hook after a successful write", async () => {
@@ -310,13 +350,15 @@ describe("interception middleware", () => {
       requestId: "req-hook"
     });
 
-    expect(onFixturePersisted).toHaveBeenCalledWith(expect.objectContaining({
-      entry,
-      descriptor: expect.objectContaining({
-        topOrigin: "https://app.example.com"
-      }),
-      capturedAt: expect.any(String)
-    }));
+    expect(onFixturePersisted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry,
+        descriptor: expect.objectContaining({
+          topOrigin: "https://app.example.com"
+        }),
+        capturedAt: expect.any(String)
+      })
+    );
   });
 
   it("skips persistence when capture policy rejects the request", async () => {

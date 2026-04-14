@@ -65,7 +65,10 @@ class MockDirectoryHandle {
     this.files = new Map();
   }
 
-  async getDirectoryHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getDirectoryHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.directories.has(name)) {
       if (!create) {
         throw new Error(`Missing directory: ${name}`);
@@ -75,7 +78,10 @@ class MockDirectoryHandle {
     return this.directories.get(name);
   }
 
-  async getFileHandle(name: string, { create = false }: { create?: boolean } = {}) {
+  async getFileHandle(
+    name: string,
+    { create = false }: { create?: boolean } = {}
+  ) {
     if (!this.files.has(name)) {
       if (!create) {
         throw new Error(`Missing file: ${name}`);
@@ -95,14 +101,20 @@ class MockDirectoryHandle {
 }
 
 async function writeSentinel(rootHandle, sentinel) {
-  const metaDirectory = await rootHandle.getDirectoryHandle(ROOT_SENTINEL_DIR, { create: true });
-  const fileHandle = await metaDirectory.getFileHandle(ROOT_SENTINEL_FILE, { create: true });
+  const metaDirectory = await rootHandle.getDirectoryHandle(ROOT_SENTINEL_DIR, {
+    create: true
+  });
+  const fileHandle = await metaDirectory.getFileHandle(ROOT_SENTINEL_FILE, {
+    create: true
+  });
   const writable = await fileHandle.createWritable();
   await writable.write(JSON.stringify(sentinel, null, 2));
   await writable.close();
 }
 
-function asFileSystemDirectoryHandle(handle: MockDirectoryHandle): FileSystemDirectoryHandle {
+function asFileSystemDirectoryHandle(
+  handle: MockDirectoryHandle
+): FileSystemDirectoryHandle {
   return handle as unknown as FileSystemDirectoryHandle;
 }
 
@@ -129,15 +141,24 @@ describe("root handle helpers", () => {
     };
     await writeSentinel(rootHandle, sentinel);
 
-    await expect(ensureRootSentinel(asFileSystemDirectoryHandle(rootHandle))).resolves.toEqual(sentinel);
+    await expect(
+      ensureRootSentinel(asFileSystemDirectoryHandle(rootHandle))
+    ).resolves.toEqual(sentinel);
   });
 
   it("creates and stores a sentinel when missing", async () => {
     const rootHandle = new MockDirectoryHandle();
 
-    const sentinel = await ensureRootSentinel(asFileSystemDirectoryHandle(rootHandle));
-    const metaDirectory = await rootHandle.getDirectoryHandle(ROOT_SENTINEL_DIR, { create: false });
-    const fileHandle = await metaDirectory.getFileHandle(ROOT_SENTINEL_FILE, { create: false });
+    const sentinel = await ensureRootSentinel(
+      asFileSystemDirectoryHandle(rootHandle)
+    );
+    const metaDirectory = await rootHandle.getDirectoryHandle(
+      ROOT_SENTINEL_DIR,
+      { create: false }
+    );
+    const fileHandle = await metaDirectory.getFileHandle(ROOT_SENTINEL_FILE, {
+      create: false
+    });
     const stored = JSON.parse(await (await fileHandle.getFile()).text());
 
     expect(sentinel.rootId).toBeTypeOf("string");
@@ -150,14 +171,20 @@ describe("root handle helpers", () => {
 
     await expect(queryRootPermission()).resolves.toBe("prompt");
     await expect(requestRootPermission(null)).resolves.toBe("prompt");
-    await expect(queryRootPermission(asFileSystemDirectoryHandle(rootHandle))).resolves.toBe("granted");
-    await expect(requestRootPermission(asFileSystemDirectoryHandle(rootHandle))).resolves.toBe("granted");
+    await expect(
+      queryRootPermission(asFileSystemDirectoryHandle(rootHandle))
+    ).resolves.toBe("granted");
+    await expect(
+      requestRootPermission(asFileSystemDirectoryHandle(rootHandle))
+    ).resolves.toBe("granted");
   });
 
   it("stores the root handle after ensuring a sentinel", async () => {
     const rootHandle = new MockDirectoryHandle();
 
-    const sentinel = await storeRootHandleWithSentinel(asFileSystemDirectoryHandle(rootHandle));
+    const sentinel = await storeRootHandleWithSentinel(
+      asFileSystemDirectoryHandle(rootHandle)
+    );
 
     expect(sentinel.rootId).toBeTypeOf("string");
     expect(mocks.idbSet).toHaveBeenCalledWith(ROOT_HANDLE_KEY, rootHandle);

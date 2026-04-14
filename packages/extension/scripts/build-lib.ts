@@ -1,7 +1,12 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 
-export const ROOT_RUNTIME_FILES = ["background.js", "popup.js", "options.js", "offscreen.js"] as const;
+export const ROOT_RUNTIME_FILES = [
+  "background.js",
+  "popup.js",
+  "options.js",
+  "offscreen.js"
+] as const;
 export const STATIC_EXTENSION_FILES = [
   "manifest.json",
   "popup.html",
@@ -67,9 +72,17 @@ export function createBuildPaths(rootDir: string): BuildPaths {
     vendorSource,
     distVendorDir: path.join(distDir, "vendor"),
     distVendorFile: path.join(distDir, "vendor", "idb.js"),
-    coreFixtureLayoutSource: path.resolve(rootDir, "../core/out/fixture-layout.mjs"),
+    coreFixtureLayoutSource: path.resolve(
+      rootDir,
+      "../core/out/fixture-layout.mjs"
+    ),
     distVendorCoreDir: path.join(distDir, "vendor", "wraithwalker-core"),
-    distVendorCoreFixtureLayoutFile: path.join(distDir, "vendor", "wraithwalker-core", "fixture-layout.js"),
+    distVendorCoreFixtureLayoutFile: path.join(
+      distDir,
+      "vendor",
+      "wraithwalker-core",
+      "fixture-layout.js"
+    ),
     uiStylesSource: path.join(rootDir, "src", "ui", "styles.css"),
     distCssFile: path.join(distDir, "app.css")
   };
@@ -106,8 +119,17 @@ export function rewriteIdbSpecifiers(source: string): string {
   return source.replace(/from\s+["']idb["']/g, 'from "../vendor/idb.js"');
 }
 
-export function rewriteCoreFixtureLayoutSpecifiers(source: string, replacement: string): string {
+export function rewriteCoreFixtureLayoutSpecifiers(
+  source: string,
+  replacement: string
+): string {
   return source
-    .replace(/from\s+["']@wraithwalker\/core\/fixture-layout["']/g, `from "${replacement}"`)
-    .replace(/from\s+["']@wraithwalker\/core\/fixture-layout["'];?/g, `from "${replacement}"`);
+    .replace(
+      /from\s+["']@wraithwalker\/core\/fixture-layout["']/g,
+      `from "${replacement}"`
+    )
+    .replace(
+      /from\s+["']@wraithwalker\/core\/fixture-layout["'];?/g,
+      `from "${replacement}"`
+    );
 }
