@@ -34,3 +34,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wraithwalker-extension-${{ github.sha }}
+          path: packages/extension/dist
+          if-no-files-found: error
+          retention-days: 14
