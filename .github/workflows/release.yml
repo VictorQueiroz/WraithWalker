@@ -46,8 +46,8 @@ jobs:
         with:
           version: npm run release:prepare
           publish: npm run release:publish
-          title: chore: version packages
-          commit: chore: version packages
+          title: "chore: version packages"
+          commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - if: steps.extension_version.outputs.changed == 'true'
