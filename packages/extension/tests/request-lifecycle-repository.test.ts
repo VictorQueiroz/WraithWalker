@@ -100,13 +100,13 @@ describe("default request lifecycle repository", () => {
       descriptor: { bodyPath: "body" } as any,
       request: {
         method: "GET"
-      },
+      } as any,
       response: {
         body: "fixture-body",
         bodyEncoding: "utf8" as const,
         meta: {
           status: 200
-        }
+        } as any
       }
     };
 
