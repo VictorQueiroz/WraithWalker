@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WraithWalker",
   "description": "Capture and replay network fixtures using the Chrome Debugger API.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "minimum_chrome_version": "118",
   "permissions": [
     "debugger",
@@ -13,7 +13,10 @@
     "nativeMessaging",
     "contextMenus"
   ],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -36,8 +39,14 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["offscreen.html", "offscreen.js", "app.css"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "offscreen.html",
+        "offscreen.js",
+        "app.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
