@@ -6,3 +6,4 @@ out/
 vendor/
 packages/*/src/**/*.mjs
 packages/*/src/**/*.d.mts
+packages/extension/static/manifest.json
