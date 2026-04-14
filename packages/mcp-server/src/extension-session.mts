@@ -77,6 +77,7 @@ interface CreateExtensionSessionTrackerDependencies {
   getEffectiveSiteConfigs: () => Promise<SiteConfig[]>;
   now?: () => number;
   ttlMs?: number;
+  completedCommandResultLimit?: number;
 }
 
 export type ScenarioTracePhase = "disconnected" | "not_ready" | "idle" | "armed" | "recording";
@@ -192,7 +193,8 @@ export function createExtensionSessionTracker({
   getActiveTrace,
   getEffectiveSiteConfigs,
   now = Date.now,
-  ttlMs = EXTENSION_HEARTBEAT_TTL_MS
+  ttlMs = EXTENSION_HEARTBEAT_TTL_MS,
+  completedCommandResultLimit = 100
 }: CreateExtensionSessionTrackerDependencies) {
   let activeClient: ActiveExtensionClientState | null = null;
   let commandSequence = 0;
@@ -240,7 +242,15 @@ export function createExtensionSessionTracker({
 
   function settleCompletedCommand(result: ExtensionServerCommandResult): void {
     pendingCommands.delete(result.commandId);
+    completedCommandResults.delete(result.commandId);
     completedCommandResults.set(result.commandId, result);
+    while (completedCommandResults.size > completedCommandResultLimit) {
+      const oldestCommandId = completedCommandResults.keys().next().value;
+      if (!oldestCommandId) {
+        break;
+      }
+      completedCommandResults.delete(oldestCommandId);
+    }
 
     const waiters = commandWaiters.get(result.commandId) ?? [];
     commandWaiters.delete(result.commandId);
@@ -299,7 +309,10 @@ export function createExtensionSessionTracker({
     const siteConfigs = connected
       ? await getEffectiveSiteConfigs()
       : [];
-    const enabledOrigins = siteConfigs.map((siteConfig) => siteConfig.origin);
+    const configuredOrigins = new Set(siteConfigs.map((siteConfig) => siteConfig.origin));
+    const enabledOrigins = connected && activeClient
+      ? [...new Set(activeClient.enabledOrigins.filter((origin) => configuredOrigins.has(origin)))]
+      : [];
     const captureReady = connected && Boolean(activeClient?.sessionActive) && enabledOrigins.length > 0;
     const tracePhase = getTracePhase({
       connected,

@@ -576,7 +576,7 @@ function registerTools(
       }
 
       const nextPatterns = mode === "reset"
-        ? normalizeDumpAllowlistPatterns([])
+        ? createConfiguredSiteConfig(normalizedOrigin).dumpAllowlistPatterns
         : mode === "append"
           ? [...new Set([
               ...existing.dumpAllowlistPatterns,

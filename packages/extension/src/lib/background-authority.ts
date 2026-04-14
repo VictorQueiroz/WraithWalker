@@ -118,7 +118,6 @@ export function createBackgroundAuthority({
   let offscreenDocumentPromise: Promise<void> | null = null;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   const bufferedCommandResults = new Map<string, ExtensionServerCommandResult>();
-  const knownCommandResults = new Map<string, ExtensionServerCommandResult>();
   const runningCommandIds = new Set<string>();
 
   function normalizeEffectiveSiteConfigs(siteConfigs: SiteConfig[]): SiteConfig[] {
@@ -262,16 +261,13 @@ export function createBackgroundAuthority({
         continue;
       }
 
-      const knownResult = knownCommandResults.get(command.commandId);
-      if (knownResult) {
-        bufferedCommandResults.set(command.commandId, knownResult);
+      if (bufferedCommandResults.has(command.commandId)) {
         continue;
       }
 
       runningCommandIds.add(command.commandId);
       try {
         const result = await runServerCommand(command);
-        knownCommandResults.set(result.commandId, result);
         bufferedCommandResults.set(result.commandId, result);
         producedNewResults = true;
       } finally {
@@ -293,8 +289,11 @@ export function createBackgroundAuthority({
       ...(completedCommands.length > 0 ? { completedCommands } : {})
     });
 
+    const redeliveredCommandIds = new Set((info.commands ?? []).map((command) => command.commandId));
     for (const result of completedCommands) {
-      bufferedCommandResults.delete(result.commandId);
+      if (!redeliveredCommandIds.has(result.commandId)) {
+        bufferedCommandResults.delete(result.commandId);
+      }
     }
 
     const previousTraceId = (state.activeTrace as { traceId?: string } | null)?.traceId || null;

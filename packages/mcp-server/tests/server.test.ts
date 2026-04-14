@@ -1741,6 +1741,21 @@ describe("mcp server", () => {
         })
       }));
 
+      const resetPatternsResult = await client.callTool({
+        name: "update-site-patterns",
+        arguments: {
+          origin: "https://app.example.com",
+          mode: "reset"
+        }
+      });
+      expect(JSON.parse(readTextContent(resetPatternsResult))).toEqual(expect.objectContaining({
+        changed: true,
+        siteConfig: expect.objectContaining({
+          origin: "https://app.example.com",
+          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
+        })
+      }));
+
       const invalidPatternResult = await client.callTool({
         name: "update-site-patterns",
         arguments: {
@@ -1766,7 +1781,7 @@ describe("mcp server", () => {
         sites: [{
           origin: "https://app.example.com",
           createdAt: expect.any(String),
-          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$", "\\.svg$"]
+          dumpAllowlistPatterns: ["\\.m?(js|ts)x?$", "\\.css$", "\\.wasm$", "\\.json$"]
         }]
       });
     } finally {
@@ -1913,8 +1928,9 @@ describe("mcp server", () => {
         origin: "https://prepared.example.com",
         connected: true,
         sessionActive: true,
-        captureReady: true,
-        nextAction: "ready"
+        captureReady: false,
+        enabledOrigins: ["https://app.example.com"],
+        nextAction: "wait_for_extension_refresh"
       }));
       const idleTraceStatus = await client.callTool({ name: "trace-status", arguments: {} });
       expect(JSON.parse(readTextContent(idleTraceStatus))).toEqual(
