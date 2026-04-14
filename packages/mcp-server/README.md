@@ -147,7 +147,8 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 | `checkout-workspace` | optional `paths`, optional `includeGlobs`, optional `excludeGlobs` | Copy selected projection-backed files into a same-machine local workspace and return its absolute path                                                                                            |
 | `push-workspace`     | `workspaceId`                                                      | Push tracked edits from a projection workspace back into the human-facing root files, skipping conflicts and untracked changes                                                                    |
 | `discard-workspace`  | `workspaceId`                                                      | Remove a previously checked-out projection workspace                                                                                                                                              |
-| `list-snapshots`     | —                                                                  | List saved scenario snapshots                                                                                                                                                                     |
+| `list-snapshots`     | —                                                                  | List saved scenario snapshots with legacy-safe metadata when available                                                                                                                            |
+| `save-trace-as-snapshot` | `traceId`, optional `name`, optional `description`             | Save the current fixture workspace as a named scenario snapshot and attach trace provenance                                                                                                      |
 | `diff-snapshots`     | `scenarioA`, `scenarioB`                                           | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names                                                                                          |
 
 ## tRPC Backend
@@ -222,6 +223,7 @@ For guided traces, the recommended agent flow is:
 3. poll `trace-status` while the user clicks
 4. `stop-trace`
 5. `read-trace` only when the compact summaries are not enough
+6. `save-trace-as-snapshot(traceId, name?)` when the trace should become a reusable scenario snapshot
 
 ### UI Imitation Example
 

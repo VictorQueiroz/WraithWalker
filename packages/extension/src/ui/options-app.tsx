@@ -16,9 +16,12 @@ import type {
   ErrorResult,
   NativeOpenResult,
   NativeVerifyResult,
+  ScenarioDiffResult,
   ScenarioListResult,
+  ScenarioListSuccess,
   ScenarioResult
 } from "../lib/messages.js";
+import type { FixtureDiff } from "@wraithwalker/core/scenarios";
 import {
   normalizeSiteInput,
   originToPermissionPattern
@@ -79,6 +82,67 @@ interface RootState {
 interface FlashState {
   variant: "default" | "success" | "destructive";
   text: string;
+}
+
+interface ScenarioSwitchDialogState {
+  targetName: string;
+  diff: FixtureDiff | null;
+}
+
+const EMPTY_SCENARIO_PANEL: Omit<ScenarioListSuccess, "ok"> = {
+  scenarios: [],
+  snapshots: [],
+  activeScenarioName: null,
+  activeScenarioMissing: false,
+  activeTrace: null,
+  supportsTraceSave: false
+};
+
+function isValidScenarioName(value: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value.trim());
+}
+
+function getScenarioNameError(value: string): string | null {
+  if (!value.trim()) {
+    return "Enter a scenario name.";
+  }
+
+  if (!isValidScenarioName(value)) {
+    return "Use 1-64 letters, numbers, hyphens, or underscores.";
+  }
+
+  return null;
+}
+
+function buildSuggestedScenarioName(
+  value: string | undefined,
+  fallback: string
+): string {
+  const base = (value?.trim() || fallback).trim();
+  const normalized = base
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .replace(/^[^a-zA-Z0-9]+/, "")
+    .slice(0, 64);
+
+  return isValidScenarioName(normalized) ? normalized : fallback;
+}
+
+function buildDiffPreview(diff: FixtureDiff): string[] {
+  const previews = [
+    ...diff.added.slice(0, 2).map(
+      (entry) => `Added ${entry.method} ${entry.pathname} (${entry.status})`
+    ),
+    ...diff.removed.slice(0, 2).map(
+      (entry) => `Removed ${entry.method} ${entry.pathname} (${entry.status})`
+    ),
+    ...diff.changed.slice(0, 3).map((entry) => {
+      const suffix = entry.bodyChanged ? ", body changed" : "";
+      return `Changed ${entry.method} ${entry.pathname} (${entry.statusBefore} -> ${entry.statusAfter}${suffix})`;
+    })
+  ];
+
+  return previews.slice(0, 5);
 }
 
 export interface OptionsAppProps {
@@ -311,11 +375,27 @@ export function OptionsApp({
     React.useState<SessionSnapshot | null>(null);
   const [nativeHostConfig, setNativeHostConfigState] =
     React.useState<NativeHostConfig | null>(null);
-  const [scenarioNames, setScenarioNames] = React.useState<string[]>([]);
-  const [scenarioName, setScenarioName] = React.useState("");
+  const [scenarioPanel, setScenarioPanel] = React.useState(EMPTY_SCENARIO_PANEL);
+  const [manualScenarioName, setManualScenarioName] = React.useState("");
+  const [manualScenarioDescription, setManualScenarioDescription] =
+    React.useState("");
+  const [manualScenarioError, setManualScenarioError] =
+    React.useState<string | null>(null);
+  const [traceScenarioName, setTraceScenarioName] = React.useState("");
+  const [traceScenarioDescription, setTraceScenarioDescription] =
+    React.useState("");
+  const [traceScenarioError, setTraceScenarioError] =
+    React.useState<string | null>(null);
   const [scenarioStatus, setScenarioStatus] = React.useState<FlashState | null>(
     null
   );
+  const [savingManualScenario, setSavingManualScenario] = React.useState(false);
+  const [savingTraceScenario, setSavingTraceScenario] = React.useState(false);
+  const [switchBusyName, setSwitchBusyName] = React.useState<string | null>(
+    null
+  );
+  const [switchDialog, setSwitchDialog] =
+    React.useState<ScenarioSwitchDialogState | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [flash, setFlash] = React.useState<FlashState | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -371,18 +451,24 @@ export function OptionsApp({
           variant: "destructive",
           text: getErrorMessage(result as ErrorResult)
         });
-        setScenarioNames([]);
+        setScenarioPanel(EMPTY_SCENARIO_PANEL);
         return;
       }
 
       setScenarioStatus(null);
-      setScenarioNames(result.scenarios);
+      setScenarioPanel({
+        snapshots: result.snapshots,
+        activeScenarioName: result.activeScenarioName,
+        activeScenarioMissing: result.activeScenarioMissing,
+        activeTrace: result.activeTrace,
+        supportsTraceSave: result.supportsTraceSave
+      });
     } catch (error) {
       setScenarioStatus({
         variant: "destructive",
         text: error instanceof Error ? error.message : String(error)
       });
-      setScenarioNames([]);
+      setScenarioPanel(EMPTY_SCENARIO_PANEL);
     }
   }, [chromeApi.runtime]);
 
@@ -412,6 +498,28 @@ export function OptionsApp({
   React.useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  React.useEffect(() => {
+    if (!scenarioPanel.activeTrace) {
+      setTraceScenarioName("");
+      setTraceScenarioDescription("");
+      setTraceScenarioError(null);
+      return;
+    }
+
+    setTraceScenarioName(
+      buildSuggestedScenarioName(
+        scenarioPanel.activeTrace.name,
+        scenarioPanel.activeTrace.traceId
+      )
+    );
+    setTraceScenarioDescription(scenarioPanel.activeTrace.goal ?? "");
+    setTraceScenarioError(null);
+  }, [
+    scenarioPanel.activeTrace?.goal,
+    scenarioPanel.activeTrace?.name,
+    scenarioPanel.activeTrace?.traceId
+  ]);
 
   async function handleAddSite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -650,20 +758,28 @@ export function OptionsApp({
   }
 
   async function handleSaveScenario() {
-    if (!scenarioName.trim()) {
+    const nameError = getScenarioNameError(manualScenarioName);
+    if (nameError) {
+      setManualScenarioError(nameError);
       return;
     }
 
     setFlash(null);
+    setManualScenarioError(null);
+    setSavingManualScenario(true);
     try {
       const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
         type: "scenario.save",
-        name: scenarioName.trim()
+        name: manualScenarioName.trim(),
+        ...(manualScenarioDescription.trim()
+          ? { description: manualScenarioDescription.trim() }
+          : {})
       });
       if (!result.ok) {
         throw new Error(getErrorMessage(result as ErrorResult));
       }
-      setScenarioName("");
+      setManualScenarioName("");
+      setManualScenarioDescription("");
       await refreshScenarios();
       setFlash({
         variant: "success",
@@ -674,19 +790,106 @@ export function OptionsApp({
         variant: "destructive",
         text: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      setSavingManualScenario(false);
+    }
+  }
+
+  async function handleSaveScenarioFromTrace() {
+    const nameError = getScenarioNameError(traceScenarioName);
+    if (nameError) {
+      setTraceScenarioError(nameError);
+      return;
+    }
+
+    setFlash(null);
+    setTraceScenarioError(null);
+    setSavingTraceScenario(true);
+    try {
+      const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
+        type: "scenario.saveFromTrace",
+        name: traceScenarioName.trim(),
+        ...(traceScenarioDescription.trim()
+          ? { description: traceScenarioDescription.trim() }
+          : {})
+      });
+      if (!result.ok) {
+        throw new Error(getErrorMessage(result as ErrorResult));
+      }
+      await refreshScenarios();
+      setFlash({
+        variant: "success",
+        text: `Scenario "${result.name}" saved from the active trace.`
+      });
+    } catch (error) {
+      setFlash({
+        variant: "destructive",
+        text: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setSavingTraceScenario(false);
     }
   }
 
   async function handleSwitchScenario(name: string) {
     setFlash(null);
+    setSwitchBusyName(name);
+    try {
+      if (
+        scenarioPanel.activeScenarioName &&
+        !scenarioPanel.activeScenarioMissing &&
+        scenarioPanel.activeScenarioName !== name
+      ) {
+        const diffResult = await sendMessage<ScenarioDiffResult>(
+          chromeApi.runtime,
+          {
+            type: "scenario.diff",
+            scenarioA: scenarioPanel.activeScenarioName,
+            scenarioB: name
+          }
+        );
+        if (!diffResult.ok) {
+          throw new Error(getErrorMessage(diffResult as ErrorResult));
+        }
+
+        setSwitchDialog({
+          targetName: name,
+          diff: diffResult.diff
+        });
+        return;
+      }
+
+      setSwitchDialog({
+        targetName: name,
+        diff: null
+      });
+    } catch (error) {
+      setFlash({
+        variant: "destructive",
+        text: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setSwitchBusyName(null);
+    }
+  }
+
+  async function handleConfirmSwitchScenario() {
+    if (!switchDialog) {
+      return;
+    }
+
+    setFlash(null);
+    setSwitchBusyName(switchDialog.targetName);
     try {
       const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
         type: "scenario.switch",
-        name
+        name: switchDialog.targetName
       });
       if (!result.ok) {
         throw new Error(getErrorMessage(result as ErrorResult));
       }
+      setSwitchDialog(null);
+      await refreshScenarios();
       setFlash({
         variant: "success",
         text: `Switched to "${result.name}".`
@@ -696,6 +899,8 @@ export function OptionsApp({
         variant: "destructive",
         text: error instanceof Error ? error.message : String(error)
       });
+    } finally {
+      setSwitchBusyName(null);
     }
   }
 
@@ -704,6 +909,9 @@ export function OptionsApp({
     : rootState.permission === "granted"
       ? "Change Root Directory"
       : "Reconnect Root Directory";
+  const switchDialogPreview = switchDialog?.diff
+    ? buildDiffPreview(switchDialog.diff)
+    : [];
 
   return (
     <main className="mx-auto max-w-4xl p-6">
@@ -837,56 +1045,290 @@ export function OptionsApp({
               </CardContent>
             </Card>
 
-            <Card className="opacity-90">
+            <Card>
               <CardHeader>
                 <SectionIntro
-                  title="Scenarios"
-                  description="Secondary controls for saving and switching fixture snapshots when you need them."
+                  title="Scenario Manager"
+                  description="Save metadata-rich snapshots, keep the active root marker visible, and compare changes before switching."
                 />
               </CardHeader>
-              <CardContent className="grid gap-4">
+              <CardContent className="grid gap-6">
                 {scenarioStatus ? (
                   <Alert variant={scenarioStatus.variant}>
                     {scenarioStatus.text}
                   </Alert>
                 ) : null}
-                <div className="grid gap-2">
-                  {scenarioNames.length > 0 ? (
-                    scenarioNames.map((name) => (
-                      <div
-                        key={name}
-                        className="flex items-center justify-between rounded-xl border border-border/70 bg-white/70 px-4 py-3"
+
+                <div className="grid gap-4 rounded-xl border border-border/70 bg-white/70 p-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">Current Workspace</h3>
+                    <p className="text-sm text-muted-foreground">
+                      The active snapshot marker lives in the connected root and
+                      only changes when you switch.
+                    </p>
+                  </div>
+
+                  {scenarioPanel.activeScenarioName ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={
+                          scenarioPanel.activeScenarioMissing
+                            ? "destructive"
+                            : "success"
+                        }
                       >
-                        <span className="font-medium">{name}</span>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => void handleSwitchScenario(name)}
-                        >
-                          Switch
+                        {scenarioPanel.activeScenarioMissing
+                          ? "Active Missing"
+                          : "Active"}
+                      </Badge>
+                      <span className="font-medium">
+                        {scenarioPanel.activeScenarioName}
+                      </span>
+                    </div>
+                  ) : (
+                    <Alert variant="default">
+                      No active snapshot marker is set for this root yet.
+                    </Alert>
+                  )}
+
+                  {scenarioPanel.activeScenarioMissing &&
+                  scenarioPanel.activeScenarioName ? (
+                    <Alert variant="destructive">
+                      The active snapshot marker still points to "
+                      {scenarioPanel.activeScenarioName}", but that snapshot is
+                      missing from this root.
+                    </Alert>
+                  ) : null}
+
+                  <form
+                    className="grid gap-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSaveScenario();
+                    }}
+                  >
+                    <div className="grid gap-2">
+                      <Label htmlFor="scenario-name">Scenario name</Label>
+                      <Input
+                        id="scenario-name"
+                        aria-label="Scenario name"
+                        placeholder="baseline"
+                        disabled={savingManualScenario}
+                        value={manualScenarioName}
+                        onChange={(event) => {
+                          setManualScenarioName(event.currentTarget.value);
+                          setManualScenarioError(null);
+                        }}
+                      />
+                      {manualScenarioError ? (
+                        <p className="text-xs text-destructive">
+                          {manualScenarioError}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="scenario-description">
+                        Description (optional)
+                      </Label>
+                      <Textarea
+                        id="scenario-description"
+                        aria-label="Scenario description"
+                        placeholder="Saved after refreshing the root fixtures."
+                        disabled={savingManualScenario}
+                        value={manualScenarioDescription}
+                        onChange={(event) =>
+                          setManualScenarioDescription(event.currentTarget.value)
+                        }
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={savingManualScenario}>
+                        {savingManualScenario ? "Saving..." : "Save Snapshot"}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+
+                {scenarioPanel.supportsTraceSave && scenarioPanel.activeTrace ? (
+                  <div className="grid gap-4 rounded-xl border border-border/70 bg-white/70 p-4">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold">
+                        Save From Active Trace
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Snapshot the current workspace with trace provenance
+                        attached while the server-backed trace is active.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-2 rounded-xl border border-border/60 bg-background/80 p-3 text-sm">
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="default">
+                          {scenarioPanel.activeTrace.status}
+                        </Badge>
+                        <span className="font-medium">
+                          {scenarioPanel.activeTrace.name ??
+                            scenarioPanel.activeTrace.traceId}
+                        </span>
+                      </div>
+                      {scenarioPanel.activeTrace.goal ? (
+                        <p>{scenarioPanel.activeTrace.goal}</p>
+                      ) : null}
+                      <div className="grid gap-1 text-muted-foreground sm:grid-cols-2">
+                        <span>
+                          Trace ID: {scenarioPanel.activeTrace.traceId}
+                        </span>
+                        <span>
+                          Steps: {scenarioPanel.activeTrace.stepCount}
+                        </span>
+                        <span>
+                          Linked fixtures:{" "}
+                          {scenarioPanel.activeTrace.linkedFixtureCount}
+                        </span>
+                        <span>
+                          Origins: {scenarioPanel.activeTrace.selectedOrigins.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <form
+                      className="grid gap-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleSaveScenarioFromTrace();
+                      }}
+                    >
+                      <div className="grid gap-2">
+                        <Label htmlFor="trace-scenario-name">Scenario name</Label>
+                        <Input
+                          id="trace-scenario-name"
+                          aria-label="Trace scenario name"
+                          placeholder="trace_snapshot"
+                          disabled={savingTraceScenario}
+                          value={traceScenarioName}
+                          onChange={(event) => {
+                            setTraceScenarioName(event.currentTarget.value);
+                            setTraceScenarioError(null);
+                          }}
+                        />
+                        {traceScenarioError ? (
+                          <p className="text-xs text-destructive">
+                            {traceScenarioError}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="trace-scenario-description">
+                          Description (optional)
+                        </Label>
+                        <Textarea
+                          id="trace-scenario-description"
+                          aria-label="Trace scenario description"
+                          placeholder="Saved from the active guided trace."
+                          disabled={savingTraceScenario}
+                          value={traceScenarioDescription}
+                          onChange={(event) =>
+                            setTraceScenarioDescription(
+                              event.currentTarget.value
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <Button type="submit" disabled={savingTraceScenario}>
+                          {savingTraceScenario
+                            ? "Saving..."
+                            : "Save Trace Snapshot"}
                         </Button>
                       </div>
-                    ))
+                    </form>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold">Saved Snapshots</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Active snapshots stay pinned first, then the rest sort
+                        by newest saved time.
+                      </p>
+                    </div>
+                    <Badge variant="muted">
+                      {scenarioPanel.snapshots.length} saved
+                    </Badge>
+                  </div>
+
+                  {scenarioPanel.snapshots.length > 0 ? (
+                    scenarioPanel.snapshots.map((snapshot) => {
+                      const switchBusy = switchBusyName === snapshot.name;
+
+                      return (
+                        <div
+                          key={snapshot.name}
+                          className="grid gap-3 rounded-xl border border-border/70 bg-white/70 p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium">
+                                  {snapshot.name}
+                                </span>
+                                {snapshot.isActive ? (
+                                  <Badge variant="success">Active</Badge>
+                                ) : null}
+                                {snapshot.source === "manual" ? (
+                                  <Badge variant="default">Manual</Badge>
+                                ) : null}
+                                {snapshot.source === "trace" ? (
+                                  <Badge variant="muted">Trace</Badge>
+                                ) : null}
+                                {snapshot.source === "unknown" ? (
+                                  <Badge variant="muted">Legacy</Badge>
+                                ) : null}
+                              </div>
+                              {snapshot.description ? (
+                                <p className="text-sm text-foreground/90">
+                                  {snapshot.description}
+                                </p>
+                              ) : null}
+                              <div className="grid gap-1 text-sm text-muted-foreground">
+                                {snapshot.createdAt ? (
+                                  <span>Created: {snapshot.createdAt}</span>
+                                ) : null}
+                                {snapshot.sourceTrace ? (
+                                  <span>
+                                    Trace {snapshot.sourceTrace.traceId} ·{" "}
+                                    {snapshot.sourceTrace.stepCount} steps ·{" "}
+                                    {
+                                      snapshot.sourceTrace.linkedFixtureCount
+                                    }{" "}
+                                    linked fixtures
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={snapshot.isActive || switchBusy}
+                              onClick={() =>
+                                void handleSwitchScenario(snapshot.name)
+                              }
+                            >
+                              {snapshot.isActive
+                                ? "Active"
+                                : switchBusy
+                                  ? "Working..."
+                                  : "Switch"}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
                   ) : (
-                    <Alert variant="default">No scenarios saved yet.</Alert>
+                    <Alert variant="default">No snapshots saved yet.</Alert>
                   )}
-                </div>
-                <Separator />
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <Input
-                    aria-label="Scenario name"
-                    placeholder="baseline"
-                    value={scenarioName}
-                    onChange={(event) =>
-                      setScenarioName(event.currentTarget.value)
-                    }
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => void handleSaveScenario()}
-                  >
-                    Save Scenario
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1040,6 +1482,101 @@ export function OptionsApp({
             </Card>
           </div>
         </div>
+
+        {switchDialog ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6">
+            <Card
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Switch to ${switchDialog.targetName}`}
+              className="w-full max-w-xl"
+            >
+              <CardHeader>
+                <CardTitle>Switch Snapshot</CardTitle>
+                <CardDescription>
+                  {switchDialog.diff
+                    ? `Compare "${switchDialog.diff.scenarioA}" with "${switchDialog.targetName}" before replacing the current workspace.`
+                    : `Replace the current workspace with "${switchDialog.targetName}".`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                {switchDialog.diff ? (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                        <div className="text-xs text-muted-foreground">
+                          Added
+                        </div>
+                        <div className="text-lg font-semibold">
+                          {switchDialog.diff.added.length}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                        <div className="text-xs text-muted-foreground">
+                          Removed
+                        </div>
+                        <div className="text-lg font-semibold">
+                          {switchDialog.diff.removed.length}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                        <div className="text-xs text-muted-foreground">
+                          Changed
+                        </div>
+                        <div className="text-lg font-semibold">
+                          {switchDialog.diff.changed.length}
+                        </div>
+                      </div>
+                    </div>
+
+                    {switchDialogPreview.length > 0 ? (
+                      <ul className="grid gap-2 text-sm text-foreground/90">
+                        {switchDialogPreview.map((preview) => (
+                          <li
+                            key={preview}
+                            className="rounded-xl border border-border/70 bg-white/70 px-3 py-2"
+                          >
+                            {preview}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <Alert variant="default">
+                        No endpoint differences were detected between these
+                        snapshots.
+                      </Alert>
+                    )}
+                  </>
+                ) : (
+                  <Alert variant="default">
+                    No active snapshot baseline is available, so this switch
+                    will proceed without a diff preview.
+                  </Alert>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={switchBusyName === switchDialog.targetName}
+                    onClick={() => setSwitchDialog(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={switchBusyName === switchDialog.targetName}
+                    onClick={() => void handleConfirmSwitchScenario()}
+                  >
+                    {switchBusyName === switchDialog.targetName
+                      ? "Switching..."
+                      : "Confirm Switch"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </div>
     </main>
   );

@@ -145,6 +145,16 @@ describe("background runtime shared helpers", () => {
       isBackgroundMessage({ type: "native.open", editorId: "cursor" })
     ).toBe(true);
     expect(
+      isBackgroundMessage({
+        type: "scenario.diff",
+        scenarioA: "baseline",
+        scenarioB: "candidate"
+      })
+    ).toBe(true);
+    expect(
+      isBackgroundMessage({ type: "scenario.saveFromTrace", name: "trace" })
+    ).toBe(true);
+    expect(
       isBackgroundMessage({ target: "offscreen", type: "session.start" })
     ).toBe(false);
     expect(isBackgroundMessage({ type: "unknown" })).toBe(false);

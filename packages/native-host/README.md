@@ -28,7 +28,7 @@ You **do** want the native host when you need:
 | `revealDirectory` | Verifies the root and opens that directory in Finder, Explorer, or the platform file manager            |
 | `saveScenario`    | Copies current fixture directories into `.wraithwalker/scenarios/{name}/`                               |
 | `switchScenario`  | Restores a saved scenario by replacing current fixtures with the snapshot                               |
-| `listScenarios`   | Returns the names of all saved scenarios                                                                |
+| `listScenarios`   | Returns saved scenario names plus structured snapshot state for the extension UI                        |
 
 ## Setup
 

@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 function createNativeMessage(payload: unknown): Buffer {
@@ -25,7 +26,8 @@ async function loadHostModule() {
     switchScenario: vi
       .fn()
       .mockResolvedValue({ ok: true, via: "switchScenario" }),
-    listScenarios: vi.fn().mockResolvedValue({ ok: true, via: "listScenarios" })
+    listScenarios: vi.fn().mockResolvedValue({ ok: true, via: "listScenarios" }),
+    diffScenarios: vi.fn().mockResolvedValue({ ok: true, via: "diffScenarios" })
   };
 
   vi.doMock("../src/lib.mjs", () => mocks);
@@ -95,6 +97,9 @@ describe("native host entrypoint", () => {
     await expect(
       host.handleMessage({ type: "listScenarios" })
     ).resolves.toEqual({ ok: true, via: "listScenarios" });
+    await expect(
+      host.handleMessage({ type: "diffScenarios" })
+    ).resolves.toEqual({ ok: true, via: "diffScenarios" });
 
     expect(mocks.verifyRoot).toHaveBeenCalledWith({ type: "verifyRoot" });
     expect(mocks.openDirectory).toHaveBeenCalledWith({ type: "openDirectory" });
@@ -106,6 +111,9 @@ describe("native host entrypoint", () => {
       type: "switchScenario"
     });
     expect(mocks.listScenarios).toHaveBeenCalledWith({ type: "listScenarios" });
+    expect(mocks.diffScenarios).toHaveBeenCalledWith({
+      type: "diffScenarios"
+    });
   });
 
   it("rejects unknown message types", async () => {
@@ -274,7 +282,7 @@ describe("native host entrypoint", () => {
 
     try {
       await fs.symlink(
-        path.join(process.cwd(), "src", "host.mts"),
+        fileURLToPath(new URL("../src/host.mts", import.meta.url)),
         symlinkPath
       );
 

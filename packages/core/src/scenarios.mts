@@ -4,12 +4,17 @@ import {
   CAPTURES_DIR,
   CAPTURE_HTTP_DIR,
   MANIFESTS_DIR,
+  SCENARIO_ACTIVE_FILE,
+  SCENARIO_ACTIVE_SCHEMA_VERSION,
+  SCENARIO_METADATA_FILE,
+  SCENARIO_METADATA_SCHEMA_VERSION,
   SCENARIOS_DIR,
   WRAITHWALKER_DIR
 } from "./constants.mjs";
 import type { ResponseMeta } from "./fixture-layout.mjs";
 import { readSentinel } from "./root.mjs";
 import { createFixtureRootFs, type FixtureRootFs } from "./root-fs.mjs";
+import type { ScenarioTraceRecord } from "./scenario-traces.mjs";
 
 export interface ScenarioRootOptions {
   path?: string;
@@ -18,6 +23,58 @@ export interface ScenarioRootOptions {
 
 export interface ScenarioOperationOptions extends ScenarioRootOptions {
   name?: string;
+  description?: string;
+  createdAt?: string;
+  sourceTrace?: ScenarioSnapshotSourceTrace;
+}
+
+export interface ScenarioActiveMarker {
+  schemaVersion: number;
+  name: string;
+  rootId: string;
+  updatedAt: string;
+}
+
+export interface ScenarioSnapshotSourceTrace {
+  traceId: string;
+  name?: string;
+  goal?: string;
+  status: ScenarioTraceRecord["status"];
+  createdAt: string;
+  startedAt?: string;
+  endedAt?: string;
+  selectedOrigins: string[];
+  extensionClientId: string;
+  stepCount: number;
+  linkedFixtureCount: number;
+}
+
+export interface ScenarioSnapshotMetadata {
+  schemaVersion: number;
+  name: string;
+  createdAt: string;
+  rootId: string;
+  source: "manual" | "trace";
+  description?: string;
+  sourceTrace?: ScenarioSnapshotSourceTrace;
+}
+
+export interface ScenarioSnapshotSummary {
+  name: string;
+  schemaVersion?: number;
+  createdAt?: string;
+  rootId?: string;
+  source: "manual" | "trace" | "unknown";
+  description?: string;
+  sourceTrace?: ScenarioSnapshotSourceTrace;
+  hasMetadata: boolean;
+  isActive: boolean;
+}
+
+export interface ScenarioPanelState {
+  snapshots: ScenarioSnapshotSummary[];
+  activeScenarioName: string | null;
+  activeScenarioMissing: boolean;
 }
 
 export interface EndpointRef {
@@ -52,10 +109,53 @@ interface EndpointWithBody {
   bodyContent: string | null;
 }
 
+interface StoredScenarioSnapshotMetadata
+  extends Omit<ScenarioSnapshotMetadata, "source" | "sourceTrace"> {
+  source?: ScenarioSnapshotMetadata["source"];
+  sourceTrace?: Partial<ScenarioSnapshotSourceTrace>;
+}
+
+interface StoredScenarioActiveMarker
+  extends Partial<Omit<ScenarioActiveMarker, "name" | "rootId" | "updatedAt">> {
+  name?: string;
+  rootId?: string;
+  updatedAt?: string;
+}
+
+function countLinkedFixtures(
+  trace: Pick<ScenarioTraceRecord, "steps">
+): number {
+  return trace.steps.reduce(
+    (total, step) => total + step.linkedFixtures.length,
+    0
+  );
+}
+
+export function buildScenarioSnapshotSourceTrace(
+  trace: ScenarioTraceRecord
+): ScenarioSnapshotSourceTrace {
+  return {
+    traceId: trace.traceId,
+    ...(trace.name ? { name: trace.name } : {}),
+    ...(trace.goal ? { goal: trace.goal } : {}),
+    status: trace.status,
+    createdAt: trace.createdAt,
+    ...(trace.startedAt ? { startedAt: trace.startedAt } : {}),
+    ...(trace.endedAt ? { endedAt: trace.endedAt } : {}),
+    selectedOrigins: [...trace.selectedOrigins],
+    extensionClientId: trace.extensionClientId,
+    stepCount: trace.steps.length,
+    linkedFixtureCount: countLinkedFixtures(trace)
+  };
+}
+
 async function verifyRootPath({
   path: rootPath,
   expectedRootId
-}: ScenarioRootOptions): Promise<string> {
+}: ScenarioRootOptions): Promise<{
+  rootPath: string;
+  sentinel: Awaited<ReturnType<typeof readSentinel>>;
+}> {
   if (!rootPath) {
     throw new Error("Root path is required.");
   }
@@ -71,7 +171,10 @@ async function verifyRootPath({
     );
   }
 
-  return rootPath;
+  return {
+    rootPath,
+    sentinel
+  };
 }
 
 function isScenarioSafe(name: string): boolean {
@@ -100,6 +203,10 @@ async function requireScenarioDir(
   }
 
   return scenarioDir;
+}
+
+function scenarioMetadataPath(scenarioName: string): string {
+  return path.join(SCENARIOS_DIR, scenarioName, SCENARIO_METADATA_FILE);
 }
 
 async function listFixtureEntries(rootFs: FixtureRootFs): Promise<string[]> {
@@ -185,12 +292,248 @@ export async function listScenarios(rootPath: string): Promise<string[]> {
   return createFixtureRootFs(rootPath).listOptionalDirectories(SCENARIOS_DIR);
 }
 
+function normalizeScenarioActiveMarker(
+  value: unknown
+): ScenarioActiveMarker | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const marker = value as StoredScenarioActiveMarker;
+  if (
+    !isScenarioSafe(marker.name ?? "") ||
+    typeof marker.rootId !== "string" ||
+    typeof marker.updatedAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    schemaVersion:
+      typeof marker.schemaVersion === "number"
+        ? marker.schemaVersion
+        : SCENARIO_ACTIVE_SCHEMA_VERSION,
+    name: marker.name,
+    rootId: marker.rootId,
+    updatedAt: marker.updatedAt
+  };
+}
+
+function normalizeScenarioSource(
+  value: unknown
+): ScenarioSnapshotSummary["source"] {
+  return value === "manual" || value === "trace" ? value : "unknown";
+}
+
+function normalizeScenarioSnapshotSourceTrace(
+  source: unknown
+): ScenarioSnapshotSourceTrace | undefined {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+
+  const traceSource = source as Partial<ScenarioSnapshotSourceTrace>;
+  if (
+    typeof traceSource.traceId !== "string" ||
+    typeof traceSource.createdAt !== "string" ||
+    (traceSource.status !== "armed" &&
+      traceSource.status !== "recording" &&
+      traceSource.status !== "completed") ||
+    typeof traceSource.extensionClientId !== "string" ||
+    !Array.isArray(traceSource.selectedOrigins) ||
+    typeof traceSource.stepCount !== "number" ||
+    typeof traceSource.linkedFixtureCount !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    traceId: traceSource.traceId,
+    ...(typeof traceSource.name === "string" ? { name: traceSource.name } : {}),
+    ...(typeof traceSource.goal === "string" ? { goal: traceSource.goal } : {}),
+    status: traceSource.status,
+    createdAt: traceSource.createdAt,
+    ...(typeof traceSource.startedAt === "string"
+      ? { startedAt: traceSource.startedAt }
+      : {}),
+    ...(typeof traceSource.endedAt === "string"
+      ? { endedAt: traceSource.endedAt }
+      : {}),
+    selectedOrigins: traceSource.selectedOrigins.filter(
+      (origin): origin is string => typeof origin === "string"
+    ),
+    extensionClientId: traceSource.extensionClientId,
+    stepCount: traceSource.stepCount,
+    linkedFixtureCount: traceSource.linkedFixtureCount
+  };
+}
+
+function toScenarioSnapshotSummary(
+  scenarioName: string,
+  metadata: StoredScenarioSnapshotMetadata | null,
+  activeScenarioName: string | null
+): ScenarioSnapshotSummary {
+  if (!metadata) {
+    return {
+      name: scenarioName,
+      source: "unknown",
+      hasMetadata: false,
+      isActive: activeScenarioName === scenarioName
+    };
+  }
+
+  const sourceTrace = normalizeScenarioSnapshotSourceTrace(metadata.sourceTrace);
+
+  return {
+    name: scenarioName,
+    ...(typeof metadata.schemaVersion === "number"
+      ? { schemaVersion: metadata.schemaVersion }
+      : {}),
+    ...(typeof metadata.createdAt === "string"
+      ? { createdAt: metadata.createdAt }
+      : {}),
+    ...(typeof metadata.rootId === "string" ? { rootId: metadata.rootId } : {}),
+    source: normalizeScenarioSource(metadata.source),
+    ...(typeof metadata.description === "string" && metadata.description.trim()
+      ? { description: metadata.description.trim() }
+      : {}),
+    ...(sourceTrace ? { sourceTrace } : {}),
+    hasMetadata: true,
+    isActive: activeScenarioName === scenarioName
+  };
+}
+
+function sortScenarioSnapshots(
+  snapshots: ScenarioSnapshotSummary[]
+): ScenarioSnapshotSummary[] {
+  return snapshots.sort((left, right) => {
+    if (left.isActive !== right.isActive) {
+      return left.isActive ? -1 : 1;
+    }
+
+    if (left.createdAt && right.createdAt) {
+      return (
+        right.createdAt.localeCompare(left.createdAt) ||
+        left.name.localeCompare(right.name)
+      );
+    }
+
+    if (left.createdAt) {
+      return -1;
+    }
+
+    if (right.createdAt) {
+      return 1;
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+}
+
+export async function readActiveScenarioMarker(
+  rootPath: string
+): Promise<ScenarioActiveMarker | null> {
+  const rootFs = createFixtureRootFs(rootPath);
+  const marker =
+    await rootFs.readOptionalJson<StoredScenarioActiveMarker>(
+      SCENARIO_ACTIVE_FILE
+    );
+
+  return normalizeScenarioActiveMarker(marker);
+}
+
+export async function writeActiveScenarioMarker({
+  path: rootPath,
+  expectedRootId,
+  name,
+  createdAt
+}: ScenarioOperationOptions): Promise<ScenarioActiveMarker> {
+  const { rootPath: verifiedRootPath, sentinel } = await verifyRootPath({
+    path: rootPath,
+    expectedRootId
+  });
+  const scenarioName = validateScenarioName(name);
+  const marker: ScenarioActiveMarker = {
+    schemaVersion: SCENARIO_ACTIVE_SCHEMA_VERSION,
+    name: scenarioName,
+    rootId: sentinel.rootId,
+    updatedAt: createdAt ?? new Date().toISOString()
+  };
+
+  await createFixtureRootFs(verifiedRootPath).writeJson(
+    SCENARIO_ACTIVE_FILE,
+    marker
+  );
+
+  return marker;
+}
+
+export async function listScenarioPanelState(
+  rootPath: string
+): Promise<ScenarioPanelState> {
+  const rootFs = createFixtureRootFs(rootPath);
+  const [scenarioNames, activeMarker] = await Promise.all([
+    listScenarios(rootPath),
+    readActiveScenarioMarker(rootPath)
+  ]);
+  const activeScenarioName = activeMarker?.name ?? null;
+  const snapshots = sortScenarioSnapshots(
+    await Promise.all(
+      scenarioNames.map(async (scenarioName) =>
+        toScenarioSnapshotSummary(
+          scenarioName,
+          await rootFs.readOptionalJson<StoredScenarioSnapshotMetadata>(
+            scenarioMetadataPath(scenarioName)
+          ),
+          activeScenarioName
+        )
+      )
+    )
+  );
+
+  return {
+    snapshots,
+    activeScenarioName,
+    activeScenarioMissing: Boolean(
+      activeScenarioName &&
+        !snapshots.some((snapshot) => snapshot.name === activeScenarioName)
+    )
+  };
+}
+
+export async function readScenarioSnapshot(
+  rootPath: string,
+  name: string
+): Promise<ScenarioSnapshotSummary | null> {
+  const scenarioName = validateScenarioName(name);
+  const rootFs = createFixtureRootFs(rootPath);
+  await requireScenarioDir(rootPath, scenarioName);
+  const activeScenarioName =
+    (await readActiveScenarioMarker(rootPath))?.name ?? null;
+
+  const metadata =
+    await rootFs.readOptionalJson<StoredScenarioSnapshotMetadata>(
+      scenarioMetadataPath(scenarioName)
+    );
+
+  return toScenarioSnapshotSummary(scenarioName, metadata, activeScenarioName);
+}
+
+export async function listScenarioSnapshots(
+  rootPath: string
+): Promise<ScenarioSnapshotSummary[]> {
+  return (await listScenarioPanelState(rootPath)).snapshots;
+}
+
 export async function saveScenario({
   path: rootPath,
   expectedRootId,
-  name
+  name,
+  description,
+  createdAt = new Date().toISOString(),
+  sourceTrace
 }: ScenarioOperationOptions): Promise<{ ok: true; name: string }> {
-  const verifiedRootPath = await verifyRootPath({
+  const { rootPath: verifiedRootPath, sentinel } = await verifyRootPath({
     path: rootPath,
     expectedRootId
   });
@@ -211,6 +554,20 @@ export async function saveScenario({
     await rootFs.copyRecursive(entry, path.join(scenarioDir, entry));
   }
 
+  const snapshotMetadata: ScenarioSnapshotMetadata = {
+    schemaVersion: SCENARIO_METADATA_SCHEMA_VERSION,
+    name: scenarioName,
+    createdAt,
+    rootId: sentinel.rootId,
+    source: sourceTrace ? "trace" : "manual",
+    ...(description?.trim() ? { description: description.trim() } : {}),
+    ...(sourceTrace ? { sourceTrace } : {})
+  };
+  await rootFs.writeJson(
+    path.join(scenarioDir, SCENARIO_METADATA_FILE),
+    snapshotMetadata
+  );
+
   return { ok: true, name: scenarioName };
 }
 
@@ -219,7 +576,7 @@ export async function switchScenario({
   expectedRootId,
   name
 }: ScenarioOperationOptions): Promise<{ ok: true; name: string }> {
-  const verifiedRootPath = await verifyRootPath({
+  const { rootPath: verifiedRootPath } = await verifyRootPath({
     path: rootPath,
     expectedRootId
   });
@@ -237,8 +594,17 @@ export async function switchScenario({
 
   const scenarioEntries = await rootFs.listDirectory(scenarioDir);
   for (const entry of scenarioEntries) {
+    if (entry.name === SCENARIO_METADATA_FILE) {
+      continue;
+    }
     await rootFs.copyRecursive(path.join(scenarioDir, entry.name), entry.name);
   }
+
+  await writeActiveScenarioMarker({
+    path: verifiedRootPath,
+    expectedRootId,
+    name: scenarioName
+  });
 
   return { ok: true, name: scenarioName };
 }

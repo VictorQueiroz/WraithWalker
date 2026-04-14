@@ -515,6 +515,7 @@ describe("mcp server", () => {
         "read-trace",
         "remove-site",
         "restore-file",
+        "save-trace-as-snapshot",
         "search-files",
         "start-trace",
         "stop-trace",
@@ -809,8 +810,23 @@ describe("mcp server", () => {
       });
       const scenarios = JSON.parse(readTextContent(scenariosResult)) as {
         scenarios: string[];
+        snapshots: Array<{ name: string; source: string; hasMetadata: boolean }>;
       };
       expect(scenarios.scenarios.sort()).toEqual(["baseline", "candidate"]);
+      expect(scenarios.snapshots).toEqual([
+        {
+          name: "baseline",
+          source: "unknown",
+          hasMetadata: false,
+          isActive: false
+        },
+        {
+          name: "candidate",
+          source: "unknown",
+          hasMetadata: false,
+          isActive: false
+        }
+      ]);
 
       const diffResult = await client.callTool({
         name: "diff-snapshots",
@@ -2657,6 +2673,46 @@ describe("mcp server", () => {
         })
       );
 
+      const saveSnapshotResult = await client.callTool({
+        name: "save-trace-as-snapshot",
+        arguments: {
+          traceId: startedTrace.trace.traceId,
+          name: "settings_snapshot"
+        }
+      });
+      expect(JSON.parse(readTextContent(saveSnapshotResult))).toEqual(
+        expect.objectContaining({
+          ok: true,
+          name: "settings_snapshot",
+          snapshot: expect.objectContaining({
+            name: "settings_snapshot",
+            source: "trace",
+            hasMetadata: true,
+            description:
+              "Capture the save flow so the agent can inspect the linked assets.",
+            sourceTrace: expect.objectContaining({
+              traceId: startedTrace.trace.traceId,
+              stepCount: 1,
+              linkedFixtureCount: 0,
+              status: "completed"
+            })
+          })
+        })
+      );
+
+      await expect(
+        fs.readFile(
+          path.join(
+            root.rootPath,
+            ".wraithwalker",
+            "scenarios",
+            "settings_snapshot",
+            "scenario.json"
+          ),
+          "utf8"
+        )
+      ).resolves.toContain(`"traceId": "${startedTrace.trace.traceId}"`);
+
       await expect(
         fs.readFile(
           path.join(
@@ -2999,6 +3055,7 @@ describe("mcp server", () => {
         "push-workspace",
         "discard-workspace",
         "list-snapshots",
+        "save-trace-as-snapshot",
         "diff-snapshots"
       ]);
 
@@ -3025,6 +3082,7 @@ describe("mcp server", () => {
         "read-trace",
         "remove-site",
         "restore-file",
+        "save-trace-as-snapshot",
         "search-files",
         "start-trace",
         "stop-trace",
@@ -3100,6 +3158,7 @@ describe("mcp server", () => {
         arguments: {}
       });
       expect(readTextContent(scenariosResult)).toContain("baseline");
+      expect(readTextContent(scenariosResult)).toContain('"snapshots"');
 
       const diffResult = await client.callTool({
         name: "diff-snapshots",

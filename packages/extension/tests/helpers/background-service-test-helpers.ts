@@ -128,11 +128,31 @@ export function createMockServerClient(
     revealRoot: vi
       .fn()
       .mockResolvedValue({ ok: true, command: "open /tmp/server-root" }),
-    listScenarios: vi.fn().mockResolvedValue({ scenarios: [] }),
+    listScenarios: vi.fn().mockResolvedValue({
+      scenarios: [],
+      snapshots: [],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: true
+    }),
     saveScenario: vi
       .fn()
       .mockImplementation(async (name: string) => ({ ok: true, name })),
     switchScenario: vi
+      .fn()
+      .mockImplementation(async (name: string) => ({ ok: true, name })),
+    diffScenarios: vi.fn().mockResolvedValue({
+      ok: true,
+      diff: {
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        added: [],
+        removed: [],
+        changed: []
+      }
+    }),
+    saveScenarioFromTrace: vi
       .fn()
       .mockImplementation(async (name: string) => ({ ok: true, name })),
     heartbeat,

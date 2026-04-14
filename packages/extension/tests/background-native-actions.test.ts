@@ -167,10 +167,46 @@ describe("background native actions", () => {
 
   it("routes scenario actions through the native host when only a local root is available", async () => {
     const chromeApi = createChromeApi();
-    chromeApi.runtime.sendNativeMessage.mockResolvedValue({
-      ok: true,
-      name: "smoke"
-    });
+    chromeApi.runtime.sendNativeMessage.mockImplementation(
+      async (_hostName, message: { type: string; name?: string }) => {
+        switch (message.type) {
+          case "listScenarios":
+            return {
+              ok: true,
+              scenarios: ["baseline"],
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: false
+                }
+              ],
+              activeScenarioName: null,
+              activeScenarioMissing: false,
+              activeTrace: null,
+              supportsTraceSave: false
+            };
+          case "saveScenario":
+          case "switchScenario":
+            return { ok: true, name: message.name ?? "" };
+          case "diffScenarios":
+            return {
+              ok: true,
+              diff: {
+                scenarioA: "baseline",
+                scenarioB: "candidate",
+                added: [],
+                removed: [],
+                changed: []
+              }
+            };
+          default:
+            return { ok: true };
+        }
+      }
+    );
     const state = createBackgroundState({
       localRootReady: true,
       localRootSentinel: { rootId: "local-root" },
@@ -201,16 +237,80 @@ describe("background native actions", () => {
       getRequiredRootId
     });
 
-    const result = await nativeActions.saveScenarioForActiveTarget("smoke");
+    await expect(nativeActions.listScenariosForActiveTarget()).resolves.toEqual(
+      {
+        ok: true,
+        scenarios: ["baseline"],
+        snapshots: [
+          expect.objectContaining({
+            name: "baseline"
+          })
+        ],
+        activeScenarioName: null,
+        activeScenarioMissing: false,
+        activeTrace: null,
+        supportsTraceSave: false
+      }
+    );
+    await expect(
+      nativeActions.saveScenarioForActiveTarget(
+        "smoke",
+        "Saved from local fixtures."
+      )
+    ).resolves.toEqual({ ok: true, name: "smoke" });
+    await expect(
+      nativeActions.switchScenarioForActiveTarget("baseline")
+    ).resolves.toEqual({ ok: true, name: "baseline" });
+    await expect(
+      nativeActions.diffScenariosForActiveTarget("baseline", "candidate")
+    ).resolves.toEqual({
+      ok: true,
+      diff: {
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        added: [],
+        removed: [],
+        changed: []
+      }
+    });
+    await expect(
+      nativeActions.saveScenarioFromTraceForActiveTarget("trace_snapshot")
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        "Saving a snapshot from an active trace is only available when connected to the local WraithWalker server."
+    });
 
-    expect(result).toEqual({ ok: true, name: "smoke" });
-    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenCalledWith(
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      2,
       "com.wraithwalker.host",
       {
         type: "saveScenario",
         path: "/tmp/local-root",
         expectedRootId: "local-root",
-        name: "smoke"
+        name: "smoke",
+        description: "Saved from local fixtures."
+      }
+    );
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      3,
+      "com.wraithwalker.host",
+      {
+        type: "switchScenario",
+        path: "/tmp/local-root",
+        expectedRootId: "local-root",
+        name: "baseline"
+      }
+    );
+    expect(chromeApi.runtime.sendNativeMessage).toHaveBeenNthCalledWith(
+      4,
+      "com.wraithwalker.host",
+      {
+        type: "diffScenarios",
+        path: "/tmp/local-root",
+        expectedRootId: "local-root",
+        scenarioA: "baseline",
+        scenarioB: "candidate"
       }
     );
   });
@@ -487,7 +587,13 @@ describe("background native actions", () => {
           .mockRejectedValue(new Error("server save failed")),
         switchScenario: vi
           .fn()
-          .mockRejectedValue(new Error("server switch failed"))
+          .mockRejectedValue(new Error("server switch failed")),
+        diffScenarios: vi
+          .fn()
+          .mockRejectedValue(new Error("server diff failed")),
+        saveScenarioFromTrace: vi
+          .fn()
+          .mockRejectedValue(new Error("server trace save failed"))
       }
     });
 
@@ -512,6 +618,20 @@ describe("background native actions", () => {
     ).resolves.toEqual({
       ok: false,
       error: "server switch failed"
+    });
+    await expect(
+      harness.nativeActions.diffScenariosForActiveTarget("a", "b")
+    ).resolves.toEqual({
+      ok: false,
+      error: "server diff failed"
+    });
+    await expect(
+      harness.nativeActions.saveScenarioFromTraceForActiveTarget(
+        "trace_snapshot"
+      )
+    ).resolves.toEqual({
+      ok: false,
+      error: "server trace save failed"
     });
   });
 
@@ -547,6 +667,13 @@ describe("background native actions", () => {
     });
     await expect(
       nativeActions.switchScenarioForActiveTarget("smoke")
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        "Configure the native host name and shared editor launch path in the options page first."
+    });
+    await expect(
+      nativeActions.diffScenariosForActiveTarget("baseline", "candidate")
     ).resolves.toEqual({
       ok: false,
       error:

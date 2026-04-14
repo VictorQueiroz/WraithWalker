@@ -40,6 +40,7 @@ The trace gives the agent:
 5. Poll `trace-status` while the trace is active.
 6. Call `stop-trace` with the returned `traceId`.
 7. Call `read-trace` only when you need the full stored record.
+8. Call `save-trace-as-snapshot` when the traced workspace should become a named scenario snapshot.
 
 For most agents, `trace-status` should stay the main progress surface. Save `read-trace` for the moments when the compact summary is not enough.
 
@@ -54,6 +55,7 @@ The local MCP server exposes:
 - `stop-trace`
 - `list-traces`
 - `read-trace`
+- `save-trace-as-snapshot`
 
 ### `browser-status`
 
@@ -137,6 +139,8 @@ Guided traces live under:
 - extension client id
 - recorded click steps
 - linked fixtures for each step
+
+Scenario snapshots can now also store trace provenance in `.wraithwalker/scenarios/<name>/scenario.json` when they are created from a guided trace handoff.
 
 Simple-mode fixture storage still works the same way:
 

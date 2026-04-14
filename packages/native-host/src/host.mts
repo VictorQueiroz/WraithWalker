@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  diffScenarios,
   listScenarios,
   openDirectory,
   revealDirectory,
@@ -19,6 +20,9 @@ interface NativeHostMessage {
   expectedRootId?: string;
   commandTemplate?: string;
   name?: string;
+  description?: string;
+  scenarioA?: string;
+  scenarioB?: string;
 }
 
 export function writeMessage(payload: unknown): void {
@@ -53,6 +57,10 @@ export async function handleMessage(
 
   if (message.type === "listScenarios") {
     return listScenarios(message);
+  }
+
+  if (message.type === "diffScenarios") {
+    return diffScenarios(message);
   }
 
   throw new Error(`Unknown message type: ${message.type}`);

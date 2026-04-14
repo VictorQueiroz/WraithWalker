@@ -34,5 +34,6 @@ export const MCP_TOOL_NAMES = [
   "push-workspace",
   "discard-workspace",
   "list-snapshots",
+  "save-trace-as-snapshot",
   "diff-snapshots"
 ] as const;

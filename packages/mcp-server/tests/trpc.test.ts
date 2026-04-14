@@ -1269,13 +1269,38 @@ describe("tRPC capture backend", () => {
     });
     const caller = router.createCaller({});
 
-    await expect(caller.scenarios.list()).resolves.toEqual({ scenarios: [] });
-    await expect(caller.scenarios.save({ name: "baseline" })).resolves.toEqual({
+    await expect(caller.scenarios.list()).resolves.toEqual({
+      scenarios: [],
+      snapshots: [],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: true
+    });
+    await expect(
+      caller.scenarios.save({
+        name: "baseline",
+        description: "Manual baseline snapshot."
+      })
+    ).resolves.toEqual({
       ok: true,
       name: "baseline"
     });
     await expect(caller.scenarios.list()).resolves.toEqual({
-      scenarios: ["baseline"]
+      scenarios: ["baseline"],
+      snapshots: [
+        expect.objectContaining({
+          name: "baseline",
+          description: "Manual baseline snapshot.",
+          source: "manual",
+          hasMetadata: true,
+          isActive: false
+        })
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: true
     });
     await expect(
       caller.scenarios.switch({ name: "baseline" })
@@ -1283,6 +1308,220 @@ describe("tRPC capture backend", () => {
       ok: true,
       name: "baseline"
     });
+    await expect(caller.scenarios.list()).resolves.toEqual({
+      scenarios: ["baseline"],
+      snapshots: [
+        expect.objectContaining({
+          name: "baseline",
+          isActive: true
+        })
+      ],
+      activeScenarioName: "baseline",
+      activeScenarioMissing: false,
+      activeTrace: null,
+      supportsTraceSave: true
+    });
+  });
+
+  it("exposes active-trace snapshot saves and structured scenario diffs over tRPC", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    await root.writeApiFixture({
+      scenario: "baseline",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
+        status: 200,
+        mimeType: "application/json",
+        url: "https://api.example.com/users",
+        method: "GET"
+      },
+      body: '{"users":[]}'
+    });
+    await root.writeApiFixture({
+      scenario: "candidate",
+      topOrigin: "https://app.example.com",
+      method: "GET",
+      fixtureName: "users__q-abc__b-def",
+      meta: {
+        status: 500,
+        mimeType: "application/json",
+        url: "https://api.example.com/users",
+        method: "GET"
+      },
+      body: '{"error":true}'
+    });
+
+    const sentinel = await readSentinel(root.rootPath);
+    const runtime = createServerRootRuntime({
+      rootPath: root.rootPath,
+      sentinel
+    });
+    await runtime.startTrace({
+      traceId: "trace_active",
+      name: "trace_active",
+      goal: "Capture the active checkout flow.",
+      selectedOrigins: ["https://app.example.com"],
+      extensionClientId: "client-1",
+      createdAt: "2026-04-08T00:00:00.000Z"
+    });
+    await runtime.recordClick({
+      traceId: "trace_active",
+      step: {
+        stepId: "step-1",
+        tabId: 7,
+        recordedAt: "2026-04-08T00:00:01.000Z",
+        pageUrl: "https://app.example.com/checkout",
+        topOrigin: "https://app.example.com",
+        selector: "#checkout",
+        tagName: "button",
+        textSnippet: "Checkout"
+      }
+    });
+
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      runtime,
+      extensionSessions: {
+        heartbeat: async ({
+          clientId,
+          extensionVersion,
+          sessionActive,
+          enabledOrigins
+        }) => ({
+          connected: true,
+          captureReady: sessionActive && enabledOrigins.length > 0,
+          sessionActive,
+          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+          extensionVersion,
+          clientId,
+          captureDestination: "server" as const,
+          enabledOrigins,
+          siteConfigs: [],
+          activeTrace: await runtime.getActiveTrace(),
+          tracePhase: "armed" as const,
+          activeTraceSummary: null,
+          recentConsoleEntries: []
+        })
+      },
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+
+    await expect(caller.scenarios.list()).resolves.toEqual({
+      scenarios: ["baseline", "candidate"],
+      snapshots: [
+        expect.objectContaining({
+          name: "baseline",
+          isActive: false
+        }),
+        expect.objectContaining({
+          name: "candidate",
+          isActive: false
+        })
+      ],
+      activeScenarioName: null,
+      activeScenarioMissing: false,
+      activeTrace: expect.objectContaining({
+        traceId: "trace_active",
+        name: "trace_active",
+        goal: "Capture the active checkout flow.",
+        status: "recording",
+        stepCount: 1,
+        linkedFixtureCount: 0
+      }),
+      supportsTraceSave: true
+    });
+    await expect(
+      caller.scenarios.diff({ scenarioA: "baseline", scenarioB: "candidate" })
+    ).resolves.toEqual({
+      ok: true,
+      diff: expect.objectContaining({
+        scenarioA: "baseline",
+        scenarioB: "candidate",
+        changed: [
+          expect.objectContaining({
+            method: "GET",
+            pathname: "/users",
+            statusBefore: 200,
+            statusAfter: 500,
+            bodyChanged: true
+          })
+        ]
+      })
+    });
+    await expect(
+      caller.scenarios.saveFromTrace({
+        name: "trace_snapshot",
+        description: "Saved from the active trace."
+      })
+    ).resolves.toEqual({
+      ok: true,
+      name: "trace_snapshot"
+    });
+  });
+
+  it("fails explicitly when trace-save is requested without an active trace", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-trpc-",
+      rootId: "root-trpc"
+    });
+    const sentinel = await readSentinel(root.rootPath);
+    const runtime = createServerRootRuntime({
+      rootPath: root.rootPath,
+      sentinel
+    });
+    const router = createWraithwalkerRouter({
+      rootPath: root.rootPath,
+      sentinel,
+      serverName: "wraithwalker",
+      serverVersion: "0.6.1",
+      runtime,
+      extensionSessions: {
+        heartbeat: async ({
+          clientId,
+          extensionVersion,
+          sessionActive,
+          enabledOrigins
+        }) => ({
+          connected: true,
+          captureReady: false,
+          sessionActive,
+          lastHeartbeatAt: "2026-04-08T00:00:00.000Z",
+          extensionVersion,
+          clientId,
+          captureDestination: "server" as const,
+          enabledOrigins,
+          siteConfigs: [],
+          activeTrace: null,
+          tracePhase: "idle" as const,
+          activeTraceSummary: null,
+          recentConsoleEntries: []
+        })
+      },
+      getServerUrls: () => ({
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      })
+    });
+    const caller = router.createCaller({});
+
+    await expect(
+      caller.scenarios.saveFromTrace({
+        name: "trace_snapshot"
+      })
+    ).rejects.toThrow("No active trace is available to save.");
   });
 
   it("serves extension heartbeats and guided trace record/link operations", async () => {

@@ -6,6 +6,11 @@ import type {
   SessionSnapshot,
   SiteConfig
 } from "./types.js";
+import type {
+  FixtureDiff,
+  ScenarioSnapshotSourceTrace,
+  ScenarioSnapshotSummary
+} from "@wraithwalker/core/scenarios";
 
 export interface ErrorResult {
   ok: false;
@@ -103,10 +108,19 @@ export type SessionMessage =
   | { type: "session.start" }
   | { type: "session.stop" };
 
-export type ScenarioListResult =
-  | { ok: true; scenarios: string[] }
-  | ErrorResult;
+export interface ScenarioListSuccess {
+  ok: true;
+  scenarios?: string[];
+  snapshots: ScenarioSnapshotSummary[];
+  activeScenarioName: string | null;
+  activeScenarioMissing: boolean;
+  activeTrace: ScenarioSnapshotSourceTrace | null;
+  supportsTraceSave: boolean;
+}
+
+export type ScenarioListResult = ScenarioListSuccess | ErrorResult;
 export type ScenarioResult = { ok: true; name: string } | ErrorResult;
+export type ScenarioDiffResult = { ok: true; diff: FixtureDiff } | ErrorResult;
 
 export type BackgroundMessage =
   | SessionMessage
@@ -119,8 +133,10 @@ export type BackgroundMessage =
   | { type: "native.open"; commandTemplate?: string; editorId?: string }
   | { type: "native.revealRoot" }
   | { type: "scenario.list" }
-  | { type: "scenario.save"; name: string }
-  | { type: "scenario.switch"; name: string };
+  | { type: "scenario.save"; name: string; description?: string }
+  | { type: "scenario.switch"; name: string }
+  | { type: "scenario.diff"; scenarioA: string; scenarioB: string }
+  | { type: "scenario.saveFromTrace"; name: string; description?: string };
 
 export interface FixtureResponsePayload {
   body: string;
@@ -187,6 +203,7 @@ export type BackgroundMessageResult =
   | NativeVerifyResult
   | NativeOpenResult
   | ScenarioListResult
+  | ScenarioDiffResult
   | ScenarioResult
   | undefined;
 
