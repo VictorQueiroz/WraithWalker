@@ -1279,11 +1279,13 @@ describe("popup entrypoint", () => {
 
     try {
       expect(await screen.findByLabelText("Workspace status")).toBeTruthy();
-      expect(screen.getAllByText("Server Root")).toHaveLength(2);
-      expect(screen.getByText("Open actions use Server Root.")).toBeTruthy();
-      expect(screen.getByText("/tmp/server-root")).toBeTruthy();
+      expect(await screen.findAllByText("Server Root")).toHaveLength(2);
       expect(
-        screen.getByRole("button", { name: "Open in folder" })
+        await screen.findByText("Open actions use Server Root.")
+      ).toBeTruthy();
+      expect(await screen.findByText("/tmp/server-root")).toBeTruthy();
+      expect(
+        await screen.findByRole("button", { name: "Open in folder" })
       ).toBeTruthy();
     } finally {
       popup.unmount();
