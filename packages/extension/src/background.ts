@@ -23,9 +23,13 @@ import {
   createWraithWalkerServerClient as defaultCreateWraithWalkerServerClient,
   type WraithWalkerServerClient
 } from "./lib/wraithwalker-server.js";
+import {
+  createChromeApi,
+  type BrowserTab,
+  type ChromeApi
+} from "./lib/chrome-api.js";
 import type {
   BackgroundState,
-  ChromeApi,
   RequestLifecycleApi,
   SessionControllerApi
 } from "./lib/background-runtime-shared.js";
@@ -99,7 +103,7 @@ function isTestMode(): boolean {
 }
 
 export function createBackgroundRuntime({
-  chromeApi = chrome as unknown as ChromeApi,
+  chromeApi = createChromeApi(),
   getSiteConfigs,
   getLegacySiteConfigs = defaultGetLegacySiteConfigs,
   getLegacySiteConfigsMigrated = defaultGetLegacySiteConfigsMigrated,
@@ -240,21 +244,42 @@ export function createBackgroundRuntime({
   let listenersRegistered = false;
 
   function refreshContextMenus(): void {
-    void contextMenu.registerContextMenus().catch((error: unknown) => {
-      setLastError(error instanceof Error ? error.message : String(error));
-    });
+    void contextMenu
+      .registerContextMenus()
+      .then(() => contextMenu.refreshContextMenuForActiveTab())
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function refreshContextMenuForActiveTab(): void {
+    void contextMenu
+      .refreshContextMenuForActiveTab()
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
   }
 
   function handleTabUpdated(
     tabId: number,
     _changeInfo: Record<string, unknown>,
-    tab: { id?: number; url?: string }
+    tab: BrowserTab
   ): void {
     sessionController
       .handleTabStateChange(tabId, tab)
       .catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
+
+    if (tab.active) {
+      void contextMenu.refreshContextMenuForTab(tab).catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
+    }
+  }
+
+  function handleTabActivated(): void {
+    refreshContextMenuForActiveTab();
   }
 
   function handleTabRemoved(tabId: number): void {
@@ -409,6 +434,7 @@ export function createBackgroundRuntime({
         });
     });
     chromeApi.tabs.onUpdated.addListener(handleTabUpdated);
+    chromeApi.tabs.onActivated?.addListener?.(handleTabActivated);
     chromeApi.tabs.onRemoved.addListener(handleTabRemoved);
     chromeApi.storage.onChanged.addListener(handleStorageChanged);
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
@@ -443,6 +469,11 @@ export function createBackgroundRuntime({
     await contextMenu.registerContextMenus().catch((error: unknown) => {
       setLastError(error instanceof Error ? error.message : String(error));
     });
+    await contextMenu
+      .refreshContextMenuForActiveTab()
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
     authority.queueServerRefresh({ force: true });
     authority.scheduleHeartbeat();
   }
