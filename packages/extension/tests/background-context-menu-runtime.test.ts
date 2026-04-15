@@ -218,6 +218,45 @@ describe("background context menu runtime", () => {
     );
   });
 
+  it("surfaces a missing local root when whitelisting without a configured root folder", async () => {
+    const { chromeApi, getConfiguredSiteConfigs, runtime } =
+      await createLocalRuntime({
+        activeTabUrl: "https://docs.example.com/dashboard",
+        sendMessageOverride: async (message) => {
+          if (message.type === "fs.ensureRoot") {
+            return { ok: false, error: "No root directory selected." };
+          }
+
+          return undefined;
+        }
+      });
+
+    chromeApi.contextMenus.update.mockClear();
+
+    chromeApi.contextMenus.onClicked.listeners[0](
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 12,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+    await flushPromises();
+
+    expect(chromeApi.permissions.request).not.toHaveBeenCalled();
+    expect(getConfiguredSiteConfigs()).toEqual([]);
+    expect(chromeApi.contextMenus.update).not.toHaveBeenCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: UNWHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
+    expect(runtime.state.lastError).toBe("No root directory selected.");
+  });
+
   it("removes the current site through the local fallback path and flips the menu label back", async () => {
     const { chromeApi, getConfiguredSiteConfigs } = await createLocalRuntime({
       activeTabUrl: "https://docs.example.com/dashboard",

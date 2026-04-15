@@ -581,6 +581,51 @@ describe("background context menu", () => {
     );
   });
 
+  it("surfaces a missing-root-directory error before attempting to whitelist", async () => {
+    const chromeApi = createTestChromeApi();
+    const authority = createAuthorityStub({
+      ensureRootReady: vi.fn().mockResolvedValue({
+        ok: false,
+        error: "No root directory selected."
+      })
+    });
+    const setLastError = vi.fn();
+    const contextMenu = createBackgroundContextMenu({
+      chromeApi,
+      authority,
+      setLastError
+    });
+
+    await contextMenu.handleContextMenuClicked(
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 9,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+
+    expect(chromeApi.permissions.request).not.toHaveBeenCalled();
+    expect(
+      authority.readConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+    expect(chromeApi.contextMenus.update).not.toHaveBeenCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: UNWHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
+    expect(setLastError).toHaveBeenLastCalledWith(
+      "No root directory selected."
+    );
+  });
+
   it("surfaces host permission denials", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.permissions.request.mockResolvedValue(false);
