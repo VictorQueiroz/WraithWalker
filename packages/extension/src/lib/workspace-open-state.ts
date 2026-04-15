@@ -145,8 +145,16 @@ export function deriveWorkspaceStatus({
         : authority === "browser_root"
           ? "Remembered Browser Root"
           : "No Active Root",
-    sessionState: !snapshot ? "loading" : snapshot.sessionActive ? "active" : "idle",
-    sessionLabel: !snapshot ? "Loading…" : snapshot.sessionActive ? "Active" : "Idle",
+    sessionState: !snapshot
+      ? "loading"
+      : snapshot.sessionActive
+        ? "active"
+        : "idle",
+    sessionLabel: !snapshot
+      ? "Loading…"
+      : snapshot.sessionActive
+        ? "Active"
+        : "Idle",
     enabledOriginCount: Array.isArray(snapshot?.enabledOrigins)
       ? snapshot.enabledOrigins.length
       : 0,

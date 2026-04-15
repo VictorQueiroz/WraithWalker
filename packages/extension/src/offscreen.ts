@@ -265,10 +265,9 @@ export function createOffscreenRuntime({
     }
   }
 
-  function unknownMessageError(classified: Extract<
-    OffscreenMessageClassification,
-    { kind: "unknown" }
-  >): ErrorResult {
+  function unknownMessageError(
+    classified: Extract<OffscreenMessageClassification, { kind: "unknown" }>
+  ): ErrorResult {
     return {
       ok: false,
       error: `Unknown offscreen message: ${String(classified.type)}`

@@ -17,7 +17,11 @@ describe("site whitelist lifecycle", () => {
   it("requests host permission before loading or writing site configs", async () => {
     const callOrder: string[] = [];
     const readDeferred = createDeferred<
-      Array<{ origin: string; createdAt: string; dumpAllowlistPatterns: string[] }>
+      Array<{
+        origin: string;
+        createdAt: string;
+        dumpAllowlistPatterns: string[];
+      }>
     >();
     const requestHostPermission = vi.fn(async () => {
       callOrder.push("request");
@@ -62,7 +66,9 @@ describe("site whitelist lifecycle", () => {
         readSiteConfigs,
         writeSiteConfigs
       })
-    ).rejects.toThrow("Host access was not granted for https://app.example.com/*.");
+    ).rejects.toThrow(
+      "Host access was not granted for https://app.example.com/*."
+    );
 
     expect(readSiteConfigs).not.toHaveBeenCalled();
     expect(writeSiteConfigs).not.toHaveBeenCalled();

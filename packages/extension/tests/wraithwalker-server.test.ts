@@ -7,15 +7,22 @@ import {
   WRAITHWALKER_SERVER_SOURCE_HEADER,
   WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS
 } from "../src/lib/wraithwalker-server.js";
+import {
+  bindWraithWalkerServerClient,
+  type WraithWalkerServerTrpcClient
+} from "../src/lib/wraithwalker-server.client.js";
 import type {
   GenerateContextPayload,
   LinkTraceFixturePayload,
   RecordTraceClickPayload,
   ServerHeartbeatPayload,
-  WraithWalkerServerTrpcClient,
   WriteFixtureIfAbsentPayload
 } from "../src/lib/wraithwalker-server.shared.js";
-import { bindWraithWalkerServerClient } from "../src/lib/wraithwalker-server.client.js";
+import type {
+  FixtureDescriptor,
+  HeaderEntry,
+  ResponseMeta
+} from "../src/lib/types.js";
 
 afterEach(() => {
   vi.doUnmock("@trpc/client");
@@ -207,7 +214,9 @@ describe("wraithwalker server client helpers", () => {
     upstream.abort(reason);
     const fetchImpl = vi
       .fn<typeof fetch>()
-      .mockImplementation((_input, init) => Promise.reject(init?.signal?.reason));
+      .mockImplementation((_input, init) =>
+        Promise.reject(init?.signal?.reason)
+      );
 
     const timedFetch = createTimedFetch(100, fetchImpl);
 
@@ -365,8 +374,11 @@ describe("bound wraithwalker server client", () => {
       enabledOrigins: ["https://app.example.com"],
       recentConsoleEntries: [
         {
+          tabId: 7,
+          topOrigin: "https://app.example.com",
+          source: "console-api",
           level: "error",
-          message: "Boom",
+          text: "Boom",
           url: "https://app.example.com",
           timestamp: "2026-04-14T00:00:00.000Z"
         }
@@ -392,6 +404,19 @@ describe("bound wraithwalker server client", () => {
       bodyPath: "fixtures/example.body",
       requestPath: "fixtures/example.request.json",
       metaPath: "fixtures/example.meta.json"
+    } as FixtureDescriptor;
+    const headers: HeaderEntry[] = [];
+    const meta: ResponseMeta = {
+      status: 200,
+      statusText: "OK",
+      headers,
+      mimeType: "application/json",
+      resourceType: "Fetch",
+      url: "https://app.example.com/api/example",
+      method: "GET",
+      capturedAt: "2026-04-14T00:00:00.000Z",
+      bodyEncoding: "utf8",
+      bodySuggestedExtension: ".json"
     };
     const siteConfigs = [
       {
@@ -403,19 +428,20 @@ describe("bound wraithwalker server client", () => {
     const writePayload: WriteFixtureIfAbsentPayload = {
       descriptor,
       request: {
+        topOrigin: "https://app.example.com",
         method: "GET",
         url: "https://app.example.com/api/example",
-        headers: {}
+        headers,
+        body: "",
+        bodyEncoding: "utf8",
+        bodyHash: "body-hash",
+        queryHash: "query-hash",
+        capturedAt: "2026-04-14T00:00:00.000Z"
       },
       response: {
         body: "body",
         bodyEncoding: "utf8",
-        meta: {
-          status: 200,
-          mimeType: "application/json",
-          resourceType: "Fetch",
-          fetchedAt: "2026-04-14T00:00:00.000Z"
-        }
+        meta
       }
     };
     const generateContextPayload: GenerateContextPayload = {
@@ -438,9 +464,7 @@ describe("bound wraithwalker server client", () => {
     });
     expect(spies.readFixture).toHaveBeenCalledWith({ descriptor });
     expect(spies.writeFixtureIfAbsent).toHaveBeenCalledWith(writePayload);
-    expect(spies.generateContext).toHaveBeenCalledWith(
-      generateContextPayload
-    );
+    expect(spies.generateContext).toHaveBeenCalledWith(generateContextPayload);
   });
 
   it("passes trace payloads through unchanged", async () => {
@@ -501,9 +525,8 @@ describe("wraithwalker server client construction", () => {
       createWraithWalkerServerTransportOptions: createTransportOptionsMock
     }));
 
-    const { createWraithWalkerServerClient } = await import(
-      "../src/lib/wraithwalker-server.client.js"
-    );
+    const { createWraithWalkerServerClient } =
+      await import("../src/lib/wraithwalker-server.client.js");
 
     createWraithWalkerServerClient("http://127.0.0.1:4319/trpc", {
       timeoutMs: 42,

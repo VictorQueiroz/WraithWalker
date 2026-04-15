@@ -717,9 +717,7 @@ describe("options entrypoint", () => {
         )
       ).toBeTruthy();
       expect(
-        screen.getByText(
-          /Next: add your first origin so capture can start\./i
-        )
+        screen.getByText(/Next: add your first origin so capture can start\./i)
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -783,18 +781,23 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const readyRoot = createReadyRootDeps();
-    const localSites = [createStoredSite({ origin: "https://local.example.com" })];
+    const localSites = [
+      createStoredSite({ origin: "https://local.example.com" })
+    ];
     const serverSites = [
       createStoredSite({ origin: "https://server.example.com" })
     ];
     let serverConnected = false;
     let intervalHandler: (() => void) | null = null;
     const intervalId = 17 as unknown as ReturnType<typeof setInterval>;
-    const setIntervalFn = vi.fn(((handler: TimerHandler) => {
+    const setIntervalMock = vi.fn((handler: TimerHandler) => {
       intervalHandler = handler as () => void;
       return intervalId;
-    }) as typeof setInterval);
-    const clearIntervalFn = vi.fn() as typeof clearInterval;
+    });
+    const clearIntervalMock = vi.fn();
+    const setIntervalFn = setIntervalMock as unknown as typeof setInterval;
+    const clearIntervalFn =
+      clearIntervalMock as unknown as typeof clearInterval;
     const runtimeSendMessage = vi.fn(
       async (message: {
         type: string;
@@ -873,7 +876,9 @@ describe("options entrypoint", () => {
       refreshIntervalMs: 25,
       getSiteConfigs: vi
         .fn()
-        .mockImplementation(async () => (serverConnected ? serverSites : localSites)),
+        .mockImplementation(async () =>
+          serverConnected ? serverSites : localSites
+        ),
       getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
       setNativeHostConfig: vi.fn(),
       setSiteConfigs: vi.fn(),
@@ -889,8 +894,12 @@ describe("options entrypoint", () => {
       intervalHandler?.();
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(await screen.findByText(/Editing \/tmp\/server-root\./)).toBeTruthy();
-      expect(await screen.findByText("https://server.example.com")).toBeTruthy();
+      expect(
+        await screen.findByText(/Editing \/tmp\/server-root\./)
+      ).toBeTruthy();
+      expect(
+        await screen.findByText("https://server.example.com")
+      ).toBeTruthy();
       expect(screen.queryByText("https://local.example.com")).toBeNull();
       expect(await screen.findByText("Save From Active Trace")).toBeTruthy();
     } finally {
@@ -1576,9 +1585,7 @@ describe("options entrypoint", () => {
         )
       ).toBeTruthy();
       expect(
-        screen.getByText(
-          /Next: add your first origin so capture can start\./i
-        )
+        screen.getByText(/Next: add your first origin so capture can start\./i)
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -2478,9 +2485,13 @@ describe("options entrypoint", () => {
 
     try {
       expect(await screen.findByText("baseline")).toBeTruthy();
-      expect(await screen.findByText("Snapshots in No Active Root")).toBeTruthy();
       expect(
-        screen.getByText("Trace save becomes available when Server Root is active.")
+        await screen.findByText("Snapshots in No Active Root")
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          "Trace save becomes available when Server Root is active."
+        )
       ).toBeTruthy();
       await user.click(screen.getByRole("button", { name: "Switch" }));
       expect(
@@ -3113,7 +3124,10 @@ describe("options entrypoint", () => {
       ).toBe("");
 
       await user.clear(screen.getByLabelText("Trace scenario name"));
-      await user.type(screen.getByLabelText("Trace scenario name"), "bad name!");
+      await user.type(
+        screen.getByLabelText("Trace scenario name"),
+        "bad name!"
+      );
       await user.click(
         screen.getByRole("button", { name: "Save Trace Snapshot" })
       );

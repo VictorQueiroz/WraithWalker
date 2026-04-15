@@ -17,7 +17,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function createRequestEntry(overrides: Partial<RequestEntry> = {}): RequestEntry {
+function createRequestEntry(
+  overrides: Partial<RequestEntry> = {}
+): RequestEntry {
   return {
     tabId: 1,
     requestId: "network-1",
@@ -86,7 +88,14 @@ function createReplayFixture(): {
       meta: {
         status: 200,
         statusText: "OK",
-        headers: [{ name: "Content-Type", value: "application/json" }]
+        headers: [{ name: "Content-Type", value: "application/json" }],
+        mimeType: "application/json",
+        resourceType: "Fetch",
+        url: "https://cdn.example.com/app.js",
+        method: "GET",
+        capturedAt: "2026-04-08T00:00:00.000Z",
+        bodyEncoding: "utf8",
+        bodySuggestedExtension: ".json"
       },
       bodyBase64: "e30=",
       size: 2
@@ -121,13 +130,18 @@ function createCoordinatorHarness({
     attachedTabs: new Map([[1, attachedTab]]),
     requests: new Map([["1:network-1", entry]])
   };
-  const sendDebuggerCommand = vi.fn(
+  const sendDebuggerCommandMock = vi.fn(
     async (
       _tabId: number,
       method: string,
       params?: Record<string, unknown>
-    ) => ({ method, params })
+    ): Promise<unknown> => ({ method, params })
   );
+  const sendDebuggerCommand = sendDebuggerCommandMock as <T = unknown>(
+    tabId: number,
+    method: string,
+    params?: Record<string, unknown>
+  ) => Promise<T>;
   const setLastError = vi.fn();
   const tracker = {
     ensureRequestEntry: vi.fn(() => entry),
@@ -149,7 +163,7 @@ function createCoordinatorHarness({
   return {
     coordinator,
     entry,
-    sendDebuggerCommand,
+    sendDebuggerCommand: sendDebuggerCommandMock,
     setLastError,
     tracker
   };

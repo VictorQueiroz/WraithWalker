@@ -1071,9 +1071,7 @@ describe("request lifecycle fetch flow", () => {
           meta: {
             status: 200,
             statusText: "OK",
-            headers: [
-              { name: "Content-Type", value: "application/javascript" }
-            ]
+            headers: [{ name: "Content-Type", value: "application/javascript" }]
           }
         };
       }

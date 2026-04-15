@@ -170,10 +170,7 @@ export function bindWraithWalkerServerClient(
 
 export function createWraithWalkerServerClient(
   url = DEFAULT_WRAITHWALKER_SERVER_TRPC_URL,
-  {
-    timeoutMs,
-    fetchImpl
-  }: WraithWalkerServerClientOptions = {}
+  { timeoutMs, fetchImpl }: WraithWalkerServerClientOptions = {}
 ): WraithWalkerServerClient {
   const trpc = createTRPCClient<AppRouter>({
     links: [

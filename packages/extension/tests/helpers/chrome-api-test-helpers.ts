@@ -2,12 +2,27 @@ import { vi } from "vitest";
 
 import type { ChromeApi } from "../../src/lib/chrome-api.js";
 
-function createEvent<T extends (...args: any[]) => unknown>() {
-  const listeners: T[] = [];
+type EventListener<TEvent> = TEvent extends {
+  addListener(listener: infer TListener): void;
+}
+  ? TListener
+  : never;
+
+type TestEvent<TEvent extends { addListener(listener: any): void }> = {
+  listeners: Array<EventListener<TEvent>>;
+  addListener: (listener: EventListener<TEvent>) => void;
+};
+
+function createEvent<
+  TEvent extends {
+    addListener(listener: any): void;
+  }
+>(): TestEvent<TEvent> {
+  const listeners: Array<EventListener<TEvent>> = [];
 
   return {
     listeners,
-    addListener: vi.fn((listener: T) => {
+    addListener: vi.fn((listener: EventListener<TEvent>) => {
       listeners.push(listener);
     })
   };
@@ -21,17 +36,26 @@ export type TestChromeApi = ChromeApi & {
     sendNativeMessage: ReturnType<typeof vi.fn>;
     openOptionsPage: ReturnType<typeof vi.fn>;
     getContexts: ReturnType<typeof vi.fn>;
+    onMessage: TestEvent<ChromeApi["runtime"]["onMessage"]>;
+    onStartup: TestEvent<ChromeApi["runtime"]["onStartup"]>;
+    onInstalled: TestEvent<ChromeApi["runtime"]["onInstalled"]>;
   };
   debugger: ChromeApi["debugger"] & {
     attach: ReturnType<typeof vi.fn>;
     sendCommand: ReturnType<typeof vi.fn>;
     detach: ReturnType<typeof vi.fn>;
+    onEvent: TestEvent<ChromeApi["debugger"]["onEvent"]>;
+    onDetach: TestEvent<ChromeApi["debugger"]["onDetach"]>;
   };
   tabs: ChromeApi["tabs"] & {
     query: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    onActivated: TestEvent<ChromeApi["tabs"]["onActivated"]>;
+    onUpdated: TestEvent<ChromeApi["tabs"]["onUpdated"]>;
+    onRemoved: TestEvent<ChromeApi["tabs"]["onRemoved"]>;
   };
   storage: NonNullable<ChromeApi["storage"]> & {
+    onChanged: TestEvent<NonNullable<ChromeApi["storage"]>["onChanged"]>;
     local: {
       get: ReturnType<typeof vi.fn>;
       set: ReturnType<typeof vi.fn>;
@@ -44,6 +68,7 @@ export type TestChromeApi = ChromeApi & {
   alarms?: NonNullable<ChromeApi["alarms"]> & {
     create: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
+    onAlarm: TestEvent<NonNullable<ChromeApi["alarms"]>["onAlarm"]>;
   };
   permissions?: NonNullable<ChromeApi["permissions"]> & {
     request: ReturnType<typeof vi.fn>;
@@ -53,6 +78,7 @@ export type TestChromeApi = ChromeApi & {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     removeAll: ReturnType<typeof vi.fn>;
+    onClicked: TestEvent<NonNullable<ChromeApi["contextMenus"]>["onClicked"]>;
   };
 };
 
@@ -84,27 +110,27 @@ export function createTestChromeApi(
       sendMessage: vi.fn(),
       sendNativeMessage: vi.fn(),
       openOptionsPage: vi.fn(),
-      onMessage: createEvent(),
-      onStartup: createEvent(),
-      onInstalled: createEvent(),
+      onMessage: createEvent<ChromeApi["runtime"]["onMessage"]>(),
+      onStartup: createEvent<ChromeApi["runtime"]["onStartup"]>(),
+      onInstalled: createEvent<ChromeApi["runtime"]["onInstalled"]>(),
       getContexts: vi.fn().mockResolvedValue([])
     },
     debugger: {
       attach: vi.fn(),
       sendCommand: vi.fn(),
       detach: vi.fn(),
-      onEvent: createEvent(),
-      onDetach: createEvent()
+      onEvent: createEvent<ChromeApi["debugger"]["onEvent"]>(),
+      onDetach: createEvent<ChromeApi["debugger"]["onDetach"]>()
     },
     tabs: {
       query: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: 99 }),
-      onActivated: createEvent(),
-      onUpdated: createEvent(),
-      onRemoved: createEvent()
+      onActivated: createEvent<ChromeApi["tabs"]["onActivated"]>(),
+      onUpdated: createEvent<ChromeApi["tabs"]["onUpdated"]>(),
+      onRemoved: createEvent<ChromeApi["tabs"]["onRemoved"]>()
     },
     storage: {
-      onChanged: createEvent(),
+      onChanged: createEvent<NonNullable<ChromeApi["storage"]>["onChanged"]>(),
       local: {
         get: vi.fn().mockResolvedValue({}),
         set: vi.fn().mockResolvedValue(undefined)
@@ -120,7 +146,7 @@ export function createTestChromeApi(
     alarms: {
       create: vi.fn(),
       clear: vi.fn().mockResolvedValue(true),
-      onAlarm: createEvent()
+      onAlarm: createEvent<NonNullable<ChromeApi["alarms"]>["onAlarm"]>()
     },
     permissions: {
       request: vi.fn().mockResolvedValue(true),
@@ -130,7 +156,8 @@ export function createTestChromeApi(
       create: vi.fn(),
       update: vi.fn().mockResolvedValue(undefined),
       removeAll: vi.fn().mockResolvedValue(undefined),
-      onClicked: createEvent()
+      onClicked:
+        createEvent<NonNullable<ChromeApi["contextMenus"]>["onClicked"]>()
     }
   };
 
@@ -174,8 +201,8 @@ export function installTestChromeApi(
 ): TestChromeApi {
   const chromeApi = createTestChromeApi(overrides);
 
-  (globalThis as typeof globalThis & { chrome: TestChromeApi }).chrome =
-    chromeApi;
+  (globalThis as typeof globalThis & { chrome: unknown }).chrome =
+    chromeApi as unknown as typeof chrome;
 
   return chromeApi;
 }

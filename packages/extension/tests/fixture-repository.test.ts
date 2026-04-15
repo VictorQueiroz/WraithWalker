@@ -139,11 +139,20 @@ describe("fixture repository", () => {
       schemaVersion: 1,
       createdAt: "2026-04-03T00:00:00.000Z"
     };
+    const readOptionalJsonMock = vi.fn(
+      async (_root: FileSystemDirectoryHandle, _relativePath: string) => ({
+        ok: true
+      })
+    );
+    const readOptionalJson = <T>(
+      root: FileSystemDirectoryHandle,
+      relativePath: string
+    ) => readOptionalJsonMock(root, relativePath) as Promise<T | null>;
     const gateway = {
       exists: vi.fn(async () => true),
       writeJson: vi.fn(async () => {}),
       writeBody: vi.fn(async () => {}),
-      readOptionalJson: vi.fn(async () => ({ ok: true })),
+      readOptionalJson,
       readBody: vi.fn(async () => ({ bodyBase64: "Zm9v", size: 3 }))
     };
     const sharedRepository = { source: "shared" };
@@ -200,7 +209,10 @@ describe("fixture repository", () => {
       sentinel
     });
 
-    await capturedArgs!.storage.exists(rootHandle, "fixtures/example/request.json");
+    await capturedArgs!.storage.exists(
+      rootHandle,
+      "fixtures/example/request.json"
+    );
     expect(gateway.exists).toHaveBeenCalledWith(
       rootHandle,
       "fixtures/example/request.json"
@@ -234,7 +246,7 @@ describe("fixture repository", () => {
       rootHandle,
       "fixtures/example/meta.json"
     );
-    expect(gateway.readOptionalJson).toHaveBeenCalledWith(
+    expect(readOptionalJsonMock).toHaveBeenCalledWith(
       rootHandle,
       "fixtures/example/meta.json"
     );

@@ -272,7 +272,10 @@ describe("workspace open state", () => {
         snapshot: {
           sessionActive: true,
           attachedTabIds: [4],
-          enabledOrigins: ["https://app.example.com", "https://admin.example.com"],
+          enabledOrigins: [
+            "https://app.example.com",
+            "https://admin.example.com"
+          ],
           rootReady: true,
           captureDestination: "local",
           captureRootPath: "/tmp/local-root",

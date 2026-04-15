@@ -4990,8 +4990,8 @@ describe("background entrypoint", () => {
     expect(runtime.state.requests.size).toBe(0);
 
     runtime.state.attachedTabs.set(5, { topOrigin: "https://app.example.com" });
-    chromeApi.debugger.onDetach.listeners[0]({});
-    chromeApi.debugger.onDetach.listeners[0]({ tabId: 5 });
+    chromeApi.debugger.onDetach.listeners[0]({}, "target_closed");
+    chromeApi.debugger.onDetach.listeners[0]({ tabId: 5 }, "target_closed");
     expect(runtime.state.attachedTabs.has(5)).toBe(false);
 
     await runtime.handleRuntimeMessage({ type: "session.stop" });

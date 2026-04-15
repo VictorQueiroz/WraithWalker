@@ -33,11 +33,15 @@ describe("chrome api adapters", () => {
         contextMenus: rawChrome.contextMenus
       })
     );
-    expect(createMessageRuntimeApi().sendMessage).toBe(rawChrome.runtime.sendMessage);
+    expect(createMessageRuntimeApi().sendMessage).toBe(
+      rawChrome.runtime.sendMessage
+    );
     expect(createPopupRuntimeApi().openOptionsPage).toBe(
       rawChrome.runtime.openOptionsPage
     );
-    expect(createOffscreenRuntimeApi().onMessage).toBe(rawChrome.runtime.onMessage);
+    expect(createOffscreenRuntimeApi().onMessage).toBe(
+      rawChrome.runtime.onMessage
+    );
     expect(createOptionsChromeApi().permissions.request).toBe(
       rawChrome.permissions!.request
     );

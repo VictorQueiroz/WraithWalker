@@ -199,7 +199,8 @@ export function createBackgroundRuntime({
     setLastError,
     syncTraceBindings: () => traceService.syncTraceBindings(),
     reconcileTabs: () => sessionController.reconcileTabs(),
-    onServerHeartbeatSuccess: () => refreshContextMenuForActiveTabWithCurrentOrigins()
+    onServerHeartbeatSuccess: () =>
+      refreshContextMenuForActiveTabWithCurrentOrigins()
   });
 
   traceService = createBackgroundTraceService({
@@ -282,9 +283,11 @@ export function createBackgroundRuntime({
       });
 
     if (tab.active) {
-      void contextMenu.refreshContextMenuForTab(tab).catch((error: unknown) => {
-        setLastError(error instanceof Error ? error.message : String(error));
-      });
+      void contextMenu
+        .refreshContextMenuForTabWithOrigins(tab, [...state.enabledOrigins])
+        .catch((error: unknown) => {
+          setLastError(error instanceof Error ? error.message : String(error));
+        });
     }
   }
 

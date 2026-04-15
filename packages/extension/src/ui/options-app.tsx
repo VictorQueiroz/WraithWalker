@@ -7,10 +7,7 @@ import {
   POPUP_REFRESH_INTERVAL_MS,
   type EditorPreset
 } from "../lib/constants.js";
-import {
-  getEditorLaunchOverride,
-  updateEditorLaunchOverride
-} from "../lib/editor-launch.js";
+import { getEditorLaunchOverride } from "../lib/editor-launch.js";
 import type {
   BackgroundMessage,
   DiagnosticsResult,
@@ -36,14 +33,9 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
-import {
-  isValidDumpAllowlistPatterns
-} from "../lib/site-config.js";
+import { isValidDumpAllowlistPatterns } from "../lib/site-config.js";
 import { whitelistSiteOrigin } from "../lib/site-whitelist.js";
-import type {
-  MessageRuntimeApi,
-  OptionsChromeApi
-} from "../lib/chrome-api.js";
+import type { MessageRuntimeApi, OptionsChromeApi } from "../lib/chrome-api.js";
 import type {
   NativeHostConfig,
   RootSentinel,
@@ -64,7 +56,11 @@ import {
   Separator,
   Textarea
 } from "./components.js";
-import { withSwitchDialogTargetName } from "./options-app.helpers.js";
+import {
+  withSwitchDialogTargetName,
+  withUpdatedEditorCommandOverride,
+  withUpdatedEditorUrlOverride
+} from "./options-app.helpers.js";
 
 interface RootState {
   hasHandle: boolean;
@@ -412,27 +408,40 @@ function SectionIntro({
 function SiteCard({
   siteConfig,
   disabled = false,
+  onDraftingChange,
   onSave,
   onRemove
 }: {
   siteConfig: SiteConfig;
   disabled?: boolean;
+  onDraftingChange?: (origin: string, isDrafting: boolean) => void;
   onSave: (
     origin: string,
     patch: Pick<SiteConfig, "dumpAllowlistPatterns">
   ) => Promise<void>;
   onRemove: (origin: string) => Promise<void>;
 }) {
-  const [patternsText, setPatternsText] = React.useState(
-    formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns)
+  const formattedPatterns = React.useMemo(
+    () => formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns),
+    [siteConfig.dumpAllowlistPatterns]
   );
+  const [patternsText, setPatternsText] = React.useState(formattedPatterns);
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
+  const isDrafting = patternsText !== formattedPatterns;
 
   React.useEffect(() => {
-    setPatternsText(
-      formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns)
-    );
-  }, [siteConfig.dumpAllowlistPatterns]);
+    if (!isDrafting) {
+      setPatternsText(formattedPatterns);
+    }
+  }, [formattedPatterns, isDrafting]);
+
+  React.useEffect(() => {
+    onDraftingChange?.(siteConfig.origin, isDrafting);
+
+    return () => {
+      onDraftingChange?.(siteConfig.origin, false);
+    };
+  }, [isDrafting, onDraftingChange, siteConfig.origin]);
 
   return (
     <Card className="bg-white/80">
@@ -559,6 +568,7 @@ export function OptionsApp({
   const [switchDialog, setSwitchDialog] =
     React.useState<ScenarioSwitchDialogState | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [siteDraftOrigins, setSiteDraftOrigins] = React.useState<string[]>([]);
   const [flash, setFlash] = React.useState<FlashState | null>(null);
   const [loading, setLoading] = React.useState(true);
   const cursorEditor = React.useMemo(
@@ -659,6 +669,22 @@ export function OptionsApp({
     ]);
   }, [refreshScenarios, refreshSessionSnapshot, refreshSiteConfigs]);
 
+  const handleSiteDraftingChange = React.useCallback(
+    (origin: string, isDrafting: boolean) => {
+      setSiteDraftOrigins((currentOrigins) => {
+        const hasOrigin = currentOrigins.includes(origin);
+        if (isDrafting) {
+          return hasOrigin ? currentOrigins : [...currentOrigins, origin];
+        }
+
+        return hasOrigin
+          ? currentOrigins.filter((currentOrigin) => currentOrigin !== origin)
+          : currentOrigins;
+      });
+    },
+    []
+  );
+
   const refreshAll = React.useCallback(async () => {
     setLoading(true);
     try {
@@ -668,11 +694,7 @@ export function OptionsApp({
     } finally {
       setLoading(false);
     }
-  }, [
-    getNativeHostConfig,
-    refreshAuthorityData,
-    refreshRootState
-  ]);
+  }, [getNativeHostConfig, refreshAuthorityData, refreshRootState]);
 
   React.useEffect(() => {
     void refreshAll();
@@ -680,6 +702,10 @@ export function OptionsApp({
 
   React.useEffect(() => {
     const intervalId = setIntervalFn(() => {
+      if (siteDraftOrigins.length > 0) {
+        return;
+      }
+
       void refreshAuthorityData().catch(() => undefined);
     }, refreshIntervalMs);
 
@@ -690,6 +716,7 @@ export function OptionsApp({
     clearIntervalFn,
     refreshAuthorityData,
     refreshIntervalMs,
+    siteDraftOrigins.length,
     setIntervalFn
   ]);
 
@@ -1058,32 +1085,35 @@ export function OptionsApp({
   }
 
   async function handleConfirmSwitchScenario() {
-    return withSwitchDialogTargetName(switchDialog, async (switchTargetName) => {
-      setFlash(null);
-      setSwitchBusyName(switchTargetName);
-      try {
-        const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
-          type: "scenario.switch",
-          name: switchTargetName
-        });
-        if (!result.ok) {
-          throw new Error(getErrorMessage(result as ErrorResult));
+    return withSwitchDialogTargetName(
+      switchDialog,
+      async (switchTargetName) => {
+        setFlash(null);
+        setSwitchBusyName(switchTargetName);
+        try {
+          const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
+            type: "scenario.switch",
+            name: switchTargetName
+          });
+          if (!result.ok) {
+            throw new Error(getErrorMessage(result as ErrorResult));
+          }
+          setSwitchDialog(null);
+          await refreshScenarios();
+          setFlash({
+            variant: "success",
+            text: `Switched to "${result.name}".`
+          });
+        } catch (error) {
+          setFlash({
+            variant: "destructive",
+            text: error instanceof Error ? error.message : String(error)
+          });
+        } finally {
+          setSwitchBusyName(null);
         }
-        setSwitchDialog(null);
-        await refreshScenarios();
-        setFlash({
-          variant: "success",
-          text: `Switched to "${result.name}".`
-        });
-      } catch (error) {
-        setFlash({
-          variant: "destructive",
-          text: error instanceof Error ? error.message : String(error)
-        });
-      } finally {
-        setSwitchBusyName(null);
       }
-    });
+    );
   }
 
   const rootActionLabel = !rootState?.hasHandle
@@ -1266,15 +1296,14 @@ export function OptionsApp({
                 </form>
                 <div className="grid gap-3">
                   {!canEditSites ? (
-                    <Alert variant="default">
-                      {originsBlockedMessage}
-                    </Alert>
+                    <Alert variant="default">{originsBlockedMessage}</Alert>
                   ) : sites.length > 0 ? (
                     sites.map((siteConfig) => (
                       <SiteCard
                         key={siteConfig.origin}
                         siteConfig={siteConfig}
                         disabled={!canEditSites}
+                        onDraftingChange={handleSiteDraftingChange}
                         onSave={handleUpdateSite}
                         onRemove={handleRemoveSite}
                       />
@@ -1309,9 +1338,7 @@ export function OptionsApp({
                     </Badge>
                     <Badge
                       variant={
-                        workspaceStatus.activeSnapshotName
-                          ? "success"
-                          : "muted"
+                        workspaceStatus.activeSnapshotName ? "success" : "muted"
                       }
                     >
                       Active snapshot:{" "}
@@ -1689,19 +1716,11 @@ export function OptionsApp({
                         onChange={(event) => {
                           const urlTemplate = event.currentTarget.value;
                           setNativeHostConfigState((current) =>
-                            current
-                              ? updateEditorLaunchOverride(
-                                  current,
-                                  cursorEditor.id,
-                                  {
-                                    ...getEditorLaunchOverride(
-                                      current,
-                                      cursorEditor.id
-                                    ),
-                                    urlTemplate
-                                  }
-                                )
-                              : current
+                            withUpdatedEditorUrlOverride(
+                              current,
+                              cursorEditor.id,
+                              urlTemplate
+                            )
                           );
                         }}
                         placeholder={
@@ -1720,19 +1739,11 @@ export function OptionsApp({
                         onChange={(event) => {
                           const commandTemplate = event.currentTarget.value;
                           setNativeHostConfigState((current) =>
-                            current
-                              ? updateEditorLaunchOverride(
-                                  current,
-                                  cursorEditor.id,
-                                  {
-                                    ...getEditorLaunchOverride(
-                                      current,
-                                      cursorEditor.id
-                                    ),
-                                    commandTemplate
-                                  }
-                                )
-                              : current
+                            withUpdatedEditorCommandOverride(
+                              current,
+                              cursorEditor.id,
+                              commandTemplate
+                            )
                           );
                         }}
                         placeholder={cursorEditor.commandTemplate}

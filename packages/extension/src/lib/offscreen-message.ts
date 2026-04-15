@@ -34,7 +34,11 @@ export function classifyOffscreenMessage(
     return { kind: "ignore" };
   }
 
-  if (!KNOWN_OFFSCREEN_MESSAGE_TYPES.has(typedMessage.type as OffscreenMessage["type"])) {
+  if (
+    !KNOWN_OFFSCREEN_MESSAGE_TYPES.has(
+      typedMessage.type as OffscreenMessage["type"]
+    )
+  ) {
     return {
       kind: "unknown",
       type: typedMessage.type

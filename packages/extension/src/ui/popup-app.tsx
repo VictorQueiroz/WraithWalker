@@ -61,13 +61,7 @@ function resolvePreferredEditor(
   );
 }
 
-function PopupStatusTile({
-  label,
-  value
-}: {
-  label: string;
-  value: string;
-}) {
+function PopupStatusTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1 rounded-xl border border-border/70 bg-white/70 px-3 py-2">
       <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

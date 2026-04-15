@@ -49,6 +49,10 @@ export interface BackgroundContextMenuApi {
   registerContextMenus(): Promise<void>;
   refreshContextMenuForActiveTab(): Promise<void>;
   refreshContextMenuForActiveTabWithOrigins(origins: string[]): Promise<void>;
+  refreshContextMenuForTabWithOrigins(
+    tab: BrowserTab | undefined,
+    origins: string[]
+  ): Promise<void>;
   refreshContextMenuForTab(tab?: BrowserTab): Promise<void>;
   handleContextMenuClicked(
     info: ContextMenuOnClickData,
@@ -144,10 +148,7 @@ export function createBackgroundContextMenu({
       (siteConfig) => siteConfig.origin
     );
 
-    return findMatchingOrigin(
-      url,
-      lastKnownOrigins
-    )
+    return findMatchingOrigin(url, lastKnownOrigins)
       ? UNWHITELIST_MENU_STATE
       : DEFAULT_WHITELIST_MENU_STATE;
   }
@@ -260,7 +261,9 @@ export function createBackgroundContextMenu({
       }
       setLastError(writeResult.ok ? "" : getErrorMessage(writeResult));
       if (writeResult.ok) {
-        lastKnownOrigins = nextSiteConfigs.map((siteConfig) => siteConfig.origin);
+        lastKnownOrigins = nextSiteConfigs.map(
+          (siteConfig) => siteConfig.origin
+        );
         await updateWhitelistMenuState(DEFAULT_WHITELIST_MENU_STATE);
       }
       return;
@@ -300,7 +303,9 @@ export function createBackgroundContextMenu({
           }
         }
       });
-      lastKnownOrigins = result.siteConfigs.map((siteConfig) => siteConfig.origin);
+      lastKnownOrigins = result.siteConfigs.map(
+        (siteConfig) => siteConfig.origin
+      );
       setLastError("");
       await updateWhitelistMenuState(UNWHITELIST_MENU_STATE);
     } catch (error) {
@@ -312,6 +317,7 @@ export function createBackgroundContextMenu({
     registerContextMenus,
     refreshContextMenuForActiveTab,
     refreshContextMenuForActiveTabWithOrigins,
+    refreshContextMenuForTabWithOrigins,
     refreshContextMenuForTab,
     handleContextMenuClicked
   };

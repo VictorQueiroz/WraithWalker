@@ -1,8 +1,5 @@
 import type { BackgroundMessage, ErrorResult } from "./messages.js";
-import type {
-  BrowserTab,
-  DebuggeeTarget
-} from "./chrome-api.js";
+import type { BrowserTab, DebuggeeTarget } from "./chrome-api.js";
 import type {
   AttachedTabState,
   BrowserConsoleEntry,

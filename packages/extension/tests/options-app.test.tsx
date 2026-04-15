@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
-import * as React from "react";
-
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
 import {
   getSwitchDialogTargetName,
-  withSwitchDialogTargetName
+  withSwitchDialogTargetName,
+  withUpdatedEditorCommandOverride,
+  withUpdatedEditorUrlOverride
 } from "../src/ui/options-app.helpers.js";
 import {
   DEFAULT_NATIVE_HOST_CONFIG,
@@ -84,11 +84,21 @@ function createRuntimeSendMessage({
 function createOptionsAppHarness({
   nativeHostConfig = createNativeHostConfig(),
   editorPresets,
-  sessionSnapshot
+  sessionSnapshot,
+  siteConfigs = [],
+  setIntervalFn,
+  clearIntervalFn
 }: {
   nativeHostConfig?: NativeHostConfig;
   editorPresets?: EditorPreset[];
   sessionSnapshot?: SessionSnapshot;
+  siteConfigs?: Array<{
+    origin: string;
+    createdAt: string;
+    dumpAllowlistPatterns: string[];
+  }>;
+  setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
 } = {}) {
   const runtimeSendMessage = createRuntimeSendMessage({ sessionSnapshot });
   const chromeApi = createTestChromeApi({
@@ -106,8 +116,10 @@ function createOptionsAppHarness({
       runtime: chromeApi.runtime,
       permissions: chromeApi.permissions!
     },
+    ...(setIntervalFn ? { setIntervalFn } : {}),
+    ...(clearIntervalFn ? { clearIntervalFn } : {}),
     getNativeHostConfig,
-    getSiteConfigs: vi.fn().mockResolvedValue([]),
+    getSiteConfigs: vi.fn().mockResolvedValue(siteConfigs),
     setNativeHostConfig,
     setSiteConfigs: vi.fn().mockResolvedValue(undefined),
     loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
@@ -133,62 +145,6 @@ async function openAdvancedLaunchSettings() {
   await user.click(await screen.findByRole("button", { name: "Show" }));
   await screen.findByLabelText("Custom URL Override For Cursor");
   return user;
-}
-
-function extractLastNativeHostConfigUpdater(
-  updates: Array<React.SetStateAction<NativeHostConfig | null>>
-) {
-  const update = [...updates]
-    .reverse()
-    .find(
-      (
-        value
-      ): value is (current: NativeHostConfig | null) => NativeHostConfig | null =>
-        typeof value === "function"
-    );
-
-  if (!update) {
-    throw new Error("Expected a native host config updater function.");
-  }
-
-  return update;
-}
-
-async function loadOptionsAppWithNativeHostConfigCapture(
-  updates: Array<React.SetStateAction<NativeHostConfig | null>>
-) {
-  vi.resetModules();
-  vi.doMock("react", async () => {
-    const actual = await vi.importActual<typeof import("react")>("react");
-    let callCount = 0;
-
-    return {
-      ...actual,
-      useState(initial: unknown) {
-        callCount += 1;
-        const tuple = actual.useState(initial as never) as [
-          unknown,
-          React.Dispatch<unknown>
-        ];
-
-        if (callCount % 20 === 5) {
-          const [value, setValue] = tuple;
-          const wrappedSet = (next: unknown) => {
-            updates.push(next as React.SetStateAction<NativeHostConfig | null>);
-            return setValue(next);
-          };
-
-          return [value, wrappedSet];
-        }
-
-        return tuple;
-      }
-    };
-  });
-
-  const module = await import("../src/ui/options-app.js");
-
-  return module.OptionsApp;
 }
 
 describe("OptionsApp launch settings", () => {
@@ -253,49 +209,52 @@ describe("OptionsApp launch settings", () => {
     expect(await screen.findByText("Launch settings saved.")).toBeTruthy();
   });
 
-  it("keeps the URL override updater null-safe when native host config state is missing", async () => {
-    const nativeHostConfigUpdates: Array<
-      React.SetStateAction<NativeHostConfig | null>
-    > = [];
-    const CapturedOptionsApp = await loadOptionsAppWithNativeHostConfigCapture(
-      nativeHostConfigUpdates
-    );
-
-    const { props } = createOptionsAppHarness();
-    render(<CapturedOptionsApp {...props} />);
-
-    await openAdvancedLaunchSettings();
-    fireEvent.change(screen.getByLabelText("Custom URL Override For Cursor"), {
-      target: { value: "cursor://workspace?folder=$DIR_COMPONENT" }
+  it("does not poll authority data while a site-pattern edit is still dirty", async () => {
+    let intervalHandler: (() => void) | null = null;
+    const intervalId = 23 as unknown as ReturnType<typeof setInterval>;
+    const setIntervalMock = vi.fn((handler: TimerHandler) => {
+      intervalHandler = handler as () => void;
+      return intervalId;
     });
+    const clearIntervalMock = vi.fn();
+    const setIntervalFn = setIntervalMock as unknown as typeof setInterval;
+    const clearIntervalFn =
+      clearIntervalMock as unknown as typeof clearInterval;
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        captureRootPath: "/tmp/server-root",
+        enabledOrigins: ["https://docs.example.com"]
+      }),
+      siteConfigs: [
+        {
+          origin: "https://docs.example.com",
+          createdAt: "2026-04-14T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ],
+      setIntervalFn,
+      clearIntervalFn
+    });
+    const user = userEvent.setup();
 
-    const update = extractLastNativeHostConfigUpdater(nativeHostConfigUpdates);
+    render(<OptionsApp {...props} />);
 
-    expect(update(null)).toBeNull();
-  });
-
-  it("keeps the command override updater null-safe when native host config state is missing", async () => {
-    const nativeHostConfigUpdates: Array<
-      React.SetStateAction<NativeHostConfig | null>
-    > = [];
-    const CapturedOptionsApp = await loadOptionsAppWithNativeHostConfigCapture(
-      nativeHostConfigUpdates
+    const patternsInput = await screen.findByLabelText(
+      "Dump Allowlist Patterns"
     );
+    await user.clear(patternsInput);
+    await user.type(patternsInput, "\\.tsx$");
 
-    const { props } = createOptionsAppHarness();
-    render(<CapturedOptionsApp {...props} />);
+    const getSiteConfigs = props.getSiteConfigs as ReturnType<typeof vi.fn>;
+    const beforeTickCalls = getSiteConfigs.mock.calls.length;
 
-    await openAdvancedLaunchSettings();
-    fireEvent.change(
-      screen.getByLabelText("Custom Command Override For Cursor"),
-      {
-        target: { value: 'cursor --folder "$DIR"' }
-      }
-    );
+    intervalHandler?.();
+    await Promise.resolve();
 
-    const update = extractLastNativeHostConfigUpdater(nativeHostConfigUpdates);
-
-    expect(update(null)).toBeNull();
+    expect(getSiteConfigs).toHaveBeenCalledTimes(beforeTickCalls);
+    expect((patternsInput as HTMLTextAreaElement).value).toBe("\\.tsx$");
   });
 });
 
@@ -331,5 +290,21 @@ describe("options app helpers", () => {
       )
     ).toBe("switch:candidate");
     expect(callback).toHaveBeenCalledWith("candidate");
+  });
+
+  it("keeps the editor URL override updater null-safe when native host config state is missing", () => {
+    expect(
+      withUpdatedEditorUrlOverride(
+        null,
+        "cursor",
+        "cursor://workspace?folder=$DIR_COMPONENT"
+      )
+    ).toBeNull();
+  });
+
+  it("keeps the editor command override updater null-safe when native host config state is missing", () => {
+    expect(
+      withUpdatedEditorCommandOverride(null, "cursor", 'cursor --folder "$DIR"')
+    ).toBeNull();
   });
 });

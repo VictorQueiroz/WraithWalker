@@ -657,7 +657,9 @@ describe("popup entrypoint", () => {
     const nativeHostConfig = createDeferred<NativeHostConfig>();
     const initialSnapshot = createDeferred<SessionSnapshot>();
     const runtime = {
-      sendMessage: vi.fn().mockImplementationOnce(() => initialSnapshot.promise),
+      sendMessage: vi
+        .fn()
+        .mockImplementationOnce(() => initialSnapshot.promise),
       openOptionsPage: vi.fn()
     };
     const getNativeHostConfig = vi
@@ -734,9 +736,7 @@ describe("popup entrypoint", () => {
         type: "native.revealRoot"
       });
       expect(
-        await screen.findByText(
-          "Opened Server Root in the OS file manager."
-        )
+        await screen.findByText("Opened Server Root in the OS file manager.")
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -776,10 +776,10 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Open in folder" })
       );
 
-      expect(
-        await screen.findByText("Reveal transport failed.")
-      ).toBeTruthy();
-      const revealButton = screen.getByRole("button", { name: "Open in folder" });
+      expect(await screen.findByText("Reveal transport failed.")).toBeTruthy();
+      const revealButton = screen.getByRole("button", {
+        name: "Open in folder"
+      });
       expect((revealButton as HTMLButtonElement).disabled).toBe(false);
       expect(screen.queryByRole("button", { name: "Opening..." })).toBeNull();
     } finally {
@@ -821,7 +821,9 @@ describe("popup entrypoint", () => {
       );
 
       expect(await screen.findByText("404")).toBeTruthy();
-      const revealButton = screen.getByRole("button", { name: "Open in folder" });
+      const revealButton = screen.getByRole("button", {
+        name: "Open in folder"
+      });
       expect((revealButton as HTMLButtonElement).disabled).toBe(false);
       expect(screen.queryByRole("button", { name: "Opening..." })).toBeNull();
     } finally {
@@ -954,9 +956,7 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Open in folder" })
       );
       expect(
-        await screen.findByText(
-          "Opened Server Root in the OS file manager."
-        )
+        await screen.findByText("Opened Server Root in the OS file manager.")
       ).toBeTruthy();
 
       expect(serverClient.revealRoot).toHaveBeenCalledTimes(1);
@@ -1353,9 +1353,7 @@ describe("popup entrypoint", () => {
       await flushPromises();
 
       expect(
-        await screen.findByText(
-          "Opened Server Root in the OS file manager."
-        )
+        await screen.findByText("Opened Server Root in the OS file manager.")
       ).toBeTruthy();
     } finally {
       popup.unmount();

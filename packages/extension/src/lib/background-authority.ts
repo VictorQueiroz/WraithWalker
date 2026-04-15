@@ -5,9 +5,7 @@ import type {
   RootReadySuccess,
   SiteConfigsResult
 } from "./messages.js";
-import type {
-  ChromeApi
-} from "./chrome-api.js";
+import type { ChromeApi } from "./chrome-api.js";
 import type {
   BackgroundState,
   BackgroundServerInfo

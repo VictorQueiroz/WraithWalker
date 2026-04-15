@@ -334,12 +334,14 @@ describe("background context menu runtime", () => {
   });
 
   it("refreshes the menu only for active tab updates", async () => {
-    const { chromeApi } = await createLocalRuntime({
+    const { chromeApi, runtime } = await createLocalRuntime({
       activeTabUrl: "https://docs.example.com/dashboard",
       configuredSiteConfigs: [createSiteConfig("https://docs.example.com")]
     });
 
+    runtime.state.enabledOrigins = ["https://docs.example.com"];
     chromeApi.contextMenus.update.mockClear();
+    chromeApi.runtime.sendMessage.mockClear();
 
     chromeApi.tabs.onUpdated.listeners[0](
       12,
@@ -363,6 +365,11 @@ describe("background context menu runtime", () => {
         title: UNWHITELIST_SITE_MENU_TITLE,
         enabled: true
       }
+    );
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "fs.readConfiguredSiteConfigs"
+      })
     );
   });
 
@@ -403,7 +410,9 @@ describe("background context menu runtime", () => {
     const runtime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
-      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
       getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
       setLastSessionSnapshot: vi.fn(),
       createWraithWalkerServerClient: vi.fn(() =>
@@ -445,7 +454,9 @@ describe("background context menu runtime", () => {
     heartbeat.mockClear();
     serverOnline = true;
 
-    await runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" });
+    await runtime.handleRuntimeMessage({
+      type: "config.readConfiguredSiteConfigs"
+    });
     await flushPromises();
     await flushPromises();
     await flushPromises();
