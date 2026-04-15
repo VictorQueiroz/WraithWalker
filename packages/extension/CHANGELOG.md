@@ -1,5 +1,11 @@
 # @wraithwalker/extension
 
+## 0.2.1
+
+### Patch Changes
+
+- e0f49d1: Improve extension workspace UX and align context-menu whitelisting with the Settings lifecycle.
+
 ## 0.2.0
 
 ### Minor Changes
