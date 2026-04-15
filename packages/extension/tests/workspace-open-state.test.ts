@@ -7,6 +7,8 @@ import {
   createMissingNativeHostAlert,
   deriveCaptureRootState,
   deriveEditorLaunchState,
+  derivePopupStartBlockReason,
+  deriveWorkspaceStatus,
   resolvePopupAlert
 } from "../src/lib/workspace-open-state.js";
 
@@ -231,6 +233,194 @@ describe("workspace open state", () => {
     });
   });
 
+  it("derives workspace status for server, local, and disconnected roots", () => {
+    expect(
+      deriveWorkspaceStatus({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: true,
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root",
+          lastError: ""
+        },
+        rememberedRootState: {
+          hasHandle: false,
+          permission: "prompt"
+        },
+        activeScenarioName: "baseline",
+        activeTrace: {
+          traceId: "trace-server",
+          name: "Checkout"
+        }
+      })
+    ).toEqual({
+      authority: "server",
+      authorityLabel: "Server Root",
+      sessionState: "idle",
+      sessionLabel: "Idle",
+      enabledOriginCount: 1,
+      rememberedRootState: { kind: "missing_handle" },
+      rememberedRootLabel: "Optional fallback",
+      activeSnapshotName: "baseline",
+      activeTraceLabel: "Checkout"
+    });
+
+    expect(
+      deriveWorkspaceStatus({
+        snapshot: {
+          sessionActive: true,
+          attachedTabIds: [4],
+          enabledOrigins: ["https://app.example.com", "https://admin.example.com"],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        rememberedRootState: {
+          hasHandle: true,
+          permission: "granted"
+        }
+      })
+    ).toEqual({
+      authority: "browser_root",
+      authorityLabel: "Remembered Browser Root",
+      sessionState: "active",
+      sessionLabel: "Active",
+      enabledOriginCount: 2,
+      rememberedRootState: { kind: "ready" },
+      rememberedRootLabel: "Ready",
+      activeSnapshotName: null,
+      activeTraceLabel: null
+    });
+
+    expect(
+      deriveWorkspaceStatus({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        },
+        rememberedRootState: {
+          hasHandle: true,
+          permission: "prompt"
+        },
+        activeTrace: {
+          traceId: "trace-fallback"
+        }
+      })
+    ).toEqual({
+      authority: "none",
+      authorityLabel: "No Active Root",
+      sessionState: "idle",
+      sessionLabel: "Idle",
+      enabledOriginCount: 0,
+      rememberedRootState: { kind: "permission_required" },
+      rememberedRootLabel: "Reconnect Root Directory",
+      activeSnapshotName: null,
+      activeTraceLabel: "trace-fallback"
+    });
+  });
+
+  it("derives popup start blocking reasons from workspace status", () => {
+    const loadingStatus = deriveWorkspaceStatus({
+      snapshot: null,
+      captureRootState: { kind: "missing_handle" }
+    });
+    expect(
+      derivePopupStartBlockReason({
+        snapshot: null,
+        workspaceStatus: loadingStatus
+      })
+    ).toBeNull();
+
+    const activeStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: true,
+        attachedTabIds: [4],
+        enabledOrigins: [],
+        rootReady: true,
+        captureDestination: "local",
+        captureRootPath: "/tmp/local-root",
+        lastError: ""
+      },
+      captureRootState: { kind: "ready" }
+    });
+    expect(
+      derivePopupStartBlockReason({
+        snapshot: {
+          sessionActive: true,
+          attachedTabIds: [4],
+          enabledOrigins: [],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        workspaceStatus: activeStatus
+      })
+    ).toBeNull();
+
+    const missingOriginsStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: true,
+        captureDestination: "local",
+        captureRootPath: "/tmp/local-root",
+        lastError: ""
+      },
+      captureRootState: { kind: "ready" }
+    });
+    expect(
+      derivePopupStartBlockReason({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        workspaceStatus: missingOriginsStatus
+      })
+    ).toBe("missing_origins");
+
+    const missingRootStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: false,
+        captureDestination: "none",
+        captureRootPath: "",
+        lastError: ""
+      },
+      captureRootState: { kind: "permission_required" }
+    });
+    expect(
+      derivePopupStartBlockReason({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        },
+        workspaceStatus: missingRootStatus
+      })
+    ).toBe("missing_root");
+  });
+
   it("resolves popup alerts by precedence", () => {
     const editorLaunchState = deriveEditorLaunchState(
       DEFAULT_NATIVE_HOST_CONFIG,
@@ -256,7 +446,7 @@ describe("workspace open state", () => {
         },
         expected: {
           variant: "default" as const,
-          text: "Loading session state..."
+          text: "Checking workspace status..."
         }
       },
       {
@@ -286,7 +476,7 @@ describe("workspace open state", () => {
         },
         expected: {
           variant: "default" as const,
-          text: "Add at least one origin in Settings before starting a capture session."
+          text: "Add your first origin in Settings before starting capture."
         }
       },
       {
@@ -294,44 +484,15 @@ describe("workspace open state", () => {
         input: {
           snapshot: {
             ...baseSnapshot,
-            rootReady: false
+            rootReady: false,
+            captureDestination: "none" as const
           },
           captureRootState: { kind: "permission_required" as const },
           editorLaunchState
         },
         expected: {
           variant: "destructive" as const,
-          text: "Reconnect the WraithWalker root directory in Settings before starting or opening the workspace."
-        }
-      },
-      {
-        name: "active capture success",
-        input: {
-          snapshot: {
-            ...baseSnapshot,
-            sessionActive: true
-          },
-          captureRootState: { kind: "ready" as const },
-          editorLaunchState
-        },
-        expected: {
-          variant: "success" as const,
-          text: "Debugger capture and replay are active for all matching tabs."
-        }
-      },
-      {
-        name: "idle server-backed state",
-        input: {
-          snapshot: {
-            ...baseSnapshot,
-            captureDestination: "server" as const
-          },
-          captureRootState: { kind: "ready" as const },
-          editorLaunchState
-        },
-        expected: {
-          variant: "default" as const,
-          text: "Session is idle. Start it when you want matching tabs to capture into the local WraithWalker server root."
+          text: "Reconnect Root Directory in Settings before starting capture."
         }
       }
     ];
@@ -339,6 +500,41 @@ describe("workspace open state", () => {
     for (const testCase of cases) {
       expect(resolvePopupAlert(testCase.input)).toEqual(testCase.expected);
     }
+  });
+
+  it("returns no popup alert when the status strip is enough", () => {
+    const snapshot = {
+      sessionActive: false,
+      attachedTabIds: [],
+      enabledOrigins: ["https://app.example.com"],
+      rootReady: true,
+      captureDestination: "local" as const,
+      captureRootPath: "/tmp/fixtures",
+      lastError: ""
+    };
+    const editorLaunchState = deriveEditorLaunchState(
+      DEFAULT_NATIVE_HOST_CONFIG,
+      "cursor"
+    );
+
+    expect(
+      resolvePopupAlert({
+        snapshot,
+        captureRootState: { kind: "ready" },
+        editorLaunchState
+      })
+    ).toBeNull();
+
+    expect(
+      resolvePopupAlert({
+        snapshot: {
+          ...snapshot,
+          captureDestination: "server"
+        },
+        captureRootState: { kind: "missing_handle" },
+        editorLaunchState
+      })
+    ).toBeNull();
   });
 
   it("keeps popup launch errors click-driven", () => {
@@ -362,10 +558,7 @@ describe("workspace open state", () => {
         captureRootState: { kind: "ready" },
         editorLaunchState
       })
-    ).toEqual({
-      variant: "default",
-      text: "Session is idle. Start it when you want matching tabs to attach automatically."
-    });
+    ).toBeNull();
 
     expect(
       resolvePopupAlert({
@@ -376,7 +569,7 @@ describe("workspace open state", () => {
       })
     ).toEqual({
       variant: "destructive",
-      text: "Set the absolute editor launch path in Settings to open the remembered root in Cursor. Chrome does not expose local folder paths from the directory picker."
+      text: "Set the absolute editor launch path in Settings to open Remembered Browser Root in Cursor. Chrome does not expose local folder paths from the directory picker."
     });
   });
 });

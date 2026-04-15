@@ -7,7 +7,7 @@ import type {
 import { findMatchingOrigin } from "./background-helpers.js";
 import { getErrorMessage } from "./background-runtime-shared.js";
 import { originToPermissionPattern } from "./path-utils.js";
-import { createConfiguredSiteConfig } from "./site-config.js";
+import { whitelistSiteOrigin } from "./site-whitelist.js";
 
 export const WHITELIST_SITE_MENU_ID = "wraithwalker.whitelist-site";
 export const WHITELIST_SITE_MENU_TITLE = "Whitelist this website";
@@ -30,20 +30,25 @@ const UNWHITELIST_MENU_STATE: WhitelistMenuState = {
   enabled: true
 };
 
+const WHITELIST_ROOT_REQUIRED_MESSAGE =
+  "Open WraithWalker Settings and choose Root Directory, or connect the local WraithWalker server, before whitelisting websites.";
+
 interface BackgroundContextMenuDependencies {
   chromeApi: ChromeApi;
   authority: Pick<
     BackgroundAuthorityApi,
-    | "ensureRootReady"
     | "readConfiguredSiteConfigsForAuthority"
     | "writeConfiguredSiteConfigsForAuthority"
   >;
+  getEnabledOrigins: () => string[];
+  isAuthorityReady: () => boolean;
   setLastError: (message: string) => void;
 }
 
 export interface BackgroundContextMenuApi {
   registerContextMenus(): Promise<void>;
   refreshContextMenuForActiveTab(): Promise<void>;
+  refreshContextMenuForActiveTabWithOrigins(origins: string[]): Promise<void>;
   refreshContextMenuForTab(tab?: BrowserTab): Promise<void>;
   handleContextMenuClicked(
     info: ContextMenuOnClickData,
@@ -91,8 +96,12 @@ function resolveOriginCandidate(
 export function createBackgroundContextMenu({
   chromeApi,
   authority,
+  getEnabledOrigins,
+  isAuthorityReady,
   setLastError
 }: BackgroundContextMenuDependencies): BackgroundContextMenuApi {
+  let lastKnownOrigins: string[] = [];
+
   async function updateWhitelistMenuState(
     menuState: WhitelistMenuState
   ): Promise<void> {
@@ -103,6 +112,19 @@ export function createBackgroundContextMenu({
     await Promise.resolve(
       chromeApi.contextMenus.update(WHITELIST_SITE_MENU_ID, menuState)
     );
+  }
+
+  function resolveWhitelistMenuStateForOrigins(
+    url: string | null,
+    origins: string[]
+  ): WhitelistMenuState {
+    if (!url) {
+      return DEFAULT_WHITELIST_MENU_STATE;
+    }
+
+    return findMatchingOrigin(url, origins)
+      ? UNWHITELIST_MENU_STATE
+      : DEFAULT_WHITELIST_MENU_STATE;
   }
 
   async function resolveWhitelistMenuState(
@@ -118,12 +140,30 @@ export function createBackgroundContextMenu({
       return DEFAULT_WHITELIST_MENU_STATE;
     }
 
+    lastKnownOrigins = configuredResult.siteConfigs.map(
+      (siteConfig) => siteConfig.origin
+    );
+
     return findMatchingOrigin(
       url,
-      configuredResult.siteConfigs.map((siteConfig) => siteConfig.origin)
+      lastKnownOrigins
     )
       ? UNWHITELIST_MENU_STATE
       : DEFAULT_WHITELIST_MENU_STATE;
+  }
+
+  async function refreshContextMenuForTabWithOrigins(
+    tab: BrowserTab | undefined,
+    origins: string[]
+  ): Promise<void> {
+    if (!chromeApi.contextMenus?.update) {
+      return;
+    }
+
+    lastKnownOrigins = [...origins];
+    await updateWhitelistMenuState(
+      resolveWhitelistMenuStateForOrigins(resolveUrlCandidate({}, tab), origins)
+    );
   }
 
   async function registerContextMenus(): Promise<void> {
@@ -162,6 +202,20 @@ export function createBackgroundContextMenu({
     await refreshContextMenuForTab(activeTab);
   }
 
+  async function refreshContextMenuForActiveTabWithOrigins(
+    origins: string[]
+  ): Promise<void> {
+    if (!chromeApi.contextMenus?.update) {
+      return;
+    }
+
+    const [activeTab] = await chromeApi.tabs.query({
+      active: true,
+      currentWindow: true
+    });
+    await refreshContextMenuForTabWithOrigins(activeTab, origins);
+  }
+
   async function handleContextMenuClicked(
     info: ContextMenuOnClickData,
     tab?: BrowserTab
@@ -177,29 +231,21 @@ export function createBackgroundContextMenu({
       return;
     }
 
-    const rootResult = await authority.ensureRootReady({
-      requestPermission: true
-    });
-    if (!rootResult.ok) {
-      setLastError(getErrorMessage(rootResult));
-      return;
-    }
-
-    const configuredResult =
-      await authority.readConfiguredSiteConfigsForAuthority();
-    if (!configuredResult.ok) {
-      setLastError(getErrorMessage(configuredResult));
-      return;
-    }
-
     const matchingOrigin =
       url &&
       findMatchingOrigin(
         url,
-        configuredResult.siteConfigs.map((siteConfig) => siteConfig.origin)
+        lastKnownOrigins.length > 0 ? lastKnownOrigins : getEnabledOrigins()
       );
 
     if (matchingOrigin) {
+      const configuredResult =
+        await authority.readConfiguredSiteConfigsForAuthority();
+      if (!configuredResult.ok) {
+        setLastError(getErrorMessage(configuredResult));
+        return;
+      }
+
       const nextSiteConfigs = configuredResult.siteConfigs.filter(
         (siteConfig) => siteConfig.origin !== matchingOrigin
       );
@@ -214,37 +260,58 @@ export function createBackgroundContextMenu({
       }
       setLastError(writeResult.ok ? "" : getErrorMessage(writeResult));
       if (writeResult.ok) {
+        lastKnownOrigins = nextSiteConfigs.map((siteConfig) => siteConfig.origin);
         await updateWhitelistMenuState(DEFAULT_WHITELIST_MENU_STATE);
       }
       return;
     }
 
-    if (chromeApi.permissions) {
-      const granted = await chromeApi.permissions.request({
-        origins: [originToPermissionPattern(origin)]
-      });
-      if (!granted) {
-        setLastError(`Host permission was not granted for ${origin}.`);
-        return;
-      }
+    if (!isAuthorityReady()) {
+      setLastError(WHITELIST_ROOT_REQUIRED_MESSAGE);
+      return;
     }
 
-    const nextSiteConfigs = [
-      ...configuredResult.siteConfigs,
-      createConfiguredSiteConfig(origin)
-    ].sort((left, right) => left.origin.localeCompare(right.origin));
+    try {
+      const result = await whitelistSiteOrigin({
+        originInput: origin,
+        requestHostPermission: async (permissionPattern) => {
+          if (!chromeApi.permissions) {
+            return true;
+          }
 
-    const writeResult =
-      await authority.writeConfiguredSiteConfigsForAuthority(nextSiteConfigs);
-    setLastError(writeResult.ok ? "" : getErrorMessage(writeResult));
-    if (writeResult.ok) {
+          return chromeApi.permissions.request({
+            origins: [permissionPattern]
+          });
+        },
+        readSiteConfigs: async () => {
+          const configuredResult =
+            await authority.readConfiguredSiteConfigsForAuthority();
+          if (!configuredResult.ok) {
+            throw new Error(getErrorMessage(configuredResult));
+          }
+
+          return configuredResult.siteConfigs;
+        },
+        writeSiteConfigs: async (siteConfigs) => {
+          const writeResult =
+            await authority.writeConfiguredSiteConfigsForAuthority(siteConfigs);
+          if (!writeResult.ok) {
+            throw new Error(getErrorMessage(writeResult));
+          }
+        }
+      });
+      lastKnownOrigins = result.siteConfigs.map((siteConfig) => siteConfig.origin);
+      setLastError("");
       await updateWhitelistMenuState(UNWHITELIST_MENU_STATE);
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : String(error));
     }
   }
 
   return {
     registerContextMenus,
     refreshContextMenuForActiveTab,
+    refreshContextMenuForActiveTabWithOrigins,
     refreshContextMenuForTab,
     handleContextMenuClicked
   };

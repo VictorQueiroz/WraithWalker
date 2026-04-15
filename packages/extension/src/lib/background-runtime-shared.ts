@@ -1,9 +1,7 @@
 import type { BackgroundMessage, ErrorResult } from "./messages.js";
 import type {
   BrowserTab,
-  ChromeApi,
-  DebuggeeTarget,
-  DetachReason
+  DebuggeeTarget
 } from "./chrome-api.js";
 import type {
   AttachedTabState,

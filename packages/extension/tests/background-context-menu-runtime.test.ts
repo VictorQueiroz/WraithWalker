@@ -7,6 +7,7 @@ import {
   WHITELIST_SITE_MENU_TITLE
 } from "../src/lib/background-context-menu.js";
 import { installTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
+import { createMockServerClient } from "./helpers/background-service-test-helpers.js";
 
 function createSiteConfig(origin: string) {
   return {
@@ -18,6 +19,20 @@ function createSiteConfig(origin: string) {
 
 function flushPromises() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function waitForExpectation(expectation: () => void, attempts = 10) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      expectation();
+      return;
+    } catch (error) {
+      if (attempt === attempts - 1) {
+        throw error;
+      }
+      await flushPromises();
+    }
+  }
 }
 
 async function loadBackgroundModule() {
@@ -175,13 +190,15 @@ describe("background context menu runtime", () => {
       configuredSiteConfigs: [createSiteConfig("https://docs.example.com")]
     });
 
-    expect(chromeApi.contextMenus.update).toHaveBeenCalledWith(
-      WHITELIST_SITE_MENU_ID,
-      {
-        title: UNWHITELIST_SITE_MENU_TITLE,
-        enabled: true
-      }
-    );
+    await waitForExpectation(() => {
+      expect(chromeApi.contextMenus.update).toHaveBeenCalledWith(
+        WHITELIST_SITE_MENU_ID,
+        {
+          title: UNWHITELIST_SITE_MENU_TITLE,
+          enabled: true
+        }
+      );
+    });
   });
 
   it("adds the current site through the local fallback path and flips the menu label", async () => {
@@ -218,7 +235,7 @@ describe("background context menu runtime", () => {
     );
   });
 
-  it("surfaces a missing local root when whitelisting without a configured root folder", async () => {
+  it("surfaces setup guidance when whitelisting without a configured root folder", async () => {
     const { chromeApi, getConfiguredSiteConfigs, runtime } =
       await createLocalRuntime({
         activeTabUrl: "https://docs.example.com/dashboard",
@@ -254,7 +271,9 @@ describe("background context menu runtime", () => {
         enabled: true
       }
     );
-    expect(runtime.state.lastError).toBe("No root directory selected.");
+    expect(runtime.state.lastError).toBe(
+      "Open WraithWalker Settings and choose Root Directory, or connect the local WraithWalker server, before whitelisting websites."
+    );
   });
 
   it("removes the current site through the local fallback path and flips the menu label back", async () => {
@@ -338,6 +357,105 @@ describe("background context menu runtime", () => {
     );
     await flushPromises();
 
+    expect(chromeApi.contextMenus.update).toHaveBeenCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: UNWHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
+  });
+
+  it("refreshes the active-tab menu label when a later server check switches authority to Server Root", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = installTestChromeApi({
+      tabs: {
+        query: vi.fn().mockResolvedValue([
+          {
+            id: 12,
+            active: true,
+            url: "https://docs.example.com/dashboard"
+          }
+        ])
+      }
+    });
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+
+    let serverOnline = false;
+    const serverSiteConfigs = [createSiteConfig("https://docs.example.com")];
+    const heartbeat = vi.fn().mockImplementation(async () => {
+      if (!serverOnline) {
+        throw new Error("offline");
+      }
+
+      return {
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        activeTrace: null,
+        siteConfigs: cloneSiteConfigs(serverSiteConfigs)
+      };
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-1"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() =>
+        createMockServerClient({
+          heartbeat,
+          readConfiguredSiteConfigs: vi.fn().mockImplementation(async () => {
+            if (!serverOnline) {
+              throw new Error("offline");
+            }
+
+            return {
+              siteConfigs: cloneSiteConfigs(serverSiteConfigs),
+              sentinel: { rootId: "server-root" }
+            };
+          })
+        })
+      ),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn().mockResolvedValue(undefined),
+        stopSession: vi.fn().mockResolvedValue(undefined),
+        reconcileTabs: vi.fn().mockResolvedValue(undefined),
+        handleTabStateChange: vi.fn().mockResolvedValue(undefined)
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    await flushPromises();
+    await flushPromises();
+
+    chromeApi.contextMenus.update.mockClear();
+    chromeApi.tabs.query.mockClear();
+    heartbeat.mockClear();
+    serverOnline = true;
+
+    await runtime.handleRuntimeMessage({ type: "config.readConfiguredSiteConfigs" });
+    await flushPromises();
+    await flushPromises();
+    await flushPromises();
+
+    expect(heartbeat).toHaveBeenCalled();
+    expect(runtime.state.enabledOrigins).toEqual(["https://docs.example.com"]);
+    expect(chromeApi.tabs.query).toHaveBeenCalledWith({
+      active: true,
+      currentWindow: true
+    });
     expect(chromeApi.contextMenus.update).toHaveBeenCalledWith(
       WHITELIST_SITE_MENU_ID,
       {

@@ -35,6 +35,7 @@ interface BackgroundAuthorityServerSyncDependencies {
   applyEffectiveSiteConfigs: (siteConfigs: SiteConfig[]) => boolean;
   restoreLocalEffectiveSiteConfigs: () => boolean;
   updateEffectiveRootState: () => void;
+  onServerHeartbeatSuccess?: () => void;
 }
 
 export function createBackgroundAuthorityServerSync({
@@ -48,7 +49,8 @@ export function createBackgroundAuthorityServerSync({
   persistSnapshot,
   applyEffectiveSiteConfigs,
   restoreLocalEffectiveSiteConfigs,
-  updateEffectiveRootState
+  updateEffectiveRootState,
+  onServerHeartbeatSuccess
 }: BackgroundAuthorityServerSyncDependencies): BackgroundAuthorityServerSyncApi {
   let serverRefreshPromise: Promise<BackgroundServerInfo | null> | null = null;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
@@ -221,6 +223,8 @@ export function createBackgroundAuthorityServerSync({
     if (await processServerCommands(info.commands ?? [])) {
       return performHeartbeatCycle();
     }
+
+    onServerHeartbeatSuccess?.();
 
     return state.serverInfo;
   }

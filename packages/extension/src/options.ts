@@ -5,7 +5,11 @@ import {
   getNativeHostConfig as defaultGetNativeHostConfig,
   setNativeHostConfig as defaultSetNativeHostConfig
 } from "./lib/chrome-storage.js";
-import { EDITOR_PRESETS, type EditorPreset } from "./lib/constants.js";
+import {
+  EDITOR_PRESETS,
+  POPUP_REFRESH_INTERVAL_MS,
+  type EditorPreset
+} from "./lib/constants.js";
 import {
   getConfiguredSiteConfigs as defaultGetSiteConfigs,
   setConfiguredSiteConfigs as defaultSetSiteConfigs
@@ -27,6 +31,9 @@ export interface OptionsDependencies {
   document?: Document;
   windowRef?: Window;
   chromeApi?: OptionsChromeApi;
+  setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
+  refreshIntervalMs?: number;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getSiteConfigs?: typeof defaultGetSiteConfigs;
   setNativeHostConfig?: typeof defaultSetNativeHostConfig;
@@ -53,6 +60,9 @@ export async function initOptions({
   document: documentRef = document,
   windowRef = window,
   chromeApi = createOptionsChromeApi(),
+  setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
+  refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   getNativeHostConfig = defaultGetNativeHostConfig,
   getSiteConfigs = defaultGetSiteConfigs,
   setNativeHostConfig = defaultSetNativeHostConfig,
@@ -75,6 +85,9 @@ export async function initOptions({
     React.createElement(OptionsApp, {
       windowRef,
       chromeApi,
+      setIntervalFn,
+      clearIntervalFn,
+      refreshIntervalMs,
       getNativeHostConfig,
       getSiteConfigs,
       setNativeHostConfig,

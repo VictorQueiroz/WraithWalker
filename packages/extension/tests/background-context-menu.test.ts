@@ -9,11 +9,6 @@ import {
 import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
 function createAuthorityStub({
-  ensureRootReady = vi.fn().mockResolvedValue({
-    ok: true,
-    sentinel: { rootId: "root-1" },
-    permission: "granted"
-  }),
   readConfiguredSiteConfigsForAuthority = vi.fn().mockResolvedValue({
     ok: true,
     siteConfigs: [],
@@ -28,21 +23,49 @@ function createAuthorityStub({
     }))
 } = {}) {
   return {
-    ensureRootReady,
     readConfiguredSiteConfigsForAuthority,
     writeConfiguredSiteConfigsForAuthority
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
+function createContextMenuHarness({
+  chromeApi = createTestChromeApi(),
+  authority = createAuthorityStub(),
+  enabledOrigins = [],
+  isAuthorityReady = true,
+  setLastError = vi.fn()
+}: {
+  chromeApi?: ReturnType<typeof createTestChromeApi>;
+  authority?: ReturnType<typeof createAuthorityStub>;
+  enabledOrigins?: string[];
+  isAuthorityReady?: boolean;
+  setLastError?: ReturnType<typeof vi.fn>;
+} = {}) {
+  const contextMenu = createBackgroundContextMenu({
+    chromeApi,
+    authority,
+    getEnabledOrigins: () => enabledOrigins,
+    isAuthorityReady: () => isAuthorityReady,
+    setLastError
+  });
+
+  return { chromeApi, authority, contextMenu, setLastError };
+}
+
 describe("background context menu", () => {
   it("registers the website whitelist menu for web pages", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError: vi.fn()
-    });
+    const { chromeApi, contextMenu } = createContextMenuHarness();
 
     await contextMenu.registerContextMenus();
 
@@ -57,14 +80,11 @@ describe("background context menu", () => {
 
   it("skips menu registration when context menus are unavailable", async () => {
     const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const contextMenu = createBackgroundContextMenu({
+    const { contextMenu } = createContextMenuHarness({
       chromeApi: {
         ...chromeApi,
         contextMenus: undefined
-      } as any,
-      authority,
-      setLastError: vi.fn()
+      } as any
     });
 
     await expect(contextMenu.registerContextMenus()).resolves.toBeUndefined();
@@ -73,33 +93,30 @@ describe("background context menu", () => {
   });
 
   it("shows the remove-from-whitelist label for the active tab origin", async () => {
-    const chromeApi = createTestChromeApi({
-      tabs: {
-        query: vi.fn().mockResolvedValue([
-          {
-            id: 4,
-            active: true,
-            url: "https://docs.example.com/dashboard"
-          }
-        ])
-      }
-    });
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: true,
-        siteConfigs: [
-          {
-            origin: "https://docs.example.com",
-            createdAt: "2026-04-10T00:00:00.000Z"
-          }
-        ],
-        sentinel: { rootId: "root-1" }
+    const { chromeApi, contextMenu } = createContextMenuHarness({
+      chromeApi: createTestChromeApi({
+        tabs: {
+          query: vi.fn().mockResolvedValue([
+            {
+              id: 4,
+              active: true,
+              url: "https://docs.example.com/dashboard"
+            }
+          ])
+        }
+      }),
+      authority: createAuthorityStub({
+        readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+          ok: true,
+          siteConfigs: [
+            {
+              origin: "https://docs.example.com",
+              createdAt: "2026-04-10T00:00:00.000Z"
+            }
+          ],
+          sentinel: { rootId: "root-1" }
+        })
       })
-    });
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError: vi.fn()
     });
 
     await contextMenu.refreshContextMenuForActiveTab();
@@ -118,22 +135,20 @@ describe("background context menu", () => {
   });
 
   it("skips passive refresh work when menu updates are unavailable", async () => {
-    const chromeApi = createTestChromeApi({
-      contextMenus: {
-        create: vi.fn(),
-        update: undefined as any,
-        removeAll: vi.fn().mockResolvedValue(undefined),
-        onClicked: {
-          listeners: [],
-          addListener: vi.fn()
-        }
-      }
-    });
     const authority = createAuthorityStub();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError: vi.fn()
+    const { chromeApi, contextMenu } = createContextMenuHarness({
+      chromeApi: createTestChromeApi({
+        contextMenus: {
+          create: vi.fn(),
+          update: undefined as any,
+          removeAll: vi.fn().mockResolvedValue(undefined),
+          onClicked: {
+            listeners: [],
+            addListener: vi.fn()
+          }
+        }
+      }),
+      authority
     });
 
     await expect(
@@ -154,13 +169,7 @@ describe("background context menu", () => {
   });
 
   it("keeps the whitelist action available when the active origin is not configured", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError: vi.fn()
-    });
+    const { chromeApi, contextMenu } = createContextMenuHarness();
 
     await contextMenu.refreshContextMenuForTab({
       id: 4,
@@ -178,17 +187,14 @@ describe("background context menu", () => {
   });
 
   it("falls back to the whitelist action when passive state refresh cannot read configs", async () => {
-    const chromeApi = createTestChromeApi();
     const setLastError = vi.fn();
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: false,
-        error: "Config read failed."
-      })
-    });
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
+    const { chromeApi, contextMenu } = createContextMenuHarness({
+      authority: createAuthorityStub({
+        readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+          ok: false,
+          error: "Config read failed."
+        })
+      }),
       setLastError
     });
 
@@ -209,14 +215,8 @@ describe("background context menu", () => {
   });
 
   it("whitelists the clicked website and requests the matching host permission", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness();
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -229,9 +229,6 @@ describe("background context menu", () => {
       }
     );
 
-    expect(authority.ensureRootReady).toHaveBeenCalledWith({
-      requestPermission: true
-    });
     expect(chromeApi.permissions.request).toHaveBeenCalledWith({
       origins: ["https://docs.example.com/*"]
     });
@@ -259,22 +256,17 @@ describe("background context menu", () => {
   });
 
   it("still updates the whitelist when menu updates are unavailable during a click action", async () => {
-    const chromeApi = createTestChromeApi({
-      contextMenus: {
-        create: vi.fn(),
-        update: undefined as any,
-        removeAll: vi.fn().mockResolvedValue(undefined),
-        onClicked: {
-          addListener: vi.fn()
-        } as any
-      }
-    });
-    const authority = createAuthorityStub();
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
+      chromeApi: createTestChromeApi({
+        contextMenus: {
+          create: vi.fn(),
+          update: undefined as any,
+          removeAll: vi.fn().mockResolvedValue(undefined),
+          onClicked: {
+            addListener: vi.fn()
+          } as any
+        }
+      })
     });
 
     await contextMenu.handleContextMenuClicked(
@@ -299,14 +291,8 @@ describe("background context menu", () => {
   });
 
   it("ignores unrelated context menu clicks", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness();
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -319,20 +305,15 @@ describe("background context menu", () => {
       }
     );
 
-    expect(authority.ensureRootReady).not.toHaveBeenCalled();
     expect(chromeApi.permissions.request).not.toHaveBeenCalled();
+    expect(
+      authority.readConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
     expect(setLastError).not.toHaveBeenCalled();
   });
 
   it("falls back past invalid URL candidates to a later web origin", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+    const { chromeApi, contextMenu, setLastError } = createContextMenuHarness();
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -345,9 +326,6 @@ describe("background context menu", () => {
       }
     );
 
-    expect(authority.ensureRootReady).toHaveBeenCalledWith({
-      requestPermission: true
-    });
     expect(chromeApi.permissions.request).toHaveBeenCalledWith({
       origins: ["https://docs.example.com/*"]
     });
@@ -355,26 +333,23 @@ describe("background context menu", () => {
   });
 
   it("removes the site from the whitelist when it is already configured", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: true,
-        siteConfigs: [
-          {
-            origin: "https://docs.example.com",
-            createdAt: "2026-04-10T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.js$"]
-          }
-        ],
-        sentinel: { rootId: "root-1" }
-      })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness({
+        authority: createAuthorityStub({
+          readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+            ok: true,
+            siteConfigs: [
+              {
+                origin: "https://docs.example.com",
+                createdAt: "2026-04-10T00:00:00.000Z",
+                dumpAllowlistPatterns: ["\\.js$"]
+              }
+            ],
+            sentinel: { rootId: "root-1" }
+          })
+        }),
+        enabledOrigins: ["https://docs.example.com"]
+      });
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -407,24 +382,22 @@ describe("background context menu", () => {
   it("keeps unwhitelisting successful when host permission removal fails", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.permissions.remove!.mockRejectedValue(new Error("remove failed"));
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: true,
-        siteConfigs: [
-          {
-            origin: "https://docs.example.com",
-            createdAt: "2026-04-10T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.js$"]
-          }
-        ],
-        sentinel: { rootId: "root-1" }
-      })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
       chromeApi,
-      authority,
-      setLastError
+      authority: createAuthorityStub({
+        readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+          ok: true,
+          siteConfigs: [
+            {
+              origin: "https://docs.example.com",
+              createdAt: "2026-04-10T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            }
+          ],
+          sentinel: { rootId: "root-1" }
+        })
+      }),
+      enabledOrigins: ["https://docs.example.com"]
     });
 
     await contextMenu.handleContextMenuClicked(
@@ -444,37 +417,28 @@ describe("background context menu", () => {
     expect(chromeApi.permissions.remove).toHaveBeenCalledWith({
       origins: ["https://docs.example.com/*"]
     });
-    expect(chromeApi.contextMenus.update).toHaveBeenLastCalledWith(
-      WHITELIST_SITE_MENU_ID,
-      {
-        title: WHITELIST_SITE_MENU_TITLE,
-        enabled: true
-      }
-    );
     expect(setLastError).toHaveBeenLastCalledWith("");
   });
 
   it("keeps unwhitelisting successful when host permission removal returns false", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.permissions.remove!.mockResolvedValue(false);
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: true,
-        siteConfigs: [
-          {
-            origin: "https://docs.example.com",
-            createdAt: "2026-04-10T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.js$"]
-          }
-        ],
-        sentinel: { rootId: "root-1" }
-      })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
       chromeApi,
-      authority,
-      setLastError
+      authority: createAuthorityStub({
+        readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+          ok: true,
+          siteConfigs: [
+            {
+              origin: "https://docs.example.com",
+              createdAt: "2026-04-10T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            }
+          ],
+          sentinel: { rootId: "root-1" }
+        })
+      }),
+      enabledOrigins: ["https://docs.example.com"]
     });
 
     await contextMenu.handleContextMenuClicked(
@@ -498,30 +462,27 @@ describe("background context menu", () => {
   });
 
   it("surfaces unwhitelist write failures without removing permissions", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: true,
-        siteConfigs: [
-          {
-            origin: "https://docs.example.com",
-            createdAt: "2026-04-10T00:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.js$"]
-          }
-        ],
-        sentinel: { rootId: "root-1" }
-      }),
-      writeConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: false,
-        error: "Config write failed."
-      })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness({
+        authority: createAuthorityStub({
+          readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+            ok: true,
+            siteConfigs: [
+              {
+                origin: "https://docs.example.com",
+                createdAt: "2026-04-10T00:00:00.000Z",
+                dumpAllowlistPatterns: ["\\.js$"]
+              }
+            ],
+            sentinel: { rootId: "root-1" }
+          }),
+          writeConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+            ok: false,
+            error: "Config write failed."
+          })
+        }),
+        enabledOrigins: ["https://docs.example.com"]
+      });
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -536,65 +497,14 @@ describe("background context menu", () => {
 
     expect(chromeApi.permissions.request).not.toHaveBeenCalled();
     expect(chromeApi.permissions.remove).not.toHaveBeenCalled();
-    expect(chromeApi.contextMenus.update).not.toHaveBeenCalledWith(
-      WHITELIST_SITE_MENU_ID,
-      {
-        title: WHITELIST_SITE_MENU_TITLE,
-        enabled: true
-      }
-    );
     expect(setLastError).toHaveBeenLastCalledWith("Config write failed.");
   });
 
-  it("surfaces root readiness failures before requesting permissions", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub({
-      ensureRootReady: vi.fn().mockResolvedValue({
-        ok: false,
-        error: "Root access is unavailable."
-      })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
-
-    await contextMenu.handleContextMenuClicked(
-      {
-        menuItemId: WHITELIST_SITE_MENU_ID,
-        pageUrl: "https://docs.example.com/page"
-      },
-      {
-        id: 9,
-        url: "https://docs.example.com/dashboard"
-      }
-    );
-
-    expect(chromeApi.permissions.request).not.toHaveBeenCalled();
-    expect(
-      authority.readConfiguredSiteConfigsForAuthority
-    ).not.toHaveBeenCalled();
-    expect(setLastError).toHaveBeenLastCalledWith(
-      "Root access is unavailable."
-    );
-  });
-
-  it("surfaces a missing-root-directory error before attempting to whitelist", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub({
-      ensureRootReady: vi.fn().mockResolvedValue({
-        ok: false,
-        error: "No root directory selected."
-      })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+  it("surfaces root setup guidance before requesting permissions when no authority is ready", async () => {
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness({
+        isAuthorityReady: false
+      });
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -614,27 +524,16 @@ describe("background context menu", () => {
     expect(
       authority.writeConfiguredSiteConfigsForAuthority
     ).not.toHaveBeenCalled();
-    expect(chromeApi.contextMenus.update).not.toHaveBeenCalledWith(
-      WHITELIST_SITE_MENU_ID,
-      {
-        title: UNWHITELIST_SITE_MENU_TITLE,
-        enabled: true
-      }
-    );
     expect(setLastError).toHaveBeenLastCalledWith(
-      "No root directory selected."
+      "Open WraithWalker Settings and choose Root Directory, or connect the local WraithWalker server, before whitelisting websites."
     );
   });
 
   it("surfaces host permission denials", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.permissions.request.mockResolvedValue(false);
-    const authority = createAuthorityStub();
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
+      chromeApi
     });
 
     await contextMenu.handleContextMenuClicked(
@@ -650,28 +549,106 @@ describe("background context menu", () => {
 
     expect(
       authority.readConfiguredSiteConfigsForAuthority
-    ).toHaveBeenCalledTimes(1);
+    ).not.toHaveBeenCalled();
     expect(
       authority.writeConfiguredSiteConfigsForAuthority
     ).not.toHaveBeenCalled();
     expect(setLastError).toHaveBeenLastCalledWith(
-      "Host permission was not granted for https://docs.example.com."
+      "Host access was not granted for https://docs.example.com/*."
+    );
+  });
+
+  it("requests host permission before reading configs so the click keeps its user gesture", async () => {
+    const callOrder: string[] = [];
+    const readDeferred = createDeferred<{
+      ok: true;
+      siteConfigs: [];
+      sentinel: { rootId: string };
+    }>();
+    const authority = createAuthorityStub({
+      readConfiguredSiteConfigsForAuthority: vi.fn(() => {
+        callOrder.push("read");
+        return readDeferred.promise;
+      })
+    });
+    const chromeApi = createTestChromeApi();
+    chromeApi.permissions.request.mockImplementation(async () => {
+      callOrder.push("request");
+      return true;
+    });
+    const { contextMenu } = createContextMenuHarness({
+      chromeApi,
+      authority
+    });
+
+    const pending = contextMenu.handleContextMenuClicked(
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 10,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(chromeApi.permissions.request).toHaveBeenCalledWith({
+      origins: ["https://docs.example.com/*"]
+    });
+    expect(callOrder).toEqual(["request", "read"]);
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+
+    readDeferred.resolve({
+      ok: true,
+      siteConfigs: [],
+      sentinel: { rootId: "root-1" }
+    });
+    await pending;
+  });
+
+  it("surfaces user-gesture permission request failures without writing config", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.permissions.request.mockRejectedValue(
+      "This must be executed after a user gesture."
+    );
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
+      chromeApi
+    });
+
+    await contextMenu.handleContextMenuClicked(
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 10,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+
+    expect(
+      authority.readConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+    expect(setLastError).toHaveBeenLastCalledWith(
+      "This must be executed after a user gesture."
     );
   });
 
   it("surfaces configured-site read failures after permission grant", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub({
-      readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: false,
-        error: "Config read failed."
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
+      authority: createAuthorityStub({
+        readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+          ok: false,
+          error: "Config read failed."
+        })
       })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
     });
 
     await contextMenu.handleContextMenuClicked(
@@ -692,18 +669,13 @@ describe("background context menu", () => {
   });
 
   it("surfaces configured-site write failures", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub({
-      writeConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
-        ok: false,
-        error: "Config write failed."
+    const { authority, contextMenu, setLastError } = createContextMenuHarness({
+      authority: createAuthorityStub({
+        writeConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+          ok: false,
+          error: "Config write failed."
+        })
       })
-    });
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
     });
 
     await contextMenu.handleContextMenuClicked(
@@ -724,14 +696,8 @@ describe("background context menu", () => {
   });
 
   it("rejects unsupported URLs without attempting permissions or config writes", async () => {
-    const chromeApi = createTestChromeApi();
-    const authority = createAuthorityStub();
-    const setLastError = vi.fn();
-    const contextMenu = createBackgroundContextMenu({
-      chromeApi,
-      authority,
-      setLastError
-    });
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness();
 
     await contextMenu.handleContextMenuClicked(
       {
@@ -744,7 +710,6 @@ describe("background context menu", () => {
       }
     );
 
-    expect(authority.ensureRootReady).not.toHaveBeenCalled();
     expect(chromeApi.permissions.request).not.toHaveBeenCalled();
     expect(
       authority.writeConfiguredSiteConfigsForAuthority

@@ -8,8 +8,10 @@ import type {
 import type { PopupRuntimeApi } from "../lib/chrome-api.js";
 import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
 import {
+  derivePopupStartBlockReason,
   deriveCaptureRootState,
   deriveEditorLaunchState,
+  deriveWorkspaceStatus,
   resolvePopupAlert,
   type CaptureRootState,
   type PopupAlertState
@@ -21,7 +23,7 @@ import {
   POPUP_REFRESH_INTERVAL_MS,
   type EditorPreset
 } from "../lib/constants.js";
-import { Alert, Button } from "./components.js";
+import { Alert, Badge, Button } from "./components.js";
 
 export interface PopupAppProps {
   runtime: PopupRuntimeApi;
@@ -59,6 +61,23 @@ function resolvePreferredEditor(
   );
 }
 
+function PopupStatusTile({
+  label,
+  value
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="grid gap-1 rounded-xl border border-border/70 bg-white/70 px-3 py-2">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span className="text-sm font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
 export function PopupApp({
   runtime,
   getNativeHostConfig,
@@ -87,6 +106,22 @@ export function PopupApp({
   const editorLaunchState = React.useMemo(
     () => deriveEditorLaunchState(nativeHostConfig, preferredEditor.id),
     [nativeHostConfig, preferredEditor.id]
+  );
+  const workspaceStatus = React.useMemo(
+    () =>
+      deriveWorkspaceStatus({
+        snapshot,
+        captureRootState
+      }),
+    [captureRootState, snapshot]
+  );
+  const startBlockReason = React.useMemo(
+    () =>
+      derivePopupStartBlockReason({
+        snapshot,
+        workspaceStatus
+      }),
+    [snapshot, workspaceStatus]
   );
 
   const refreshEnvironment = React.useCallback(async () => {
@@ -155,6 +190,15 @@ export function PopupApp({
     editorLaunchState,
     actionDiagnostic: actionAlert
   });
+  const openActionHint =
+    workspaceStatus.authority === "server"
+      ? `Open actions use ${workspaceStatus.authorityLabel}.`
+      : workspaceStatus.authority === "browser_root"
+        ? `Open in ${preferredEditor.label} uses ${workspaceStatus.authorityLabel}.`
+        : "Choose Root Directory in Settings to give WraithWalker a remembered workspace.";
+  const startButtonDisabled =
+    busyAction !== null ||
+    (!snapshot?.sessionActive && startBlockReason !== null);
 
   async function handleToggleSession() {
     setBusyAction("toggle");
@@ -196,8 +240,8 @@ export function PopupApp({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
           ? openedServerRoot
-            ? `Opened ${preferredEditor.label} at the server root.`
-            : `Opened ${preferredEditor.label} and sent the fixture brief to Cursor Chat.`
+            ? `Opened ${preferredEditor.label} at Server Root.`
+            : `Opened ${preferredEditor.label} for Remembered Browser Root and sent the fixture brief to Cursor Chat.`
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {
@@ -220,7 +264,7 @@ export function PopupApp({
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? "Opened the server root in the OS file manager."
+          ? "Opened Server Root in the OS file manager."
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {
@@ -242,30 +286,41 @@ export function PopupApp({
               WraithWalker
             </h1>
             <p className="text-sm text-muted-foreground">
-              Start capture, open the remembered root, or jump straight to
+              Start capture, open the active workspace, or jump straight to
               Settings.
             </p>
-            {snapshot?.captureDestination === "server" ? (
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-emerald-600">
-                    Connected.
-                  </span>{" "}
-                  Using local WraithWalker server root.
-                </p>
-                <p className="text-xs break-all text-muted-foreground">
-                  {snapshot.captureRootPath}
-                </p>
+          </div>
+
+          <div className="grid gap-2" aria-label="Workspace status">
+            <div className="grid grid-cols-3 gap-2">
+              <PopupStatusTile
+                label="Session"
+                value={workspaceStatus.sessionLabel}
+              />
+              <PopupStatusTile
+                label="Active Root"
+                value={workspaceStatus.authorityLabel}
+              />
+              <PopupStatusTile
+                label="Origins"
+                value={`${workspaceStatus.enabledOriginCount} enabled`}
+              />
+            </div>
+            {snapshot?.captureRootPath &&
+            workspaceStatus.authority !== "none" ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="muted">{workspaceStatus.authorityLabel}</Badge>
+                <span className="break-all">{snapshot.captureRootPath}</span>
               </div>
             ) : null}
           </div>
 
-          <Alert variant={alert.variant}>{alert.text}</Alert>
+          {alert ? <Alert variant={alert.variant}>{alert.text}</Alert> : null}
 
           <div className="grid gap-3">
             <Button
               type="button"
-              disabled={busyAction !== null}
+              disabled={startButtonDisabled}
               onClick={handleToggleSession}
             >
               {snapshot?.sessionActive ? "Stop Session" : "Start Session"}
@@ -280,6 +335,7 @@ export function PopupApp({
                 ? "Opening..."
                 : `Open in ${preferredEditor.label}`}
             </Button>
+            <p className="text-xs text-muted-foreground">{openActionHint}</p>
             {snapshot?.captureDestination === "server" ? (
               <Button
                 type="button"
