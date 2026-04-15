@@ -390,9 +390,7 @@ describe("options entrypoint", () => {
 
     try {
       const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
-      await user.clear(patterns);
-      await user.click(patterns);
-      await user.paste("[");
+      fireEvent.change(patterns, { target: { value: "[" } });
       expect((patterns as HTMLTextAreaElement).value).toBe("[");
       await user.click(screen.getByRole("button", { name: "Save" }));
 
