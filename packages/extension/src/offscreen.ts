@@ -15,6 +15,14 @@ import {
   queryRootPermission as defaultQueryRootPermission,
   requestRootPermission as defaultRequestRootPermission
 } from "./lib/root-handle.js";
+import {
+  classifyOffscreenMessage,
+  type OffscreenMessageClassification
+} from "./lib/offscreen-message.js";
+import {
+  createOffscreenRuntimeApi,
+  type OffscreenRuntimeApi
+} from "./lib/chrome-api.js";
 import type {
   FixtureDescriptor,
   RequestPayload,
@@ -22,18 +30,6 @@ import type {
   RootSentinel,
   SiteConfig
 } from "./lib/types.js";
-
-interface RuntimeApi {
-  onMessage: {
-    addListener(
-      listener: (
-        message: unknown,
-        sender: unknown,
-        sendResponse: (response: unknown) => void
-      ) => boolean | void
-    ): void;
-  };
-}
 
 interface FixtureResponsePayload {
   body: string;
@@ -52,43 +48,13 @@ interface RootStateSuccess {
 type RootStateResult = RootStateSuccess | ErrorResult;
 
 interface OffscreenDependencies {
-  runtime?: RuntimeApi;
+  runtime?: OffscreenRuntimeApi;
   loadStoredRootHandle?: typeof defaultLoadStoredRootHandle;
   ensureRootSentinel?: typeof defaultEnsureRootSentinel;
   queryRootPermission?: typeof defaultQueryRootPermission;
   requestRootPermission?: typeof defaultRequestRootPermission;
   base64ToBytes?: (value: string) => Uint8Array;
   arrayBufferToBase64?: (buffer: ArrayBuffer) => string;
-}
-
-function isOffscreenTargetMessage(
-  message: unknown
-): message is { target: "offscreen"; type?: string; payload?: unknown } {
-  if (!message || typeof message !== "object") {
-    return false;
-  }
-
-  const typedMessage = message as { target?: string; type?: string };
-  return typedMessage.target === "offscreen";
-}
-
-function isKnownOffscreenMessage(
-  message: unknown
-): message is OffscreenMessage {
-  if (!isOffscreenTargetMessage(message)) {
-    return false;
-  }
-
-  return [
-    "fs.ensureRoot",
-    "fs.readConfiguredSiteConfigs",
-    "fs.readEffectiveSiteConfigs",
-    "fs.writeConfiguredSiteConfigs",
-    "fs.hasFixture",
-    "fs.readFixture",
-    "fs.writeFixture",
-    "fs.generateContext"
-  ].includes(message.type || "");
 }
 
 function toErrorResult(result: {
@@ -110,7 +76,7 @@ function isTestMode(): boolean {
 }
 
 export function createOffscreenRuntime({
-  runtime = chrome.runtime as unknown as RuntimeApi,
+  runtime = createOffscreenRuntimeApi(),
   loadStoredRootHandle = defaultLoadStoredRootHandle,
   ensureRootSentinel = defaultEnsureRootSentinel,
   queryRootPermission = defaultQueryRootPermission,
@@ -254,8 +220,8 @@ export function createOffscreenRuntime({
     };
   }
 
-  async function handleMessage(
-    message: unknown
+  async function handleKnownMessage(
+    message: OffscreenMessage
   ): Promise<
     | RootReadyResult
     | SiteConfigsResult
@@ -263,19 +229,7 @@ export function createOffscreenRuntime({
     | FixtureReadResult
     | FixtureWriteResult
     | { ok: true }
-    | undefined
   > {
-    if (!isOffscreenTargetMessage(message)) {
-      return undefined;
-    }
-
-    if (!isKnownOffscreenMessage(message)) {
-      return {
-        ok: false,
-        error: `Unknown offscreen message: ${String(message.type)}`
-      };
-    }
-
     switch (message.type) {
       case "fs.ensureRoot": {
         const result = await getRootState(message.payload);
@@ -311,13 +265,49 @@ export function createOffscreenRuntime({
     }
   }
 
+  function unknownMessageError(
+    classified: Extract<OffscreenMessageClassification, { kind: "unknown" }>
+  ): ErrorResult {
+    return {
+      ok: false,
+      error: `Unknown offscreen message: ${String(classified.type)}`
+    };
+  }
+
+  async function handleMessage(
+    message: unknown
+  ): Promise<
+    | RootReadyResult
+    | SiteConfigsResult
+    | FixtureHasResult
+    | FixtureReadResult
+    | FixtureWriteResult
+    | { ok: true }
+    | undefined
+  > {
+    const classified = classifyOffscreenMessage(message);
+    if (classified.kind === "ignore") {
+      return undefined;
+    }
+
+    return classified.kind === "unknown"
+      ? unknownMessageError(classified)
+      : handleKnownMessage(classified.message);
+  }
+
   function register(): void {
     runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (!isOffscreenTargetMessage(message)) {
+      const classified = classifyOffscreenMessage(message);
+      if (classified.kind === "ignore") {
         return undefined;
       }
 
-      handleMessage(message)
+      const responsePromise =
+        classified.kind === "unknown"
+          ? Promise.resolve(unknownMessageError(classified))
+          : handleKnownMessage(classified.message);
+
+      responsePromise
         .then((response) => sendResponse(response))
         .catch((error: unknown) => {
           sendResponse({

@@ -7,66 +7,10 @@ import { userEvent } from "@testing-library/user-event";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
 import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
+import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
 function renderRoot() {
   document.body.innerHTML = '<div id="root"></div>';
-}
-
-function createEvent() {
-  const listeners: Array<(...args: any[]) => void> = [];
-  return {
-    listeners,
-    addListener: vi.fn((listener: (...args: any[]) => void) => {
-      listeners.push(listener);
-    })
-  };
-}
-
-function createBackgroundChromeApi() {
-  return {
-    runtime: {
-      getURL: vi.fn((path) => path),
-      getManifest: vi.fn(() => ({ version: "0.1.0" })),
-      sendMessage: vi.fn(),
-      sendNativeMessage: vi.fn(),
-      onMessage: createEvent(),
-      onStartup: createEvent(),
-      onInstalled: createEvent(),
-      getContexts: vi.fn().mockResolvedValue([])
-    },
-    debugger: {
-      attach: vi.fn(),
-      sendCommand: vi.fn(),
-      detach: vi.fn(),
-      onEvent: createEvent(),
-      onDetach: createEvent()
-    },
-    tabs: {
-      query: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 99 }),
-      onUpdated: createEvent(),
-      onRemoved: createEvent()
-    },
-    storage: {
-      onChanged: createEvent(),
-      local: {
-        get: vi.fn().mockResolvedValue({}),
-        set: vi.fn().mockResolvedValue(undefined)
-      }
-    },
-    offscreen: {
-      createDocument: vi.fn(),
-      closeDocument: vi.fn(),
-      Reason: {
-        BLOBS: "BLOBS"
-      }
-    },
-    alarms: {
-      create: vi.fn(),
-      clear: vi.fn().mockResolvedValue(true),
-      onAlarm: createEvent()
-    }
-  };
 }
 
 function createNativeHostConfig(
@@ -199,6 +143,13 @@ describe("popup entrypoint", () => {
       expect(
         await screen.findByRole("button", { name: "Stop Session" })
       ).toBeTruthy();
+      expect(screen.getByLabelText("Workspace status")).toBeTruthy();
+      expect(screen.getByText("Active")).toBeTruthy();
+      expect(screen.getAllByText("Remembered Browser Root")).toHaveLength(2);
+      expect(screen.getByText("1 enabled")).toBeTruthy();
+      expect(
+        screen.getByText("Open in Cursor uses Remembered Browser Root.")
+      ).toBeTruthy();
       expect(
         screen.getByRole("button", { name: "Open in Cursor" })
       ).toBeTruthy();
@@ -290,7 +241,7 @@ describe("popup entrypoint", () => {
       });
       expect(
         await screen.findByText(
-          "Opened Cursor and sent the fixture brief to Cursor Chat."
+          "Opened Cursor for Remembered Browser Root and sent the fixture brief to Cursor Chat."
         )
       ).toBeTruthy();
     } finally {
@@ -324,10 +275,10 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText(
-          "Session is idle. Start it when you want matching tabs to attach automatically."
-        )
+        await screen.findByText("Open in Cursor uses Remembered Browser Root.")
       ).toBeTruthy();
+      expect(screen.getByText("Idle")).toBeTruthy();
+      expect(screen.getByText("1 enabled")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
       expect(runtime.sendMessage).toHaveBeenCalledWith({
@@ -336,7 +287,7 @@ describe("popup entrypoint", () => {
       });
       expect(
         await screen.findByText(
-          "Opened Cursor and sent the fixture brief to Cursor Chat."
+          "Opened Cursor for Remembered Browser Root and sent the fixture brief to Cursor Chat."
         )
       ).toBeTruthy();
     } finally {
@@ -379,9 +330,7 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText(
-          "Session is idle. Start it when you want matching tabs to attach automatically."
-        )
+        await screen.findByText("Open in Cursor uses Remembered Browser Root.")
       ).toBeTruthy();
       expect(screen.queryByText(/Cursor prompt launch failed/i)).toBeNull();
 
@@ -424,6 +373,41 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Start Session" })
       );
       expect(await screen.findByText("Session failed.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("stringifies non-Error session toggle failures through the single status area", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockRejectedValueOnce("Session failed hard."),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Start Session" })
+      );
+      expect(await screen.findByText("Session failed hard.")).toBeTruthy();
     } finally {
       popup.unmount();
     }
@@ -597,6 +581,118 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("stringifies non-Error open-editor failures through the single status area", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockRejectedValueOnce(418),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in Cursor" })
+      );
+      expect(await screen.findByText("418")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("falls back to the shared unknown error message when open-editor fails without an error field", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce({ ok: false })
+        .mockResolvedValueOnce(createSnapshot()),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in Cursor" })
+      );
+      expect(await screen.findByText("Unknown error.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("safely ignores deferred startup completion after the popup unmounts", async () => {
+    const { PopupApp } = await import("../src/ui/popup-app.tsx");
+    const nativeHostConfig = createDeferred<NativeHostConfig>();
+    const initialSnapshot = createDeferred<SessionSnapshot>();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockImplementationOnce(() => initialSnapshot.promise),
+      openOptionsPage: vi.fn()
+    };
+    const getNativeHostConfig = vi
+      .fn()
+      .mockImplementationOnce(() => nativeHostConfig.promise);
+    const clearIntervalFn = vi.fn() as typeof clearInterval;
+
+    const popup = render(
+      React.createElement(PopupApp, {
+        runtime,
+        getNativeHostConfig,
+        setIntervalFn: fakeSetInterval,
+        clearIntervalFn,
+        ...createRootDeps()
+      })
+    );
+
+    await flushPromises();
+    popup.unmount();
+
+    nativeHostConfig.resolve(
+      createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+    );
+    initialSnapshot.resolve(createSnapshot());
+    await flushPromises();
+
+    expect(getNativeHostConfig).toHaveBeenCalledTimes(1);
+    expect(runtime.sendMessage).toHaveBeenCalledWith({
+      type: "session.getState"
+    });
+    expect(clearIntervalFn).toHaveBeenCalledWith(1);
+  });
+
   it("opens the server root in the OS file manager through the shared background flow", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
@@ -640,10 +736,96 @@ describe("popup entrypoint", () => {
         type: "native.revealRoot"
       });
       expect(
-        await screen.findByText(
-          "Opened the server root in the OS file manager."
-        )
+        await screen.findByText("Opened Server Root in the OS file manager.")
       ).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("surfaces thrown reveal-folder errors and restores the button state", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(
+          createSnapshot({
+            captureDestination: "server",
+            captureRootPath: "/tmp/server-root"
+          })
+        )
+        .mockRejectedValueOnce(new Error("Reveal transport failed.")),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in folder" })
+      );
+
+      expect(await screen.findByText("Reveal transport failed.")).toBeTruthy();
+      const revealButton = screen.getByRole("button", {
+        name: "Open in folder"
+      });
+      expect((revealButton as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByRole("button", { name: "Opening..." })).toBeNull();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("stringifies non-Error reveal-folder failures and restores the button state", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(
+          createSnapshot({
+            captureDestination: "server",
+            captureRootPath: "/tmp/server-root"
+          })
+        )
+        .mockRejectedValueOnce(404),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in folder" })
+      );
+
+      expect(await screen.findByText("404")).toBeTruthy();
+      const revealButton = screen.getByRole("button", {
+        name: "Open in folder"
+      });
+      expect((revealButton as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByRole("button", { name: "Opening..." })).toBeNull();
     } finally {
       popup.unmount();
     }
@@ -658,7 +840,7 @@ describe("popup entrypoint", () => {
     const { initPopup } = await import("../src/popup.ts");
     const { createBackgroundRuntime } = await import("../src/background.ts");
 
-    const chromeApi = createBackgroundChromeApi();
+    const chromeApi = createTestChromeApi();
     const serverClient = {
       getSystemInfo: vi.fn().mockResolvedValue({
         version: "1.0.0",
@@ -774,9 +956,7 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Open in folder" })
       );
       expect(
-        await screen.findByText(
-          "Opened the server root in the OS file manager."
-        )
+        await screen.findByText("Opened Server Root in the OS file manager.")
       ).toBeTruthy();
 
       expect(serverClient.revealRoot).toHaveBeenCalledTimes(1);
@@ -795,7 +975,7 @@ describe("popup entrypoint", () => {
     const { initPopup } = await import("../src/popup.ts");
     const { createBackgroundRuntime } = await import("../src/background.ts");
 
-    const chromeApi = createBackgroundChromeApi();
+    const chromeApi = createTestChromeApi();
     const serverClient = {
       getSystemInfo: vi.fn().mockResolvedValue({
         version: "1.0.0",
@@ -940,7 +1120,7 @@ describe("popup entrypoint", () => {
       expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
       expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
       expect(
-        await screen.findByText("Opened Cursor at the server root.")
+        await screen.findByText("Opened Cursor at Server Root.")
       ).toBeTruthy();
     } finally {
       popup?.unmount();
@@ -1056,15 +1236,23 @@ describe("popup entrypoint", () => {
     try {
       expect(
         await screen.findByText(
-          /Reconnect the WraithWalker root directory in Settings/i
+          /Reconnect Root Directory in Settings before starting capture/i
         )
       ).toBeTruthy();
+      expect(screen.getByText("No Active Root")).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Start Session"
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
     } finally {
       popup.unmount();
     }
   });
 
-  it("shows a subtle connected indicator when the local WraithWalker server is active", async () => {
+  it("shows server-root status when the local WraithWalker server is active", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
@@ -1090,10 +1278,9 @@ describe("popup entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText("Connected.")).toBeTruthy();
-      expect(
-        screen.getByText(/Using local WraithWalker server root\./i)
-      ).toBeTruthy();
+      expect(await screen.findByLabelText("Workspace status")).toBeTruthy();
+      expect(screen.getAllByText("Server Root")).toHaveLength(2);
+      expect(screen.getByText("Open actions use Server Root.")).toBeTruthy();
       expect(screen.getByText("/tmp/server-root")).toBeTruthy();
       expect(
         screen.getByRole("button", { name: "Open in folder" })
@@ -1166,9 +1353,7 @@ describe("popup entrypoint", () => {
       await flushPromises();
 
       expect(
-        await screen.findByText(
-          "Opened the server root in the OS file manager."
-        )
+        await screen.findByText("Opened Server Root in the OS file manager.")
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -1240,7 +1425,8 @@ describe("popup entrypoint", () => {
       intervalHandler?.();
       await flushPromises();
 
-      expect(await screen.findByText("Connected.")).toBeTruthy();
+      expect(await screen.findAllByText("Server Root")).toHaveLength(2);
+      expect(screen.getByText("Open actions use Server Root.")).toBeTruthy();
       expect(screen.queryByText("Cursor prompt launch failed.")).toBeNull();
     } finally {
       popup.unmount();
@@ -1276,6 +1462,94 @@ describe("popup entrypoint", () => {
     try {
       await user.click(await screen.findByRole("button", { name: "Settings" }));
       expect(runtime.openOptionsPage).toHaveBeenCalled();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("disables Start Session when no origins are enabled", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValue(createSnapshot({ enabledOrigins: [] })),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      expect(
+        await screen.findByText(
+          "Add your first origin in Settings before starting capture."
+        )
+      ).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Start Session"
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
+      expect(screen.getByText("0 enabled")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("disables Start Session when there is no active root yet", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const runtime = {
+      sendMessage: vi.fn().mockResolvedValue(
+        createSnapshot({
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: ""
+        })
+      ),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      expect(
+        await screen.findByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeTruthy();
+      expect(screen.getByText("No Active Root")).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Start Session"
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(true);
     } finally {
       popup.unmount();
     }

@@ -327,7 +327,9 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText("Enabled Origins")).toBeTruthy();
+      expect(
+        await screen.findByRole("heading", { name: "Enabled Origins" })
+      ).toBeTruthy();
       expect(await screen.findByText("https://app.example.com")).toBeTruthy();
 
       const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
@@ -498,7 +500,7 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await screen.findByText(/WraithWalker root access is ready\./);
+      await screen.findByText(/Remembered Browser Root is ready\./);
       await user.type(
         await screen.findByLabelText("Exact origin"),
         "app.example.com"
@@ -699,7 +701,7 @@ describe("options entrypoint", () => {
       ).toBeTruthy();
       expect(
         await screen.findByText(
-          /No WraithWalker root directory is connected yet/i
+          /Choose Root Directory to set the Remembered Browser Root fallback\./i
         )
       ).toBeTruthy();
       expect(
@@ -711,8 +713,11 @@ describe("options entrypoint", () => {
       ).toBe(true);
       expect(
         screen.getByText(
-          /Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i
+          /Choose Root Directory above before adding origins, or connect the local WraithWalker server\./i
         )
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Next: add your first origin so capture can start\./i)
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -762,13 +767,146 @@ describe("options entrypoint", () => {
     });
 
     try {
+      expect(await screen.findByText("Workspace Status")).toBeTruthy();
       expect(
-        await screen.findByText(/Settings changes are using the server root\./)
+        await screen.findByText(/Settings changes are using Server Root\./)
       ).toBeTruthy();
-      expect(screen.getByText(/Editing the server root\./)).toBeTruthy();
+      expect(screen.getByText(/Editing Server Root\./)).toBeTruthy();
     } finally {
       options.unmount();
     }
+  });
+
+  it("polls Settings data and updates the active authority when Server Root comes online later", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const readyRoot = createReadyRootDeps();
+    const localSites = [
+      createStoredSite({ origin: "https://local.example.com" })
+    ];
+    const serverSites = [
+      createStoredSite({ origin: "https://server.example.com" })
+    ];
+    let serverConnected = false;
+    let intervalHandler: (() => void) | null = null;
+    const intervalId = 17 as unknown as ReturnType<typeof setInterval>;
+    const setIntervalMock = vi.fn((handler: TimerHandler) => {
+      intervalHandler = handler as () => void;
+      return intervalId;
+    });
+    const clearIntervalMock = vi.fn();
+    const setIntervalFn = setIntervalMock as unknown as typeof setInterval;
+    const clearIntervalFn =
+      clearIntervalMock as unknown as typeof clearInterval;
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return serverConnected
+              ? {
+                  sessionActive: false,
+                  attachedTabIds: [],
+                  enabledOrigins: serverSites.map((site) => site.origin),
+                  rootReady: true,
+                  captureDestination: "server",
+                  captureRootPath: "/tmp/server-root",
+                  lastError: ""
+                }
+              : {
+                  sessionActive: false,
+                  attachedTabIds: [],
+                  enabledOrigins: localSites.map((site) => site.origin),
+                  rootReady: true,
+                  captureDestination: "local",
+                  captureRootPath: "/tmp/browser-root",
+                  lastError: ""
+                };
+          case "scenario.list":
+            return serverConnected
+              ? createScenarioListResult({
+                  snapshots: [],
+                  activeTrace: {
+                    traceId: "trace-live",
+                    status: "armed",
+                    createdAt: "2026-04-03T12:06:00.000Z",
+                    selectedOrigins: ["https://server.example.com"],
+                    extensionClientId: "client-1",
+                    stepCount: 2,
+                    linkedFixtureCount: 1
+                  },
+                  supportsTraceSave: true
+                })
+              : createScenarioListResult({
+                  snapshots: [],
+                  activeTrace: null,
+                  supportsTraceSave: false
+                });
+          case "native.verify":
+            return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn().mockResolvedValue(true),
+          remove: vi.fn().mockResolvedValue(true)
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      setIntervalFn,
+      clearIntervalFn,
+      refreshIntervalMs: 25,
+      getSiteConfigs: vi
+        .fn()
+        .mockImplementation(async () =>
+          serverConnected ? serverSites : localSites
+        ),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      ...readyRoot,
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByText("https://local.example.com")).toBeTruthy();
+      expect(screen.queryByText("Save From Active Trace")).toBeNull();
+
+      serverConnected = true;
+      intervalHandler?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        await screen.findByText(/Editing \/tmp\/server-root\./)
+      ).toBeTruthy();
+      expect(
+        await screen.findByText("https://server.example.com")
+      ).toBeTruthy();
+      expect(screen.queryByText("https://local.example.com")).toBeNull();
+      expect(await screen.findByText("Save From Active Trace")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+
+    expect(clearIntervalFn).toHaveBeenCalledWith(intervalId);
   });
 
   it("writes a Settings-added origin into the live server root config file", async () => {
@@ -1015,7 +1153,7 @@ describe("options entrypoint", () => {
     try {
       expect(
         await screen.findByText(
-          /No WraithWalker root directory is connected yet/i
+          /Choose Root Directory to set the Remembered Browser Root fallback\./i
         )
       ).toBeTruthy();
       expect(
@@ -1030,7 +1168,7 @@ describe("options entrypoint", () => {
       expect(permissions.request).not.toHaveBeenCalled();
       expect(
         screen.getByText(
-          /Choose and connect a WraithWalker root directory, or connect the local WraithWalker server/i
+          /Choose Root Directory above before adding origins, or connect the local WraithWalker server\./i
         )
       ).toBeTruthy();
     } finally {
@@ -1228,7 +1366,7 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await screen.findByText(/WraithWalker root access is ready\./);
+      await screen.findByText(/Remembered Browser Root is ready\./);
       await user.type(
         await screen.findByLabelText("Exact origin"),
         "app.example.com"
@@ -1442,7 +1580,12 @@ describe("options entrypoint", () => {
       });
       expect(screen.queryByText(/Aborted/i)).toBeNull();
       expect(
-        screen.getByText(/No WraithWalker root directory is connected yet/i)
+        screen.getByText(
+          /Choose Root Directory to set the Remembered Browser Root fallback\./i
+        )
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Next: add your first origin so capture can start\./i)
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -1628,7 +1771,9 @@ describe("options entrypoint", () => {
     });
 
     try {
-      expect(await screen.findByText("WraithWalker Root")).toBeTruthy();
+      expect(
+        await screen.findByRole("heading", { name: "Remembered Browser Root" })
+      ).toBeTruthy();
       expect(screen.queryByText("Preferred Editor")).toBeNull();
       await userEvent
         .setup()
@@ -1681,14 +1826,19 @@ describe("options entrypoint", () => {
       ).toBeTruthy();
       expect(
         screen.getByText(
-          "WraithWalker root access is ready. Root ID: root-ready."
+          "Remembered Browser Root is ready. Root ID: root-ready."
         )
       ).toBeTruthy();
       expect(screen.getByText("root-ready")).toBeTruthy();
-      expect(screen.getByText("WraithWalker Root")).toBeTruthy();
-      expect(screen.getByText("Enabled Origins")).toBeTruthy();
       expect(
-        screen.getByRole("button", { name: "Open Launch Folder" })
+        screen.getByRole("heading", { name: "Remembered Browser Root" })
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("heading", { name: "Enabled Origins" })
+      ).toBeTruthy();
+      expect(screen.getByText("Ready")).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Open Active Root Folder" })
       ).toBeTruthy();
       expect(screen.queryByText("Default root path")).toBeNull();
 
@@ -1876,6 +2026,95 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("updates the custom cursor command override when it changes", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+    const getNativeHostConfig = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor "$DIR"'
+            }
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor --folder "$DIR"'
+            }
+          }
+        })
+      );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: createRuntimeSendMessage()
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig,
+      setNativeHostConfig,
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Show" }));
+      fireEvent.change(
+        screen.getByLabelText("Custom Command Override For Cursor"),
+        {
+          target: { value: 'cursor --folder "$DIR"' }
+        }
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save Launch Settings" })
+      );
+
+      expect(setNativeHostConfig).toHaveBeenCalledWith(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor --folder "$DIR"'
+            }
+          }
+        })
+      );
+      expect(await screen.findByText("Launch settings saved.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("opens the configured launch folder through the OS handler", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
@@ -1926,15 +2165,16 @@ describe("options entrypoint", () => {
     });
 
     try {
+      await screen.findByText(/Remembered Browser Root is ready\./);
       await user.click(
-        await screen.findByRole("button", { name: "Open Launch Folder" })
+        await screen.findByRole("button", { name: "Open Active Root Folder" })
       );
       expect(runtimeSendMessage).toHaveBeenCalledWith({
         type: "native.revealRoot"
       });
       expect(
         await screen.findByText(
-          "Opened the launch folder in the OS file manager."
+          "Opened the active root in the OS file manager."
         )
       ).toBeTruthy();
     } finally {
@@ -2055,9 +2295,9 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await screen.findByText("Enabled Origins");
+      await screen.findByRole("heading", { name: "Enabled Origins" });
       await user.click(
-        screen.getByRole("button", { name: "Copy Diagnostics" })
+        screen.getByRole("button", { name: "Copy Support Diagnostics" })
       );
 
       expect(runtimeSendMessage).toHaveBeenCalledWith({
@@ -2067,7 +2307,7 @@ describe("options entrypoint", () => {
         JSON.stringify(diagnosticsReport, null, 2)
       );
       expect(
-        await screen.findByText("Diagnostics copied to clipboard.")
+        await screen.findByText("Support diagnostics copied to clipboard.")
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -2136,9 +2376,9 @@ describe("options entrypoint", () => {
     });
 
     try {
-      await screen.findByText("Enabled Origins");
+      await screen.findByRole("heading", { name: "Enabled Origins" });
       await user.click(
-        screen.getByRole("button", { name: "Copy Diagnostics" })
+        screen.getByRole("button", { name: "Copy Support Diagnostics" })
       );
 
       expect(await screen.findByText("Diagnostics unavailable.")).toBeTruthy();
@@ -2198,7 +2438,7 @@ describe("options entrypoint", () => {
 
     try {
       await user.click(
-        await screen.findByRole("button", { name: "Open Launch Folder" })
+        await screen.findByRole("button", { name: "Open Active Root Folder" })
       );
       expect(runtimeSendMessage).toHaveBeenCalledWith({
         type: "native.revealRoot"
@@ -2245,6 +2485,14 @@ describe("options entrypoint", () => {
 
     try {
       expect(await screen.findByText("baseline")).toBeTruthy();
+      expect(
+        await screen.findByText("Snapshots in No Active Root")
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          "Trace save becomes available when Server Root is active."
+        )
+      ).toBeTruthy();
       await user.click(screen.getByRole("button", { name: "Switch" }));
       expect(
         await screen.findByRole("dialog", { name: "Switch to baseline" })
@@ -2555,6 +2803,14 @@ describe("options entrypoint", () => {
 
     try {
       expect(await screen.findByText("Save From Active Trace")).toBeTruthy();
+      expect(await screen.findByText("Snapshots in Server Root")).toBeTruthy();
+      expect(screen.getByText("Active snapshot: baseline")).toBeTruthy();
+      expect(screen.getByText("Trace: trace_active")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "Trace provenance below belongs to the active Server Root."
+        )
+      ).toBeTruthy();
       expect(await screen.findByDisplayValue("trace_active")).toBeTruthy();
       expect(
         await screen.findByDisplayValue("Capture checkout state.")
@@ -2592,6 +2848,494 @@ describe("options entrypoint", () => {
           'Scenario "trace_active" saved from the active trace.'
         )
       ).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("shows an empty diff notice when a switch comparison has no endpoint differences", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: true
+                },
+                {
+                  name: "candidate",
+                  createdAt: "2026-04-03T12:05:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: false
+                }
+              ],
+              activeScenarioName: "baseline"
+            });
+          case "scenario.diff":
+            return {
+              ok: true,
+              diff: {
+                scenarioA: message.scenarioA ?? "baseline",
+                scenarioB: message.scenarioB ?? "candidate",
+                added: [],
+                removed: [],
+                changed: []
+              }
+            };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Switch" }));
+
+      expect(
+        await screen.findByText(
+          "No endpoint differences were detected between these snapshots."
+        )
+      ).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("surfaces diff lookup failures before opening the switch dialog", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: true
+                },
+                {
+                  name: "candidate",
+                  createdAt: "2026-04-03T12:05:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: false
+                }
+              ],
+              activeScenarioName: "baseline"
+            });
+          case "scenario.diff":
+            return { ok: false, error: "Diff failed." };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Switch" }));
+
+      expect(await screen.findByText("Diff failed.")).toBeTruthy();
+      expect(
+        screen.queryByRole("dialog", { name: "Switch to candidate" })
+      ).toBeNull();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("falls back to the trace id for invalid trace names and omits blank trace descriptions when saving", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [],
+              activeTrace: {
+                traceId: "trace_active",
+                name: "!!!",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.saveFromTrace":
+            return { ok: true, name: message.name ?? "" };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByDisplayValue("trace_active")).toBeTruthy();
+      expect(
+        (
+          screen.getByLabelText(
+            "Trace scenario description"
+          ) as HTMLTextAreaElement
+        ).value
+      ).toBe("");
+
+      await user.clear(screen.getByLabelText("Trace scenario name"));
+      await user.type(
+        screen.getByLabelText("Trace scenario name"),
+        "bad name!"
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+      expect(
+        await screen.findByText(
+          "Use 1-64 letters, numbers, hyphens, or underscores."
+        )
+      ).toBeTruthy();
+
+      await user.clear(screen.getByLabelText("Trace scenario name"));
+      await user.type(
+        screen.getByLabelText("Trace scenario name"),
+        "trace_active_copy"
+      );
+      await user.type(
+        screen.getByLabelText("Trace scenario description"),
+        "   "
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.saveFromTrace",
+        name: "trace_active_copy"
+      });
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("falls back to the trace id in the summary and surfaces non-Error trace-save failures", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [],
+              activeTrace: {
+                traceId: "trace_active",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.saveFromTrace":
+            throw "Trace save failed hard.";
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByDisplayValue("trace_active")).toBeTruthy();
+      expect(
+        screen.getByText("trace_active", { selector: "span" })
+      ).toBeTruthy();
+
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+
+      expect(await screen.findByText("Trace save failed hard.")).toBeTruthy();
+      const saveTraceButton = screen.getByRole("button", {
+        name: "Save Trace Snapshot"
+      });
+      expect((saveTraceButton as HTMLButtonElement).disabled).toBe(false);
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.saveFromTrace",
+        name: "trace_active"
+      });
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("surfaces trace-save result failures and restores the trace-save button state", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [],
+              activeTrace: {
+                traceId: "trace_active",
+                name: "trace_active",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.saveFromTrace":
+            return { ok: false, error: "Trace save failed." };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Save Trace Snapshot" })
+      );
+
+      expect(await screen.findByText("Trace save failed.")).toBeTruthy();
+      const saveTraceButton = screen.getByRole("button", {
+        name: "Save Trace Snapshot"
+      });
+      expect((saveTraceButton as HTMLButtonElement).disabled).toBe(false);
     } finally {
       options.unmount();
     }
@@ -2820,7 +3564,9 @@ describe("options entrypoint", () => {
 
     await loadOptionsModuleOutsideTestMode();
 
-    expect(await screen.findByText("Enabled Origins")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Enabled Origins" })
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Choose Root Directory" })
     ).toBeTruthy();

@@ -1044,6 +1044,92 @@ describe("request lifecycle fetch flow", () => {
     ]);
   });
 
+  it("swallows a stale request-stage replay error without surfacing it to the user", async () => {
+    const harness = createLifecycleHarness();
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: true };
+      }
+      if (type === "fs.readFixture") {
+        return {
+          ok: true,
+          exists: true,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/assets/app.js",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          },
+          bodyBase64: Buffer.from("console.log('stale')", "utf8").toString(
+            "base64"
+          ),
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "application/javascript" }]
+          }
+        };
+      }
+      return { ok: true };
+    });
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (
+          method === "Fetch.fulfillRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-stale-request-stage"
+        ) {
+          throw new StaleFetchRequestCommandError(
+            1,
+            method,
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
+        if (method === "Network.getRequestPostData") {
+          return { postData: '{"seed":"one"}', base64Encoded: false };
+        }
+        if (method === "Network.getResponseBody") {
+          return { body: '{"ok":true}', base64Encoded: false };
+        }
+
+        return { method, params };
+      }
+    );
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-stale-request-stage",
+        networkId: "network-stale-request-stage",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.js"
+        },
+        resourceType: "Script"
+      })
+    );
+
+    expect(harness.setLastError).not.toHaveBeenCalled();
+    expect(harness.state.requests.has("1:network-stale-request-stage")).toBe(
+      false
+    );
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({ requestId: "fetch-stale-request-stage" })
+    );
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      expect.objectContaining({ requestId: "fetch-stale-request-stage" })
+    );
+  });
+
   it("resets replayOnResponse when a live-header replay fixture disappears during the response phase", async () => {
     const harness = createLifecycleHarness({
       createFixtureDescriptor: realCreateFixtureDescriptor
@@ -1225,6 +1311,109 @@ describe("request lifecycle fetch flow", () => {
 
     expect(harness.setLastError).toHaveBeenCalledWith("response replay failed");
     expect(harness.state.requests.has("1:network-live-error")).toBe(false);
+  });
+
+  it("swallows a stale response-stage replay error without surfacing it to the user", async () => {
+    const harness = createLifecycleHarness({
+      createFixtureDescriptor: realCreateFixtureDescriptor
+    });
+    harness.sendOffscreenMessage.mockImplementation(async (type) => {
+      if (type === "fs.hasFixture") {
+        return { ok: true, exists: true };
+      }
+      if (type === "fs.readFixture") {
+        return {
+          ok: true,
+          exists: true,
+          request: {
+            topOrigin: "https://app.example.com",
+            url: "https://cdn.example.com/assets/app.css",
+            method: "GET",
+            headers: [],
+            body: "",
+            bodyEncoding: "utf8",
+            bodyHash: "",
+            queryHash: "",
+            capturedAt: "2026-04-09T00:00:00.000Z"
+          },
+          bodyBase64: Buffer.from("body{color:red}", "utf8").toString("base64"),
+          meta: {
+            status: 200,
+            statusText: "OK",
+            headers: [{ name: "Content-Type", value: "text/css" }],
+            headerStrategy: "live"
+          }
+        };
+      }
+      return { ok: true };
+    });
+    harness.sendDebuggerCommand.mockImplementation(
+      async (_tabId, method, params) => {
+        if (
+          method === "Fetch.fulfillRequest" &&
+          (params as { requestId?: string } | undefined)?.requestId ===
+            "fetch-live-stale-response"
+        ) {
+          throw new StaleFetchRequestCommandError(
+            1,
+            method,
+            '{"code":-32602,"message":"Invalid InterceptionId."}'
+          );
+        }
+        if (method === "Network.getRequestPostData") {
+          return { postData: '{"seed":"one"}', base64Encoded: false };
+        }
+        if (method === "Network.getResponseBody") {
+          return { body: '{"ok":true}', base64Encoded: false };
+        }
+        return { method, params };
+      }
+    );
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-live-stale-prepare",
+        networkId: "network-live-stale-response",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.css"
+        },
+        resourceType: "Stylesheet"
+      })
+    );
+
+    await harness.lifecycle.handleFetchRequestPaused(
+      { tabId: 1 },
+      createFetchPausedParams({
+        requestId: "fetch-live-stale-response",
+        networkId: "network-live-stale-response",
+        request: {
+          method: "GET",
+          url: "https://cdn.example.com/assets/app.css"
+        },
+        resourceType: "Stylesheet",
+        responseStatusCode: 200,
+        responseHeaders: {
+          "Content-Type": "text/css"
+        }
+      })
+    );
+
+    expect(harness.setLastError).not.toHaveBeenCalled();
+    expect(harness.state.requests.has("1:network-live-stale-response")).toBe(
+      false
+    );
+    expect(harness.sendDebuggerCommand).toHaveBeenCalledWith(
+      1,
+      "Fetch.fulfillRequest",
+      expect.objectContaining({ requestId: "fetch-live-stale-response" })
+    );
+    expect(harness.sendDebuggerCommand).not.toHaveBeenCalledWith(
+      1,
+      "Fetch.continueRequest",
+      expect.objectContaining({ requestId: "fetch-live-stale-response" })
+    );
   });
 
   it("drops a request when replay lookup fails and the fallback continue becomes stale", async () => {

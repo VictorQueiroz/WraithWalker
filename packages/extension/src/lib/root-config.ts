@@ -1,13 +1,13 @@
 import type { BackgroundMessage, SiteConfigsResult } from "./messages.js";
+import {
+  createMessageRuntimeApi,
+  type MessageRuntimeApi
+} from "./chrome-api.js";
 import { normalizeSiteConfigs } from "./site-config.js";
 import type { SiteConfig } from "./types.js";
 
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-}
-
 function sendMessage<T>(
-  runtime: RuntimeApi,
+  runtime: MessageRuntimeApi,
   message: BackgroundMessage
 ): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;
@@ -21,7 +21,7 @@ function isRootConfigUnavailable(message: string): boolean {
 }
 
 async function readSiteConfigs(
-  runtime: RuntimeApi,
+  runtime: MessageRuntimeApi,
   message: Extract<
     BackgroundMessage,
     {
@@ -52,20 +52,20 @@ async function readSiteConfigs(
 }
 
 export async function getConfiguredSiteConfigs(
-  runtime: RuntimeApi = chrome.runtime as unknown as RuntimeApi
+  runtime: MessageRuntimeApi = createMessageRuntimeApi()
 ): Promise<SiteConfig[]> {
   return readSiteConfigs(runtime, { type: "config.readConfiguredSiteConfigs" });
 }
 
 export async function getEffectiveSiteConfigs(
-  runtime: RuntimeApi = chrome.runtime as unknown as RuntimeApi
+  runtime: MessageRuntimeApi = createMessageRuntimeApi()
 ): Promise<SiteConfig[]> {
   return readSiteConfigs(runtime, { type: "config.readEffectiveSiteConfigs" });
 }
 
 export async function setConfiguredSiteConfigs(
   siteConfigs: SiteConfig[],
-  runtime: RuntimeApi = chrome.runtime as unknown as RuntimeApi
+  runtime: MessageRuntimeApi = createMessageRuntimeApi()
 ): Promise<void> {
   const result = await sendMessage<SiteConfigsResult>(runtime, {
     type: "config.writeConfiguredSiteConfigs",

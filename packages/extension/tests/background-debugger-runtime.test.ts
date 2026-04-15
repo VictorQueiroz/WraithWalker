@@ -4,13 +4,13 @@ import { createBackgroundDebuggerRuntime } from "../src/lib/background-debugger-
 import type { RequestLifecycleApi } from "../src/lib/background-runtime-shared.js";
 import {
   createBackgroundState,
-  createChromeApi
+  createTestChromeApi
 } from "./helpers/background-service-test-helpers.js";
 
 describe("background debugger runtime", () => {
   it("attaches tabs with debugger domains enabled and detaches while clearing tracked requests", async () => {
     const state = createBackgroundState();
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     const traceService = {
       handleBindingCalled: vi.fn().mockResolvedValue(false),
       disarmTraceForTab: vi.fn().mockResolvedValue(undefined),
@@ -67,7 +67,7 @@ describe("background debugger runtime", () => {
       ])
     });
     state.requests.set("9:req-1", { requestId: "req-1" } as any);
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.debugger.sendCommand.mockRejectedValueOnce(
       new Error("Debugger is not attached to the tab with id: 9.")
     );
@@ -116,7 +116,7 @@ describe("background debugger runtime", () => {
     const setLastError = vi.fn();
     const runtime = createBackgroundDebuggerRuntime({
       state: createBackgroundState({ sessionActive: true }),
-      chromeApi: createChromeApi(),
+      chromeApi: createTestChromeApi(),
       setLastError,
       persistSnapshot,
       stopSession,
@@ -158,7 +158,7 @@ describe("background debugger runtime", () => {
     });
     const runtime = createBackgroundDebuggerRuntime({
       state,
-      chromeApi: createChromeApi(),
+      chromeApi: createTestChromeApi(),
       setLastError: vi.fn(),
       persistSnapshot: vi.fn().mockResolvedValue(undefined),
       stopSession: vi.fn().mockResolvedValue(undefined),
@@ -211,7 +211,7 @@ describe("background debugger runtime", () => {
     });
     const runtime = createBackgroundDebuggerRuntime({
       state,
-      chromeApi: createChromeApi(),
+      chromeApi: createTestChromeApi(),
       setLastError: vi.fn(),
       persistSnapshot: vi.fn().mockResolvedValue(undefined),
       stopSession: vi.fn().mockResolvedValue(undefined),
@@ -236,7 +236,7 @@ describe("background debugger runtime", () => {
 
   it("rethrows non-detached setup errors while attaching tabs", async () => {
     const state = createBackgroundState();
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.debugger.sendCommand.mockRejectedValueOnce(
       new Error("Network enable failed.")
     );

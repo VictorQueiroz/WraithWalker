@@ -19,10 +19,8 @@ import type {
   BackgroundAuthorityApi,
   getRequiredRootId
 } from "./background-authority.js";
-import type {
-  BackgroundState,
-  ChromeApi
-} from "./background-runtime-shared.js";
+import type { ChromeApi } from "./chrome-api.js";
+import type { BackgroundState } from "./background-runtime-shared.js";
 import { getErrorMessage } from "./background-runtime-shared.js";
 import type { SiteConfig } from "./types.js";
 import type { WraithWalkerServerClient } from "./wraithwalker-server.js";

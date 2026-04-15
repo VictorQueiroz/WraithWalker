@@ -53,6 +53,33 @@ export interface PopupAlertState {
   text: string;
 }
 
+export interface RememberedRootStateInput {
+  hasHandle: boolean;
+  permission: PermissionState;
+}
+
+export interface WorkspaceStatus {
+  authority: "server" | "browser_root" | "none";
+  authorityLabel: "Server Root" | "Remembered Browser Root" | "No Active Root";
+  sessionState: "loading" | "active" | "idle";
+  sessionLabel: "Loading…" | "Active" | "Idle";
+  enabledOriginCount: number;
+  rememberedRootState: CaptureRootState;
+  rememberedRootLabel:
+    | "Ready"
+    | "Choose Root Directory"
+    | "Reconnect Root Directory"
+    | "Optional fallback";
+  activeSnapshotName: string | null;
+  activeTraceLabel: string | null;
+}
+
+export type PopupStartBlockReason =
+  | "loading"
+  | "missing_origins"
+  | "missing_root"
+  | null;
+
 export function deriveCaptureRootState({
   hasHandle,
   permission
@@ -69,6 +96,106 @@ export function deriveCaptureRootState({
   }
 
   return { kind: "ready" };
+}
+
+function deriveRememberedRootState(
+  captureRootState?: CaptureRootState | null,
+  rememberedRootState?: RememberedRootStateInput | null
+): CaptureRootState {
+  if (captureRootState) {
+    return captureRootState;
+  }
+
+  if (rememberedRootState) {
+    return deriveCaptureRootState(rememberedRootState);
+  }
+
+  return { kind: "missing_handle" };
+}
+
+export function deriveWorkspaceStatus({
+  snapshot,
+  captureRootState,
+  rememberedRootState,
+  activeScenarioName = null,
+  activeTrace = null
+}: {
+  snapshot: SessionSnapshot | null;
+  captureRootState?: CaptureRootState | null;
+  rememberedRootState?: RememberedRootStateInput | null;
+  activeScenarioName?: string | null;
+  activeTrace?: { traceId: string; name?: string | null } | null;
+}): WorkspaceStatus {
+  const authority =
+    snapshot?.captureDestination === "server"
+      ? "server"
+      : snapshot?.captureDestination === "local"
+        ? "browser_root"
+        : "none";
+  const rememberedRoot = deriveRememberedRootState(
+    captureRootState,
+    rememberedRootState
+  );
+
+  return {
+    authority,
+    authorityLabel:
+      authority === "server"
+        ? "Server Root"
+        : authority === "browser_root"
+          ? "Remembered Browser Root"
+          : "No Active Root",
+    sessionState: !snapshot
+      ? "loading"
+      : snapshot.sessionActive
+        ? "active"
+        : "idle",
+    sessionLabel: !snapshot
+      ? "Loading…"
+      : snapshot.sessionActive
+        ? "Active"
+        : "Idle",
+    enabledOriginCount: Array.isArray(snapshot?.enabledOrigins)
+      ? snapshot.enabledOrigins.length
+      : 0,
+    rememberedRootState: rememberedRoot,
+    rememberedRootLabel:
+      rememberedRoot.kind === "ready"
+        ? "Ready"
+        : rememberedRoot.kind === "permission_required"
+          ? "Reconnect Root Directory"
+          : authority === "server"
+            ? "Optional fallback"
+            : "Choose Root Directory",
+    activeSnapshotName: activeScenarioName,
+    activeTraceLabel: activeTrace?.name?.trim() || activeTrace?.traceId || null
+  };
+}
+
+export function derivePopupStartBlockReason({
+  snapshot,
+  workspaceStatus
+}: {
+  snapshot: SessionSnapshot | null;
+  workspaceStatus: WorkspaceStatus;
+}): PopupStartBlockReason {
+  if (!snapshot) {
+    return null;
+  }
+
+  if (snapshot.sessionActive) {
+    return null;
+  }
+
+  if (!workspaceStatus.enabledOriginCount) {
+    return "missing_origins";
+  }
+
+  if (workspaceStatus.authority === "none") {
+    return "missing_root";
+  }
+
+  return null;
 }
 
 export function deriveEditorLaunchState(
@@ -164,7 +291,7 @@ export function createMissingLaunchPathAlert(
 ): PopupAlertState {
   return {
     variant: "destructive",
-    text: `Set the absolute editor launch path in Settings to open the remembered root in ${editorLabel}. Chrome does not expose local folder paths from the directory picker.`
+    text: `Set the absolute editor launch path in Settings to open Remembered Browser Root in ${editorLabel}. Chrome does not expose local folder paths from the directory picker.`
   };
 }
 
@@ -187,17 +314,26 @@ export function resolvePopupAlert({
   captureRootState: CaptureRootState;
   editorLaunchState: EditorLaunchState;
   actionDiagnostic?: PopupAlertState | null;
-}): PopupAlertState {
+}): PopupAlertState | null {
   void editorLaunchState;
 
   if (actionDiagnostic) {
     return actionDiagnostic;
   }
 
+  const workspaceStatus = deriveWorkspaceStatus({
+    snapshot,
+    captureRootState
+  });
+  const blockReason = derivePopupStartBlockReason({
+    snapshot,
+    workspaceStatus
+  });
+
   if (!snapshot) {
     return {
       variant: "default",
-      text: "Loading session state..."
+      text: "Checking workspace status..."
     };
   }
 
@@ -208,36 +344,25 @@ export function resolvePopupAlert({
     };
   }
 
-  if (!snapshot.enabledOrigins.length) {
+  if (blockReason === "missing_origins") {
     return {
       variant: "default",
-      text: "Add at least one origin in Settings before starting a capture session."
+      text: "Add your first origin in Settings before starting capture."
     };
   }
 
-  if (!snapshot.rootReady && captureRootState.kind !== "ready") {
+  if (blockReason === "missing_root") {
     return {
-      variant: "destructive",
-      text: "Reconnect the WraithWalker root directory in Settings before starting or opening the workspace."
+      variant:
+        captureRootState.kind === "permission_required"
+          ? "destructive"
+          : "default",
+      text:
+        captureRootState.kind === "permission_required"
+          ? "Reconnect Root Directory in Settings before starting capture."
+          : "Choose Root Directory in Settings before starting capture."
     };
   }
 
-  if (snapshot.sessionActive) {
-    return {
-      variant: "success",
-      text: "Debugger capture and replay are active for all matching tabs."
-    };
-  }
-
-  if (snapshot.captureDestination === "server") {
-    return {
-      variant: "default",
-      text: "Session is idle. Start it when you want matching tabs to capture into the local WraithWalker server root."
-    };
-  }
-
-  return {
-    variant: "default",
-    text: "Session is idle. Start it when you want matching tabs to attach automatically."
-  };
+  return null;
 }

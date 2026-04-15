@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuthorityHarness } from "./helpers/background-authority-test-helpers.js";
-import { createChromeApi } from "./helpers/background-service-test-helpers.js";
+import { createTestChromeApi } from "./helpers/background-service-test-helpers.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe("background authority local root", () => {
   it("reuses an existing offscreen document instead of creating a second one", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{}]);
@@ -30,7 +30,7 @@ describe("background authority local root", () => {
   });
 
   it("reuses an in-flight offscreen document creation and waits before closing it", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValueOnce([]);
 
     let finishCreate: (() => void) | null = null;
@@ -65,7 +65,7 @@ describe("background authority local root", () => {
   });
 
   it("propagates unexpected offscreen creation errors", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([]);
     chromeApi.offscreen.createDocument.mockRejectedValue(
       new Error("Offscreen denied.")
@@ -79,7 +79,7 @@ describe("background authority local root", () => {
   });
 
   it("returns local-root errors when no offscreen root result is available", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockResolvedValue(null);
     const { authority, setLastError } = createAuthorityHarness({ chromeApi });
@@ -92,7 +92,7 @@ describe("background authority local root", () => {
   });
 
   it("fails legacy site-config migration when the local write returns no result", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
@@ -135,7 +135,7 @@ describe("background authority local root", () => {
   });
 
   it("fails legacy site-config migration when the local write returns an explicit error", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {

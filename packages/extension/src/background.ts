@@ -23,9 +23,13 @@ import {
   createWraithWalkerServerClient as defaultCreateWraithWalkerServerClient,
   type WraithWalkerServerClient
 } from "./lib/wraithwalker-server.js";
+import {
+  createChromeApi,
+  type BrowserTab,
+  type ChromeApi
+} from "./lib/chrome-api.js";
 import type {
   BackgroundState,
-  ChromeApi,
   RequestLifecycleApi,
   SessionControllerApi
 } from "./lib/background-runtime-shared.js";
@@ -42,7 +46,6 @@ import type { BackgroundDebuggerRuntimeApi } from "./lib/background-debugger-run
 import { createBackgroundNativeActions } from "./lib/background-native-actions.js";
 import type { BackgroundNativeActionsApi } from "./lib/background-native-actions.js";
 import { createBackgroundContextMenu } from "./lib/background-context-menu.js";
-import type { BackgroundContextMenuApi } from "./lib/background-context-menu.js";
 
 interface BackgroundDependencies {
   chromeApi?: ChromeApi;
@@ -99,7 +102,7 @@ function isTestMode(): boolean {
 }
 
 export function createBackgroundRuntime({
-  chromeApi = chrome as unknown as ChromeApi,
+  chromeApi = createChromeApi(),
   getSiteConfigs,
   getLegacySiteConfigs = defaultGetLegacySiteConfigs,
   getLegacySiteConfigsMigrated = defaultGetLegacySiteConfigsMigrated,
@@ -156,6 +159,31 @@ export function createBackgroundRuntime({
   let debuggerRuntime!: BackgroundDebuggerRuntimeApi;
   let traceService!: BackgroundTraceServiceApi;
 
+  function refreshContextMenus(): void {
+    void contextMenu
+      .registerContextMenus()
+      .then(() => contextMenu.refreshContextMenuForActiveTab())
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function refreshContextMenuForActiveTab(): void {
+    void contextMenu
+      .refreshContextMenuForActiveTab()
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
+  }
+
+  function refreshContextMenuForActiveTabWithCurrentOrigins(): void {
+    void contextMenu
+      .refreshContextMenuForActiveTabWithOrigins([...state.enabledOrigins])
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
+  }
+
   const authority: BackgroundAuthorityApi = createBackgroundAuthority({
     state,
     chromeApi,
@@ -170,7 +198,9 @@ export function createBackgroundRuntime({
     normalizeSiteConfigs,
     setLastError,
     syncTraceBindings: () => traceService.syncTraceBindings(),
-    reconcileTabs: () => sessionController.reconcileTabs()
+    reconcileTabs: () => sessionController.reconcileTabs(),
+    onServerHeartbeatSuccess: () =>
+      refreshContextMenuForActiveTabWithCurrentOrigins()
   });
 
   traceService = createBackgroundTraceService({
@@ -231,30 +261,38 @@ export function createBackgroundRuntime({
       getRequiredRootId
     });
 
-  const contextMenu: BackgroundContextMenuApi = createBackgroundContextMenu({
+  const contextMenu = createBackgroundContextMenu({
     chromeApi,
     authority,
+    getEnabledOrigins: () => [...state.enabledOrigins],
+    isAuthorityReady: () => state.rootReady,
     setLastError
   });
 
   let listenersRegistered = false;
 
-  function refreshContextMenus(): void {
-    void contextMenu.registerContextMenus().catch((error: unknown) => {
-      setLastError(error instanceof Error ? error.message : String(error));
-    });
-  }
-
   function handleTabUpdated(
     tabId: number,
     _changeInfo: Record<string, unknown>,
-    tab: { id?: number; url?: string }
+    tab: BrowserTab
   ): void {
     sessionController
       .handleTabStateChange(tabId, tab)
       .catch((error: unknown) => {
         setLastError(error instanceof Error ? error.message : String(error));
       });
+
+    if (tab.active) {
+      void contextMenu
+        .refreshContextMenuForTabWithOrigins(tab, [...state.enabledOrigins])
+        .catch((error: unknown) => {
+          setLastError(error instanceof Error ? error.message : String(error));
+        });
+    }
+  }
+
+  function handleTabActivated(): void {
+    refreshContextMenuForActiveTab();
   }
 
   function handleTabRemoved(tabId: number): void {
@@ -301,14 +339,23 @@ export function createBackgroundRuntime({
           report
         };
       }
-      case "config.readConfiguredSiteConfigs":
-        return authority.readConfiguredSiteConfigsForAuthority();
-      case "config.readEffectiveSiteConfigs":
-        return authority.readEffectiveSiteConfigsForAuthority();
-      case "config.writeConfiguredSiteConfigs":
-        return authority.writeConfiguredSiteConfigsForAuthority(
+      case "config.readConfiguredSiteConfigs": {
+        const result = await authority.readConfiguredSiteConfigsForAuthority();
+        refreshContextMenuForActiveTab();
+        return result;
+      }
+      case "config.readEffectiveSiteConfigs": {
+        const result = await authority.readEffectiveSiteConfigsForAuthority();
+        refreshContextMenuForActiveTab();
+        return result;
+      }
+      case "config.writeConfiguredSiteConfigs": {
+        const result = await authority.writeConfiguredSiteConfigsForAuthority(
           message.siteConfigs
         );
+        refreshContextMenuForActiveTab();
+        return result;
+      }
       case "session.start": {
         state.recentConsoleEntries = [];
         await authority.refreshServerInfo({ force: true });
@@ -409,6 +456,7 @@ export function createBackgroundRuntime({
         });
     });
     chromeApi.tabs.onUpdated.addListener(handleTabUpdated);
+    chromeApi.tabs.onActivated?.addListener?.(handleTabActivated);
     chromeApi.tabs.onRemoved.addListener(handleTabRemoved);
     chromeApi.storage.onChanged.addListener(handleStorageChanged);
     chromeApi.runtime.onMessage.addListener(handleRuntimeListener);
@@ -443,6 +491,11 @@ export function createBackgroundRuntime({
     await contextMenu.registerContextMenus().catch((error: unknown) => {
       setLastError(error instanceof Error ? error.message : String(error));
     });
+    await contextMenu
+      .refreshContextMenuForActiveTab()
+      .catch((error: unknown) => {
+        setLastError(error instanceof Error ? error.message : String(error));
+      });
     authority.queueServerRefresh({ force: true });
     authority.scheduleHeartbeat();
   }

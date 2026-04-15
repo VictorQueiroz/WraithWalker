@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuthorityHarness } from "./helpers/background-authority-test-helpers.js";
-import { createChromeApi } from "./helpers/background-service-test-helpers.js";
+import { createTestChromeApi } from "./helpers/background-service-test-helpers.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe("background authority diagnostics", () => {
   it("reports missing roots, missing configs, and server disconnects in diagnostics", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
@@ -58,7 +58,7 @@ describe("background authority diagnostics", () => {
   });
 
   it("returns diagnostics for configured/effective config failures and local-root permission errors", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {

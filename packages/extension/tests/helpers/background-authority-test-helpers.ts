@@ -3,13 +3,13 @@ import { vi } from "vitest";
 import { createBackgroundAuthority } from "../../src/lib/background-authority.js";
 import {
   createBackgroundState,
-  createChromeApi,
+  createTestChromeApi,
   createMockServerClient
 } from "./background-service-test-helpers.js";
 
 export function createAuthorityHarness({
   stateOverrides = {},
-  chromeApi = createChromeApi(),
+  chromeApi = createTestChromeApi(),
   serverClientOverrides = {},
   getSiteConfigs = vi.fn().mockResolvedValue([]),
   getLegacySiteConfigs = vi.fn().mockResolvedValue([]),
@@ -28,7 +28,7 @@ export function createAuthorityHarness({
   reconcileTabs = vi.fn().mockResolvedValue(undefined)
 }: {
   stateOverrides?: Record<string, unknown>;
-  chromeApi?: ReturnType<typeof createChromeApi>;
+  chromeApi?: ReturnType<typeof createTestChromeApi>;
   serverClientOverrides?: Record<string, unknown>;
   getSiteConfigs?: ReturnType<typeof vi.fn>;
   getLegacySiteConfigs?: ReturnType<typeof vi.fn>;

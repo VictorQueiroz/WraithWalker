@@ -16,10 +16,12 @@ describe("background helpers", () => {
     expect(isHttpUrl("https://app.example.com")).toBe(true);
     expect(isHttpUrl("http://app.example.com")).toBe(true);
     expect(isHttpUrl("data:text/plain,hello")).toBe(false);
+    expect(isHttpUrl("https://")).toBe(false);
     expect(extractOrigin("https://app.example.com/path")).toBe(
       "https://app.example.com"
     );
     expect(extractOrigin("chrome://extensions")).toBeNull();
+    expect(extractOrigin("https://")).toBeNull();
     expect(
       findMatchingOrigin("https://app.example.com/dashboard", [
         "https://app.example.com",
@@ -96,6 +98,26 @@ describe("background helpers", () => {
     ]);
   });
 
+  it("keeps an existing Origin Vary token unchanged when synthesizing CORS replay headers", () => {
+    const headers = replayResponseHeaders(
+      [
+        { name: "Content-Type", value: "text/css" },
+        { name: "Vary", value: "Accept-Encoding, Origin" }
+      ],
+      {
+        assetLike: true,
+        topOrigin: "https://app.example.com",
+        requestHeaders: [{ name: "Sec-Fetch-Mode", value: "cors" }]
+      }
+    );
+
+    expect(headers).toEqual([
+      { name: "Content-Type", value: "text/css" },
+      { name: "Vary", value: "Accept-Encoding, Origin" },
+      { name: "Access-Control-Allow-Origin", value: "https://app.example.com" }
+    ]);
+  });
+
   it("adds credential-aware CORS replay headers for credentialed asset requests", () => {
     const headers = replayResponseHeaders(
       [{ name: "Content-Type", value: "font/woff2" }],
@@ -115,6 +137,39 @@ describe("background helpers", () => {
       { name: "Access-Control-Allow-Origin", value: "https://app.example.com" },
       { name: "Access-Control-Allow-Credentials", value: "true" },
       { name: "Vary", value: "Origin" }
+    ]);
+  });
+
+  it("leaves asset replay headers unchanged when cors mode has no request or top origin", () => {
+    const headers = replayResponseHeaders(
+      [{ name: "Content-Type", value: "application/javascript" }],
+      {
+        assetLike: true,
+        requestHeaders: [{ name: "Sec-Fetch-Mode", value: "cors" }]
+      }
+    );
+
+    expect(headers).toEqual([
+      { name: "Content-Type", value: "application/javascript" }
+    ]);
+  });
+
+  it("leaves asset replay headers unchanged when the request is not in browser cors mode", () => {
+    const headers = replayResponseHeaders(
+      [
+        { name: "Content-Type", value: "application/javascript" },
+        { name: "Vary", value: "Accept-Encoding" }
+      ],
+      {
+        assetLike: true,
+        topOrigin: "https://app.example.com",
+        requestHeaders: [{ name: "Sec-Fetch-Mode", value: "no-cors" }]
+      }
+    );
+
+    expect(headers).toEqual([
+      { name: "Content-Type", value: "application/javascript" },
+      { name: "Vary", value: "Accept-Encoding" }
     ]);
   });
 

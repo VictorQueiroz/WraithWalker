@@ -4,12 +4,10 @@ import {
   DEFAULT_DUMP_ALLOWLIST_PATTERNS,
   DEFAULT_EDITOR_ID,
   EDITOR_PRESETS,
+  POPUP_REFRESH_INTERVAL_MS,
   type EditorPreset
 } from "../lib/constants.js";
-import {
-  getEditorLaunchOverride,
-  updateEditorLaunchOverride
-} from "../lib/editor-launch.js";
+import { getEditorLaunchOverride } from "../lib/editor-launch.js";
 import type {
   BackgroundMessage,
   DiagnosticsResult,
@@ -22,10 +20,11 @@ import type {
   ScenarioResult
 } from "../lib/messages.js";
 import type { FixtureDiff } from "@wraithwalker/core/scenarios";
+import { originToPermissionPattern } from "../lib/path-utils.js";
 import {
-  normalizeSiteInput,
-  originToPermissionPattern
-} from "../lib/path-utils.js";
+  deriveWorkspaceStatus,
+  type WorkspaceStatus
+} from "../lib/workspace-open-state.js";
 import {
   createRootDirectoryPickerOptions,
   ensureRootSentinel as defaultEnsureRootSentinel,
@@ -34,10 +33,9 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
-import {
-  createConfiguredSiteConfig,
-  isValidDumpAllowlistPatterns
-} from "../lib/site-config.js";
+import { isValidDumpAllowlistPatterns } from "../lib/site-config.js";
+import { whitelistSiteOrigin } from "../lib/site-whitelist.js";
+import type { MessageRuntimeApi, OptionsChromeApi } from "../lib/chrome-api.js";
 import type {
   NativeHostConfig,
   RootSentinel,
@@ -58,20 +56,11 @@ import {
   Separator,
   Textarea
 } from "./components.js";
-
-interface PermissionsApi {
-  request(options: { origins: string[] }): Promise<boolean>;
-  remove(options: { origins: string[] }): Promise<boolean>;
-}
-
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-}
-
-interface ChromeApi {
-  permissions: PermissionsApi;
-  runtime: RuntimeApi;
-}
+import {
+  withSwitchDialogTargetName,
+  withUpdatedEditorCommandOverride,
+  withUpdatedEditorUrlOverride
+} from "./options-app.helpers.js";
 
 interface RootState {
   hasHandle: boolean;
@@ -248,7 +237,10 @@ function buildDiffPreview(diff: FixtureDiff): string[] {
 
 export interface OptionsAppProps {
   windowRef?: Window;
-  chromeApi: ChromeApi;
+  chromeApi: OptionsChromeApi;
+  setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
+  refreshIntervalMs?: number;
   getNativeHostConfig: () => Promise<NativeHostConfig>;
   getSiteConfigs: () => Promise<SiteConfig[]>;
   setNativeHostConfig: (nativeHostConfig: NativeHostConfig) => Promise<void>;
@@ -269,7 +261,7 @@ function getErrorMessage(result: { error?: string }): string {
 }
 
 function sendMessage<T>(
-  runtime: RuntimeApi,
+  runtime: MessageRuntimeApi,
   message: BackgroundMessage
 ): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;
@@ -292,6 +284,65 @@ function hasConfiguredRoot(rootState: RootState | null): boolean {
   return Boolean(rootState?.hasHandle && rootState.permission === "granted");
 }
 
+function WorkspaceStatusTile({
+  label,
+  value
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="grid gap-1 rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-sm font-medium text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function getWorkspaceStatusNote(
+  workspaceStatus: WorkspaceStatus
+): FlashState | null {
+  if (workspaceStatus.sessionState === "loading") {
+    return {
+      variant: "default",
+      text: "Checking which workspace is active right now."
+    };
+  }
+
+  if (!workspaceStatus.enabledOriginCount) {
+    return {
+      variant: "default",
+      text: "Next: add your first origin so capture can start."
+    };
+  }
+
+  if (workspaceStatus.authority === "none") {
+    return workspaceStatus.rememberedRootState.kind === "permission_required"
+      ? {
+          variant: "destructive",
+          text: "Next: Reconnect Root Directory so the Remembered Browser Root can be used again."
+        }
+      : {
+          variant: "default",
+          text: "Next: Choose Root Directory so WraithWalker has a remembered browser workspace."
+        };
+  }
+
+  if (
+    workspaceStatus.authority === "server" &&
+    workspaceStatus.rememberedRootState.kind === "missing_handle"
+  ) {
+    return {
+      variant: "default",
+      text: "Server Root is active. Choose Root Directory only if you want a Remembered Browser Root fallback."
+    };
+  }
+
+  return null;
+}
+
 function RootStatusSummary({
   rootState,
   serverConnected,
@@ -304,11 +355,12 @@ function RootStatusSummary({
   if (serverConnected && (!rootState || !rootState.hasHandle)) {
     return (
       <Alert variant="default">
-        Connected to the local WraithWalker server.
+        Server Root is active.
         {serverRootPath
           ? ` Settings changes are using ${serverRootPath}.`
-          : " Settings changes are using the server root."}{" "}
-        A browser-local root is optional fallback only.
+          : " Settings changes are using Server Root."}{" "}
+        Choose Root Directory only if you want a Remembered Browser Root
+        fallback.
       </Alert>
     );
   }
@@ -316,8 +368,7 @@ function RootStatusSummary({
   if (!rootState || !rootState.hasHandle) {
     return (
       <Alert variant="default">
-        No WraithWalker root directory is connected yet. Choose one to start
-        writing fixtures to disk.
+        Choose Root Directory to set the Remembered Browser Root fallback.
       </Alert>
     );
   }
@@ -325,15 +376,15 @@ function RootStatusSummary({
   if (rootState.permission !== "granted") {
     return (
       <Alert variant="destructive">
-        Chrome still knows this WraithWalker root directory, but write access
-        needs to be reconnected before capture can start.
+        Reconnect Root Directory to restore the Remembered Browser Root
+        fallback.
       </Alert>
     );
   }
 
   return (
     <Alert variant="success">
-      WraithWalker root access is ready.
+      Remembered Browser Root is ready.
       {rootState.sentinel ? ` Root ID: ${rootState.sentinel.rootId}.` : ""}
     </Alert>
   );
@@ -357,27 +408,40 @@ function SectionIntro({
 function SiteCard({
   siteConfig,
   disabled = false,
+  onDraftingChange,
   onSave,
   onRemove
 }: {
   siteConfig: SiteConfig;
   disabled?: boolean;
+  onDraftingChange?: (origin: string, isDrafting: boolean) => void;
   onSave: (
     origin: string,
     patch: Pick<SiteConfig, "dumpAllowlistPatterns">
   ) => Promise<void>;
   onRemove: (origin: string) => Promise<void>;
 }) {
-  const [patternsText, setPatternsText] = React.useState(
-    formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns)
+  const formattedPatterns = React.useMemo(
+    () => formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns),
+    [siteConfig.dumpAllowlistPatterns]
   );
+  const [patternsText, setPatternsText] = React.useState(formattedPatterns);
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
+  const isDrafting = patternsText !== formattedPatterns;
 
   React.useEffect(() => {
-    setPatternsText(
-      formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns)
-    );
-  }, [siteConfig.dumpAllowlistPatterns]);
+    if (!isDrafting) {
+      setPatternsText(formattedPatterns);
+    }
+  }, [formattedPatterns, isDrafting]);
+
+  React.useEffect(() => {
+    onDraftingChange?.(siteConfig.origin, isDrafting);
+
+    return () => {
+      onDraftingChange?.(siteConfig.origin, false);
+    };
+  }, [isDrafting, onDraftingChange, siteConfig.origin]);
 
   return (
     <Card className="bg-white/80">
@@ -450,6 +514,9 @@ function SiteCard({
 export function OptionsApp({
   windowRef = window,
   chromeApi,
+  setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
+  refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   getNativeHostConfig,
   getSiteConfigs,
   setNativeHostConfig,
@@ -501,6 +568,7 @@ export function OptionsApp({
   const [switchDialog, setSwitchDialog] =
     React.useState<ScenarioSwitchDialogState | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [siteDraftOrigins, setSiteDraftOrigins] = React.useState<string[]>([]);
   const [flash, setFlash] = React.useState<FlashState | null>(null);
   const [loading, setLoading] = React.useState(true);
   const cursorEditor = React.useMemo(
@@ -514,6 +582,21 @@ export function OptionsApp({
     : {};
   const serverConnected = sessionSnapshot?.captureDestination === "server";
   const canEditSites = serverConnected || hasConfiguredRoot(rootState);
+  const workspaceStatus = React.useMemo(
+    () =>
+      deriveWorkspaceStatus({
+        snapshot: sessionSnapshot,
+        rememberedRootState: rootState,
+        activeScenarioName: scenarioPanel.activeScenarioName,
+        activeTrace: scenarioPanel.activeTrace
+      }),
+    [
+      rootState,
+      scenarioPanel.activeScenarioName,
+      scenarioPanel.activeTrace,
+      sessionSnapshot
+    ]
+  );
 
   const refreshSessionSnapshot = React.useCallback(async () => {
     const snapshot = await sendMessage<SessionSnapshot>(chromeApi.runtime, {
@@ -522,6 +605,12 @@ export function OptionsApp({
     setSessionSnapshot(snapshot);
     return snapshot;
   }, [chromeApi.runtime]);
+
+  const refreshSiteConfigs = React.useCallback(async () => {
+    const nextSites = await getSiteConfigs();
+    setSites(nextSites);
+    return nextSites;
+  }, [getSiteConfigs]);
 
   const refreshRootState = React.useCallback(async () => {
     const rootHandle = await loadStoredRootHandle();
@@ -572,32 +661,64 @@ export function OptionsApp({
     }
   }, [chromeApi.runtime]);
 
+  const refreshAuthorityData = React.useCallback(async () => {
+    await Promise.all([
+      refreshSessionSnapshot(),
+      refreshSiteConfigs(),
+      refreshScenarios()
+    ]);
+  }, [refreshScenarios, refreshSessionSnapshot, refreshSiteConfigs]);
+
+  const handleSiteDraftingChange = React.useCallback(
+    (origin: string, isDrafting: boolean) => {
+      setSiteDraftOrigins((currentOrigins) => {
+        const hasOrigin = currentOrigins.includes(origin);
+        if (isDrafting) {
+          return hasOrigin ? currentOrigins : [...currentOrigins, origin];
+        }
+
+        return hasOrigin
+          ? currentOrigins.filter((currentOrigin) => currentOrigin !== origin)
+          : currentOrigins;
+      });
+    },
+    []
+  );
+
   const refreshAll = React.useCallback(async () => {
     setLoading(true);
     try {
-      const nextSites = await getSiteConfigs();
-      const [nextSessionSnapshot, nextNativeConfig] = await Promise.all([
-        refreshSessionSnapshot(),
-        getNativeHostConfig()
-      ]);
-      setSites(nextSites);
-      setSessionSnapshot(nextSessionSnapshot);
+      const nextNativeConfig = await getNativeHostConfig();
       setNativeHostConfigState(nextNativeConfig);
-      await Promise.all([refreshRootState(), refreshScenarios()]);
+      await Promise.all([refreshRootState(), refreshAuthorityData()]);
     } finally {
       setLoading(false);
     }
-  }, [
-    getNativeHostConfig,
-    getSiteConfigs,
-    refreshRootState,
-    refreshScenarios,
-    refreshSessionSnapshot
-  ]);
+  }, [getNativeHostConfig, refreshAuthorityData, refreshRootState]);
 
   React.useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  React.useEffect(() => {
+    const intervalId = setIntervalFn(() => {
+      if (siteDraftOrigins.length > 0) {
+        return;
+      }
+
+      void refreshAuthorityData().catch(() => undefined);
+    }, refreshIntervalMs);
+
+    return () => {
+      clearIntervalFn(intervalId);
+    };
+  }, [
+    clearIntervalFn,
+    refreshAuthorityData,
+    refreshIntervalMs,
+    siteDraftOrigins.length,
+    setIntervalFn
+  ]);
 
   React.useEffect(() => {
     if (!scenarioPanel.activeTrace) {
@@ -615,37 +736,26 @@ export function OptionsApp({
     );
     setTraceScenarioDescription(scenarioPanel.activeTrace.goal ?? "");
     setTraceScenarioError(null);
-  }, [
-    scenarioPanel.activeTrace?.goal,
-    scenarioPanel.activeTrace?.name,
-    scenarioPanel.activeTrace?.traceId
-  ]);
+  }, [scenarioPanel.activeTrace]);
 
   async function handleAddSite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFlash(null);
     try {
       if (!canEditSites) {
-        throw new Error(
-          "Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns."
-        );
+        throw new Error(originsBlockedMessage);
       }
 
-      const origin = normalizeSiteInput(siteOriginInput);
-      const permissionPattern = originToPermissionPattern(origin);
-      const granted = await chromeApi.permissions.request({
-        origins: [permissionPattern]
+      const { siteConfigs: nextSites } = await whitelistSiteOrigin({
+        originInput: siteOriginInput,
+        requestHostPermission: async (permissionPattern) =>
+          chromeApi.permissions.request({
+            origins: [permissionPattern]
+          }),
+        readSiteConfigs: async () => sites,
+        writeSiteConfigs: setSiteConfigs
       });
-      if (!granted) {
-        throw new Error(
-          `Host access was not granted for ${permissionPattern}.`
-        );
-      }
 
-      const nextSites = [...sites, createConfiguredSiteConfig(origin)].sort(
-        (left, right) => left.origin.localeCompare(right.origin)
-      );
-      await setSiteConfigs(nextSites);
       setSites(nextSites);
       setSiteOriginInput("");
       await refreshSessionSnapshot();
@@ -668,7 +778,7 @@ export function OptionsApp({
     if (!canEditSites) {
       setFlash({
         variant: "destructive",
-        text: "Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns."
+        text: originsBlockedMessage
       });
       return;
     }
@@ -709,9 +819,7 @@ export function OptionsApp({
     setFlash(null);
     try {
       if (!canEditSites) {
-        throw new Error(
-          "Choose and connect a WraithWalker root directory, or connect the local WraithWalker server, before configuring origins or dump patterns."
-        );
+        throw new Error(originsBlockedMessage);
       }
 
       const permissionPattern = originToPermissionPattern(origin);
@@ -824,7 +932,10 @@ export function OptionsApp({
       }
       setFlash({
         variant: "success",
-        text: "Opened the launch folder in the OS file manager."
+        text:
+          workspaceStatus.authority === "none"
+            ? "Opened the active root in the OS file manager."
+            : `Opened ${workspaceStatus.authorityLabel} in the OS file manager.`
       });
     } catch (error) {
       setFlash({
@@ -847,7 +958,7 @@ export function OptionsApp({
       await writeClipboardText(JSON.stringify(result.report, null, 2));
       setFlash({
         variant: "success",
-        text: "Diagnostics copied to clipboard."
+        text: "Support diagnostics copied to clipboard."
       });
     } catch (error) {
       setFlash({
@@ -974,34 +1085,35 @@ export function OptionsApp({
   }
 
   async function handleConfirmSwitchScenario() {
-    if (!switchDialog) {
-      return;
-    }
-
-    setFlash(null);
-    setSwitchBusyName(switchDialog.targetName);
-    try {
-      const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
-        type: "scenario.switch",
-        name: switchDialog.targetName
-      });
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
+    return withSwitchDialogTargetName(
+      switchDialog,
+      async (switchTargetName) => {
+        setFlash(null);
+        setSwitchBusyName(switchTargetName);
+        try {
+          const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
+            type: "scenario.switch",
+            name: switchTargetName
+          });
+          if (!result.ok) {
+            throw new Error(getErrorMessage(result as ErrorResult));
+          }
+          setSwitchDialog(null);
+          await refreshScenarios();
+          setFlash({
+            variant: "success",
+            text: `Switched to "${result.name}".`
+          });
+        } catch (error) {
+          setFlash({
+            variant: "destructive",
+            text: error instanceof Error ? error.message : String(error)
+          });
+        } finally {
+          setSwitchBusyName(null);
+        }
       }
-      setSwitchDialog(null);
-      await refreshScenarios();
-      setFlash({
-        variant: "success",
-        text: `Switched to "${result.name}".`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    } finally {
-      setSwitchBusyName(null);
-    }
+    );
   }
 
   const rootActionLabel = !rootState?.hasHandle
@@ -1012,6 +1124,11 @@ export function OptionsApp({
   const switchDialogPreview = switchDialog?.diff
     ? buildDiffPreview(switchDialog.diff)
     : [];
+  const workspaceStatusNote = getWorkspaceStatusNote(workspaceStatus);
+  const originsBlockedMessage =
+    rootActionLabel === "Reconnect Root Directory"
+      ? "Reconnect Root Directory above before adding origins, or connect the local WraithWalker server."
+      : "Choose Root Directory above before adding origins, or connect the local WraithWalker server.";
 
   return (
     <main className="mx-auto max-w-4xl p-6">
@@ -1039,8 +1156,64 @@ export function OptionsApp({
             <Card>
               <CardHeader>
                 <SectionIntro
-                  title="WraithWalker Root"
-                  description="This Chrome-granted WraithWalker root directory is remembered and reused whenever permission is still available."
+                  title="Workspace Status"
+                  description="See which workspace is active right now and what needs attention next."
+                />
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <WorkspaceStatusTile
+                    label="Session"
+                    value={workspaceStatus.sessionLabel}
+                  />
+                  <WorkspaceStatusTile
+                    label="Active Root"
+                    value={workspaceStatus.authorityLabel}
+                  />
+                  <WorkspaceStatusTile
+                    label="Remembered Browser Root"
+                    value={workspaceStatus.rememberedRootLabel}
+                  />
+                  <WorkspaceStatusTile
+                    label="Enabled Origins"
+                    value={`${workspaceStatus.enabledOriginCount} enabled`}
+                  />
+                  <WorkspaceStatusTile
+                    label="Active Snapshot"
+                    value={workspaceStatus.activeSnapshotName ?? "None"}
+                  />
+                  <WorkspaceStatusTile
+                    label="Active Trace"
+                    value={
+                      workspaceStatus.activeTraceLabel ??
+                      (workspaceStatus.authority === "server"
+                        ? "None"
+                        : "Server Root only")
+                    }
+                  />
+                </div>
+                {sessionSnapshot?.captureRootPath &&
+                workspaceStatus.authority !== "none" ? (
+                  <div className="text-sm text-muted-foreground">
+                    Current path:{" "}
+                    <span className="break-all text-foreground">
+                      {sessionSnapshot.captureRootPath}
+                    </span>
+                  </div>
+                ) : null}
+                {workspaceStatusNote ? (
+                  <Alert variant={workspaceStatusNote.variant}>
+                    {workspaceStatusNote.text}
+                  </Alert>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <SectionIntro
+                  title="Remembered Browser Root"
+                  description="Chrome can remember this fallback workspace whenever Server Root is not active."
                 />
               </CardHeader>
               <CardContent className="grid gap-4">
@@ -1070,20 +1243,20 @@ export function OptionsApp({
                   variant="secondary"
                   onClick={() => void handleOpenLaunchFolder()}
                 >
-                  Open Launch Folder
+                  Open Active Root Folder
                 </Button>
                 <Button
                   className="sm:w-fit"
                   type="button"
-                  variant="secondary"
+                  variant="ghost"
                   onClick={() => void handleCopyDiagnostics()}
                 >
-                  Copy Diagnostics
+                  Copy Support Diagnostics
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Chrome can remember the selected directory handle, but opening
-                  that folder in Finder or Explorer still requires the native
-                  host plus the shared launch path below.
+                  The directory picker remembers the browser-side fallback.
+                  Opening the active workspace in Finder or Explorer still goes
+                  through the shared reveal flow below.
                 </p>
               </CardContent>
             </Card>
@@ -1092,16 +1265,16 @@ export function OptionsApp({
               <CardHeader>
                 <SectionIntro
                   title="Enabled Origins"
-                  description="Grant exact host access one origin at a time. These origin rules are stored in the connected local server root when available, otherwise in the selected WraithWalker root."
+                  description="Grant exact host access one origin at a time. These rules are stored in Server Root when connected, otherwise in Remembered Browser Root."
                 />
               </CardHeader>
               <CardContent className="grid gap-4">
                 {serverConnected ? (
                   <Alert variant="success">
-                    Connected to the local WraithWalker server.
+                    Server Root is active.
                     {sessionSnapshot?.captureRootPath
                       ? ` Editing ${sessionSnapshot.captureRootPath}.`
-                      : " Editing the server root."}
+                      : " Editing Server Root."}
                   </Alert>
                 ) : null}
                 <form
@@ -1123,23 +1296,22 @@ export function OptionsApp({
                 </form>
                 <div className="grid gap-3">
                   {!canEditSites ? (
-                    <Alert variant="default">
-                      Choose and connect a WraithWalker root directory, or
-                      connect the local WraithWalker server, before configuring
-                      origins or dump patterns.
-                    </Alert>
+                    <Alert variant="default">{originsBlockedMessage}</Alert>
                   ) : sites.length > 0 ? (
                     sites.map((siteConfig) => (
                       <SiteCard
                         key={siteConfig.origin}
                         siteConfig={siteConfig}
                         disabled={!canEditSites}
+                        onDraftingChange={handleSiteDraftingChange}
                         onSave={handleUpdateSite}
                         onRemove={handleRemoveSite}
                       />
                     ))
                   ) : (
-                    <Alert variant="default">No origins are enabled yet.</Alert>
+                    <Alert variant="default">
+                      Add your first origin above to make capture useful.
+                    </Alert>
                   )}
                 </div>
               </CardContent>
@@ -1149,7 +1321,7 @@ export function OptionsApp({
               <CardHeader>
                 <SectionIntro
                   title="Scenario Manager"
-                  description="Save metadata-rich snapshots, keep the active root marker visible, and compare changes before switching."
+                  description="Snapshots use Server Root when connected, otherwise Remembered Browser Root."
                 />
               </CardHeader>
               <CardContent className="grid gap-6">
@@ -1159,11 +1331,39 @@ export function OptionsApp({
                   </Alert>
                 ) : null}
 
+                <div className="grid gap-3 rounded-xl border border-border/70 bg-white/70 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="default">
+                      Snapshots in {workspaceStatus.authorityLabel}
+                    </Badge>
+                    <Badge
+                      variant={
+                        workspaceStatus.activeSnapshotName ? "success" : "muted"
+                      }
+                    >
+                      Active snapshot:{" "}
+                      {workspaceStatus.activeSnapshotName ?? "None"}
+                    </Badge>
+                    <Badge variant="muted">
+                      Trace:{" "}
+                      {workspaceStatus.activeTraceLabel ??
+                        (workspaceStatus.authority === "server"
+                          ? "None"
+                          : "Server Root only")}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {workspaceStatus.authority === "server"
+                      ? "Trace provenance below belongs to the active Server Root."
+                      : "Trace save becomes available when Server Root is active."}
+                  </p>
+                </div>
+
                 <div className="grid gap-4 rounded-xl border border-border/70 bg-white/70 p-4">
                   <div className="space-y-1">
                     <h3 className="text-sm font-semibold">Current Workspace</h3>
                     <p className="text-sm text-muted-foreground">
-                      The active snapshot marker lives in the connected root and
+                      The active snapshot marker lives in the active root and
                       only changes when you switch.
                     </p>
                   </div>
@@ -1444,7 +1644,7 @@ export function OptionsApp({
                     <CardTitle>Advanced Native Host</CardTitle>
                     <CardDescription>
                       Collapsed by default so the main flow stays focused on the
-                      remembered root and default editor.
+                      active root and default editor.
                     </CardDescription>
                   </div>
                   <Button
@@ -1497,8 +1697,8 @@ export function OptionsApp({
                         placeholder="/Users/you/wraithwalker-fixtures"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Needed when you want Cursor to open the remembered root
-                        directly, or when using the native host fallback.
+                        Needed when you want Cursor to open Remembered Browser
+                        Root directly, or when using the native host fallback.
                         Without it, Cursor can still launch and receive the
                         workspace brief through its prompt deeplink, but Chrome
                         does not expose the absolute local path back to the
@@ -1516,19 +1716,11 @@ export function OptionsApp({
                         onChange={(event) => {
                           const urlTemplate = event.currentTarget.value;
                           setNativeHostConfigState((current) =>
-                            current
-                              ? updateEditorLaunchOverride(
-                                  current,
-                                  cursorEditor.id,
-                                  {
-                                    ...getEditorLaunchOverride(
-                                      current,
-                                      cursorEditor.id
-                                    ),
-                                    urlTemplate
-                                  }
-                                )
-                              : current
+                            withUpdatedEditorUrlOverride(
+                              current,
+                              cursorEditor.id,
+                              urlTemplate
+                            )
                           );
                         }}
                         placeholder={
@@ -1547,19 +1739,11 @@ export function OptionsApp({
                         onChange={(event) => {
                           const commandTemplate = event.currentTarget.value;
                           setNativeHostConfigState((current) =>
-                            current
-                              ? updateEditorLaunchOverride(
-                                  current,
-                                  cursorEditor.id,
-                                  {
-                                    ...getEditorLaunchOverride(
-                                      current,
-                                      cursorEditor.id
-                                    ),
-                                    commandTemplate
-                                  }
-                                )
-                              : current
+                            withUpdatedEditorCommandOverride(
+                              current,
+                              cursorEditor.id,
+                              commandTemplate
+                            )
                           );
                         }}
                         placeholder={cursorEditor.commandTemplate}

@@ -1,4 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const coreFixtureRepositoryMocks = vi.hoisted(() => ({
+  createFixtureRepository: vi.fn()
+}));
+
+vi.mock("@wraithwalker/core/fixture-repository", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@wraithwalker/core/fixture-repository")
+    >();
+
+  coreFixtureRepositoryMocks.createFixtureRepository.mockImplementation(
+    actual.createFixtureRepository
+  );
+
+  return {
+    ...actual,
+    createFixtureRepository: coreFixtureRepositoryMocks.createFixtureRepository
+  };
+});
 
 import { createFileSystemGateway } from "../src/lib/file-system-gateway.js";
 import { createFixtureDescriptor } from "../src/lib/fixture-mapper.js";
@@ -108,6 +128,136 @@ function asFileSystemDirectoryHandle(
 }
 
 describe("fixture repository", () => {
+  beforeEach(() => {
+    coreFixtureRepositoryMocks.createFixtureRepository.mockClear();
+  });
+
+  it("forwards root handle, sentinel, and gateway-backed storage to the shared repository", async () => {
+    const rootHandle = asFileSystemDirectoryHandle(new MemoryDirectoryHandle());
+    const sentinel = {
+      rootId: "root-forwarded",
+      schemaVersion: 1,
+      createdAt: "2026-04-03T00:00:00.000Z"
+    };
+    const readOptionalJsonMock = vi.fn(
+      async (_root: FileSystemDirectoryHandle, _relativePath: string) => ({
+        ok: true
+      })
+    );
+    const readOptionalJson = <T>(
+      root: FileSystemDirectoryHandle,
+      relativePath: string
+    ) => readOptionalJsonMock(root, relativePath) as Promise<T | null>;
+    const gateway = {
+      exists: vi.fn(async () => true),
+      writeJson: vi.fn(async () => {}),
+      writeBody: vi.fn(async () => {}),
+      readOptionalJson,
+      readBody: vi.fn(async () => ({ bodyBase64: "Zm9v", size: 3 }))
+    };
+    const sharedRepository = { source: "shared" };
+    let capturedArgs:
+      | {
+          root: FileSystemDirectoryHandle;
+          sentinel: typeof sentinel;
+          storage: {
+            exists(
+              root: FileSystemDirectoryHandle,
+              relativePath: string
+            ): Promise<boolean>;
+            writeJson(
+              root: FileSystemDirectoryHandle,
+              relativePath: string,
+              value: unknown
+            ): Promise<void>;
+            writeBody(
+              root: FileSystemDirectoryHandle,
+              relativePath: string,
+              payload: { body: string; bodyEncoding: "utf8" | "base64" }
+            ): Promise<void>;
+            readOptionalJson<T>(
+              root: FileSystemDirectoryHandle,
+              relativePath: string
+            ): Promise<T | null>;
+            readBody(
+              root: FileSystemDirectoryHandle,
+              relativePath: string
+            ): Promise<{ bodyBase64: string; size: number }>;
+          };
+        }
+      | undefined;
+
+    coreFixtureRepositoryMocks.createFixtureRepository.mockImplementationOnce(
+      (args) => {
+        capturedArgs = args as typeof capturedArgs;
+        return sharedRepository as any;
+      }
+    );
+
+    const repository = createFixtureRepository({
+      rootHandle,
+      sentinel,
+      gateway
+    });
+
+    expect(repository).toBe(sharedRepository);
+    expect(
+      coreFixtureRepositoryMocks.createFixtureRepository
+    ).toHaveBeenCalledTimes(1);
+    expect(capturedArgs).toMatchObject({
+      root: rootHandle,
+      sentinel
+    });
+
+    await capturedArgs!.storage.exists(
+      rootHandle,
+      "fixtures/example/request.json"
+    );
+    expect(gateway.exists).toHaveBeenCalledWith(
+      rootHandle,
+      "fixtures/example/request.json"
+    );
+
+    await capturedArgs!.storage.writeJson(
+      rootHandle,
+      "fixtures/example/request.json",
+      { request: true }
+    );
+    expect(gateway.writeJson).toHaveBeenCalledWith(
+      rootHandle,
+      "fixtures/example/request.json",
+      { request: true }
+    );
+
+    await capturedArgs!.storage.writeBody(rootHandle, "fixtures/example/body", {
+      body: "payload",
+      bodyEncoding: "utf8"
+    });
+    expect(gateway.writeBody).toHaveBeenCalledWith(
+      rootHandle,
+      "fixtures/example/body",
+      {
+        body: "payload",
+        bodyEncoding: "utf8"
+      }
+    );
+
+    await capturedArgs!.storage.readOptionalJson(
+      rootHandle,
+      "fixtures/example/meta.json"
+    );
+    expect(readOptionalJsonMock).toHaveBeenCalledWith(
+      rootHandle,
+      "fixtures/example/meta.json"
+    );
+
+    await capturedArgs!.storage.readBody(rootHandle, "fixtures/example/body");
+    expect(gateway.readBody).toHaveBeenCalledWith(
+      rootHandle,
+      "fixtures/example/body"
+    );
+  });
+
   it("writes a fixture once and avoids overwriting an existing body file", async () => {
     const rootHandle = new MemoryDirectoryHandle();
     const gateway = createFileSystemGateway({

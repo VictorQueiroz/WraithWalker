@@ -5,8 +5,11 @@ import {
   getNativeHostConfig as defaultGetNativeHostConfig,
   setNativeHostConfig as defaultSetNativeHostConfig
 } from "./lib/chrome-storage.js";
-import { EDITOR_PRESETS, type EditorPreset } from "./lib/constants.js";
-import type { BackgroundMessage } from "./lib/messages.js";
+import {
+  EDITOR_PRESETS,
+  POPUP_REFRESH_INTERVAL_MS,
+  type EditorPreset
+} from "./lib/constants.js";
 import {
   getConfiguredSiteConfigs as defaultGetSiteConfigs,
   setConfiguredSiteConfigs as defaultSetSiteConfigs
@@ -18,26 +21,19 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "./lib/root-handle.js";
+import {
+  createOptionsChromeApi,
+  type OptionsChromeApi
+} from "./lib/chrome-api.js";
 import { OptionsApp } from "./ui/options-app.js";
-
-interface PermissionsApi {
-  request(options: { origins: string[] }): Promise<boolean>;
-  remove(options: { origins: string[] }): Promise<boolean>;
-}
-
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-}
-
-interface ChromeApi {
-  permissions: PermissionsApi;
-  runtime: RuntimeApi;
-}
 
 export interface OptionsDependencies {
   document?: Document;
   windowRef?: Window;
-  chromeApi?: ChromeApi;
+  chromeApi?: OptionsChromeApi;
+  setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
+  refreshIntervalMs?: number;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getSiteConfigs?: typeof defaultGetSiteConfigs;
   setNativeHostConfig?: typeof defaultSetNativeHostConfig;
@@ -63,7 +59,10 @@ function isTestMode(): boolean {
 export async function initOptions({
   document: documentRef = document,
   windowRef = window,
-  chromeApi = chrome as unknown as ChromeApi,
+  chromeApi = createOptionsChromeApi(),
+  setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
+  refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   getNativeHostConfig = defaultGetNativeHostConfig,
   getSiteConfigs = defaultGetSiteConfigs,
   setNativeHostConfig = defaultSetNativeHostConfig,
@@ -86,6 +85,9 @@ export async function initOptions({
     React.createElement(OptionsApp, {
       windowRef,
       chromeApi,
+      setIntervalFn,
+      clearIntervalFn,
+      refreshIntervalMs,
       getNativeHostConfig,
       getSiteConfigs,
       setNativeHostConfig,

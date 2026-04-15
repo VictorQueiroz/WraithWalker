@@ -5,9 +5,9 @@ import type {
   RootReadySuccess,
   SiteConfigsResult
 } from "./messages.js";
+import type { ChromeApi } from "./chrome-api.js";
 import type {
   BackgroundState,
-  ChromeApi,
   BackgroundServerInfo
 } from "./background-runtime-shared.js";
 import {
@@ -48,6 +48,7 @@ interface BackgroundAuthorityDependencies {
   setLastError: (message: string) => void;
   syncTraceBindings: () => Promise<void>;
   reconcileTabs: () => Promise<void>;
+  onServerHeartbeatSuccess?: () => void;
 }
 
 interface LocalRootReadyOptions {
@@ -117,7 +118,8 @@ export function createBackgroundAuthority({
   normalizeSiteConfigs,
   setLastError,
   syncTraceBindings,
-  reconcileTabs
+  reconcileTabs,
+  onServerHeartbeatSuccess
 }: BackgroundAuthorityDependencies): BackgroundAuthorityApi {
   const localRoot = createBackgroundAuthorityLocalRoot({
     state,
@@ -143,7 +145,8 @@ export function createBackgroundAuthority({
       applyEffectiveSiteConfigs(state, siteConfigs, normalizeSiteConfigs),
     restoreLocalEffectiveSiteConfigs: () =>
       restoreLocalEffectiveSiteConfigs(state, normalizeSiteConfigs),
-    updateEffectiveRootState: () => updateEffectiveRootState(state)
+    updateEffectiveRootState: () => updateEffectiveRootState(state),
+    onServerHeartbeatSuccess
   });
 
   const data = createBackgroundAuthorityData({

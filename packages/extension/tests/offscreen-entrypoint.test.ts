@@ -154,6 +154,10 @@ describe("offscreen entrypoint", () => {
     await expect(
       runtime.handleMessage({ type: "session.getState" })
     ).resolves.toBeUndefined();
+    await expect(runtime.handleMessage(null)).resolves.toBeUndefined();
+    await expect(
+      runtime.handleMessage("fs.ensureRoot")
+    ).resolves.toBeUndefined();
     await expect(
       runtime.handleMessage({
         target: "offscreen",
@@ -1270,9 +1274,13 @@ describe("offscreen entrypoint", () => {
     });
 
     runtime.register();
+    const ignoredSendResponse = vi.fn();
     expect(
-      listeners[0]({ type: "session.getState" }, {}, vi.fn())
+      listeners[0]({ type: "session.getState" }, {}, ignoredSendResponse)
     ).toBeUndefined();
+    expect(ignoredSendResponse).not.toHaveBeenCalled();
+    expect(listeners[0](null, {}, ignoredSendResponse)).toBeUndefined();
+    expect(ignoredSendResponse).not.toHaveBeenCalled();
 
     const sendResponse = vi.fn();
     const handled = listeners[0](

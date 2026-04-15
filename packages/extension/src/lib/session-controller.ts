@@ -1,15 +1,11 @@
 import { findMatchingOrigin } from "./background-helpers.js";
+import type { BrowserTab } from "./chrome-api.js";
 import type {
   AttachedTabState,
   RequestEntry,
   RootSentinel,
   SessionSnapshot
 } from "./types.js";
-
-interface BrowserTab {
-  id?: number;
-  url?: string;
-}
 
 interface RootReadyResult {
   ok: boolean;

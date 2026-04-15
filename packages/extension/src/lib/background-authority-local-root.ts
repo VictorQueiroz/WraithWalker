@@ -8,9 +8,9 @@ import type {
 import {
   getErrorMessage,
   isLocalRootConfigUnavailable,
-  type BackgroundState,
-  type ChromeApi
+  type BackgroundState
 } from "./background-runtime-shared.js";
+import type { ChromeApi } from "./chrome-api.js";
 import {
   haveSameSiteConfigs,
   mergeLegacySiteConfigs,
