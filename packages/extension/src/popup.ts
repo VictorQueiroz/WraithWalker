@@ -11,18 +11,16 @@ import {
   loadStoredRootHandle as defaultLoadStoredRootHandle,
   queryRootPermission as defaultQueryRootPermission
 } from "./lib/root-handle.js";
-import type { BackgroundMessage } from "./lib/messages.js";
+import {
+  createPopupRuntimeApi,
+  type PopupRuntimeApi
+} from "./lib/chrome-api.js";
 import { PopupApp } from "./ui/popup-app.js";
-
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-  openOptionsPage(): void;
-}
 
 export interface PopupDependencies {
   document?: Document;
   windowRef?: Window;
-  runtime?: RuntimeApi;
+  runtime?: PopupRuntimeApi;
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
   refreshIntervalMs?: number;
@@ -43,7 +41,7 @@ function isTestMode(): boolean {
 export async function initPopup({
   document: documentRef = document,
   windowRef = window,
-  runtime = chrome.runtime as unknown as RuntimeApi,
+  runtime = createPopupRuntimeApi(),
   setIntervalFn = setInterval,
   clearIntervalFn = clearInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,

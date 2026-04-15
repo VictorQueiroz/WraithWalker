@@ -5,76 +5,12 @@ import {
   DEFAULT_NATIVE_HOST_CONFIG,
   STORAGE_KEYS
 } from "../src/lib/constants.js";
-import { WHITELIST_SITE_MENU_ID } from "../src/lib/background-context-menu.js";
-
-function createEvent() {
-  const listeners = [];
-  return {
-    listeners,
-    addListener: vi.fn((listener) => {
-      listeners.push(listener);
-    })
-  };
-}
-
-function createChromeApi() {
-  const chromeApi = {
-    runtime: {
-      getURL: vi.fn((path) => path),
-      getManifest: vi.fn(() => ({ version: "0.1.0" })),
-      sendMessage: vi.fn(),
-      sendNativeMessage: vi.fn(),
-      onMessage: createEvent(),
-      onStartup: createEvent(),
-      onInstalled: createEvent(),
-      getContexts: vi.fn().mockResolvedValue([])
-    },
-    debugger: {
-      attach: vi.fn(),
-      sendCommand: vi.fn(),
-      detach: vi.fn(),
-      onEvent: createEvent(),
-      onDetach: createEvent()
-    },
-    tabs: {
-      query: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 99 }),
-      onUpdated: createEvent(),
-      onRemoved: createEvent()
-    },
-    storage: {
-      onChanged: createEvent(),
-      local: {
-        get: vi.fn().mockResolvedValue({}),
-        set: vi.fn().mockResolvedValue(undefined)
-      }
-    },
-    offscreen: {
-      createDocument: vi.fn(),
-      closeDocument: vi.fn(),
-      Reason: {
-        BLOBS: "BLOBS"
-      }
-    },
-    alarms: {
-      create: vi.fn(),
-      clear: vi.fn().mockResolvedValue(true),
-      onAlarm: createEvent()
-    },
-    permissions: {
-      request: vi.fn().mockResolvedValue(true),
-      remove: vi.fn().mockResolvedValue(true)
-    },
-    contextMenus: {
-      create: vi.fn(),
-      removeAll: vi.fn().mockResolvedValue(undefined),
-      onClicked: createEvent()
-    }
-  };
-
-  globalThis.chrome = chromeApi as any;
-  return chromeApi;
-}
+import {
+  UNWHITELIST_SITE_MENU_TITLE,
+  WHITELIST_SITE_MENU_ID,
+  WHITELIST_SITE_MENU_TITLE
+} from "../src/lib/background-context-menu.js";
+import { installTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
 function createMockServerClient(overrides: Record<string, any> = {}) {
   const fallbackInfo = {
@@ -213,7 +149,7 @@ afterEach(() => {
 describe("background entrypoint", () => {
   it("registers listeners and loads stored configuration on start", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([
       {
         origin: "https://app.example.com",
@@ -252,13 +188,24 @@ describe("background entrypoint", () => {
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
     expect(chromeApi.storage.onChanged.addListener).toHaveBeenCalled();
     expect(chromeApi.contextMenus.onClicked.addListener).toHaveBeenCalled();
+    expect(chromeApi.tabs.onActivated.addListener).toHaveBeenCalled();
     expect(getSiteConfigs).toHaveBeenCalled();
     expect(runtime.state.enabledOrigins).toEqual(["https://app.example.com"]);
   });
 
   it("registers and handles the website whitelist context menu through the background runtime", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi({
+      tabs: {
+        query: vi.fn().mockResolvedValue([
+          {
+            id: 12,
+            active: true,
+            url: "https://docs.example.com/dashboard"
+          }
+        ])
+      }
+    });
     const sentinel = { rootId: "server-root" };
     const serverClient = createMockServerClient({
       getSystemInfo: vi.fn().mockResolvedValue({
@@ -309,7 +256,7 @@ describe("background entrypoint", () => {
 
     expect(chromeApi.contextMenus.create).toHaveBeenCalledWith({
       id: WHITELIST_SITE_MENU_ID,
-      title: "Whitelist this website",
+      title: WHITELIST_SITE_MENU_TITLE,
       contexts: ["all"],
       documentUrlPatterns: ["http://*/*", "https://*/*"]
     });
@@ -340,12 +287,93 @@ describe("background entrypoint", () => {
         ]
       })
     ]);
+    expect(chromeApi.contextMenus.update).toHaveBeenLastCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: UNWHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
     expect(runtime.state.lastError).toBe("");
+  });
+
+  it("shows the remove-from-whitelist menu label from server-backed site configs", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = installTestChromeApi({
+      tabs: {
+        query: vi.fn().mockResolvedValue([
+          {
+            id: 22,
+            active: true,
+            url: "https://docs.example.com/dashboard"
+          }
+        ])
+      }
+    });
+    const sentinel = { rootId: "server-root" };
+    const serverClient = createMockServerClient({
+      getSystemInfo: vi.fn().mockResolvedValue({
+        version: "0.6.1",
+        rootPath: "/tmp/server-root",
+        sentinel,
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: [
+          {
+            origin: "https://docs.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z"
+          }
+        ]
+      }),
+      readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
+        siteConfigs: [
+          {
+            origin: "https://docs.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z"
+          }
+        ],
+        sentinel
+      })
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient as any),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+
+    expect(chromeApi.contextMenus.update).toHaveBeenCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: UNWHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
   });
 
   it("does not block session.getState while the local server probe is still pending", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const never = new Promise<never>(() => undefined);
 
     const runtime = createBackgroundRuntime({
@@ -393,7 +421,7 @@ describe("background entrypoint", () => {
 
   it("keeps retrying server detection and switches to the server root once it responds", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSystemInfo = vi
       .fn()
       .mockRejectedValueOnce(new Error("offline"))
@@ -461,7 +489,7 @@ describe("background entrypoint", () => {
 
   it("prefers the local WraithWalker server over a ready local root for capture and editor open", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverSentinel = { rootId: "server-root" };
     const localSentinel = { rootId: "local-root" };
     const serverClient = createMockServerClient({
@@ -640,7 +668,7 @@ describe("background entrypoint", () => {
 
   it("replaces local fallback site configs with server-backed site configs when connected", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -714,7 +742,7 @@ describe("background entrypoint", () => {
 
   it("reads configured site configs from the server when connected", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverClient = createMockServerClient({
       readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
         siteConfigs: [
@@ -779,7 +807,7 @@ describe("background entrypoint", () => {
 
   it("returns an empty configured site config list when the local offscreen payload is malformed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockImplementation(
       async (message: { target?: string; type?: string }) => {
         if (message.target !== "offscreen") {
@@ -854,7 +882,7 @@ describe("background entrypoint", () => {
 
   it("reads effective site configs from the server when connected", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverClient = createMockServerClient({
       readEffectiveSiteConfigs: vi.fn().mockResolvedValue({
         siteConfigs: [
@@ -919,7 +947,7 @@ describe("background entrypoint", () => {
 
   it("returns an empty effective site config list when the local offscreen payload is malformed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockImplementation(
       async (message: { target?: string; type?: string }) => {
         if (message.target !== "offscreen") {
@@ -994,7 +1022,7 @@ describe("background entrypoint", () => {
 
   it("writes configured site configs to the server when connected without dual-writing locally", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     let serverConfiguredSites = [
       {
         origin: "https://server.example.com",
@@ -1098,7 +1126,7 @@ describe("background entrypoint", () => {
 
   it("falls back to the local root when a server-backed config write fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     let localConfiguredSites = [
       {
         origin: "https://local.example.com",
@@ -1220,7 +1248,7 @@ describe("background entrypoint", () => {
 
   it("surfaces a combined error when a server-backed config write fails and no fallback root is ready", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockImplementation(
       async (message: { target?: string; type?: string }) => {
         if (message.target !== "offscreen") {
@@ -1296,7 +1324,7 @@ describe("background entrypoint", () => {
 
   it("preserves server authority when local config refresh reads malformed site config data", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockImplementation(
       async (message: { target?: string; type?: string }) => {
         if (message.target !== "offscreen") {
@@ -1388,7 +1416,7 @@ describe("background entrypoint", () => {
 
   it("falls back to the local root when a server-backed effective config read fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const localEffectiveSites = [
       {
         origin: "https://local-effective.example.com",
@@ -1482,7 +1510,7 @@ describe("background entrypoint", () => {
 
   it("surfaces a combined error when a server-backed effective config read fails and no fallback root is ready", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockImplementation(
       async (message: { target?: string; type?: string }) => {
         if (message.target !== "offscreen") {
@@ -1551,7 +1579,7 @@ describe("background entrypoint", () => {
 
   it("heartbeats with a persisted client id and arms debugger-based tracing when the server reports an active trace", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -1641,7 +1669,7 @@ describe("background entrypoint", () => {
 
   it("does not re-arm trace bindings for tabs that are already armed for the active trace", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const activeTrace = createActiveTrace();
 
     const runtime = createBackgroundRuntime({
@@ -1703,7 +1731,7 @@ describe("background entrypoint", () => {
 
   it("continues arming trace bindings when Runtime.addBinding is already registered", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -1778,7 +1806,7 @@ describe("background entrypoint", () => {
 
   it("re-arms traced tabs when the active trace changes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -1852,7 +1880,7 @@ describe("background entrypoint", () => {
 
   it("re-arms traced tabs even when removing the previous trace script fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -1930,7 +1958,7 @@ describe("background entrypoint", () => {
 
   it("keeps tabs attached without arming trace scripts when no active trace is available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -1991,7 +2019,7 @@ describe("background entrypoint", () => {
 
   it("ignores tabs that disappear before trace disarm runs", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -2090,7 +2118,7 @@ describe("background entrypoint", () => {
 
   it("disarms trace bindings during session stop even when debugger cleanup commands fail", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -2180,7 +2208,7 @@ describe("background entrypoint", () => {
 
   it("forwards debugger binding payloads to the server and links persisted fixtures to the active trace", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const activeTrace = createActiveTrace();
     const recordTraceClick = vi.fn().mockResolvedValue({
       recorded: true,
@@ -2347,7 +2375,7 @@ describe("background entrypoint", () => {
 
   it("captures recent console entries from Log.entryAdded and includes them in the next heartbeat", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 7, url: "https://app.example.com/settings" }
     ]);
@@ -2434,7 +2462,7 @@ describe("background entrypoint", () => {
 
   it("marks the server offline when linking a persisted fixture to an active trace fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const activeTrace = createActiveTrace();
     let requestLifecycleDependencies: any;
 
@@ -2533,7 +2561,7 @@ describe("background entrypoint", () => {
 
   it("returns null when the server reports that a fixture does not exist", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverSentinel = { rootId: "server-root" };
     let requestLifecycleDependencies: any;
 
@@ -2606,7 +2634,7 @@ describe("background entrypoint", () => {
 
   it("falls back to the local root when a server-backed fixture read fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverSentinel = { rootId: "server-root" };
     const localSentinel = { rootId: "local-root" };
     let requestLifecycleDependencies: any;
@@ -2735,7 +2763,7 @@ describe("background entrypoint", () => {
 
   it("falls back to the local root when a server-backed fixture write fails", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverSentinel = { rootId: "server-root" };
     const localSentinel = { rootId: "local-root" };
     let requestLifecycleDependencies: any;
@@ -2863,7 +2891,7 @@ describe("background entrypoint", () => {
 
   it("surfaces a combined error when the server is unavailable and no fallback root is ready", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverSentinel = { rootId: "server-root" };
     let requestLifecycleDependencies: any;
 
@@ -2969,7 +2997,7 @@ describe("background entrypoint", () => {
 
   it("routes debugger events into the request lifecycle handlers", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const requestLifecycle = {
       handleFetchRequestPaused: vi.fn().mockResolvedValue(undefined),
       handleNetworkRequestWillBeSent: vi.fn(),
@@ -3028,7 +3056,7 @@ describe("background entrypoint", () => {
 
   it("executes the debugger and offscreen wrappers exposed to the request lifecycle", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -3088,7 +3116,7 @@ describe("background entrypoint", () => {
 
   it("ignores detached-tab debugger command races from in-flight lifecycle work", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     let releaseSendCommand: (() => void) | null = null;
     const sendCommandGate = new Promise<void>((resolve) => {
       releaseSendCommand = resolve;
@@ -3147,7 +3175,7 @@ describe("background entrypoint", () => {
 
   it("cleans up and recovers from a detached-tab race in the real request lifecycle", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 11, url: "https://app.example.com/page" }
     ]);
@@ -3285,7 +3313,7 @@ describe("background entrypoint", () => {
 
   it("ignores stale paused-request resolution errors from the real request lifecycle", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 13, url: "https://app.example.com/page" }
     ]);
@@ -3371,7 +3399,7 @@ describe("background entrypoint", () => {
 
   it("clears multiple in-flight requests and ignores late lifecycle events after target_closed", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 12, url: "https://app.example.com/page" }
     ]);
@@ -3518,7 +3546,7 @@ describe("background entrypoint", () => {
 
   it("dispatches runtime session messages through the registered message listener", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const sessionSnapshot = {
       sessionActive: true,
       attachedTabIds: [1],
@@ -3566,7 +3594,7 @@ describe("background entrypoint", () => {
 
   it("ignores unrelated runtime messages and returns listener errors to the sender", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const sessionController = {
       startSession: vi.fn().mockRejectedValue(new Error("Session failed.")),
       stopSession: vi.fn(),
@@ -3619,7 +3647,7 @@ describe("background entrypoint", () => {
 
   it("verifies and opens the native directory through the runtime actions", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -3697,7 +3725,7 @@ describe("background entrypoint", () => {
 
   it("opens the directory through an editor URL template when one is available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage
       .mockResolvedValueOnce({ ok: true }) // fs.generateContext
       .mockResolvedValueOnce({
@@ -3755,7 +3783,7 @@ describe("background entrypoint", () => {
 
   it("uses Cursor URL launch by default when no editor id is provided", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage
       .mockResolvedValueOnce({ ok: true }) // fs.generateContext
       .mockResolvedValueOnce({
@@ -3817,7 +3845,7 @@ describe("background entrypoint", () => {
 
   it("prefers a custom URL override over the editor's built-in URL template", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage
       .mockResolvedValueOnce({ ok: true }) // fs.generateContext
       .mockResolvedValueOnce({
@@ -3868,7 +3896,7 @@ describe("background entrypoint", () => {
 
   it("returns the URL-launch error instead of falling back to native messaging", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.create.mockRejectedValueOnce(
       new Error("External protocol handler failed.")
     );
@@ -3924,7 +3952,7 @@ describe("background entrypoint", () => {
 
   it("returns the URL-template launch error when no native fallback is configured", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.create.mockRejectedValueOnce(
       new Error("No application is registered for the URL.")
     );
@@ -3977,7 +4005,7 @@ describe("background entrypoint", () => {
 
   it("opens Cursor itself when no absolute launch path is available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage
       .mockResolvedValueOnce({ ok: true }) // fs.generateContext
       .mockResolvedValueOnce({
@@ -4024,7 +4052,7 @@ describe("background entrypoint", () => {
 
   it("reveals the configured launch root through the native host", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -4073,7 +4101,7 @@ describe("background entrypoint", () => {
 
   it("requires a native host name before revealing the launch root", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -4116,7 +4144,7 @@ describe("background entrypoint", () => {
 
   it("prefers the connected server root when revealing the active folder", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverClient = createMockServerClient({
       heartbeat: vi.fn().mockResolvedValue({
         version: "1.0.0",
@@ -4172,7 +4200,7 @@ describe("background entrypoint", () => {
 
   it("surfaces reveal-root target resolution failures before calling the native host", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: false,
       error: "Root directory access is not granted."
@@ -4213,7 +4241,7 @@ describe("background entrypoint", () => {
 
   it("returns a clear error when opening a native-host editor without a shared launch path", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -4260,7 +4288,7 @@ describe("background entrypoint", () => {
 
   it("returns scenario action errors when no launch target can be resolved", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: false,
       error: "Root directory access is not granted."
@@ -4316,7 +4344,7 @@ describe("background entrypoint", () => {
 
   it("surfaces native reveal-root failures", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -4361,7 +4389,7 @@ describe("background entrypoint", () => {
 
   it("surfaces native verification failures and root-sentinel errors", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const blockedRuntime = createBackgroundRuntime({
       chromeApi,
       getSiteConfigs: vi.fn().mockResolvedValue([]),
@@ -4433,7 +4461,7 @@ describe("background entrypoint", () => {
 
   it("requests root permission when handling explicit verify actions", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -4482,7 +4510,7 @@ describe("background entrypoint", () => {
 
   it("forwards scenario list, save, switch, and diff actions to the native host", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendNativeMessage
       .mockResolvedValueOnce({
         ok: true,
@@ -4662,7 +4690,7 @@ describe("background entrypoint", () => {
 
   it("routes scenario list, save, switch, diff, and trace-save actions through the connected server root", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const serverClient = createMockServerClient({
       heartbeat: vi.fn().mockResolvedValue({
         version: "1.0.0",
@@ -4836,7 +4864,7 @@ describe("background entrypoint", () => {
 
   it("records refresh failures triggered by startup and install listeners", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi
       .fn()
       .mockResolvedValueOnce([])
@@ -4877,7 +4905,7 @@ describe("background entrypoint", () => {
   });
 
   it("bootstraps automatically outside test mode", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     await loadBackgroundModuleOutsideTestMode();
     await flushPromises();
 
@@ -4887,10 +4915,10 @@ describe("background entrypoint", () => {
 
   it("uses the real session controller to attach, detach, and reconcile tabs", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
-    chromeApi.tabs.query.mockResolvedValue([
-      { id: 5, url: "https://app.example.com/dashboard" }
-    ]);
+    const chromeApi = installTestChromeApi();
+    chromeApi.tabs.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ id: 5, url: "https://app.example.com/dashboard" }]);
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -4972,7 +5000,7 @@ describe("background entrypoint", () => {
 
   it("reuses an existing offscreen document and skips closing when none remains on session stop", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([]);
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
@@ -5014,7 +5042,7 @@ describe("background entrypoint", () => {
 
   it("cleans up tab state even when debugger detach fails during tab removal", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.debugger.detach.mockRejectedValue(new Error("Already detached."));
 
     const runtime = createBackgroundRuntime({
@@ -5048,7 +5076,7 @@ describe("background entrypoint", () => {
 
   it("does not surface a lastError when a tab detaches during debugger setup", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 5, url: "https://app.example.com/dashboard" }
     ]);
@@ -5102,7 +5130,7 @@ describe("background entrypoint", () => {
 
   it("ignores tab-removal cleanup when the tab is not attached", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -5131,7 +5159,7 @@ describe("background entrypoint", () => {
 
   it("stops the global session when the debugger is canceled by the user", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 8, url: "https://app.example.com/dashboard" }
     ]);
@@ -5183,7 +5211,7 @@ describe("background entrypoint", () => {
 
   it("keeps the global session active when the debuggee target closes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.tabs.query.mockResolvedValue([
       { id: 8, url: "https://app.example.com/dashboard" }
     ]);
@@ -5238,7 +5266,7 @@ describe("background entrypoint", () => {
 
   it("removes only matching request entries on non-user debugger detach", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -5277,7 +5305,7 @@ describe("background entrypoint", () => {
 
   it("cleans up detached tabs even when there are no matching request entries", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -5310,7 +5338,7 @@ describe("background entrypoint", () => {
 
   it("migrates legacy chrome-local site config into the selected root once", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     let configuredSites = [
       {
         origin: "https://app.example.com",
@@ -5445,7 +5473,7 @@ describe("background entrypoint", () => {
 
   it("ignores legacy site config storage changes after root-backed config becomes authoritative", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([
       {
         origin: "https://app.example.com",
@@ -5490,7 +5518,7 @@ describe("background entrypoint", () => {
 
   it("refreshes local fallback config without reconciling tabs while the server is connected", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi
       .fn()
       .mockResolvedValueOnce([
@@ -5571,7 +5599,7 @@ describe("background entrypoint", () => {
 
   it("refreshes config for preferred editor changes without reconciling tabs", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([]);
     const getNativeHostConfig = vi
       .fn()
@@ -5616,7 +5644,7 @@ describe("background entrypoint", () => {
 
   it("ignores unrelated local storage changes", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi.fn().mockResolvedValue([]);
     const getNativeHostConfig = vi
       .fn()
@@ -5655,7 +5683,7 @@ describe("background entrypoint", () => {
 
   it("updates tab state, startup state, and storage errors through registered listeners", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const getSiteConfigs = vi
       .fn()
       .mockResolvedValueOnce([])
@@ -5722,7 +5750,7 @@ describe("background entrypoint", () => {
 
   it("only refreshes the server on heartbeat alarms", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const heartbeat = vi.fn().mockResolvedValue({
       version: "1.0.0",
       rootPath: "/tmp/server-root",
@@ -5776,7 +5804,7 @@ describe("background entrypoint", () => {
 
   it("keeps heartbeats running without chrome alarms support", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     delete (chromeApi as { alarms?: unknown }).alarms;
     const heartbeat = vi.fn().mockResolvedValue({
       version: "1.0.0",
@@ -5831,7 +5859,7 @@ describe("background entrypoint", () => {
 
   it("routes Network.requestWillBeSent and Network.responseReceived events", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const requestLifecycle = {
       handleFetchRequestPaused: vi.fn(),
       handleNetworkRequestWillBeSent: vi.fn(),
@@ -5879,7 +5907,7 @@ describe("background entrypoint", () => {
 
   it("captures lifecycle handler errors into lastError", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const requestLifecycle = {
       handleFetchRequestPaused: vi
         .fn()
@@ -5916,7 +5944,7 @@ describe("background entrypoint", () => {
 
   it("reports missing native host name or launch path during verification", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -5957,7 +5985,7 @@ describe("background entrypoint", () => {
 
   it("catches native message errors during verification", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -5998,7 +6026,7 @@ describe("background entrypoint", () => {
 
   it("handles native host returning an error response during verification", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -6039,7 +6067,7 @@ describe("background entrypoint", () => {
 
   it("handles native open directory failure response", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -6079,7 +6107,7 @@ describe("background entrypoint", () => {
 
   it("returns native verification failures before attempting to open the directory", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -6130,7 +6158,7 @@ describe("background entrypoint", () => {
 
   it("handles native open directory throwing an error", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -6170,7 +6198,7 @@ describe("background entrypoint", () => {
 
   it("captures errors from debugger detach handler into lastError", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     const sessionController = {
       startSession: vi.fn(),
       stopSession: vi.fn().mockRejectedValue(new Error("Stop session failed.")),
@@ -6207,7 +6235,7 @@ describe("background entrypoint", () => {
 
   it("does not register listeners twice", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
 
     const runtime = createBackgroundRuntime({
       chromeApi,
@@ -6240,7 +6268,7 @@ describe("background entrypoint", () => {
 
   it("handles session.getState, session.stop, and root.verify runtime messages", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -6302,7 +6330,7 @@ describe("background entrypoint", () => {
 
   it("returns a structured diagnostics report from the background runtime", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: false,
       error: "No root directory selected."
@@ -6416,7 +6444,7 @@ describe("background entrypoint", () => {
 
   it("falls back when getContexts is not available", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.getContexts = undefined;
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
@@ -6453,7 +6481,7 @@ describe("background entrypoint", () => {
 
   it("ignores duplicate offscreen document creation errors while checking root readiness", async () => {
     const { createBackgroundRuntime } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.runtime.sendMessage.mockResolvedValue({
       ok: true,
       sentinel: { rootId: "root-1" },
@@ -6493,7 +6521,7 @@ describe("background entrypoint", () => {
 
   it("bootstraps with the default chrome dependencies", async () => {
     const { bootstrapBackground } = await loadBackgroundModule();
-    const chromeApi = createChromeApi();
+    const chromeApi = installTestChromeApi();
     chromeApi.storage.local.get
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({});

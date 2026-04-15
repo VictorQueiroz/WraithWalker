@@ -5,7 +5,7 @@ import type { BackgroundAuthorityApi } from "../src/lib/background-authority.js"
 import { getRequiredRootId } from "../src/lib/background-authority.js";
 import {
   createBackgroundState,
-  createChromeApi,
+  createTestChromeApi,
   createMockServerClient
 } from "./helpers/background-service-test-helpers.js";
 
@@ -51,12 +51,12 @@ function createAuthorityStub(
 
 function createNativeHarness({
   stateOverrides = {},
-  chromeApi = createChromeApi(),
+  chromeApi = createTestChromeApi(),
   authorityOverrides = {},
   serverClientOverrides = {}
 }: {
   stateOverrides?: Record<string, unknown>;
-  chromeApi?: ReturnType<typeof createChromeApi>;
+  chromeApi?: ReturnType<typeof createTestChromeApi>;
   authorityOverrides?: Record<string, unknown>;
   serverClientOverrides?: Record<string, unknown>;
 } = {}) {
@@ -86,7 +86,7 @@ function createNativeHarness({
 
 describe("background native actions", () => {
   it("opens the server root through the editor URL when a server capture root is active", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     const state = createBackgroundState({
       enabledOrigins: ["https://app.example.com"]
     });
@@ -141,7 +141,7 @@ describe("background native actions", () => {
     };
     const nativeActions = createBackgroundNativeActions({
       state: createBackgroundState(),
-      chromeApi: createChromeApi(),
+      chromeApi: createTestChromeApi(),
       serverClient,
       authority: {
         refreshStoredConfig: vi.fn().mockResolvedValue(undefined),
@@ -166,7 +166,7 @@ describe("background native actions", () => {
   });
 
   it("routes scenario actions through the native host when only a local root is available", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.sendNativeMessage.mockImplementation(
       async (_hostName, message: { type: string; name?: string }) => {
         switch (message.type) {
@@ -386,7 +386,7 @@ describe("background native actions", () => {
       url: "cursor://file//tmp/server-root/"
     });
 
-    const failureChromeApi = createChromeApi();
+    const failureChromeApi = createTestChromeApi();
     failureChromeApi.tabs.create.mockRejectedValue("tab creation blocked");
     const failureHarness = createNativeHarness({
       chromeApi: failureChromeApi,
@@ -459,7 +459,7 @@ describe("background native actions", () => {
         "Configure the shared editor launch path in the options page first."
     });
 
-    const rejectedChromeApi = createChromeApi();
+    const rejectedChromeApi = createTestChromeApi();
     rejectedChromeApi.runtime.sendNativeMessage.mockResolvedValue({
       ok: false,
       error: "native root mismatch"
@@ -490,7 +490,7 @@ describe("background native actions", () => {
   });
 
   it("surfaces native open and local reveal failures", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.sendNativeMessage.mockImplementation(
       async (_hostName, message) => {
         if (message.type === "verifyRoot") {

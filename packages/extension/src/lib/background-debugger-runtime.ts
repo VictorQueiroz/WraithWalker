@@ -1,9 +1,11 @@
 import { extractOrigin } from "./background-helpers.js";
 import type {
-  BackgroundState,
   ChromeApi,
   DebuggeeTarget,
-  DetachReason,
+  DetachReason
+} from "./chrome-api.js";
+import type {
+  BackgroundState,
   RequestLifecycleApi
 } from "./background-runtime-shared.js";
 import {

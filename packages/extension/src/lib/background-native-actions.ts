@@ -19,9 +19,9 @@ import type {
   BackgroundAuthorityApi,
   getRequiredRootId
 } from "./background-authority.js";
+import type { ChromeApi } from "./chrome-api.js";
 import type {
-  BackgroundState,
-  ChromeApi
+  BackgroundState
 } from "./background-runtime-shared.js";
 import { getErrorMessage } from "./background-runtime-shared.js";
 import type { SiteConfig } from "./types.js";

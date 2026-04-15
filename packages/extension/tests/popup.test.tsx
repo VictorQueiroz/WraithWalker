@@ -7,66 +7,10 @@ import { userEvent } from "@testing-library/user-event";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
 import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
+import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
 function renderRoot() {
   document.body.innerHTML = '<div id="root"></div>';
-}
-
-function createEvent() {
-  const listeners: Array<(...args: any[]) => void> = [];
-  return {
-    listeners,
-    addListener: vi.fn((listener: (...args: any[]) => void) => {
-      listeners.push(listener);
-    })
-  };
-}
-
-function createBackgroundChromeApi() {
-  return {
-    runtime: {
-      getURL: vi.fn((path) => path),
-      getManifest: vi.fn(() => ({ version: "0.1.0" })),
-      sendMessage: vi.fn(),
-      sendNativeMessage: vi.fn(),
-      onMessage: createEvent(),
-      onStartup: createEvent(),
-      onInstalled: createEvent(),
-      getContexts: vi.fn().mockResolvedValue([])
-    },
-    debugger: {
-      attach: vi.fn(),
-      sendCommand: vi.fn(),
-      detach: vi.fn(),
-      onEvent: createEvent(),
-      onDetach: createEvent()
-    },
-    tabs: {
-      query: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 99 }),
-      onUpdated: createEvent(),
-      onRemoved: createEvent()
-    },
-    storage: {
-      onChanged: createEvent(),
-      local: {
-        get: vi.fn().mockResolvedValue({}),
-        set: vi.fn().mockResolvedValue(undefined)
-      }
-    },
-    offscreen: {
-      createDocument: vi.fn(),
-      closeDocument: vi.fn(),
-      Reason: {
-        BLOBS: "BLOBS"
-      }
-    },
-    alarms: {
-      create: vi.fn(),
-      clear: vi.fn().mockResolvedValue(true),
-      onAlarm: createEvent()
-    }
-  };
 }
 
 function createNativeHostConfig(
@@ -429,6 +373,41 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("stringifies non-Error session toggle failures through the single status area", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockRejectedValueOnce("Session failed hard."),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Start Session" })
+      );
+      expect(await screen.findByText("Session failed hard.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
   it("updates popup state after a successful session toggle", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
@@ -597,6 +576,116 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("stringifies non-Error open-editor failures through the single status area", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockRejectedValueOnce(418),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in Cursor" })
+      );
+      expect(await screen.findByText("418")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("falls back to the shared unknown error message when open-editor fails without an error field", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce({ ok: false })
+        .mockResolvedValueOnce(createSnapshot()),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in Cursor" })
+      );
+      expect(await screen.findByText("Unknown error.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("safely ignores deferred startup completion after the popup unmounts", async () => {
+    const { PopupApp } = await import("../src/ui/popup-app.tsx");
+    const nativeHostConfig = createDeferred<NativeHostConfig>();
+    const initialSnapshot = createDeferred<SessionSnapshot>();
+    const runtime = {
+      sendMessage: vi.fn().mockImplementationOnce(() => initialSnapshot.promise),
+      openOptionsPage: vi.fn()
+    };
+    const getNativeHostConfig = vi
+      .fn()
+      .mockImplementationOnce(() => nativeHostConfig.promise);
+    const clearIntervalFn = vi.fn() as typeof clearInterval;
+
+    const popup = render(
+      React.createElement(PopupApp, {
+        runtime,
+        getNativeHostConfig,
+        setIntervalFn: fakeSetInterval,
+        clearIntervalFn,
+        ...createRootDeps()
+      })
+    );
+
+    await flushPromises();
+    popup.unmount();
+
+    nativeHostConfig.resolve(
+      createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+    );
+    initialSnapshot.resolve(createSnapshot());
+    await flushPromises();
+
+    expect(getNativeHostConfig).toHaveBeenCalledTimes(1);
+    expect(runtime.sendMessage).toHaveBeenCalledWith({
+      type: "session.getState"
+    });
+    expect(clearIntervalFn).toHaveBeenCalledWith(1);
+  });
+
   it("opens the server root in the OS file manager through the shared background flow", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
@@ -649,6 +738,92 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("surfaces thrown reveal-folder errors and restores the button state", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(
+          createSnapshot({
+            captureDestination: "server",
+            captureRootPath: "/tmp/server-root"
+          })
+        )
+        .mockRejectedValueOnce(new Error("Reveal transport failed.")),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in folder" })
+      );
+
+      expect(
+        await screen.findByText("Reveal transport failed.")
+      ).toBeTruthy();
+      const revealButton = screen.getByRole("button", { name: "Open in folder" });
+      expect((revealButton as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByRole("button", { name: "Opening..." })).toBeNull();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("stringifies non-Error reveal-folder failures and restores the button state", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(
+          createSnapshot({
+            captureDestination: "server",
+            captureRootPath: "/tmp/server-root"
+          })
+        )
+        .mockRejectedValueOnce(404),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Open in folder" })
+      );
+
+      expect(await screen.findByText("404")).toBeTruthy();
+      const revealButton = screen.getByRole("button", { name: "Open in folder" });
+      expect((revealButton as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByRole("button", { name: "Opening..." })).toBeNull();
+    } finally {
+      popup.unmount();
+    }
+  });
+
   it("reveals the live server root through the connected server without requiring a native host", async () => {
     renderRoot();
     const user = userEvent.setup();
@@ -658,7 +833,7 @@ describe("popup entrypoint", () => {
     const { initPopup } = await import("../src/popup.ts");
     const { createBackgroundRuntime } = await import("../src/background.ts");
 
-    const chromeApi = createBackgroundChromeApi();
+    const chromeApi = createTestChromeApi();
     const serverClient = {
       getSystemInfo: vi.fn().mockResolvedValue({
         version: "1.0.0",
@@ -795,7 +970,7 @@ describe("popup entrypoint", () => {
     const { initPopup } = await import("../src/popup.ts");
     const { createBackgroundRuntime } = await import("../src/background.ts");
 
-    const chromeApi = createBackgroundChromeApi();
+    const chromeApi = createTestChromeApi();
     const serverClient = {
       getSystemInfo: vi.fn().mockResolvedValue({
         version: "1.0.0",

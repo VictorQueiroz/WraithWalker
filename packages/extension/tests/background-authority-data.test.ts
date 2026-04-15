@@ -4,7 +4,7 @@ import { createBackgroundAuthority } from "../src/lib/background-authority.js";
 import { createAuthorityHarness } from "./helpers/background-authority-test-helpers.js";
 import {
   createBackgroundState,
-  createChromeApi,
+  createTestChromeApi,
   createMockServerClient
 } from "./helpers/background-service-test-helpers.js";
 
@@ -15,7 +15,7 @@ afterEach(() => {
 
 describe("background authority data", () => {
   it("falls back to local configured site configs when a server-backed read fails", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
@@ -66,7 +66,7 @@ describe("background authority data", () => {
   });
 
   it("surfaces repository fallback errors and incomplete fixture reads", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     const responses = new Map<string, unknown>([
       ["fs.hasFixture", { ok: false, error: "Fixture lookup failed." }],
@@ -125,7 +125,7 @@ describe("background authority data", () => {
   });
 
   it("rejects fixture reads when the local fallback reports an explicit read error", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.readFixture") {
@@ -149,7 +149,7 @@ describe("background authority data", () => {
   });
 
   it("throws a combined error when the server is unavailable and no fallback root is ready", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
@@ -184,7 +184,7 @@ describe("background authority data", () => {
   });
 
   it("writes configured site configs locally and reconciles active tabs when local mode is active", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
@@ -245,7 +245,7 @@ describe("background authority data", () => {
   });
 
   it("falls back to local configured-site writes when a server write fails", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
       if (message?.type === "fs.ensureRoot") {
@@ -307,7 +307,7 @@ describe("background authority data", () => {
   });
 
   it("refreshes local state from offscreen storage and preserves the prior version when the manifest omits one", async () => {
-    const chromeApi = createChromeApi();
+    const chromeApi = createTestChromeApi();
     chromeApi.runtime.getManifest = vi.fn(() => ({}));
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
     chromeApi.runtime.sendMessage.mockImplementation(async (message) => {

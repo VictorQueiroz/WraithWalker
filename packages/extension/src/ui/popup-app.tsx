@@ -5,6 +5,7 @@ import type {
   ErrorResult,
   NativeOpenResult
 } from "../lib/messages.js";
+import type { PopupRuntimeApi } from "../lib/chrome-api.js";
 import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
 import {
   deriveCaptureRootState,
@@ -22,13 +23,8 @@ import {
 } from "../lib/constants.js";
 import { Alert, Button } from "./components.js";
 
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-  openOptionsPage(): void;
-}
-
 export interface PopupAppProps {
-  runtime: RuntimeApi;
+  runtime: PopupRuntimeApi;
   getNativeHostConfig: () => Promise<NativeHostConfig>;
   getPreferredEditorId?: () => Promise<string>;
   loadStoredRootHandle: () => Promise<FileSystemDirectoryHandle | undefined>;
@@ -46,7 +42,7 @@ function getErrorMessage(result: { error?: string }): string {
 }
 
 function sendMessage<T>(
-  runtime: RuntimeApi,
+  runtime: PopupRuntimeApi,
   message: BackgroundMessage
 ): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;

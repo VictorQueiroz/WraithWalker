@@ -1,9 +1,9 @@
 import { DEFAULT_EDITOR_ID } from "./constants.js";
 import type { SiteConfigsResult } from "./messages.js";
+import type { ChromeApi } from "./chrome-api.js";
 import type {
   BackgroundServerInfo,
-  BackgroundState,
-  ChromeApi
+  BackgroundState
 } from "./background-runtime-shared.js";
 import {
   normalizeSiteConfigsResult,

@@ -1,5 +1,11 @@
 import type { BackgroundMessage, ErrorResult } from "./messages.js";
 import type {
+  BrowserTab,
+  ChromeApi,
+  DebuggeeTarget,
+  DetachReason
+} from "./chrome-api.js";
+import type {
   AttachedTabState,
   BrowserConsoleEntry,
   NativeHostConfig,
@@ -9,151 +15,21 @@ import type {
   SiteConfig
 } from "./types.js";
 import type { ServerScenarioTraceRecord } from "./wraithwalker-server.js";
-
-export type DetachReason = "target_closed" | "canceled_by_user";
-
-export interface DebuggeeTarget {
-  tabId?: number;
-}
-
-export interface BrowserTab {
-  id?: number;
-  url?: string;
-}
-
-export interface RuntimeApi {
-  getURL(path: string): string;
-  getManifest?: () => { version?: string };
-  sendMessage(message: unknown): Promise<unknown>;
-  sendNativeMessage(
-    hostName: string,
-    message: Record<string, unknown>
-  ): Promise<Record<string, unknown>>;
-  onMessage: {
-    addListener(
-      listener: (
-        message: unknown,
-        sender: unknown,
-        sendResponse: (response: unknown) => void
-      ) => boolean | void
-    ): void;
-  };
-  onStartup: {
-    addListener(listener: () => void): void;
-  };
-  onInstalled: {
-    addListener(listener: () => void): void;
-  };
-  getContexts?: (filter: {
-    contextTypes: string[];
-    documentUrls: string[];
-  }) => Promise<unknown[]>;
-}
-
-export interface AlarmsApi {
-  create(name: string, alarmInfo: { when?: number }): void;
-  clear(name: string): Promise<boolean> | boolean;
-  onAlarm: {
-    addListener(listener: (alarm: { name: string }) => void): void;
-  };
-}
-
-export interface DebuggerApi {
-  attach(target: DebuggeeTarget, version: string): Promise<void>;
-  sendCommand<T = unknown>(
-    target: DebuggeeTarget,
-    method: string,
-    params?: Record<string, unknown>
-  ): Promise<T>;
-  detach(target: DebuggeeTarget): Promise<void>;
-  onEvent: {
-    addListener(
-      listener: (
-        source: DebuggeeTarget,
-        method: string,
-        params: unknown
-      ) => void
-    ): void;
-  };
-  onDetach: {
-    addListener(
-      listener: (source: DebuggeeTarget, reason: DetachReason) => void
-    ): void;
-  };
-}
-
-export interface TabsApi {
-  query(queryInfo: Record<string, unknown>): Promise<BrowserTab[]>;
-  create(createProperties: { url: string }): Promise<{ id?: number }>;
-  onUpdated: {
-    addListener(
-      listener: (
-        tabId: number,
-        changeInfo: Record<string, unknown>,
-        tab: BrowserTab
-      ) => void
-    ): void;
-  };
-  onRemoved: {
-    addListener(listener: (tabId: number) => void): void;
-  };
-}
-
-export interface PermissionsApi {
-  request(options: { origins: string[] }): Promise<boolean>;
-  remove?(options: { origins: string[] }): Promise<boolean>;
-}
-
-export interface ContextMenuOnClickData {
-  menuItemId?: string | number;
-  pageUrl?: string;
-  frameUrl?: string;
-  linkUrl?: string;
-}
-
-export interface ContextMenusApi {
-  create(createProperties: {
-    id: string;
-    title: string;
-    contexts: string[];
-    documentUrlPatterns?: string[];
-  }): void;
-  removeAll(): Promise<void> | void;
-  onClicked: {
-    addListener(
-      listener: (info: ContextMenuOnClickData, tab?: BrowserTab) => void
-    ): void;
-  };
-}
-
-export interface StorageApi {
-  onChanged: {
-    addListener(
-      listener: (changes: Record<string, unknown>, areaName: string) => void
-    ): void;
-  };
-}
-
-export interface OffscreenApi {
-  createDocument(config: {
-    url: string;
-    reasons: string[];
-    justification: string;
-  }): Promise<void>;
-  closeDocument(): Promise<void>;
-  Reason?: Record<string, string>;
-}
-
-export interface ChromeApi {
-  runtime: RuntimeApi;
-  debugger: DebuggerApi;
-  tabs: TabsApi;
-  storage: StorageApi;
-  offscreen: OffscreenApi;
-  alarms?: AlarmsApi;
-  permissions?: PermissionsApi;
-  contextMenus?: ContextMenusApi;
-}
+export type {
+  AlarmsApi,
+  BrowserTab,
+  ChromeApi,
+  ContextMenuOnClickData,
+  ContextMenusApi,
+  DebuggerApi,
+  DebuggeeTarget,
+  DetachReason,
+  OffscreenApi,
+  PermissionsApi,
+  RuntimeApi,
+  StorageApi,
+  TabsApi
+} from "./chrome-api.js";
 
 export interface BackgroundServerInfo {
   rootPath: string;

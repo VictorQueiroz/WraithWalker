@@ -6,7 +6,6 @@ import {
   setNativeHostConfig as defaultSetNativeHostConfig
 } from "./lib/chrome-storage.js";
 import { EDITOR_PRESETS, type EditorPreset } from "./lib/constants.js";
-import type { BackgroundMessage } from "./lib/messages.js";
 import {
   getConfiguredSiteConfigs as defaultGetSiteConfigs,
   setConfiguredSiteConfigs as defaultSetSiteConfigs
@@ -18,26 +17,16 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "./lib/root-handle.js";
+import {
+  createOptionsChromeApi,
+  type OptionsChromeApi
+} from "./lib/chrome-api.js";
 import { OptionsApp } from "./ui/options-app.js";
-
-interface PermissionsApi {
-  request(options: { origins: string[] }): Promise<boolean>;
-  remove(options: { origins: string[] }): Promise<boolean>;
-}
-
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-}
-
-interface ChromeApi {
-  permissions: PermissionsApi;
-  runtime: RuntimeApi;
-}
 
 export interface OptionsDependencies {
   document?: Document;
   windowRef?: Window;
-  chromeApi?: ChromeApi;
+  chromeApi?: OptionsChromeApi;
   getNativeHostConfig?: typeof defaultGetNativeHostConfig;
   getSiteConfigs?: typeof defaultGetSiteConfigs;
   setNativeHostConfig?: typeof defaultSetNativeHostConfig;
@@ -63,7 +52,7 @@ function isTestMode(): boolean {
 export async function initOptions({
   document: documentRef = document,
   windowRef = window,
-  chromeApi = chrome as unknown as ChromeApi,
+  chromeApi = createOptionsChromeApi(),
   getNativeHostConfig = defaultGetNativeHostConfig,
   getSiteConfigs = defaultGetSiteConfigs,
   setNativeHostConfig = defaultSetNativeHostConfig,

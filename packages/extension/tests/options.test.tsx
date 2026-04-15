@@ -1876,6 +1876,95 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("updates the custom cursor command override when it changes", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const setNativeHostConfig = vi.fn().mockResolvedValue(undefined);
+    const getNativeHostConfig = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor "$DIR"'
+            }
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor --folder "$DIR"'
+            }
+          }
+        })
+      );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: createRuntimeSendMessage()
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig,
+      setNativeHostConfig,
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn()
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Show" }));
+      fireEvent.change(
+        screen.getByLabelText("Custom Command Override For Cursor"),
+        {
+          target: { value: 'cursor --folder "$DIR"' }
+        }
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save Launch Settings" })
+      );
+
+      expect(setNativeHostConfig).toHaveBeenCalledWith(
+        createNativeHostConfig({
+          hostName: "com.example.host",
+          launchPath: "/tmp/fixtures",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "cursor://workspace?folder=$DIR_COMPONENT",
+              commandTemplate: 'cursor --folder "$DIR"'
+            }
+          }
+        })
+      );
+      expect(await screen.findByText("Launch settings saved.")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("opens the configured launch folder through the OS handler", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
@@ -2592,6 +2681,491 @@ describe("options entrypoint", () => {
           'Scenario "trace_active" saved from the active trace.'
         )
       ).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("shows an empty diff notice when a switch comparison has no endpoint differences", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: true
+                },
+                {
+                  name: "candidate",
+                  createdAt: "2026-04-03T12:05:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: false
+                }
+              ],
+              activeScenarioName: "baseline"
+            });
+          case "scenario.diff":
+            return {
+              ok: true,
+              diff: {
+                scenarioA: message.scenarioA ?? "baseline",
+                scenarioB: message.scenarioB ?? "candidate",
+                added: [],
+                removed: [],
+                changed: []
+              }
+            };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Switch" }));
+
+      expect(
+        await screen.findByText(
+          "No endpoint differences were detected between these snapshots."
+        )
+      ).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("surfaces diff lookup failures before opening the switch dialog", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [
+                {
+                  name: "baseline",
+                  createdAt: "2026-04-03T12:00:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: true
+                },
+                {
+                  name: "candidate",
+                  createdAt: "2026-04-03T12:05:00.000Z",
+                  source: "manual",
+                  hasMetadata: true,
+                  isActive: false
+                }
+              ],
+              activeScenarioName: "baseline"
+            });
+          case "scenario.diff":
+            return { ok: false, error: "Diff failed." };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Switch" }));
+
+      expect(await screen.findByText("Diff failed.")).toBeTruthy();
+      expect(
+        screen.queryByRole("dialog", { name: "Switch to candidate" })
+      ).toBeNull();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("falls back to the trace id for invalid trace names and omits blank trace descriptions when saving", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [],
+              activeTrace: {
+                traceId: "trace_active",
+                name: "!!!",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.saveFromTrace":
+            return { ok: true, name: message.name ?? "" };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByDisplayValue("trace_active")).toBeTruthy();
+      expect(
+        (
+          screen.getByLabelText(
+            "Trace scenario description"
+          ) as HTMLTextAreaElement
+        ).value
+      ).toBe("");
+
+      await user.clear(screen.getByLabelText("Trace scenario name"));
+      await user.type(screen.getByLabelText("Trace scenario name"), "bad name!");
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+      expect(
+        await screen.findByText(
+          "Use 1-64 letters, numbers, hyphens, or underscores."
+        )
+      ).toBeTruthy();
+
+      await user.clear(screen.getByLabelText("Trace scenario name"));
+      await user.type(
+        screen.getByLabelText("Trace scenario name"),
+        "trace_active_copy"
+      );
+      await user.type(
+        screen.getByLabelText("Trace scenario description"),
+        "   "
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.saveFromTrace",
+        name: "trace_active_copy"
+      });
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("falls back to the trace id in the summary and surfaces non-Error trace-save failures", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [],
+              activeTrace: {
+                traceId: "trace_active",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.saveFromTrace":
+            throw "Trace save failed hard.";
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByDisplayValue("trace_active")).toBeTruthy();
+      expect(
+        screen.getByText("trace_active", { selector: "span" })
+      ).toBeTruthy();
+
+      await user.click(
+        screen.getByRole("button", { name: "Save Trace Snapshot" })
+      );
+
+      expect(await screen.findByText("Trace save failed hard.")).toBeTruthy();
+      const saveTraceButton = screen.getByRole("button", {
+        name: "Save Trace Snapshot"
+      });
+      expect((saveTraceButton as HTMLButtonElement).disabled).toBe(false);
+      expect(runtimeSendMessage).toHaveBeenCalledWith({
+        type: "scenario.saveFromTrace",
+        name: "trace_active"
+      });
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("surfaces trace-save result failures and restores the trace-save button state", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return {
+              sessionActive: false,
+              attachedTabIds: [],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "server",
+              captureRootPath: "/tmp/server-root",
+              lastError: ""
+            };
+          case "scenario.list":
+            return createScenarioListResult({
+              snapshots: [],
+              activeTrace: {
+                traceId: "trace_active",
+                name: "trace_active",
+                status: "armed",
+                createdAt: "2026-04-03T12:06:00.000Z",
+                selectedOrigins: ["https://app.example.com"],
+                extensionClientId: "client-1",
+                stepCount: 3,
+                linkedFixtureCount: 2
+              },
+              supportsTraceSave: true
+            });
+          case "scenario.saveFromTrace":
+            return { ok: false, error: "Trace save failed." };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn(),
+          remove: vi.fn()
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      loadStoredRootHandle: vi.fn().mockResolvedValue(undefined),
+      queryRootPermission: vi.fn(),
+      requestRootPermission: vi.fn(),
+      ensureRootSentinel: vi.fn(),
+      storeRootHandleWithSentinel: vi.fn(),
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Save Trace Snapshot" })
+      );
+
+      expect(await screen.findByText("Trace save failed.")).toBeTruthy();
+      const saveTraceButton = screen.getByRole("button", {
+        name: "Save Trace Snapshot"
+      });
+      expect((saveTraceButton as HTMLButtonElement).disabled).toBe(false);
     } finally {
       options.unmount();
     }

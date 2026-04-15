@@ -1,8 +1,8 @@
 import { SERVER_HEARTBEAT_INTERVAL_MS } from "./constants.js";
+import type { ChromeApi } from "./chrome-api.js";
 import type {
   BackgroundServerInfo,
-  BackgroundState,
-  ChromeApi
+  BackgroundState
 } from "./background-runtime-shared.js";
 import {
   isServerCacheFresh,

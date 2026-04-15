@@ -179,6 +179,15 @@ describe("root handle helpers", () => {
     ).resolves.toBe("granted");
   });
 
+  it("returns prompt when a handle does not implement permission methods", async () => {
+    const rootHandle = {
+      kind: "directory"
+    } as unknown as FileSystemDirectoryHandle;
+
+    await expect(queryRootPermission(rootHandle)).resolves.toBe("prompt");
+    await expect(requestRootPermission(rootHandle)).resolves.toBe("prompt");
+  });
+
   it("stores the root handle after ensuring a sentinel", async () => {
     const rootHandle = new MockDirectoryHandle();
 

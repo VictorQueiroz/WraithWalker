@@ -6,8 +6,10 @@ import type {
   SiteConfigsResult
 } from "./messages.js";
 import type {
+  ChromeApi
+} from "./chrome-api.js";
+import type {
   BackgroundState,
-  ChromeApi,
   BackgroundServerInfo
 } from "./background-runtime-shared.js";
 import {

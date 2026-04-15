@@ -7,6 +7,7 @@ import {
   buildEditorAppUrl,
   buildEditorLaunchUrl,
   getEditorLaunchOverride,
+  normalizeEditorLaunchOverrides,
   normalizeNativeHostConfig,
   normalizePreferredEditorId,
   resolveEditorLaunch,
@@ -43,6 +44,19 @@ describe("editor launch helpers", () => {
     });
   });
 
+  it("prefers launchPath over legacy rootPath and defaults invalid host values", () => {
+    expect(
+      normalizeNativeHostConfig({
+        hostName: 42,
+        launchPath: "/tmp/launch-path",
+        rootPath: "/tmp/legacy-root"
+      })
+    ).toEqual({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      launchPath: "/tmp/launch-path"
+    });
+  });
+
   it("does not keep empty or invalid launch overrides", () => {
     expect(
       normalizeNativeHostConfig({
@@ -54,6 +68,33 @@ describe("editor launch helpers", () => {
         }
       })
     ).toEqual(DEFAULT_NATIVE_HOST_CONFIG);
+  });
+
+  it("drops invalid override entries and keeps valid partial overrides", () => {
+    expect(
+      normalizeEditorLaunchOverrides({
+        cursor: null,
+        vscode: "invalid",
+        windsurf: {
+          commandTemplate: '  windsurf --folder "$DIR"  '
+        },
+        antigravity: {
+          commandTemplate: "",
+          urlTemplate: "antigravity://file/$DIR_URI/"
+        },
+        empty: {
+          commandTemplate: "   ",
+          urlTemplate: ""
+        }
+      })
+    ).toEqual({
+      windsurf: {
+        commandTemplate: 'windsurf --folder "$DIR"'
+      },
+      antigravity: {
+        urlTemplate: "antigravity://file/$DIR_URI/"
+      }
+    });
   });
 
   it("keeps explicit preferred-editor overrides instead of overwriting them with legacy globals", () => {
@@ -77,6 +118,56 @@ describe("editor launch helpers", () => {
         cursor: {
           commandTemplate: 'custom "$DIR"',
           urlTemplate: "custom://workspace?folder=$DIR_COMPONENT"
+        }
+      }
+    });
+  });
+
+  it("fills only a missing command override from legacy config without overwriting an explicit url override", () => {
+    expect(
+      normalizeNativeHostConfig(
+        {
+          commandTemplate: 'legacy "$DIR"',
+          urlTemplate: "legacy://workspace?folder=$DIR_COMPONENT",
+          editorLaunchOverrides: {
+            cursor: {
+              urlTemplate: "custom://workspace?folder=$DIR_COMPONENT"
+            }
+          }
+        },
+        "cursor"
+      )
+    ).toEqual({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      editorLaunchOverrides: {
+        cursor: {
+          commandTemplate: 'legacy "$DIR"',
+          urlTemplate: "custom://workspace?folder=$DIR_COMPONENT"
+        }
+      }
+    });
+  });
+
+  it("fills only a missing url override from legacy config without overwriting an explicit command override", () => {
+    expect(
+      normalizeNativeHostConfig(
+        {
+          commandTemplate: 'legacy "$DIR"',
+          urlTemplate: "legacy://workspace?folder=$DIR_COMPONENT",
+          editorLaunchOverrides: {
+            cursor: {
+              commandTemplate: 'custom "$DIR"'
+            }
+          }
+        },
+        "cursor"
+      )
+    ).toEqual({
+      ...DEFAULT_NATIVE_HOST_CONFIG,
+      editorLaunchOverrides: {
+        cursor: {
+          commandTemplate: 'custom "$DIR"',
+          urlTemplate: "legacy://workspace?folder=$DIR_COMPONENT"
         }
       }
     });
@@ -202,5 +293,11 @@ describe("editor launch helpers", () => {
     expect(buildCursorPromptUrl(promptText)).toContain(
       "cursor://anysphere.cursor-deeplink/prompt?text="
     );
+  });
+
+  it("uses an empty-origin fallback in the Cursor workspace brief", () => {
+    const promptText = buildCursorPromptText([]);
+
+    expect(promptText).toContain("Selected origins: none selected yet.");
   });
 });

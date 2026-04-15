@@ -39,6 +39,10 @@ import {
   isValidDumpAllowlistPatterns
 } from "../lib/site-config.js";
 import type {
+  MessageRuntimeApi,
+  OptionsChromeApi
+} from "../lib/chrome-api.js";
+import type {
   NativeHostConfig,
   RootSentinel,
   SessionSnapshot,
@@ -58,20 +62,7 @@ import {
   Separator,
   Textarea
 } from "./components.js";
-
-interface PermissionsApi {
-  request(options: { origins: string[] }): Promise<boolean>;
-  remove(options: { origins: string[] }): Promise<boolean>;
-}
-
-interface RuntimeApi {
-  sendMessage(message: BackgroundMessage): Promise<unknown>;
-}
-
-interface ChromeApi {
-  permissions: PermissionsApi;
-  runtime: RuntimeApi;
-}
+import { withSwitchDialogTargetName } from "./options-app.helpers.js";
 
 interface RootState {
   hasHandle: boolean;
@@ -248,7 +239,7 @@ function buildDiffPreview(diff: FixtureDiff): string[] {
 
 export interface OptionsAppProps {
   windowRef?: Window;
-  chromeApi: ChromeApi;
+  chromeApi: OptionsChromeApi;
   getNativeHostConfig: () => Promise<NativeHostConfig>;
   getSiteConfigs: () => Promise<SiteConfig[]>;
   setNativeHostConfig: (nativeHostConfig: NativeHostConfig) => Promise<void>;
@@ -269,7 +260,7 @@ function getErrorMessage(result: { error?: string }): string {
 }
 
 function sendMessage<T>(
-  runtime: RuntimeApi,
+  runtime: MessageRuntimeApi,
   message: BackgroundMessage
 ): Promise<T> {
   return runtime.sendMessage(message) as Promise<T>;
@@ -974,34 +965,32 @@ export function OptionsApp({
   }
 
   async function handleConfirmSwitchScenario() {
-    if (!switchDialog) {
-      return;
-    }
-
-    setFlash(null);
-    setSwitchBusyName(switchDialog.targetName);
-    try {
-      const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
-        type: "scenario.switch",
-        name: switchDialog.targetName
-      });
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
+    return withSwitchDialogTargetName(switchDialog, async (switchTargetName) => {
+      setFlash(null);
+      setSwitchBusyName(switchTargetName);
+      try {
+        const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
+          type: "scenario.switch",
+          name: switchTargetName
+        });
+        if (!result.ok) {
+          throw new Error(getErrorMessage(result as ErrorResult));
+        }
+        setSwitchDialog(null);
+        await refreshScenarios();
+        setFlash({
+          variant: "success",
+          text: `Switched to "${result.name}".`
+        });
+      } catch (error) {
+        setFlash({
+          variant: "destructive",
+          text: error instanceof Error ? error.message : String(error)
+        });
+      } finally {
+        setSwitchBusyName(null);
       }
-      setSwitchDialog(null);
-      await refreshScenarios();
-      setFlash({
-        variant: "success",
-        text: `Switched to "${result.name}".`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    } finally {
-      setSwitchBusyName(null);
-    }
+    });
   }
 
   const rootActionLabel = !rootState?.hasHandle

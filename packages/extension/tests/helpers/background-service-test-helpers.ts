@@ -1,104 +1,14 @@
 import { vi } from "vitest";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../../src/lib/constants.js";
-import type {
-  BackgroundState,
-  ChromeApi
-} from "../../src/lib/background-runtime-shared.js";
+import type { BackgroundState } from "../../src/lib/background-runtime-shared.js";
 import type { WraithWalkerServerClient } from "../../src/lib/wraithwalker-server.js";
-
-function createEvent() {
-  const listeners: Array<(...args: any[]) => unknown> = [];
-  return {
-    listeners,
-    addListener: vi.fn((listener) => {
-      listeners.push(listener);
-    })
-  };
-}
-
-export function createChromeApi(): ChromeApi & {
-  runtime: ChromeApi["runtime"] & {
-    sendMessage: ReturnType<typeof vi.fn>;
-    sendNativeMessage: ReturnType<typeof vi.fn>;
-    getContexts: ReturnType<typeof vi.fn>;
-  };
-  debugger: ChromeApi["debugger"] & {
-    attach: ReturnType<typeof vi.fn>;
-    sendCommand: ReturnType<typeof vi.fn>;
-    detach: ReturnType<typeof vi.fn>;
-  };
-  tabs: ChromeApi["tabs"] & {
-    query: ReturnType<typeof vi.fn>;
-    create: ReturnType<typeof vi.fn>;
-  };
-  offscreen: ChromeApi["offscreen"] & {
-    createDocument: ReturnType<typeof vi.fn>;
-    closeDocument: ReturnType<typeof vi.fn>;
-  };
-  alarms: NonNullable<ChromeApi["alarms"]> & {
-    create: ReturnType<typeof vi.fn>;
-    clear: ReturnType<typeof vi.fn>;
-  };
-  permissions: NonNullable<ChromeApi["permissions"]> & {
-    request: ReturnType<typeof vi.fn>;
-    remove: ReturnType<typeof vi.fn>;
-  };
-  contextMenus: NonNullable<ChromeApi["contextMenus"]> & {
-    create: ReturnType<typeof vi.fn>;
-    removeAll: ReturnType<typeof vi.fn>;
-  };
-} {
-  return {
-    runtime: {
-      getURL: vi.fn((path) => path),
-      getManifest: vi.fn(() => ({ version: "0.1.0" })),
-      sendMessage: vi.fn(),
-      sendNativeMessage: vi.fn(),
-      onMessage: createEvent(),
-      onStartup: createEvent(),
-      onInstalled: createEvent(),
-      getContexts: vi.fn().mockResolvedValue([])
-    },
-    debugger: {
-      attach: vi.fn(),
-      sendCommand: vi.fn(),
-      detach: vi.fn(),
-      onEvent: createEvent(),
-      onDetach: createEvent()
-    },
-    tabs: {
-      query: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 99 }),
-      onUpdated: createEvent(),
-      onRemoved: createEvent()
-    },
-    storage: {
-      onChanged: createEvent()
-    },
-    offscreen: {
-      createDocument: vi.fn(),
-      closeDocument: vi.fn(),
-      Reason: {
-        BLOBS: "BLOBS"
-      }
-    },
-    alarms: {
-      create: vi.fn(),
-      clear: vi.fn().mockResolvedValue(true),
-      onAlarm: createEvent()
-    },
-    permissions: {
-      request: vi.fn().mockResolvedValue(true),
-      remove: vi.fn().mockResolvedValue(true)
-    },
-    contextMenus: {
-      create: vi.fn(),
-      removeAll: vi.fn().mockResolvedValue(undefined),
-      onClicked: createEvent()
-    }
-  };
-}
+export {
+  createTestChromeApi,
+  installTestChromeApi,
+  type TestChromeApi,
+  type TestChromeApiOverrides
+} from "./chrome-api-test-helpers.js";
 
 export function createMockServerClient(
   overrides: Partial<WraithWalkerServerClient> = {}
