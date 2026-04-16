@@ -1,5 +1,16 @@
 # @wraithwalker/extension
 
+## 0.3.0
+
+### Minor Changes
+
+- 1cb5eb8: Improve the extension's daily capture flow with clearer readiness guidance in the popup and Settings, canonicalize duplicate origins at extension config boundaries, prevent duplicate whitelist writes, and ship the built extension with React's production runtime.
+
+### Patch Changes
+
+- Updated dependencies [1cb5eb8]
+  - @wraithwalker/core@2.2.1
+
 ## 0.2.1
 
 ### Patch Changes
