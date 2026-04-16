@@ -1332,7 +1332,7 @@ describe("popup entrypoint", () => {
     const setIntervalFn = ((handler: TimerHandler) => {
       intervalHandler = handler as () => void;
       return intervalId;
-    }) as typeof setInterval;
+    }) as unknown as typeof setInterval;
     const clearIntervalFn = vi.fn() as typeof clearInterval;
     const chromeApi = createTestChromeApi();
     const getSystemInfo = vi
