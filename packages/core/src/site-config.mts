@@ -6,8 +6,10 @@ export interface SiteConfig {
   dumpAllowlistPatterns: string[];
 }
 
-type RawSiteConfig = Partial<SiteConfig> & {
+type RawSiteConfig = {
   origin: string;
+  createdAt?: string;
+  dumpAllowlistPatterns?: readonly string[] | string[];
   dumpAllowlistPattern?: string;
 };
 
@@ -101,7 +103,7 @@ function mergeDumpAllowlistPatterns(
 }
 
 export function normalizeSiteConfigs(
-  siteConfigs: RawSiteConfig[]
+  siteConfigs: readonly RawSiteConfig[]
 ): SiteConfig[] {
   const merged = new Map<string, SiteConfig>();
 
