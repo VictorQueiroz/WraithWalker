@@ -1,5 +1,11 @@
 # @wraithwalker/extension
 
+## 0.3.1
+
+### Patch Changes
+
+- 93bbadb: Polish the extension popup with a cleaner dark-mode presentation and keep an already-open popup in sync when the local WraithWalker server comes online.
+
 ## 0.3.0
 
 ### Minor Changes
