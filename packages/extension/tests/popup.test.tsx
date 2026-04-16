@@ -152,7 +152,9 @@ describe("popup entrypoint", () => {
           .closest("div")
           ?.className.includes("min-h-12")
       ).toBe(true);
-      expect(screen.getByText("Open in Cursor to jump into the workspace.")).toBeTruthy();
+      expect(
+        screen.getByText("Open in Cursor to jump into the workspace.")
+      ).toBeTruthy();
       expect(
         screen
           .getByText("Open in Cursor to jump into the workspace.")
@@ -746,7 +748,9 @@ describe("popup entrypoint", () => {
         type: "native.revealRoot"
       });
       expect(
-        await screen.findByText("Opened the workspace folder in the OS file manager.")
+        await screen.findByText(
+          "Opened the workspace folder in the OS file manager."
+        )
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -966,7 +970,9 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Open in folder" })
       );
       expect(
-        await screen.findByText("Opened the workspace folder in the OS file manager.")
+        await screen.findByText(
+          "Opened the workspace folder in the OS file manager."
+        )
       ).toBeTruthy();
 
       expect(serverClient.revealRoot).toHaveBeenCalledTimes(1);
@@ -1301,7 +1307,9 @@ describe("popup entrypoint", () => {
         )
       ).toBeNull();
       expect(
-        screen.queryByText(/Server Root|Remembered Browser Root|\/tmp\/server-root/)
+        screen.queryByText(
+          /Server Root|Remembered Browser Root|\/tmp\/server-root/
+        )
       ).toBeNull();
       expect(
         await screen.findByRole("button", { name: "Open in folder" })
@@ -1511,7 +1519,9 @@ describe("popup entrypoint", () => {
       await flushPromises();
 
       expect(
-        await screen.findByText("Opened the workspace folder in the OS file manager.")
+        await screen.findByText(
+          "Opened the workspace folder in the OS file manager."
+        )
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -1709,9 +1719,13 @@ describe("popup entrypoint", () => {
           "Choose Root Directory in Settings before starting capture."
         )
       ).toHaveLength(1);
-      expect(screen.queryByText("Next: Choose Root Directory in Settings.")).toBeNull();
       expect(
-        screen.queryByText("Choose Root Directory in Settings to open the workspace.")
+        screen.queryByText("Next: Choose Root Directory in Settings.")
+      ).toBeNull();
+      expect(
+        screen.queryByText(
+          "Choose Root Directory in Settings to open the workspace."
+        )
       ).toBeNull();
       expect(
         chooseRootAlert.closest("div")?.className.includes("bg-muted/60")

@@ -67,7 +67,9 @@ function resolvePopupSummaryText({
   startBlockReason
 }: {
   snapshot: SessionSnapshot | null;
-  startBlockReason: ReturnType<typeof deriveWorkspaceReadiness>["startBlockReason"];
+  startBlockReason: ReturnType<
+    typeof deriveWorkspaceReadiness
+  >["startBlockReason"];
 }): string | null {
   if (!snapshot) {
     return "Checking workspace status...";
@@ -93,7 +95,9 @@ function resolvePopupOpenHint({
   startBlockReason
 }: {
   editorLabel: string;
-  startBlockReason: ReturnType<typeof deriveWorkspaceReadiness>["startBlockReason"];
+  startBlockReason: ReturnType<
+    typeof deriveWorkspaceReadiness
+  >["startBlockReason"];
 }): string | null {
   if (startBlockReason === "missing_root") {
     return null;
@@ -335,7 +339,8 @@ export function PopupApp({
             <div
               className={cn(
                 "flex min-h-12 items-center justify-between rounded-lg border border-border/70 bg-card/70 px-2.5 py-2",
-                workspaceStatus.enabledOriginCount === 0 && "text-muted-foreground"
+                workspaceStatus.enabledOriginCount === 0 &&
+                  "text-muted-foreground"
               )}
             >
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
