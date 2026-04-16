@@ -1,3 +1,4 @@
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -211,5 +212,23 @@ describe("rewriteIdbSpecifiers", () => {
   it("leaves source unchanged when there are no idb imports", () => {
     const input = 'import { something } from "./other.js";';
     expect(rewriteIdbSpecifiers(input)).toBe(input);
+  });
+});
+
+describe("built extension runtime", () => {
+  it("does not ship React development runtime markers in popup and options bundles", async () => {
+    const popupBundle = await fs.readFile(
+      path.join(process.cwd(), "dist", "popup.js"),
+      "utf-8"
+    );
+    const optionsBundle = await fs.readFile(
+      path.join(process.cwd(), "dist", "options.js"),
+      "utf-8"
+    );
+
+    for (const bundle of [popupBundle, optionsBundle]) {
+      expect(bundle).not.toContain("react.development.js");
+      expect(bundle).not.toContain("jsxDEVImpl");
+    }
   });
 });

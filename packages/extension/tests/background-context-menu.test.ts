@@ -255,6 +255,51 @@ describe("background context menu", () => {
     expect(setLastError).toHaveBeenLastCalledWith("");
   });
 
+  it("treats a stale whitelist click for an already-enabled origin as a no-op sync", async () => {
+    const { chromeApi, authority, contextMenu, setLastError } =
+      createContextMenuHarness({
+        authority: createAuthorityStub({
+          readConfiguredSiteConfigsForAuthority: vi.fn().mockResolvedValue({
+            ok: true,
+            siteConfigs: [
+              {
+                origin: "https://docs.example.com",
+                createdAt: "2026-04-10T00:00:00.000Z",
+                dumpAllowlistPatterns: ["\\.js$"]
+              }
+            ],
+            sentinel: { rootId: "root-1" }
+          })
+        })
+      });
+
+    await contextMenu.handleContextMenuClicked(
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 4,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+
+    expect(chromeApi.permissions.request).toHaveBeenCalledWith({
+      origins: ["https://docs.example.com/*"]
+    });
+    expect(
+      authority.writeConfiguredSiteConfigsForAuthority
+    ).not.toHaveBeenCalled();
+    expect(chromeApi.contextMenus.update).toHaveBeenLastCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: UNWHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
+    expect(setLastError).toHaveBeenLastCalledWith("");
+  });
+
   it("still updates the whitelist when menu updates are unavailable during a click action", async () => {
     const { authority, contextMenu, setLastError } = createContextMenuHarness({
       chromeApi: createTestChromeApi({

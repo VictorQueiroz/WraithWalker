@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node --import tsx scripts/build.ts",
-    "test": "npm run build && vitest run --coverage",
+    "test": "npm run build && node --eval \"require('node:fs').mkdirSync('coverage/.tmp', { recursive: true })\" && vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
     "lint": "eslint . --max-warnings 0",

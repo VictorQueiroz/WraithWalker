@@ -80,6 +80,34 @@ export type PopupStartBlockReason =
   | "missing_root"
   | null;
 
+export type PrimaryNextAction =
+  | "checking"
+  | "choose_root"
+  | "reconnect_root"
+  | "add_origin"
+  | "start_session"
+  | "session_active";
+
+export interface WorkspaceReadinessItem {
+  id: "active_root" | "enabled_origins" | "open_in_editor" | "current_session";
+  label: string;
+  value: string;
+  state: "ready" | "needs_attention" | "info";
+  text: string;
+}
+
+export interface WorkspaceReadiness {
+  canStartCapture: boolean;
+  startBlockReason: PopupStartBlockReason;
+  primaryNextAction: PrimaryNextAction;
+  primaryNextActionLabel: string;
+  primaryNextActionText: string;
+  primaryNextActionVariant: PopupAlertState["variant"];
+  summaryText: string;
+  openActionHint: string;
+  items: WorkspaceReadinessItem[];
+}
+
 export function deriveCaptureRootState({
   hasHandle,
   permission
@@ -187,15 +215,315 @@ export function derivePopupStartBlockReason({
     return null;
   }
 
-  if (!workspaceStatus.enabledOriginCount) {
-    return "missing_origins";
-  }
-
   if (workspaceStatus.authority === "none") {
     return "missing_root";
   }
 
+  if (!workspaceStatus.enabledOriginCount) {
+    return "missing_origins";
+  }
+
   return null;
+}
+
+function buildRootReadinessItem(
+  workspaceStatus: WorkspaceStatus
+): WorkspaceReadinessItem {
+  if (workspaceStatus.authority === "server") {
+    return {
+      id: "active_root",
+      label: "Active Root",
+      value: "Server Root",
+      state: "ready",
+      text: "Capture is using Server Root right now."
+    };
+  }
+
+  if (workspaceStatus.authority === "browser_root") {
+    return {
+      id: "active_root",
+      label: "Active Root",
+      value: "Remembered Browser Root",
+      state: "ready",
+      text: "Capture is using Remembered Browser Root right now."
+    };
+  }
+
+  return {
+    id: "active_root",
+    label: "Active Root",
+    value: "No Active Root",
+    state: "needs_attention",
+    text:
+      workspaceStatus.rememberedRootState.kind === "permission_required"
+        ? "Reconnect Root Directory to restore Remembered Browser Root."
+        : "Choose Root Directory to set Remembered Browser Root."
+  };
+}
+
+function buildOriginReadinessItem(
+  workspaceStatus: WorkspaceStatus
+): WorkspaceReadinessItem {
+  return workspaceStatus.enabledOriginCount > 0
+    ? {
+        id: "enabled_origins",
+        label: "Enabled Origins",
+        value: `${workspaceStatus.enabledOriginCount} enabled`,
+        state: "ready",
+        text:
+          workspaceStatus.enabledOriginCount === 1
+            ? "Capture can use this origin right now."
+            : "Capture can use these origins right now."
+      }
+    : {
+        id: "enabled_origins",
+        label: "Enabled Origins",
+        value: "0 enabled",
+        state: "needs_attention",
+        text: "Add your first origin below."
+      };
+}
+
+function buildEditorReadinessItem({
+  workspaceStatus,
+  editorLaunchState,
+  editorLabel
+}: {
+  workspaceStatus: WorkspaceStatus;
+  editorLaunchState?: EditorLaunchState | null;
+  editorLabel: string;
+}): WorkspaceReadinessItem {
+  if (workspaceStatus.authority === "none") {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Waiting on root",
+      state: "needs_attention",
+      text: `Choose or reconnect a root before opening it in ${editorLabel}.`
+    };
+  }
+
+  if (workspaceStatus.authority === "server") {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Uses Server Root",
+      state: "ready",
+      text: `Open in ${editorLabel} will target Server Root.`
+    };
+  }
+
+  if (!editorLaunchState) {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Checking…",
+      state: "info",
+      text: "Loading launch settings."
+    };
+  }
+
+  if (editorLaunchState.kind === "missing_launch_path") {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Needs launch path",
+      state: "needs_attention",
+      text: "Set Shared Editor Launch Path in Advanced Native Host to open Remembered Browser Root directly."
+    };
+  }
+
+  if (editorLaunchState.kind === "missing_native_host") {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Needs host or URL override",
+      state: "needs_attention",
+      text: "Add a native host name or a custom URL override in Advanced Native Host."
+    };
+  }
+
+  if (editorLaunchState.kind === "ready_via_url_app") {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Prompt handoff",
+      state: "ready",
+      text: `Open in ${editorLabel} can launch and send the workspace brief even without a direct local-folder path.`
+    };
+  }
+
+  if (editorLaunchState.kind === "verification_required") {
+    return {
+      id: "open_in_editor",
+      label: `Open in ${editorLabel}`,
+      value: "Ready",
+      state: "ready",
+      text: `Open in ${editorLabel} will verify the helper on first use if needed.`
+    };
+  }
+
+  return {
+    id: "open_in_editor",
+    label: `Open in ${editorLabel}`,
+    value: "Uses Remembered Browser Root",
+    state: "ready",
+    text: `Open in ${editorLabel} will use Remembered Browser Root.`
+  };
+}
+
+function buildSessionReadinessItem({
+  snapshot,
+  workspaceStatus,
+  startBlockReason
+}: {
+  snapshot: SessionSnapshot | null;
+  workspaceStatus: WorkspaceStatus;
+  startBlockReason: PopupStartBlockReason;
+}): WorkspaceReadinessItem {
+  if (!snapshot) {
+    return {
+      id: "current_session",
+      label: "Current Session",
+      value: "Loading…",
+      state: "info",
+      text: "Checking workspace status."
+    };
+  }
+
+  if (snapshot.sessionActive) {
+    return {
+      id: "current_session",
+      label: "Current Session",
+      value: "Active",
+      state: "ready",
+      text: `Capture is active in ${workspaceStatus.authorityLabel}.`
+    };
+  }
+
+  if (startBlockReason === "missing_origins") {
+    return {
+      id: "current_session",
+      label: "Current Session",
+      value: "Idle",
+      state: "needs_attention",
+      text: "Add your first origin before starting capture."
+    };
+  }
+
+  if (startBlockReason === "missing_root") {
+    return {
+      id: "current_session",
+      label: "Current Session",
+      value: "Idle",
+      state: "needs_attention",
+      text:
+        workspaceStatus.rememberedRootState.kind === "permission_required"
+          ? "Reconnect Root Directory before starting capture."
+          : "Choose Root Directory before starting capture."
+    };
+  }
+
+  return {
+    id: "current_session",
+    label: "Current Session",
+    value: "Idle",
+    state: "ready",
+    text: "Start Session from the popup when you're ready."
+  };
+}
+
+export function deriveWorkspaceReadiness({
+  snapshot,
+  workspaceStatus,
+  editorLaunchState,
+  editorLabel = "Cursor"
+}: {
+  snapshot: SessionSnapshot | null;
+  workspaceStatus: WorkspaceStatus;
+  editorLaunchState?: EditorLaunchState | null;
+  editorLabel?: string;
+}): WorkspaceReadiness {
+  const startBlockReason = derivePopupStartBlockReason({
+    snapshot,
+    workspaceStatus
+  });
+  const openActionHint =
+    workspaceStatus.authority === "server"
+      ? `Open in ${editorLabel} uses Server Root.`
+      : workspaceStatus.authority === "browser_root"
+        ? `Open in ${editorLabel} uses Remembered Browser Root.`
+        : "Choose Root Directory in Settings to give WraithWalker a remembered workspace.";
+
+  let primaryNextAction: PrimaryNextAction;
+  let primaryNextActionLabel: string;
+  let primaryNextActionText: string;
+  let primaryNextActionVariant: PopupAlertState["variant"];
+  let summaryText: string;
+
+  if (!snapshot) {
+    primaryNextAction = "checking";
+    primaryNextActionLabel = "Checking";
+    primaryNextActionText = "Checking which workspace is active right now.";
+    primaryNextActionVariant = "default";
+    summaryText = "Checking workspace status...";
+  } else if (snapshot.sessionActive) {
+    primaryNextAction = "session_active";
+    primaryNextActionLabel = "Live";
+    primaryNextActionText = `Capture is active in ${workspaceStatus.authorityLabel}.`;
+    primaryNextActionVariant = "success";
+    summaryText = `Capture is active in ${workspaceStatus.authorityLabel}.`;
+  } else if (startBlockReason === "missing_origins") {
+    primaryNextAction = "add_origin";
+    primaryNextActionLabel = "Next";
+    primaryNextActionText = "Add your first origin so capture can start.";
+    primaryNextActionVariant = "default";
+    summaryText = "Next: Add your first origin in Settings.";
+  } else if (startBlockReason === "missing_root") {
+    const permissionRequired =
+      workspaceStatus.rememberedRootState.kind === "permission_required";
+    primaryNextAction = permissionRequired ? "reconnect_root" : "choose_root";
+    primaryNextActionLabel = "Next";
+    primaryNextActionText = permissionRequired
+      ? "Reconnect Root Directory so the Remembered Browser Root can be used again."
+      : "Choose Root Directory so WraithWalker has a remembered browser workspace.";
+    primaryNextActionVariant = permissionRequired ? "destructive" : "default";
+    summaryText = permissionRequired
+      ? "Next: Reconnect Root Directory in Settings."
+      : "Next: Choose Root Directory in Settings.";
+  } else {
+    primaryNextAction = "start_session";
+    primaryNextActionLabel = "Ready";
+    primaryNextActionText = `Capture is ready in ${workspaceStatus.authorityLabel}. Start Session from the popup when you're ready.`;
+    primaryNextActionVariant = "success";
+    summaryText = `Ready to start capture in ${workspaceStatus.authorityLabel}.`;
+  }
+
+  return {
+    canStartCapture:
+      snapshot !== null && !snapshot.sessionActive && startBlockReason === null,
+    startBlockReason,
+    primaryNextAction,
+    primaryNextActionLabel,
+    primaryNextActionText,
+    primaryNextActionVariant,
+    summaryText,
+    openActionHint,
+    items: [
+      buildRootReadinessItem(workspaceStatus),
+      buildOriginReadinessItem(workspaceStatus),
+      buildEditorReadinessItem({
+        workspaceStatus,
+        editorLaunchState,
+        editorLabel
+      }),
+      buildSessionReadinessItem({
+        snapshot,
+        workspaceStatus,
+        startBlockReason
+      })
+    ]
+  };
 }
 
 export function deriveEditorLaunchState(
@@ -315,8 +643,6 @@ export function resolvePopupAlert({
   editorLaunchState: EditorLaunchState;
   actionDiagnostic?: PopupAlertState | null;
 }): PopupAlertState | null {
-  void editorLaunchState;
-
   if (actionDiagnostic) {
     return actionDiagnostic;
   }
@@ -325,9 +651,11 @@ export function resolvePopupAlert({
     snapshot,
     captureRootState
   });
-  const blockReason = derivePopupStartBlockReason({
+  const readiness = deriveWorkspaceReadiness({
     snapshot,
-    workspaceStatus
+    workspaceStatus,
+    editorLaunchState,
+    editorLabel: editorLaunchState.editorLabel
   });
 
   if (!snapshot) {
@@ -344,14 +672,14 @@ export function resolvePopupAlert({
     };
   }
 
-  if (blockReason === "missing_origins") {
+  if (readiness.startBlockReason === "missing_origins") {
     return {
       variant: "default",
       text: "Add your first origin in Settings before starting capture."
     };
   }
 
-  if (blockReason === "missing_root") {
+  if (readiness.startBlockReason === "missing_root") {
     return {
       variant:
         captureRootState.kind === "permission_required"

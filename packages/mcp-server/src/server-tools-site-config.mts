@@ -69,6 +69,10 @@ export function registerSiteConfigTools(
     extensionSessions: ReturnType<typeof createExtensionSessionTracker>;
   }
 ): void {
+  async function readConfiguredSiteConfigs(): Promise<SiteConfig[]> {
+    return normalizeSiteConfigs(await runtime.readConfiguredSiteConfigs());
+  }
+
   server.tool(
     "list-configured-sites",
     "List the explicit site config entries stored in the current WraithWalker root",
@@ -82,7 +86,7 @@ export function registerSiteConfigTools(
     },
     async ({ search }) => {
       const normalizedSearch = search?.toLowerCase();
-      const siteConfigs = await runtime.readConfiguredSiteConfigs();
+      const siteConfigs = await readConfiguredSiteConfigs();
 
       return renderJson(
         siteConfigs.filter(
@@ -112,7 +116,7 @@ export function registerSiteConfigTools(
         );
       }
 
-      const siteConfigs = await runtime.readConfiguredSiteConfigs();
+      const siteConfigs = await readConfiguredSiteConfigs();
       const existing = siteConfigs.find(
         (siteConfig) => siteConfig.origin === normalizedOrigin
       );
@@ -154,7 +158,7 @@ export function registerSiteConfigTools(
         );
       }
 
-      const siteConfigs = await runtime.readConfiguredSiteConfigs();
+      const siteConfigs = await readConfiguredSiteConfigs();
       const existing = siteConfigs.find(
         (siteConfig) => siteConfig.origin === normalizedOrigin
       );
@@ -203,7 +207,7 @@ export function registerSiteConfigTools(
         );
       }
 
-      const siteConfigs = await runtime.readConfiguredSiteConfigs();
+      const siteConfigs = await readConfiguredSiteConfigs();
       const existing = siteConfigs.find(
         (siteConfig) => siteConfig.origin === normalizedOrigin
       );
@@ -276,7 +280,7 @@ export function registerSiteConfigTools(
         );
       }
 
-      const configuredSiteConfigs = await runtime.readConfiguredSiteConfigs();
+      const configuredSiteConfigs = await readConfiguredSiteConfigs();
       const existing = configuredSiteConfigs.find(
         (siteConfig) => siteConfig.origin === normalizedOrigin
       );

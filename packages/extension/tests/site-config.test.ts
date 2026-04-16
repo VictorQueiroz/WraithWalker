@@ -10,6 +10,7 @@ import {
   isValidDumpAllowlistPatterns,
   normalizeDumpAllowlistPatterns,
   normalizeSiteConfig,
+  normalizeSiteConfigs,
   shouldDumpRequest
 } from "../src/lib/site-config.js";
 import type { SiteConfig } from "../src/lib/types.js";
@@ -79,6 +80,41 @@ describe("site config", () => {
       } as any);
 
       expect(config.dumpAllowlistPatterns).toEqual(["\\.js$"]);
+    });
+  });
+
+  describe("normalizeSiteConfigs", () => {
+    it("collapses normalized duplicates, preserves the earliest createdAt, merges patterns, and sorts by origin", () => {
+      expect(
+        normalizeSiteConfigs([
+          {
+            origin: "zeta.example.com",
+            createdAt: "2026-04-10T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.css$"]
+          },
+          {
+            origin: "app.example.com",
+            createdAt: "2026-04-09T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+          }
+        ])
+      ).toEqual([
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        },
+        {
+          origin: "https://zeta.example.com",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        }
+      ]);
     });
   });
 

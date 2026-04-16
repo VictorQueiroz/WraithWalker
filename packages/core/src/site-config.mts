@@ -6,6 +6,11 @@ export interface SiteConfig {
   dumpAllowlistPatterns: string[];
 }
 
+type RawSiteConfig = Partial<SiteConfig> & {
+  origin: string;
+  dumpAllowlistPattern?: string;
+};
+
 export const DEFAULT_DUMP_ALLOWLIST_PATTERN = "\\.m?(js|ts)x?$";
 export const DEFAULT_DUMP_ALLOWLIST_PATTERNS: string[] = [
   DEFAULT_DUMP_ALLOWLIST_PATTERN,
@@ -52,11 +57,7 @@ export function normalizeDumpAllowlistPatterns(patterns: unknown): string[] {
   return [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
 }
 
-export function normalizeSiteConfig(
-  siteConfig: Partial<SiteConfig> & { origin: string } & {
-    dumpAllowlistPattern?: string;
-  }
-): SiteConfig {
+export function normalizeSiteConfig(siteConfig: RawSiteConfig): SiteConfig {
   const rawPatterns =
     siteConfig.dumpAllowlistPatterns ?? siteConfig.dumpAllowlistPattern;
 
@@ -70,14 +71,65 @@ export function normalizeSiteConfig(
   };
 }
 
+function isEarlierCreatedAt(candidate: string, current: string): boolean {
+  const candidateTime = Date.parse(candidate);
+  const currentTime = Date.parse(current);
+
+  if (Number.isFinite(candidateTime) && Number.isFinite(currentTime)) {
+    return candidateTime < currentTime;
+  }
+
+  if (Number.isFinite(candidateTime)) {
+    return true;
+  }
+
+  if (Number.isFinite(currentTime)) {
+    return false;
+  }
+
+  return candidate < current;
+}
+
+function mergeDumpAllowlistPatterns(
+  current: string[],
+  incoming: string[]
+): string[] {
+  return [
+    ...current,
+    ...incoming.filter((pattern) => !current.includes(pattern))
+  ];
+}
+
 export function normalizeSiteConfigs(
-  siteConfigs: Array<
-    Partial<SiteConfig> & { origin: string } & { dumpAllowlistPattern?: string }
-  >
+  siteConfigs: RawSiteConfig[]
 ): SiteConfig[] {
-  return siteConfigs
-    .map(normalizeSiteConfig)
-    .sort((left, right) => left.origin.localeCompare(right.origin));
+  const merged = new Map<string, SiteConfig>();
+
+  for (const siteConfig of siteConfigs.map(normalizeSiteConfig)) {
+    const existing = merged.get(siteConfig.origin);
+    if (!existing) {
+      merged.set(siteConfig.origin, {
+        ...siteConfig,
+        dumpAllowlistPatterns: [...siteConfig.dumpAllowlistPatterns]
+      });
+      continue;
+    }
+
+    merged.set(siteConfig.origin, {
+      origin: siteConfig.origin,
+      createdAt: isEarlierCreatedAt(siteConfig.createdAt, existing.createdAt)
+        ? siteConfig.createdAt
+        : existing.createdAt,
+      dumpAllowlistPatterns: mergeDumpAllowlistPatterns(
+        existing.dumpAllowlistPatterns,
+        siteConfig.dumpAllowlistPatterns
+      )
+    });
+  }
+
+  return [...merged.values()].sort((left, right) =>
+    left.origin.localeCompare(right.origin)
+  );
 }
 
 export function createSiteConfig(originInput: string): SiteConfig {
@@ -123,7 +175,7 @@ export function mergeSiteConfigs(
     );
   }
 
-  for (const config of explicitSiteConfigs) {
+  for (const config of normalizeSiteConfigs(explicitSiteConfigs)) {
     merged.set(config.origin, {
       ...config,
       dumpAllowlistPatterns: [...config.dumpAllowlistPatterns]

@@ -308,6 +308,54 @@ describe("background context menu runtime", () => {
     );
   });
 
+  it("treats duplicate normalized origins as one whitelisted site and removes them through a deduped write", async () => {
+    const { chromeApi, getConfiguredSiteConfigs } = await createLocalRuntime({
+      activeTabUrl: "https://docs.example.com/dashboard",
+      configuredSiteConfigs: [
+        createSiteConfig("docs.example.com"),
+        {
+          origin: "https://docs.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    await waitForExpectation(() => {
+      expect(chromeApi.contextMenus.update).toHaveBeenCalledWith(
+        WHITELIST_SITE_MENU_ID,
+        {
+          title: UNWHITELIST_SITE_MENU_TITLE,
+          enabled: true
+        }
+      );
+    });
+
+    chromeApi.contextMenus.onClicked.listeners[0](
+      {
+        menuItemId: WHITELIST_SITE_MENU_ID,
+        pageUrl: "https://docs.example.com/page"
+      },
+      {
+        id: 12,
+        url: "https://docs.example.com/dashboard"
+      }
+    );
+    await flushPromises();
+
+    expect(chromeApi.permissions.remove).toHaveBeenCalledWith({
+      origins: ["https://docs.example.com/*"]
+    });
+    expect(getConfiguredSiteConfigs()).toEqual([]);
+    expect(chromeApi.contextMenus.update).toHaveBeenLastCalledWith(
+      WHITELIST_SITE_MENU_ID,
+      {
+        title: WHITELIST_SITE_MENU_TITLE,
+        enabled: true
+      }
+    );
+  });
+
   it("refreshes the menu for the active tab when the activated-tab listener fires", async () => {
     const { chromeApi } = await createLocalRuntime({
       activeTabUrl: "https://docs.example.com/dashboard",

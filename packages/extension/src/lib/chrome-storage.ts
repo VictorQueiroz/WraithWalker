@@ -29,7 +29,7 @@ export async function getSiteConfigs(): Promise<SiteConfig[]> {
 }
 
 export async function setSiteConfigs(siteConfigs: SiteConfig[]): Promise<void> {
-  await storageSet({ [STORAGE_KEYS.SITES]: siteConfigs });
+  await storageSet({ [STORAGE_KEYS.SITES]: normalizeSiteConfigs(siteConfigs) });
 }
 
 export async function getLegacySiteConfigsMigrated(): Promise<boolean> {

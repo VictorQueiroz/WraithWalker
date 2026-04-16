@@ -230,11 +230,17 @@ export function createBackgroundAuthorityData({
   async function writeConfiguredSiteConfigsForAuthority(
     siteConfigs: SiteConfig[]
   ): Promise<SiteConfigsResult> {
+    const normalizedSiteConfigs = normalizeEffectiveSiteConfigs(
+      siteConfigs,
+      normalizeSiteConfigs
+    );
     const serverInfo = await serverSync.refreshServerInfo({ force: true });
     if (!serverInfo) {
       await localRoot.ensureLegacySiteConfigsMigrated();
       const result = normalizeSiteConfigsResult(
-        await localRoot.writeLocalConfiguredSiteConfigsResult(siteConfigs),
+        await localRoot.writeLocalConfiguredSiteConfigsResult(
+          normalizedSiteConfigs
+        ),
         normalizeSiteConfigs
       );
       if (result.ok) {
@@ -247,7 +253,9 @@ export function createBackgroundAuthorityData({
     }
 
     try {
-      const result = await serverClient.writeConfiguredSiteConfigs(siteConfigs);
+      const result = await serverClient.writeConfiguredSiteConfigs(
+        normalizedSiteConfigs
+      );
       await serverSync.refreshServerInfo({ force: true });
       return toSiteConfigsResult(
         result.siteConfigs ?? [],
@@ -269,7 +277,9 @@ export function createBackgroundAuthorityData({
 
       await localRoot.ensureLegacySiteConfigsMigrated();
       const result = normalizeSiteConfigsResult(
-        await localRoot.writeLocalConfiguredSiteConfigsResult(siteConfigs),
+        await localRoot.writeLocalConfiguredSiteConfigsResult(
+          normalizedSiteConfigs
+        ),
         normalizeSiteConfigs
       );
       if (result.ok) {

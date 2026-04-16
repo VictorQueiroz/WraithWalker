@@ -12,6 +12,7 @@ import {
   mergeSiteConfigs,
   normalizeDumpAllowlistPatterns,
   normalizeSiteConfig,
+  normalizeSiteConfigs,
   shouldDumpRequest
 } from "../src/site-config.mts";
 
@@ -24,6 +25,9 @@ describe("site config helpers", () => {
       "\\.js$",
       "\\.css$"
     ]);
+    expect(normalizeDumpAllowlistPatterns(["[", "   ", 42 as any])).toEqual(
+      DEFAULT_DUMP_ALLOWLIST_PATTERNS
+    );
     expect(normalizeDumpAllowlistPatterns("\\.css$")).toEqual(["\\.css$"]);
   });
 
@@ -39,6 +43,120 @@ describe("site config helpers", () => {
         dumpAllowlistPatterns: ["\\.svg$"]
       })
     );
+  });
+
+  it("canonicalizes duplicate normalized origins, preserves the earliest createdAt, merges patterns, and sorts by origin", () => {
+    expect(
+      normalizeSiteConfigs([
+        {
+          origin: "zeta.example.com",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.css$"]
+        },
+        {
+          origin: "app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ])
+    ).toEqual([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      },
+      {
+        origin: "https://zeta.example.com",
+        createdAt: "2026-04-10T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.css$"]
+      }
+    ]);
+  });
+
+  it("resolves duplicate createdAt precedence across later, valid, invalid, and lexical fallback cases", () => {
+    const cases = [
+      {
+        name: "keeps the existing earlier valid timestamp",
+        siteConfigs: [
+          {
+            origin: "app.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-09T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$"]
+          }
+        ],
+        expectedCreatedAt: "2026-04-08T00:00:00.000Z"
+      },
+      {
+        name: "prefers a valid candidate over an invalid current timestamp",
+        siteConfigs: [
+          {
+            origin: "app.example.com",
+            createdAt: "not-a-date",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$"]
+          }
+        ],
+        expectedCreatedAt: "2026-04-08T00:00:00.000Z"
+      },
+      {
+        name: "keeps a valid current timestamp over an invalid candidate",
+        siteConfigs: [
+          {
+            origin: "app.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "not-a-date",
+            dumpAllowlistPatterns: ["\\.json$"]
+          }
+        ],
+        expectedCreatedAt: "2026-04-08T00:00:00.000Z"
+      },
+      {
+        name: "falls back to lexical comparison when both timestamps are invalid",
+        siteConfigs: [
+          {
+            origin: "app.example.com",
+            createdAt: "zzz",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "aaa",
+            dumpAllowlistPatterns: ["\\.json$"]
+          }
+        ],
+        expectedCreatedAt: "aaa"
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      expect(normalizeSiteConfigs(testCase.siteConfigs), testCase.name).toEqual(
+        [
+          {
+            origin: "https://app.example.com",
+            createdAt: testCase.expectedCreatedAt,
+            dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+          }
+        ]
+      );
+    }
   });
 
   it("creates explicit and discovered site configs with the expected defaults", () => {
@@ -64,6 +182,11 @@ describe("site config helpers", () => {
     const merged = mergeSiteConfigs(
       [
         {
+          origin: "app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        },
+        {
           origin: "https://app.example.com",
           createdAt: "2026-04-08T00:00:00.000Z",
           dumpAllowlistPatterns: ["\\.svg$"]
@@ -84,7 +207,7 @@ describe("site config helpers", () => {
       {
         origin: "https://app.example.com",
         createdAt: "2026-04-08T00:00:00.000Z",
-        dumpAllowlistPatterns: ["\\.svg$"]
+        dumpAllowlistPatterns: ["\\.json$", "\\.svg$"]
       }
     ]);
   });
@@ -121,6 +244,17 @@ describe("site config helpers", () => {
     ).toBe(false);
     expect(
       shouldDumpRequest(config, "GET", "https://cdn.example.com/image.png")
+    ).toBe(false);
+    expect(shouldDumpRequest(config, "GET", "not a url")).toBe(false);
+    expect(shouldDumpRequest(config, "GET", "data:text/plain,hello")).toBe(
+      false
+    );
+    expect(
+      shouldDumpRequest(
+        config,
+        "GET",
+        "chrome-extension://extension-id/assets/app.js"
+      )
     ).toBe(false);
   });
 });

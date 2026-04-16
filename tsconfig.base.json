@@ -21,6 +21,10 @@
       "@wraithwalker/core/fixture-repository": [
         "packages/core/src/fixture-repository.mts"
       ],
+      "@wraithwalker/core/site-config": ["packages/core/src/site-config.mts"],
+      "@wraithwalker/core/project-config": [
+        "packages/core/src/project-config.mts"
+      ],
       "@wraithwalker/core/har-import": ["packages/core/src/har-import.mts"],
       "@wraithwalker/core/overrides-sync": [
         "packages/core/src/overrides-sync.mts"

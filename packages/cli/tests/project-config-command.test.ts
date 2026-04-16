@@ -223,7 +223,13 @@ describe("config command", () => {
           "sites",
           JSON.stringify([
             {
+              origin: "alpha.example.com",
+              createdAt: "2026-04-09T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            },
+            {
               origin: "https://alpha.example.com",
+              createdAt: "2026-04-08T00:00:00.000Z",
               dumpAllowlistPatterns: ["\\.json$"]
             }
           ])
@@ -241,10 +247,11 @@ describe("config command", () => {
     await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
       schemaVersion: 1,
       sites: [
-        expect.objectContaining({
+        {
           origin: "https://alpha.example.com",
-          dumpAllowlistPatterns: ["\\.json$"]
-        })
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
       ]
     });
 
@@ -259,6 +266,7 @@ describe("config command", () => {
       })
     ).toBe(0);
     expect(capture.logs.join("\n")).toContain("https://alpha.example.com");
+    expect(capture.logs.join("\n")).not.toContain('"alpha.example.com"');
 
     vi.restoreAllMocks();
     expect(
@@ -307,7 +315,7 @@ describe("config command", () => {
       sites: [
         expect.objectContaining({
           origin: "https://alpha.example.com",
-          dumpAllowlistPatterns: ["\\.json$"]
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
         })
       ]
     });
@@ -326,6 +334,66 @@ describe("config command", () => {
       schemaVersion: 1,
       sites: []
     });
+  });
+
+  it("lists and gets one canonical site when raw config contains duplicate normalized origins", async () => {
+    const { runCli } = await loadRunner();
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-cli-project-config-"
+    });
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [
+        {
+          origin: "app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    let capture = consoleCapture();
+    expect(
+      await runCli(["config", "list"], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
+    const listOutput = capture.logs.join("\n");
+    expect(
+      listOutput.match(
+        /site\."https:\/\/app\.example\.com"\.dumpAllowlistPatterns=/g
+      )
+    ).toHaveLength(1);
+    expect(listOutput).toContain(
+      'site."https://app.example.com".dumpAllowlistPatterns=["\\\\.js$","\\\\.json$"]'
+    );
+
+    vi.restoreAllMocks();
+    capture = consoleCapture();
+    expect(
+      await runCli(["config", "get", 'site."https://app.example.com"'], {
+        cwd: root.rootPath,
+        env: {},
+        homeDir: await tmpdir(),
+        platform: "linux",
+        isTTY: false
+      })
+    ).toBe(0);
+    const getOutput = capture.logs.join("\n");
+    expect(getOutput).toContain('"origin":"https://app.example.com"');
+    expect(getOutput).toContain('"createdAt":"2026-04-08T00:00:00.000Z"');
+    expect(getOutput).toContain('"dumpAllowlistPatterns":[');
+    expect(getOutput).toContain("\\\\.js$");
+    expect(getOutput).toContain("\\\\.json$");
   });
 
   it("reports missing keys and invalid values as command errors", async () => {

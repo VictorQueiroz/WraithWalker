@@ -22,8 +22,9 @@ import type {
 import type { FixtureDiff } from "@wraithwalker/core/scenarios";
 import { originToPermissionPattern } from "../lib/path-utils.js";
 import {
-  deriveWorkspaceStatus,
-  type WorkspaceStatus
+  deriveEditorLaunchState,
+  deriveWorkspaceReadiness,
+  deriveWorkspaceStatus
 } from "../lib/workspace-open-state.js";
 import {
   createRootDirectoryPickerOptions,
@@ -33,7 +34,10 @@ import {
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
-import { isValidDumpAllowlistPatterns } from "../lib/site-config.js";
+import {
+  isValidDumpAllowlistPatterns,
+  normalizeSiteConfigs
+} from "../lib/site-config.js";
 import { whitelistSiteOrigin } from "../lib/site-whitelist.js";
 import type { MessageRuntimeApi, OptionsChromeApi } from "../lib/chrome-api.js";
 import type {
@@ -301,46 +305,35 @@ function WorkspaceStatusTile({
   );
 }
 
-function getWorkspaceStatusNote(
-  workspaceStatus: WorkspaceStatus
-): FlashState | null {
-  if (workspaceStatus.sessionState === "loading") {
-    return {
-      variant: "default",
-      text: "Checking which workspace is active right now."
-    };
-  }
+function ReadinessChecklistRow({
+  label,
+  value,
+  text,
+  state
+}: {
+  label: string;
+  value: string;
+  text: string;
+  state: "ready" | "needs_attention" | "info";
+}) {
+  const badgeVariant =
+    state === "ready"
+      ? "success"
+      : state === "needs_attention"
+        ? "default"
+        : "muted";
 
-  if (!workspaceStatus.enabledOriginCount) {
-    return {
-      variant: "default",
-      text: "Next: add your first origin so capture can start."
-    };
-  }
-
-  if (workspaceStatus.authority === "none") {
-    return workspaceStatus.rememberedRootState.kind === "permission_required"
-      ? {
-          variant: "destructive",
-          text: "Next: Reconnect Root Directory so the Remembered Browser Root can be used again."
-        }
-      : {
-          variant: "default",
-          text: "Next: Choose Root Directory so WraithWalker has a remembered browser workspace."
-        };
-  }
-
-  if (
-    workspaceStatus.authority === "server" &&
-    workspaceStatus.rememberedRootState.kind === "missing_handle"
-  ) {
-    return {
-      variant: "default",
-      text: "Server Root is active. Choose Root Directory only if you want a Remembered Browser Root fallback."
-    };
-  }
-
-  return null;
+  return (
+    <div className="grid gap-2 rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <div className="flex items-center gap-2">
+          <Badge variant={badgeVariant}>{value}</Badge>
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
 }
 
 function RootStatusSummary({
@@ -597,6 +590,28 @@ export function OptionsApp({
       sessionSnapshot
     ]
   );
+  const cursorEditorLaunchState = React.useMemo(
+    () =>
+      nativeHostConfig
+        ? deriveEditorLaunchState(nativeHostConfig, cursorEditor.id)
+        : null,
+    [cursorEditor.id, nativeHostConfig]
+  );
+  const workspaceReadiness = React.useMemo(
+    () =>
+      deriveWorkspaceReadiness({
+        snapshot: sessionSnapshot,
+        workspaceStatus,
+        editorLaunchState: cursorEditorLaunchState,
+        editorLabel: cursorEditor.label
+      }),
+    [
+      cursorEditor.label,
+      cursorEditorLaunchState,
+      sessionSnapshot,
+      workspaceStatus
+    ]
+  );
 
   const refreshSessionSnapshot = React.useCallback(async () => {
     const snapshot = await sendMessage<SessionSnapshot>(chromeApi.runtime, {
@@ -607,7 +622,7 @@ export function OptionsApp({
   }, [chromeApi.runtime]);
 
   const refreshSiteConfigs = React.useCallback(async () => {
-    const nextSites = await getSiteConfigs();
+    const nextSites = normalizeSiteConfigs(await getSiteConfigs());
     setSites(nextSites);
     return nextSites;
   }, [getSiteConfigs]);
@@ -746,7 +761,7 @@ export function OptionsApp({
         throw new Error(originsBlockedMessage);
       }
 
-      const { siteConfigs: nextSites } = await whitelistSiteOrigin({
+      const result = await whitelistSiteOrigin({
         originInput: siteOriginInput,
         requestHostPermission: async (permissionPattern) =>
           chromeApi.permissions.request({
@@ -756,13 +771,20 @@ export function OptionsApp({
         writeSiteConfigs: setSiteConfigs
       });
 
-      setSites(nextSites);
-      setSiteOriginInput("");
-      await refreshSessionSnapshot();
-      setFlash({
-        variant: "success",
-        text: "Origin added and host access granted."
-      });
+      setSites(result.siteConfigs);
+      if (result.outcome === "already_enabled") {
+        setFlash({
+          variant: "default",
+          text: `Origin ${result.origin} is already enabled.`
+        });
+      } else {
+        setSiteOriginInput("");
+        await refreshSessionSnapshot();
+        setFlash({
+          variant: "success",
+          text: "Origin added and host access granted."
+        });
+      }
     } catch (error) {
       setFlash({
         variant: "destructive",
@@ -1124,7 +1146,6 @@ export function OptionsApp({
   const switchDialogPreview = switchDialog?.diff
     ? buildDiffPreview(switchDialog.diff)
     : [];
-  const workspaceStatusNote = getWorkspaceStatusNote(workspaceStatus);
   const originsBlockedMessage =
     rootActionLabel === "Reconnect Root Directory"
       ? "Reconnect Root Directory above before adding origins, or connect the local WraithWalker server."
@@ -1201,11 +1222,26 @@ export function OptionsApp({
                     </span>
                   </div>
                 ) : null}
-                {workspaceStatusNote ? (
-                  <Alert variant={workspaceStatusNote.variant}>
-                    {workspaceStatusNote.text}
-                  </Alert>
-                ) : null}
+                <Alert variant={workspaceReadiness.primaryNextActionVariant}>
+                  <span className="font-medium">
+                    {workspaceReadiness.primaryNextActionLabel}:
+                  </span>{" "}
+                  {workspaceReadiness.primaryNextActionText}
+                </Alert>
+                <div
+                  className="grid gap-3"
+                  aria-label="Capture readiness checklist"
+                >
+                  {workspaceReadiness.items.map((item) => (
+                    <ReadinessChecklistRow
+                      key={item.id}
+                      label={item.label}
+                      value={item.value}
+                      text={item.text}
+                      state={item.state}
+                    />
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
