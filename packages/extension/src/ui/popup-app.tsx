@@ -23,7 +23,8 @@ import {
   POPUP_REFRESH_INTERVAL_MS,
   type EditorPreset
 } from "../lib/constants.js";
-import { Alert, Badge, Button } from "./components.js";
+import { cn } from "./lib/cn.js";
+import { Alert, Button } from "./components.js";
 
 export interface PopupAppProps {
   runtime: PopupRuntimeApi;
@@ -61,15 +62,48 @@ function resolvePreferredEditor(
   );
 }
 
-function PopupStatusTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1 rounded-xl border border-border/70 bg-white/70 px-3 py-2">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      <span className="text-sm font-medium text-foreground">{value}</span>
-    </div>
-  );
+function resolvePopupSummaryText({
+  snapshot,
+  startBlockReason
+}: {
+  snapshot: SessionSnapshot | null;
+  startBlockReason: ReturnType<
+    typeof deriveWorkspaceReadiness
+  >["startBlockReason"];
+}): string | null {
+  if (!snapshot) {
+    return "Checking workspace status...";
+  }
+
+  if (snapshot.sessionActive) {
+    return "Capture is active.";
+  }
+
+  if (startBlockReason === "missing_origins") {
+    return "Next: Add your first origin in Settings.";
+  }
+
+  if (startBlockReason === "missing_root") {
+    return null;
+  }
+
+  return "Ready to start capture.";
+}
+
+function resolvePopupOpenHint({
+  editorLabel,
+  startBlockReason
+}: {
+  editorLabel: string;
+  startBlockReason: ReturnType<
+    typeof deriveWorkspaceReadiness
+  >["startBlockReason"];
+}): string | null {
+  if (startBlockReason === "missing_root") {
+    return null;
+  }
+
+  return `Open in ${editorLabel} to jump into the workspace.`;
 }
 
 export function PopupApp({
@@ -118,6 +152,22 @@ export function PopupApp({
         editorLabel: preferredEditor.label
       }),
     [editorLaunchState, preferredEditor.label, snapshot, workspaceStatus]
+  );
+  const popupSummaryText = React.useMemo(
+    () =>
+      resolvePopupSummaryText({
+        snapshot,
+        startBlockReason: workspaceReadiness.startBlockReason
+      }),
+    [snapshot, workspaceReadiness.startBlockReason]
+  );
+  const popupOpenHint = React.useMemo(
+    () =>
+      resolvePopupOpenHint({
+        editorLabel: preferredEditor.label,
+        startBlockReason: workspaceReadiness.startBlockReason
+      }),
+    [preferredEditor.label, workspaceReadiness.startBlockReason]
   );
 
   const refreshEnvironment = React.useCallback(async () => {
@@ -222,16 +272,11 @@ export function PopupApp({
         type: "native.open",
         editorId: DEFAULT_EDITOR_ID
       });
-      const nextSnapshot = await refreshState(false);
-      const openedServerRoot =
-        nextSnapshot?.captureDestination === "server" ||
-        snapshot?.captureDestination === "server";
+      await refreshState(false);
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? openedServerRoot
-            ? `Opened ${preferredEditor.label} at Server Root.`
-            : `Opened ${preferredEditor.label} for Remembered Browser Root and sent the fixture brief to Cursor Chat.`
+          ? `Opened ${preferredEditor.label} for the current workspace.`
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {
@@ -254,7 +299,7 @@ export function PopupApp({
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? "Opened Server Root in the OS file manager."
+          ? "Opened the workspace folder in the OS file manager."
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {
@@ -268,86 +313,96 @@ export function PopupApp({
   }
 
   return (
-    <main className="min-w-[360px] p-4">
+    <main className="w-[380px] p-3">
       <div className="extension-shell">
-        <div className="extension-panel grid gap-4 p-5">
-          <div className="space-y-2">
-            <h1 className="text-lg font-semibold tracking-tight">
-              WraithWalker
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Start capture, open the active workspace, or jump straight to
-              Settings.
-            </p>
-          </div>
-
-          <div className="grid gap-2" aria-label="Workspace status">
-            <div className="grid grid-cols-3 gap-2">
-              <PopupStatusTile
-                label="Session"
-                value={workspaceStatus.sessionLabel}
-              />
-              <PopupStatusTile
-                label="Active Root"
-                value={workspaceStatus.authorityLabel}
-              />
-              <PopupStatusTile
-                label="Origins"
-                value={`${workspaceStatus.enabledOriginCount} enabled`}
-              />
+        <div className="extension-panel grid gap-2.5 p-3.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <h1 className="text-base font-semibold tracking-tight">
+                WraithWalker
+              </h1>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Capture, open the active workspace, or jump to Settings.
+              </p>
             </div>
-            {snapshot?.captureRootPath &&
-            workspaceStatus.authority !== "none" ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="muted">{workspaceStatus.authorityLabel}</Badge>
-                <span className="break-all">{snapshot.captureRootPath}</span>
-              </div>
-            ) : null}
-            <div className="rounded-xl border border-border/70 bg-white/70 px-3 py-2 text-sm font-medium text-foreground">
-              {workspaceReadiness.summaryText}
-            </div>
-          </div>
-
-          {alert ? <Alert variant={alert.variant}>{alert.text}</Alert> : null}
-
-          <div className="grid gap-3">
-            <Button
-              type="button"
-              disabled={startButtonDisabled}
-              onClick={handleToggleSession}
-            >
-              {snapshot?.sessionActive ? "Stop Session" : "Start Session"}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busyAction !== null}
-              onClick={handleOpenEditor}
-            >
-              {busyAction === "open"
-                ? "Opening..."
-                : `Open in ${preferredEditor.label}`}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {workspaceReadiness.openActionHint}
-            </p>
-            {snapshot?.captureDestination === "server" ? (
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busyAction !== null}
-                onClick={handleRevealFolder}
-              >
-                {busyAction === "reveal" ? "Opening..." : "Open in folder"}
-              </Button>
-            ) : null}
             <Button
               type="button"
               variant="ghost"
+              className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
               onClick={() => runtime.openOptionsPage()}
             >
               Settings
             </Button>
+          </div>
+
+          <div className="grid gap-2" aria-label="Workspace status">
+            <div
+              className={cn(
+                "flex min-h-12 items-center justify-between rounded-lg border border-border/70 bg-card/70 px-2.5 py-2",
+                workspaceStatus.enabledOriginCount === 0 &&
+                  "text-muted-foreground"
+              )}
+            >
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Origins
+              </span>
+              <span className="text-[13px] leading-4 font-medium text-foreground">
+                {workspaceStatus.enabledOriginCount} enabled
+              </span>
+            </div>
+            {popupSummaryText ? (
+              <div className="flex min-h-12 items-center rounded-lg border border-border/70 bg-card/70 px-2.5 py-2 text-[13px] leading-4 font-medium text-foreground">
+                {popupSummaryText}
+              </div>
+            ) : null}
+          </div>
+
+          {alert ? <Alert variant={alert.variant}>{alert.text}</Alert> : null}
+
+          <div className="grid gap-1.5">
+            <Button
+              type="button"
+              disabled={startButtonDisabled}
+              className="rounded-lg"
+              onClick={handleToggleSession}
+            >
+              {snapshot?.sessionActive ? "Stop Session" : "Start Session"}
+            </Button>
+            <div
+              className={`grid gap-1.5 ${
+                snapshot?.captureDestination === "server"
+                  ? "grid-cols-2"
+                  : "grid-cols-1"
+              }`}
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                className="rounded-lg"
+                disabled={busyAction !== null}
+                onClick={handleOpenEditor}
+              >
+                {busyAction === "open"
+                  ? "Opening..."
+                  : `Open in ${preferredEditor.label}`}
+              </Button>
+              {snapshot?.captureDestination === "server" ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-lg"
+                  disabled={busyAction !== null}
+                  onClick={handleRevealFolder}
+                >
+                  {busyAction === "reveal" ? "Opening..." : "Open in folder"}
+                </Button>
+              ) : null}
+            </div>
+            {popupOpenHint ? (
+              <p className="flex min-h-8 items-center text-[11px] leading-4 text-muted-foreground">
+                {popupOpenHint}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

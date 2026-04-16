@@ -231,4 +231,27 @@ describe("built extension runtime", () => {
       expect(bundle).not.toContain("jsxDEVImpl");
     }
   });
+
+  it("ships prefers-color-scheme dark-mode styles for extension UI surfaces", async () => {
+    const cssBundle = await fs.readFile(
+      path.join(process.cwd(), "dist", "app.css"),
+      "utf-8"
+    );
+
+    expect(cssBundle).toContain("prefers-color-scheme:dark");
+  });
+
+  it("ships popup-specific sizing hooks so the popup can shrink-wrap its content", async () => {
+    const popupHtml = await fs.readFile(
+      path.join(process.cwd(), "dist", "popup.html"),
+      "utf-8"
+    );
+    const cssBundle = await fs.readFile(
+      path.join(process.cwd(), "dist", "app.css"),
+      "utf-8"
+    );
+
+    expect(popupHtml).toContain('data-extension-surface="popup"');
+    expect(cssBundle).toContain("body[data-extension-surface=popup]");
+  });
 });

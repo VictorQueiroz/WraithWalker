@@ -296,7 +296,7 @@ function WorkspaceStatusTile({
   value: string;
 }) {
   return (
-    <div className="grid gap-1 rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+    <div className="grid gap-1 rounded-xl border border-border/70 bg-card/70 px-4 py-3">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
@@ -324,7 +324,7 @@ function ReadinessChecklistRow({
         : "muted";
 
   return (
-    <div className="grid gap-2 rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+    <div className="grid gap-2 rounded-xl border border-border/70 bg-card/70 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm font-medium text-foreground">{label}</div>
         <div className="flex items-center gap-2">
@@ -437,7 +437,7 @@ function SiteCard({
   }, [isDrafting, onDraftingChange, siteConfig.origin]);
 
   return (
-    <Card className="bg-white/80">
+    <Card className="bg-card/80">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -1259,7 +1259,7 @@ export function OptionsApp({
                   serverRootPath={sessionSnapshot?.captureRootPath}
                 />
                 {rootState?.sentinel ? (
-                  <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3 text-sm">
+                  <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3 text-sm">
                     <div className="font-medium">Root ID</div>
                     <div className="mt-1 font-mono text-xs text-muted-foreground">
                       {rootState.sentinel.rootId}
@@ -1367,7 +1367,7 @@ export function OptionsApp({
                   </Alert>
                 ) : null}
 
-                <div className="grid gap-3 rounded-xl border border-border/70 bg-white/70 p-4">
+                <div className="grid gap-3 rounded-xl border border-border/70 bg-card/70 p-4">
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="default">
                       Snapshots in {workspaceStatus.authorityLabel}
@@ -1395,7 +1395,7 @@ export function OptionsApp({
                   </p>
                 </div>
 
-                <div className="grid gap-4 rounded-xl border border-border/70 bg-white/70 p-4">
+                <div className="grid gap-4 rounded-xl border border-border/70 bg-card/70 p-4">
                   <div className="space-y-1">
                     <h3 className="text-sm font-semibold">Current Workspace</h3>
                     <p className="text-sm text-muted-foreground">
@@ -1489,7 +1489,7 @@ export function OptionsApp({
 
                 {scenarioPanel.supportsTraceSave &&
                 scenarioPanel.activeTrace ? (
-                  <div className="grid gap-4 rounded-xl border border-border/70 bg-white/70 p-4">
+                  <div className="grid gap-4 rounded-xl border border-border/70 bg-card/70 p-4">
                     <div className="space-y-1">
                       <h3 className="text-sm font-semibold">
                         Save From Active Trace
@@ -1608,7 +1608,7 @@ export function OptionsApp({
                       return (
                         <div
                           key={snapshot.name}
-                          className="grid gap-3 rounded-xl border border-border/70 bg-white/70 p-4"
+                          className="grid gap-3 rounded-xl border border-border/70 bg-card/70 p-4"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="space-y-2">
@@ -1827,7 +1827,7 @@ export function OptionsApp({
                 {switchDialog.diff ? (
                   <>
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                      <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
                         <div className="text-xs text-muted-foreground">
                           Added
                         </div>
@@ -1835,7 +1835,7 @@ export function OptionsApp({
                           {switchDialog.diff.added.length}
                         </div>
                       </div>
-                      <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                      <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
                         <div className="text-xs text-muted-foreground">
                           Removed
                         </div>
@@ -1843,7 +1843,7 @@ export function OptionsApp({
                           {switchDialog.diff.removed.length}
                         </div>
                       </div>
-                      <div className="rounded-xl border border-border/70 bg-white/70 px-4 py-3">
+                      <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
                         <div className="text-xs text-muted-foreground">
                           Changed
                         </div>
@@ -1858,7 +1858,7 @@ export function OptionsApp({
                         {switchDialogPreview.map((preview) => (
                           <li
                             key={preview}
-                            className="rounded-xl border border-border/70 bg-white/70 px-3 py-2"
+                            className="rounded-xl border border-border/70 bg-card/70 px-3 py-2"
                           >
                             {preview}
                           </li>

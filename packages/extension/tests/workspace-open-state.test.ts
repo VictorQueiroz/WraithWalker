@@ -492,8 +492,8 @@ describe("workspace open state", () => {
       primaryNextAction: "start_session",
       primaryNextActionLabel: "Ready",
       primaryNextActionVariant: "success",
-      summaryText: "Ready to start capture in Server Root.",
-      openActionHint: "Open in Cursor uses Server Root."
+      summaryText: "Ready in Server Root.",
+      openActionHint: "Open in Cursor at Server Root."
     });
 
     const localStatus = deriveWorkspaceStatus({
@@ -532,8 +532,8 @@ describe("workspace open state", () => {
     ).toMatchObject({
       canStartCapture: true,
       primaryNextAction: "start_session",
-      summaryText: "Ready to start capture in Remembered Browser Root.",
-      openActionHint: "Open in Cursor uses Remembered Browser Root."
+      summaryText: "Ready in Remembered Browser Root.",
+      openActionHint: "Open in Cursor at Remembered Browser Root."
     });
 
     const missingRootStatus = deriveWorkspaceStatus({
@@ -656,7 +656,7 @@ describe("workspace open state", () => {
       primaryNextAction: "session_active",
       primaryNextActionLabel: "Live",
       primaryNextActionVariant: "success",
-      summaryText: "Capture is active in Remembered Browser Root."
+      summaryText: "Capturing in Remembered Browser Root."
     });
   });
 

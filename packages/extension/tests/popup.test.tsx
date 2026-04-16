@@ -144,18 +144,32 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Stop Session" })
       ).toBeTruthy();
       expect(screen.getByLabelText("Workspace status")).toBeTruthy();
-      expect(screen.getByText("Active")).toBeTruthy();
-      expect(screen.getAllByText("Remembered Browser Root")).toHaveLength(2);
       expect(screen.getByText("1 enabled")).toBeTruthy();
+      expect(screen.getByText("Capture is active.")).toBeTruthy();
       expect(
-        screen.getByText("Capture is active in Remembered Browser Root.")
+        screen
+          .getByText("Capture is active.")
+          .closest("div")
+          ?.className.includes("min-h-12")
+      ).toBe(true);
+      expect(
+        screen.getByText("Open in Cursor to jump into the workspace.")
       ).toBeTruthy();
       expect(
-        screen.getByText("Open in Cursor uses Remembered Browser Root.")
-      ).toBeTruthy();
+        screen
+          .getByText("Open in Cursor to jump into the workspace.")
+          .closest("p")
+          ?.className.includes("min-h-8")
+      ).toBe(true);
       expect(
         screen.getByRole("button", { name: "Open in Cursor" })
       ).toBeTruthy();
+      expect(
+        screen
+          .getByRole("button", { name: "Stop Session" })
+          .closest("main")
+          ?.className.includes("w-[380px]")
+      ).toBe(true);
       expect(
         screen.queryByRole("button", { name: "Open in folder" })
       ).toBeNull();
@@ -243,9 +257,7 @@ describe("popup entrypoint", () => {
         editorId: "cursor"
       });
       expect(
-        await screen.findByText(
-          "Opened Cursor for Remembered Browser Root and sent the fixture brief to Cursor Chat."
-        )
+        await screen.findByText("Opened Cursor for the current workspace.")
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -278,10 +290,9 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText("Open in Cursor uses Remembered Browser Root.")
+        await screen.findByText("Open in Cursor to jump into the workspace.")
       ).toBeTruthy();
-      expect(screen.getByText("Idle")).toBeTruthy();
-      expect(screen.getByText("1 enabled")).toBeTruthy();
+      expect(await screen.findByText("1 enabled")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
       expect(runtime.sendMessage).toHaveBeenCalledWith({
@@ -289,9 +300,7 @@ describe("popup entrypoint", () => {
         editorId: "cursor"
       });
       expect(
-        await screen.findByText(
-          "Opened Cursor for Remembered Browser Root and sent the fixture brief to Cursor Chat."
-        )
+        await screen.findByText("Opened Cursor for the current workspace.")
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -333,7 +342,7 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText("Open in Cursor uses Remembered Browser Root.")
+        await screen.findByText("Open in Cursor to jump into the workspace.")
       ).toBeTruthy();
       expect(screen.queryByText(/Cursor prompt launch failed/i)).toBeNull();
 
@@ -739,7 +748,9 @@ describe("popup entrypoint", () => {
         type: "native.revealRoot"
       });
       expect(
-        await screen.findByText("Opened Server Root in the OS file manager.")
+        await screen.findByText(
+          "Opened the workspace folder in the OS file manager."
+        )
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -959,7 +970,9 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Open in folder" })
       );
       expect(
-        await screen.findByText("Opened Server Root in the OS file manager.")
+        await screen.findByText(
+          "Opened the workspace folder in the OS file manager."
+        )
       ).toBeTruthy();
 
       expect(serverClient.revealRoot).toHaveBeenCalledTimes(1);
@@ -1123,7 +1136,7 @@ describe("popup entrypoint", () => {
       expect(chromeApi.tabs.create).toHaveBeenCalledTimes(1);
       expect(chromeApi.runtime.sendNativeMessage).not.toHaveBeenCalled();
       expect(
-        await screen.findByText("Opened Cursor at Server Root.")
+        await screen.findByText("Opened Cursor for the current workspace.")
       ).toBeTruthy();
     } finally {
       popup?.unmount();
@@ -1242,7 +1255,9 @@ describe("popup entrypoint", () => {
           /Reconnect Root Directory in Settings before starting capture/i
         )
       ).toBeTruthy();
-      expect(screen.getByText("No Active Root")).toBeTruthy();
+      expect(
+        screen.queryByText(/Server Root|Remembered Browser Root|No Active Root/)
+      ).toBeNull();
       expect(
         (
           screen.getByRole("button", {
@@ -1255,7 +1270,7 @@ describe("popup entrypoint", () => {
     }
   });
 
-  it("shows server-root status when the local WraithWalker server is active", async () => {
+  it("keeps the popup generic when the local WraithWalker server is active", async () => {
     renderRoot();
     const { initPopup } = await loadPopupModule();
     const runtime = {
@@ -1282,19 +1297,162 @@ describe("popup entrypoint", () => {
 
     try {
       expect(await screen.findByLabelText("Workspace status")).toBeTruthy();
-      expect(await screen.findAllByText("Server Root")).toHaveLength(2);
+      expect(await screen.findByText("Ready to start capture.")).toBeTruthy();
       expect(
-        await screen.findByText("Ready to start capture in Server Root.")
+        await screen.findByText("Open in Cursor to jump into the workspace.")
       ).toBeTruthy();
       expect(
-        await screen.findByText("Open in Cursor uses Server Root.")
-      ).toBeTruthy();
-      expect(await screen.findByText("/tmp/server-root")).toBeTruthy();
+        screen.queryByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeNull();
+      expect(
+        screen.queryByText(
+          /Server Root|Remembered Browser Root|\/tmp\/server-root/
+        )
+      ).toBeNull();
       expect(
         await screen.findByRole("button", { name: "Open in folder" })
       ).toBeTruthy();
     } finally {
       popup.unmount();
+    }
+  });
+
+  it("updates an open popup after the local WraithWalker server comes online", async () => {
+    renderRoot();
+    vi.resetModules();
+    globalThis.__WRAITHWALKER_TEST__ = true;
+
+    const { initPopup } = await import("../src/popup.ts");
+    const { createBackgroundRuntime } = await import("../src/background.ts");
+
+    let intervalHandler: (() => void) | undefined;
+    const intervalId = 7 as unknown as ReturnType<typeof setInterval>;
+    const setIntervalFn = ((handler: TimerHandler) => {
+      intervalHandler = handler as () => void;
+      return intervalId;
+    }) as unknown as typeof setInterval;
+    const clearIntervalFn = vi.fn() as typeof clearInterval;
+    const chromeApi = createTestChromeApi();
+    const getSystemInfo = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: []
+      });
+    const serverClient = {
+      getSystemInfo,
+      revealRoot: vi
+        .fn()
+        .mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
+      heartbeat: vi.fn(async () => ({
+        ...(await getSystemInfo()),
+        activeTrace: null
+      })),
+      listScenarios: vi.fn().mockResolvedValue({
+        scenarios: [],
+        snapshots: [],
+        activeScenarioName: null,
+        activeScenarioMissing: false,
+        activeTrace: null,
+        supportsTraceSave: true
+      }),
+      saveScenario: vi.fn(),
+      switchScenario: vi.fn(),
+      diffScenarios: vi.fn(),
+      saveScenarioFromTrace: vi.fn(),
+      hasFixture: vi.fn(),
+      readConfiguredSiteConfigs: vi.fn(),
+      readEffectiveSiteConfigs: vi.fn(),
+      writeConfiguredSiteConfigs: vi.fn(),
+      readFixture: vi.fn(),
+      writeFixtureIfAbsent: vi.fn(),
+      generateContext: vi.fn(),
+      recordTraceClick: vi.fn(),
+      linkTraceFixture: vi.fn()
+    };
+
+    const background = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getLegacySiteConfigsMigrated: vi.fn().mockResolvedValue(true),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-popup"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient as any),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const popupRuntime = {
+      sendMessage: vi.fn((message) =>
+        background.handleRuntimeMessage(message as any)
+      ),
+      openOptionsPage: vi.fn()
+    };
+
+    let popup: Awaited<ReturnType<typeof initPopup>> | undefined;
+
+    try {
+      await background.start();
+      await flushPromises();
+
+      popup = await initPopup({
+        document,
+        runtime: popupRuntime,
+        setIntervalFn,
+        clearIntervalFn,
+        getNativeHostConfig: vi
+          .fn()
+          .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+        getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+        ...createRootDeps({ hasHandle: false })
+      });
+
+      expect(
+        await screen.findByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeTruthy();
+      expect(
+        screen.queryByRole("button", { name: "Open in folder" })
+      ).toBeNull();
+
+      expect(intervalHandler).toBeTypeOf("function");
+      intervalHandler?.();
+      await flushPromises();
+
+      expect(
+        await screen.findByRole("button", { name: "Open in folder" })
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeNull();
+    } finally {
+      popup?.unmount();
+      await flushPromises();
     }
   });
 
@@ -1361,7 +1519,9 @@ describe("popup entrypoint", () => {
       await flushPromises();
 
       expect(
-        await screen.findByText("Opened Server Root in the OS file manager.")
+        await screen.findByText(
+          "Opened the workspace folder in the OS file manager."
+        )
       ).toBeTruthy();
     } finally {
       popup.unmount();
@@ -1433,11 +1593,10 @@ describe("popup entrypoint", () => {
       intervalHandler?.();
       await flushPromises();
 
-      expect(await screen.findAllByText("Server Root")).toHaveLength(2);
+      expect(screen.getByText("Ready to start capture.")).toBeTruthy();
       expect(
-        screen.getByText("Ready to start capture in Server Root.")
+        screen.getByText("Open in Cursor to jump into the workspace.")
       ).toBeTruthy();
-      expect(screen.getByText("Open in Cursor uses Server Root.")).toBeTruthy();
       expect(screen.queryByText("Cursor prompt launch failed.")).toBeNull();
     } finally {
       popup.unmount();
@@ -1551,15 +1710,29 @@ describe("popup entrypoint", () => {
     });
 
     try {
+      const chooseRootAlert = await screen.findByText(
+        "Choose Root Directory in Settings before starting capture."
+      );
+      expect(chooseRootAlert).toBeTruthy();
       expect(
-        await screen.findByText(
+        screen.getAllByText(
           "Choose Root Directory in Settings before starting capture."
         )
-      ).toBeTruthy();
+      ).toHaveLength(1);
       expect(
-        screen.getByText("Next: Choose Root Directory in Settings.")
-      ).toBeTruthy();
-      expect(screen.getByText("No Active Root")).toBeTruthy();
+        screen.queryByText("Next: Choose Root Directory in Settings.")
+      ).toBeNull();
+      expect(
+        screen.queryByText(
+          "Choose Root Directory in Settings to open the workspace."
+        )
+      ).toBeNull();
+      expect(
+        chooseRootAlert.closest("div")?.className.includes("bg-muted/60")
+      ).toBe(true);
+      expect(
+        screen.queryByText(/Server Root|Remembered Browser Root|No Active Root/)
+      ).toBeNull();
       expect(
         (
           screen.getByRole("button", {

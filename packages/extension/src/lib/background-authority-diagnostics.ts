@@ -45,7 +45,7 @@ export function createBackgroundAuthorityDiagnostics({
   readEffectiveSiteConfigsForAuthority
 }: BackgroundAuthorityDiagnosticsDependencies): BackgroundAuthorityDiagnosticsApi {
   async function snapshotState(): Promise<SessionSnapshot> {
-    queueServerRefresh();
+    queueServerRefresh({ force: !state.serverInfo });
 
     return buildSessionSnapshot({
       sessionActive: state.sessionActive,
