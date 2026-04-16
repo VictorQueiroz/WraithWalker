@@ -64,11 +64,9 @@ function resolvePreferredEditor(
 
 function resolvePopupSummaryText({
   snapshot,
-  captureRootState,
   startBlockReason
 }: {
   snapshot: SessionSnapshot | null;
-  captureRootState: CaptureRootState;
   startBlockReason: ReturnType<typeof deriveWorkspaceReadiness>["startBlockReason"];
 }): string | null {
   if (!snapshot) {
@@ -155,10 +153,9 @@ export function PopupApp({
     () =>
       resolvePopupSummaryText({
         snapshot,
-        captureRootState,
         startBlockReason: workspaceReadiness.startBlockReason
       }),
-    [captureRootState, snapshot, workspaceReadiness.startBlockReason]
+    [snapshot, workspaceReadiness.startBlockReason]
   );
   const popupOpenHint = React.useMemo(
     () =>

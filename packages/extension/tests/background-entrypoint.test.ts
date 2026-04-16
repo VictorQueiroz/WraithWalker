@@ -466,7 +466,6 @@ describe("background entrypoint", () => {
 
     expect(runtime.state.serverInfo).toBeNull();
 
-    runtime.state.serverCheckedAt = 0;
     const firstState = await runtime.handleRuntimeMessage({
       type: "session.getState"
     });

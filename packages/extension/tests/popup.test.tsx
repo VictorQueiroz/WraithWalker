@@ -1311,6 +1311,143 @@ describe("popup entrypoint", () => {
     }
   });
 
+  it("updates an open popup after the local WraithWalker server comes online", async () => {
+    renderRoot();
+    vi.resetModules();
+    globalThis.__WRAITHWALKER_TEST__ = true;
+
+    const { initPopup } = await import("../src/popup.ts");
+    const { createBackgroundRuntime } = await import("../src/background.ts");
+
+    let intervalHandler: (() => void) | undefined;
+    const intervalId = 7 as unknown as ReturnType<typeof setInterval>;
+    const setIntervalFn = ((handler: TimerHandler) => {
+      intervalHandler = handler as () => void;
+      return intervalId;
+    }) as typeof setInterval;
+    const clearIntervalFn = vi.fn() as typeof clearInterval;
+    const chromeApi = createTestChromeApi();
+    const getSystemInfo = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue({
+        version: "1.0.0",
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc",
+        siteConfigs: []
+      });
+    const serverClient = {
+      getSystemInfo,
+      revealRoot: vi
+        .fn()
+        .mockResolvedValue({ ok: true, command: "xdg-open /tmp/server-root" }),
+      heartbeat: vi.fn(async () => ({
+        ...(await getSystemInfo()),
+        activeTrace: null
+      })),
+      listScenarios: vi.fn().mockResolvedValue({
+        scenarios: [],
+        snapshots: [],
+        activeScenarioName: null,
+        activeScenarioMissing: false,
+        activeTrace: null,
+        supportsTraceSave: true
+      }),
+      saveScenario: vi.fn(),
+      switchScenario: vi.fn(),
+      diffScenarios: vi.fn(),
+      saveScenarioFromTrace: vi.fn(),
+      hasFixture: vi.fn(),
+      readConfiguredSiteConfigs: vi.fn(),
+      readEffectiveSiteConfigs: vi.fn(),
+      writeConfiguredSiteConfigs: vi.fn(),
+      readFixture: vi.fn(),
+      writeFixtureIfAbsent: vi.fn(),
+      generateContext: vi.fn(),
+      recordTraceClick: vi.fn(),
+      linkTraceFixture: vi.fn()
+    };
+
+    const background = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([]),
+      getLegacySiteConfigsMigrated: vi.fn().mockResolvedValue(true),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getOrCreateExtensionClientId: vi.fn().mockResolvedValue("client-popup"),
+      setLastSessionSnapshot: vi.fn(),
+      createWraithWalkerServerClient: vi.fn(() => serverClient as any),
+      createSessionController: vi.fn(() => ({
+        startSession: vi.fn(),
+        stopSession: vi.fn(),
+        reconcileTabs: vi.fn(),
+        handleTabStateChange: vi.fn()
+      })),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    const popupRuntime = {
+      sendMessage: vi.fn((message) =>
+        background.handleRuntimeMessage(message as any)
+      ),
+      openOptionsPage: vi.fn()
+    };
+
+    let popup: Awaited<ReturnType<typeof initPopup>> | undefined;
+
+    try {
+      await background.start();
+      await flushPromises();
+
+      popup = await initPopup({
+        document,
+        runtime: popupRuntime,
+        setIntervalFn,
+        clearIntervalFn,
+        getNativeHostConfig: vi
+          .fn()
+          .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+        getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+        ...createRootDeps({ hasHandle: false })
+      });
+
+      expect(
+        await screen.findByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeTruthy();
+      expect(
+        screen.queryByRole("button", { name: "Open in folder" })
+      ).toBeNull();
+
+      expect(intervalHandler).toBeTypeOf("function");
+      intervalHandler?.();
+      await flushPromises();
+
+      expect(
+        await screen.findByRole("button", { name: "Open in folder" })
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeNull();
+    } finally {
+      popup?.unmount();
+      await flushPromises();
+    }
+  });
+
   it("disables popup actions while the server-folder reveal is in flight", async () => {
     const { PopupApp } = await import("../src/ui/popup-app.tsx");
     const user = userEvent.setup();
