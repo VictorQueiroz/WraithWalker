@@ -450,9 +450,9 @@ export function deriveWorkspaceReadiness({
   });
   const openActionHint =
     workspaceStatus.authority === "server"
-      ? `Open in ${editorLabel} uses Server Root.`
+      ? `Open in ${editorLabel} at Server Root.`
       : workspaceStatus.authority === "browser_root"
-        ? `Open in ${editorLabel} uses Remembered Browser Root.`
+        ? `Open in ${editorLabel} at Remembered Browser Root.`
         : "Choose Root Directory in Settings to give WraithWalker a remembered workspace.";
 
   let primaryNextAction: PrimaryNextAction;
@@ -472,7 +472,7 @@ export function deriveWorkspaceReadiness({
     primaryNextActionLabel = "Live";
     primaryNextActionText = `Capture is active in ${workspaceStatus.authorityLabel}.`;
     primaryNextActionVariant = "success";
-    summaryText = `Capture is active in ${workspaceStatus.authorityLabel}.`;
+    summaryText = `Capturing in ${workspaceStatus.authorityLabel}.`;
   } else if (startBlockReason === "missing_origins") {
     primaryNextAction = "add_origin";
     primaryNextActionLabel = "Next";
@@ -496,7 +496,7 @@ export function deriveWorkspaceReadiness({
     primaryNextActionLabel = "Ready";
     primaryNextActionText = `Capture is ready in ${workspaceStatus.authorityLabel}. Start Session from the popup when you're ready.`;
     primaryNextActionVariant = "success";
-    summaryText = `Ready to start capture in ${workspaceStatus.authorityLabel}.`;
+    summaryText = `Ready in ${workspaceStatus.authorityLabel}.`;
   }
 
   return {

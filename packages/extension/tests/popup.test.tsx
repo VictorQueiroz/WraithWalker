@@ -144,18 +144,36 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Stop Session" })
       ).toBeTruthy();
       expect(screen.getByLabelText("Workspace status")).toBeTruthy();
-      expect(screen.getByText("Active")).toBeTruthy();
+      expect(screen.getAllByText("Active").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Remembered Browser Root")).toHaveLength(2);
       expect(screen.getByText("1 enabled")).toBeTruthy();
       expect(
-        screen.getByText("Capture is active in Remembered Browser Root.")
+        screen.getByText("Capturing in Remembered Browser Root.")
       ).toBeTruthy();
       expect(
-        screen.getByText("Open in Cursor uses Remembered Browser Root.")
+        screen
+          .getByText("Capturing in Remembered Browser Root.")
+          .closest("div")
+          ?.className.includes("min-h-12")
+      ).toBe(true);
+      expect(
+        screen.getByText("Open in Cursor at Remembered Browser Root.")
       ).toBeTruthy();
+      expect(
+        screen
+          .getByText("Open in Cursor at Remembered Browser Root.")
+          .closest("p")
+          ?.className.includes("min-h-8")
+      ).toBe(true);
       expect(
         screen.getByRole("button", { name: "Open in Cursor" })
       ).toBeTruthy();
+      expect(
+        screen
+          .getByRole("button", { name: "Stop Session" })
+          .closest("main")
+          ?.className.includes("w-[360px]")
+      ).toBe(true);
       expect(
         screen.queryByRole("button", { name: "Open in folder" })
       ).toBeNull();
@@ -278,9 +296,9 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText("Open in Cursor uses Remembered Browser Root.")
+        await screen.findByText("Open in Cursor at Remembered Browser Root.")
       ).toBeTruthy();
-      expect(screen.getByText("Idle")).toBeTruthy();
+      expect(screen.getAllByText("Idle").length).toBeGreaterThan(0);
       expect(screen.getByText("1 enabled")).toBeTruthy();
 
       await user.click(screen.getByRole("button", { name: "Open in Cursor" }));
@@ -333,7 +351,7 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByText("Open in Cursor uses Remembered Browser Root.")
+        await screen.findByText("Open in Cursor at Remembered Browser Root.")
       ).toBeTruthy();
       expect(screen.queryByText(/Cursor prompt launch failed/i)).toBeNull();
 
@@ -1284,10 +1302,10 @@ describe("popup entrypoint", () => {
       expect(await screen.findByLabelText("Workspace status")).toBeTruthy();
       expect(await screen.findAllByText("Server Root")).toHaveLength(2);
       expect(
-        await screen.findByText("Ready to start capture in Server Root.")
+        await screen.findByText("Ready in Server Root.")
       ).toBeTruthy();
       expect(
-        await screen.findByText("Open in Cursor uses Server Root.")
+        await screen.findByText("Open in Cursor at Server Root.")
       ).toBeTruthy();
       expect(await screen.findByText("/tmp/server-root")).toBeTruthy();
       expect(
@@ -1435,9 +1453,9 @@ describe("popup entrypoint", () => {
 
       expect(await screen.findAllByText("Server Root")).toHaveLength(2);
       expect(
-        screen.getByText("Ready to start capture in Server Root.")
+        screen.getByText("Ready in Server Root.")
       ).toBeTruthy();
-      expect(screen.getByText("Open in Cursor uses Server Root.")).toBeTruthy();
+      expect(screen.getByText("Open in Cursor at Server Root.")).toBeTruthy();
       expect(screen.queryByText("Cursor prompt launch failed.")).toBeNull();
     } finally {
       popup.unmount();

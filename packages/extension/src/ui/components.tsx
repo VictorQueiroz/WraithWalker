@@ -86,7 +86,8 @@ export function Badge({
       className={cn(
         "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium",
         variant === "default" && "bg-primary/12 text-primary",
-        variant === "success" && "bg-emerald-500/14 text-emerald-700",
+        variant === "success" &&
+          "bg-emerald-500/14 text-emerald-700 dark:bg-emerald-400/12 dark:text-emerald-200",
         variant === "destructive" && "bg-destructive/12 text-destructive",
         variant === "muted" && "bg-muted text-muted-foreground",
         className
@@ -109,7 +110,7 @@ export function Alert({
         "rounded-xl border px-4 py-3 text-sm",
         variant === "default" && "border-border bg-muted/60 text-foreground",
         variant === "success" &&
-          "border-emerald-500/20 bg-emerald-500/10 text-emerald-800",
+          "border-emerald-500/20 bg-emerald-500/10 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-100",
         variant === "destructive" &&
           "border-destructive/20 bg-destructive/10 text-destructive",
         className

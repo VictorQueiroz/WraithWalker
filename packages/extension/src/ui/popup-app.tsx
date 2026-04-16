@@ -23,6 +23,7 @@ import {
   POPUP_REFRESH_INTERVAL_MS,
   type EditorPreset
 } from "../lib/constants.js";
+import { cn } from "./lib/cn.js";
 import { Alert, Badge, Button } from "./components.js";
 
 export interface PopupAppProps {
@@ -61,13 +62,28 @@ function resolvePreferredEditor(
   );
 }
 
-function PopupStatusTile({ label, value }: { label: string; value: string }) {
+function PopupStatusTile({
+  label,
+  value,
+  className
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
   return (
-    <div className="grid gap-1 rounded-xl border border-border/70 bg-white/70 px-3 py-2">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div
+      className={cn(
+        "grid min-h-14 gap-1 rounded-lg border border-border/70 bg-card/70 px-2.5 py-2",
+        className
+      )}
+    >
+      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
-      <span className="text-sm font-medium text-foreground">{value}</span>
+      <span className="text-[13px] leading-4 font-medium text-foreground">
+        {value}
+      </span>
     </div>
   );
 }
@@ -268,86 +284,105 @@ export function PopupApp({
   }
 
   return (
-    <main className="min-w-[360px] p-4">
+    <main className="p-3">
       <div className="extension-shell">
-        <div className="extension-panel grid gap-4 p-5">
-          <div className="space-y-2">
-            <h1 className="text-lg font-semibold tracking-tight">
-              WraithWalker
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Start capture, open the active workspace, or jump straight to
-              Settings.
-            </p>
+        <div className="extension-panel grid gap-2.5 p-3.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <h1 className="text-base font-semibold tracking-tight">
+                WraithWalker
+              </h1>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Capture, open the active workspace, or jump to Settings.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+              onClick={() => runtime.openOptionsPage()}
+            >
+              Settings
+            </Button>
           </div>
 
           <div className="grid gap-2" aria-label="Workspace status">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <PopupStatusTile
                 label="Session"
                 value={workspaceStatus.sessionLabel}
               />
               <PopupStatusTile
-                label="Active Root"
-                value={workspaceStatus.authorityLabel}
-              />
-              <PopupStatusTile
                 label="Origins"
                 value={`${workspaceStatus.enabledOriginCount} enabled`}
+              />
+              <PopupStatusTile
+                label="Active Root"
+                value={workspaceStatus.authorityLabel}
+                className="col-span-2 min-h-16"
               />
             </div>
             {snapshot?.captureRootPath &&
             workspaceStatus.authority !== "none" ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="muted">{workspaceStatus.authorityLabel}</Badge>
-                <span className="break-all">{snapshot.captureRootPath}</span>
+                <span
+                  className="min-w-0 flex-1 truncate"
+                  title={snapshot.captureRootPath}
+                >
+                  {snapshot.captureRootPath}
+                </span>
               </div>
             ) : null}
-            <div className="rounded-xl border border-border/70 bg-white/70 px-3 py-2 text-sm font-medium text-foreground">
+            <div className="flex min-h-12 items-center rounded-lg border border-border/70 bg-card/70 px-2.5 py-2 text-[13px] leading-4 font-medium text-foreground">
               {workspaceReadiness.summaryText}
             </div>
           </div>
 
           {alert ? <Alert variant={alert.variant}>{alert.text}</Alert> : null}
 
-          <div className="grid gap-3">
+          <div className="grid gap-1.5">
             <Button
               type="button"
               disabled={startButtonDisabled}
+              className="rounded-lg"
               onClick={handleToggleSession}
             >
               {snapshot?.sessionActive ? "Stop Session" : "Start Session"}
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busyAction !== null}
-              onClick={handleOpenEditor}
+            <div
+              className={`grid gap-1.5 ${
+                snapshot?.captureDestination === "server"
+                  ? "grid-cols-2"
+                  : "grid-cols-1"
+              }`}
             >
-              {busyAction === "open"
-                ? "Opening..."
-                : `Open in ${preferredEditor.label}`}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {workspaceReadiness.openActionHint}
-            </p>
-            {snapshot?.captureDestination === "server" ? (
               <Button
                 type="button"
                 variant="secondary"
+                className="rounded-lg"
                 disabled={busyAction !== null}
-                onClick={handleRevealFolder}
+                onClick={handleOpenEditor}
               >
-                {busyAction === "reveal" ? "Opening..." : "Open in folder"}
+                {busyAction === "open"
+                  ? "Opening..."
+                  : `Open in ${preferredEditor.label}`}
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => runtime.openOptionsPage()}
-            >
-              Settings
-            </Button>
+              {snapshot?.captureDestination === "server" ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-lg"
+                  disabled={busyAction !== null}
+                  onClick={handleRevealFolder}
+                >
+                  {busyAction === "reveal" ? "Opening..." : "Open in folder"}
+                </Button>
+              ) : null}
+            </div>
+            <p className="flex min-h-8 items-center text-[11px] leading-4 text-muted-foreground">
+              {workspaceReadiness.openActionHint}
+            </p>
           </div>
         </div>
       </div>
