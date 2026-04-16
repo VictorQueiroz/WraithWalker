@@ -24,7 +24,7 @@ import {
   type EditorPreset
 } from "../lib/constants.js";
 import { cn } from "./lib/cn.js";
-import { Alert, Badge, Button } from "./components.js";
+import { Alert, Button } from "./components.js";
 
 export interface PopupAppProps {
   runtime: PopupRuntimeApi;
@@ -62,30 +62,46 @@ function resolvePreferredEditor(
   );
 }
 
-function PopupStatusTile({
-  label,
-  value,
-  className
+function resolvePopupSummaryText({
+  snapshot,
+  captureRootState,
+  startBlockReason
 }: {
-  label: string;
-  value: string;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "grid min-h-14 gap-1 rounded-lg border border-border/70 bg-card/70 px-2.5 py-2",
-        className
-      )}
-    >
-      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      <span className="text-[13px] leading-4 font-medium text-foreground">
-        {value}
-      </span>
-    </div>
-  );
+  snapshot: SessionSnapshot | null;
+  captureRootState: CaptureRootState;
+  startBlockReason: ReturnType<typeof deriveWorkspaceReadiness>["startBlockReason"];
+}): string | null {
+  if (!snapshot) {
+    return "Checking workspace status...";
+  }
+
+  if (snapshot.sessionActive) {
+    return "Capture is active.";
+  }
+
+  if (startBlockReason === "missing_origins") {
+    return "Next: Add your first origin in Settings.";
+  }
+
+  if (startBlockReason === "missing_root") {
+    return null;
+  }
+
+  return "Ready to start capture.";
+}
+
+function resolvePopupOpenHint({
+  editorLabel,
+  startBlockReason
+}: {
+  editorLabel: string;
+  startBlockReason: ReturnType<typeof deriveWorkspaceReadiness>["startBlockReason"];
+}): string | null {
+  if (startBlockReason === "missing_root") {
+    return null;
+  }
+
+  return `Open in ${editorLabel} to jump into the workspace.`;
 }
 
 export function PopupApp({
@@ -134,6 +150,23 @@ export function PopupApp({
         editorLabel: preferredEditor.label
       }),
     [editorLaunchState, preferredEditor.label, snapshot, workspaceStatus]
+  );
+  const popupSummaryText = React.useMemo(
+    () =>
+      resolvePopupSummaryText({
+        snapshot,
+        captureRootState,
+        startBlockReason: workspaceReadiness.startBlockReason
+      }),
+    [captureRootState, snapshot, workspaceReadiness.startBlockReason]
+  );
+  const popupOpenHint = React.useMemo(
+    () =>
+      resolvePopupOpenHint({
+        editorLabel: preferredEditor.label,
+        startBlockReason: workspaceReadiness.startBlockReason
+      }),
+    [preferredEditor.label, workspaceReadiness.startBlockReason]
   );
 
   const refreshEnvironment = React.useCallback(async () => {
@@ -238,16 +271,11 @@ export function PopupApp({
         type: "native.open",
         editorId: DEFAULT_EDITOR_ID
       });
-      const nextSnapshot = await refreshState(false);
-      const openedServerRoot =
-        nextSnapshot?.captureDestination === "server" ||
-        snapshot?.captureDestination === "server";
+      await refreshState(false);
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? openedServerRoot
-            ? `Opened ${preferredEditor.label} at Server Root.`
-            : `Opened ${preferredEditor.label} for Remembered Browser Root and sent the fixture brief to Cursor Chat.`
+          ? `Opened ${preferredEditor.label} for the current workspace.`
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {
@@ -270,7 +298,7 @@ export function PopupApp({
       setActionAlert({
         variant: result.ok ? "success" : "destructive",
         text: result.ok
-          ? "Opened Server Root in the OS file manager."
+          ? "Opened the workspace folder in the OS file manager."
           : getErrorMessage(result as ErrorResult)
       });
     } catch (error) {
@@ -284,7 +312,7 @@ export function PopupApp({
   }
 
   return (
-    <main className="p-3">
+    <main className="w-[380px] p-3">
       <div className="extension-shell">
         <div className="extension-panel grid gap-2.5 p-3.5">
           <div className="flex items-start justify-between gap-3">
@@ -307,36 +335,24 @@ export function PopupApp({
           </div>
 
           <div className="grid gap-2" aria-label="Workspace status">
-            <div className="grid grid-cols-2 gap-1.5">
-              <PopupStatusTile
-                label="Session"
-                value={workspaceStatus.sessionLabel}
-              />
-              <PopupStatusTile
-                label="Origins"
-                value={`${workspaceStatus.enabledOriginCount} enabled`}
-              />
-              <PopupStatusTile
-                label="Active Root"
-                value={workspaceStatus.authorityLabel}
-                className="col-span-2 min-h-16"
-              />
+            <div
+              className={cn(
+                "flex min-h-12 items-center justify-between rounded-lg border border-border/70 bg-card/70 px-2.5 py-2",
+                workspaceStatus.enabledOriginCount === 0 && "text-muted-foreground"
+              )}
+            >
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Origins
+              </span>
+              <span className="text-[13px] leading-4 font-medium text-foreground">
+                {workspaceStatus.enabledOriginCount} enabled
+              </span>
             </div>
-            {snapshot?.captureRootPath &&
-            workspaceStatus.authority !== "none" ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="muted">{workspaceStatus.authorityLabel}</Badge>
-                <span
-                  className="min-w-0 flex-1 truncate"
-                  title={snapshot.captureRootPath}
-                >
-                  {snapshot.captureRootPath}
-                </span>
+            {popupSummaryText ? (
+              <div className="flex min-h-12 items-center rounded-lg border border-border/70 bg-card/70 px-2.5 py-2 text-[13px] leading-4 font-medium text-foreground">
+                {popupSummaryText}
               </div>
             ) : null}
-            <div className="flex min-h-12 items-center rounded-lg border border-border/70 bg-card/70 px-2.5 py-2 text-[13px] leading-4 font-medium text-foreground">
-              {workspaceReadiness.summaryText}
-            </div>
           </div>
 
           {alert ? <Alert variant={alert.variant}>{alert.text}</Alert> : null}
@@ -380,9 +396,11 @@ export function PopupApp({
                 </Button>
               ) : null}
             </div>
-            <p className="flex min-h-8 items-center text-[11px] leading-4 text-muted-foreground">
-              {workspaceReadiness.openActionHint}
-            </p>
+            {popupOpenHint ? (
+              <p className="flex min-h-8 items-center text-[11px] leading-4 text-muted-foreground">
+                {popupOpenHint}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
