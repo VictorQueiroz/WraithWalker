@@ -8,7 +8,7 @@ import { normalizeSiteInput } from "./fixture-layout.mjs";
 import {
   createDiscoveredSiteConfig,
   mergeSiteConfigs,
-  normalizeSiteConfig,
+  normalizeSiteConfigs,
   type SiteConfig
 } from "./site-config.mjs";
 
@@ -87,16 +87,14 @@ function validateProjectConfig(
         `sites[${index}].origin must be a non-empty string.`
       );
     }
-    return normalizeSiteConfig(
-      value as Partial<SiteConfig> & { origin: string } & {
-        dumpAllowlistPattern?: string;
-      }
-    );
+    return value as Partial<SiteConfig> & { origin: string } & {
+      dumpAllowlistPattern?: string;
+    };
   });
 
   return {
     schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
-    sites
+    sites: normalizeSiteConfigs(sites)
   };
 }
 

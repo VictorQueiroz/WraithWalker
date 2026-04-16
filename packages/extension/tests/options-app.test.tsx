@@ -237,15 +237,12 @@ describe("OptionsApp launch settings", () => {
       setIntervalFn,
       clearIntervalFn
     });
-    const user = userEvent.setup();
-
     render(<OptionsApp {...props} />);
 
     const patternsInput = await screen.findByLabelText(
       "Dump Allowlist Patterns"
     );
-    await user.clear(patternsInput);
-    await user.type(patternsInput, "\\.tsx$");
+    fireEvent.change(patternsInput, { target: { value: "\\.tsx$" } });
 
     const getSiteConfigs = props.getSiteConfigs as ReturnType<typeof vi.fn>;
     const beforeTickCalls = getSiteConfigs.mock.calls.length;
@@ -255,6 +252,84 @@ describe("OptionsApp launch settings", () => {
 
     expect(getSiteConfigs).toHaveBeenCalledTimes(beforeTickCalls);
     expect((patternsInput as HTMLTextAreaElement).value).toBe("\\.tsx$");
+  });
+
+  it("renders one site card for duplicate normalized origins and writes a canonical save payload", async () => {
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        enabledOrigins: ["https://docs.example.com"]
+      }),
+      siteConfigs: [
+        {
+          origin: "docs.example.com",
+          createdAt: "2026-04-14T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://docs.example.com",
+          createdAt: "2026-04-13T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    render(<OptionsApp {...props} />);
+
+    expect(await screen.findAllByText("https://docs.example.com")).toHaveLength(
+      1
+    );
+    const patternsInput = await screen.findByLabelText(
+      "Dump Allowlist Patterns"
+    );
+    fireEvent.change(patternsInput, { target: { value: "\\.tsx$\n\\.json$" } });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(props.setSiteConfigs).toHaveBeenCalledWith([
+      {
+        origin: "https://docs.example.com",
+        createdAt: "2026-04-13T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.tsx$", "\\.json$"]
+      }
+    ]);
+  });
+
+  it("removes duplicate normalized origins through a single site card", async () => {
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        enabledOrigins: ["https://docs.example.com"]
+      }),
+      siteConfigs: [
+        {
+          origin: "docs.example.com",
+          createdAt: "2026-04-14T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://docs.example.com",
+          createdAt: "2026-04-13T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    render(<OptionsApp {...props} />);
+
+    expect(await screen.findAllByText("https://docs.example.com")).toHaveLength(
+      1
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    expect(props.setSiteConfigs).toHaveBeenCalledWith([]);
+    expect(props.chromeApi.permissions.remove).toHaveBeenCalledWith({
+      origins: ["https://docs.example.com/*"]
+    });
   });
 });
 

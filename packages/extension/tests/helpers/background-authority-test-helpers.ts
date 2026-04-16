@@ -7,6 +7,10 @@ import {
   createMockServerClient
 } from "./background-service-test-helpers.js";
 
+type NormalizeSiteConfigs = NonNullable<
+  Parameters<typeof createBackgroundAuthority>[0]["normalizeSiteConfigs"]
+>;
+
 export function createAuthorityHarness({
   stateOverrides = {},
   chromeApi = createTestChromeApi(),
@@ -37,7 +41,7 @@ export function createAuthorityHarness({
   getOrCreateExtensionClientId?: ReturnType<typeof vi.fn>;
   setLegacySiteConfigsMigrated?: ReturnType<typeof vi.fn>;
   setLastSessionSnapshot?: ReturnType<typeof vi.fn>;
-  normalizeSiteConfigs?: ReturnType<typeof vi.fn>;
+  normalizeSiteConfigs?: NormalizeSiteConfigs;
   setLastError?: ReturnType<typeof vi.fn>;
   syncTraceBindings?: ReturnType<typeof vi.fn>;
   reconcileTabs?: ReturnType<typeof vi.fn>;

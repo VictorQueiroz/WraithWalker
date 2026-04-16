@@ -69,7 +69,7 @@ export async function setConfiguredSiteConfigs(
 ): Promise<void> {
   const result = await sendMessage<SiteConfigsResult>(runtime, {
     type: "config.writeConfiguredSiteConfigs",
-    siteConfigs
+    siteConfigs: normalizeSiteConfigs(siteConfigs)
   });
   if (!result) {
     throw new Error("Failed to update root config.");

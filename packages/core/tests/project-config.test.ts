@@ -5,6 +5,7 @@ import {
   readConfiguredSiteConfigs,
   readProjectConfig,
   resolveConfiguredSite,
+  writeProjectConfig,
   writeConfiguredSiteConfigs
 } from "../src/project-config.mts";
 import {
@@ -59,6 +60,134 @@ describe("project config helpers", () => {
     });
   });
 
+  it("returns canonical configured sites on read without rewriting duplicate raw entries", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-project-config-"
+    });
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [
+        {
+          origin: "app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    await expect(readProjectConfig(root.rootPath)).resolves.toEqual({
+      schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ]
+    });
+    await expect(readConfiguredSiteConfigs(root.rootPath)).resolves.toEqual([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
+    await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
+      schemaVersion: 1,
+      sites: [
+        {
+          origin: "app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+  });
+
+  it("canonicalizes duplicate normalized origins before writing configured sites", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-project-config-"
+    });
+
+    await writeConfiguredSiteConfigs(root.rootPath, [
+      {
+        origin: "app.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      } as any,
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+      } as any
+    ]);
+
+    await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
+      schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ]
+    });
+  });
+
+  it("writes project config through the path-based wrapper and persists canonicalized sites", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-project-config-"
+    });
+
+    await expect(
+      writeProjectConfig(root.rootPath, {
+        schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+        sites: [
+          {
+            origin: "app.example.com",
+            createdAt: "2026-04-09T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-08T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+          }
+        ]
+      })
+    ).resolves.toEqual({
+      schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ]
+    });
+
+    await expect(root.readJson(PROJECT_CONFIG_RELATIVE_PATH)).resolves.toEqual({
+      schemaVersion: PROJECT_CONFIG_SCHEMA_VERSION,
+      sites: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ]
+    });
+  });
+
   it("merges explicit config with discovered origins when reading effective site configs", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-project-config-"
@@ -87,6 +216,37 @@ describe("project config helpers", () => {
         createdAt: "2026-04-08T00:00:00.000Z",
         dumpAllowlistPatterns: ["\\.svg$"]
       })
+    ]);
+  });
+
+  it("keeps explicit values authoritative in effective configs while collapsing duplicate normalized origins", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-project-config-"
+    });
+
+    await root.writeProjectConfig({
+      schemaVersion: 1,
+      sites: [
+        {
+          origin: "configured.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        },
+        {
+          origin: "https://configured.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.svg$"]
+        }
+      ]
+    });
+    await root.ensureOrigin({ topOrigin: "https://configured.example.com" });
+
+    await expect(readSiteConfigs(root.rootPath)).resolves.toEqual([
+      {
+        origin: "https://configured.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$", "\\.svg$"]
+      }
     ]);
   });
 

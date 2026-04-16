@@ -95,6 +95,9 @@ async function buildRuntime() {
   await runTsc(path.join(ROOT, "tsconfig.build.json"));
   await buildEsbuild({
     bundle: true,
+    define: {
+      "process.env.NODE_ENV": '"production"'
+    },
     entryPoints: {
       background: path.join(ROOT, "src", "background.ts"),
       offscreen: path.join(ROOT, "src", "offscreen.ts"),
@@ -104,6 +107,7 @@ async function buildRuntime() {
     format: "esm",
     legalComments: "none",
     logLevel: "silent",
+    minify: true,
     outdir: PATHS.emitDir,
     platform: "browser",
     sourcemap: false,

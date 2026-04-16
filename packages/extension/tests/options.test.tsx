@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
 import {
@@ -21,6 +21,26 @@ import { createWraithwalkerFixtureRoot } from "../../../test-support/wraithwalke
 
 function renderRoot() {
   document.body.innerHTML = '<div id="root"></div>';
+}
+
+function getWorkspaceStatusSection(): HTMLElement {
+  const heading = screen.getByRole("heading", { name: "Workspace Status" });
+  const section = heading.closest("section");
+
+  if (!section) {
+    throw new Error("Workspace Status section not found.");
+  }
+
+  return section;
+}
+
+function getReadinessChecklist(): HTMLElement {
+  return screen.getByLabelText("Capture readiness checklist");
+}
+
+function hasExactTextContent(text: string) {
+  return (_content: string, element?: Element | null) =>
+    element?.textContent?.replace(/\s+/g, " ").trim() === text;
 }
 
 function createWindowWithDirectoryPicker(
@@ -614,6 +634,63 @@ describe("options entrypoint", () => {
     }
   });
 
+  it("does not add an origin when the normalized origin is already configured", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const user = userEvent.setup();
+    const setSiteConfigs = vi.fn(async () => undefined);
+    const permissions = {
+      request: vi.fn().mockResolvedValue(true),
+      remove: vi.fn().mockResolvedValue(true)
+    };
+    const readyRoot = createReadyRootDeps();
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions,
+        runtime: {
+          sendMessage: createRuntimeSendMessage()
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([createStoredSite()]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs,
+      ...readyRoot,
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      await screen.findByText(/Remembered Browser Root is ready\./);
+      await user.type(
+        await screen.findByLabelText("Exact origin"),
+        "app.example.com"
+      );
+      await user.click(screen.getByRole("button", { name: "Add Origin" }));
+
+      expect(permissions.request).toHaveBeenCalledWith({
+        origins: ["https://app.example.com/*"]
+      });
+      expect(setSiteConfigs).not.toHaveBeenCalled();
+      expect(
+        await screen.findByText(
+          "Origin https://app.example.com is already enabled."
+        )
+      ).toBeTruthy();
+      expect(
+        (screen.getByLabelText("Exact origin") as HTMLInputElement).value
+      ).toBe("app.example.com");
+    } finally {
+      options.unmount();
+    }
+  });
+
   it("blocks further origin editing if the server disconnects after a save and no local root is available", async () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
@@ -715,7 +792,11 @@ describe("options entrypoint", () => {
         )
       ).toBeTruthy();
       expect(
-        screen.getByText(/Next: add your first origin so capture can start\./i)
+        within(getWorkspaceStatusSection()).getByText(
+          hasExactTextContent(
+            "Next: Choose Root Directory so WraithWalker has a remembered browser workspace."
+          )
+        )
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -769,7 +850,75 @@ describe("options entrypoint", () => {
       expect(
         await screen.findByText(/Settings changes are using Server Root\./)
       ).toBeTruthy();
+      expect(
+        within(getWorkspaceStatusSection()).getByText(
+          hasExactTextContent(
+            "Next: Add your first origin so capture can start."
+          )
+        )
+      ).toBeTruthy();
+      expect(getReadinessChecklist()).toBeTruthy();
+      expect(
+        within(getReadinessChecklist()).getByText("Active Root")
+      ).toBeTruthy();
+      expect(
+        within(getReadinessChecklist()).getByText("Open in Cursor")
+      ).toBeTruthy();
       expect(screen.getByText(/Editing Server Root\./)).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+  });
+
+  it("shows live capture guidance in the workspace status card", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const readyRoot = createReadyRootDeps();
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn().mockResolvedValue(true),
+          remove: vi.fn().mockResolvedValue(true)
+        },
+        runtime: {
+          sendMessage: createRuntimeSendMessage({
+            sessionSnapshot: {
+              sessionActive: true,
+              attachedTabIds: [4],
+              enabledOrigins: ["https://app.example.com"],
+              rootReady: true,
+              captureDestination: "local",
+              captureRootPath: "/tmp/browser-root",
+              lastError: ""
+            }
+          })
+        }
+      },
+      getSiteConfigs: vi.fn().mockResolvedValue([createStoredSite()]),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      ...readyRoot,
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(
+        await screen.findByText(
+          hasExactTextContent(
+            "Live: Capture is active in Remembered Browser Root."
+          )
+        )
+      ).toBeTruthy();
+      expect(screen.getByText("Current Session")).toBeTruthy();
+      expect(within(getReadinessChecklist()).getByText("Active")).toBeTruthy();
     } finally {
       options.unmount();
     }
@@ -1583,7 +1732,11 @@ describe("options entrypoint", () => {
         )
       ).toBeTruthy();
       expect(
-        screen.getByText(/Next: add your first origin so capture can start\./i)
+        within(getWorkspaceStatusSection()).getByText(
+          hasExactTextContent(
+            "Next: Choose Root Directory so WraithWalker has a remembered browser workspace."
+          )
+        )
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -1678,6 +1831,13 @@ describe("options entrypoint", () => {
     });
 
     try {
+      expect(
+        await screen.findByText(
+          hasExactTextContent(
+            "Next: Reconnect Root Directory so the Remembered Browser Root can be used again."
+          )
+        )
+      ).toBeTruthy();
       await user.click(
         await screen.findByRole("button", { name: "Reconnect Root Directory" })
       );

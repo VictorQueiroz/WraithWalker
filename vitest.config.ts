@@ -11,7 +11,7 @@ export default defineConfig({
     alias: createWorkspacePackageAliases(["core", "mcp-server"])
   },
   test: {
-    include: ["tests/contracts/**/*.test.ts"],
-    environment: "node"
+    environment: "node",
+    exclude: ["tests/smoke/**/*.test.ts"]
   }
 });

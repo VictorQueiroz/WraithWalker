@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBackgroundAuthority } from "../src/lib/background-authority.js";
+import { normalizeSiteConfigs } from "../src/lib/site-config.js";
 import { createAuthorityHarness } from "./helpers/background-authority-test-helpers.js";
 import {
   createBackgroundState,
@@ -62,6 +63,98 @@ describe("background authority data", () => {
         }
       ],
       sentinel: { rootId: "local-root" }
+    });
+  });
+
+  it("collapses duplicate normalized origins when reading local configured site configs", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.type === "fs.ensureRoot") {
+        return {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        };
+      }
+      if (message?.type === "fs.readConfiguredSiteConfigs") {
+        return {
+          ok: true,
+          siteConfigs: [
+            {
+              origin: "local.example.com",
+              createdAt: "2026-04-10T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            },
+            {
+              origin: "https://local.example.com",
+              createdAt: "2026-04-09T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+            }
+          ],
+          sentinel: { rootId: "local-root" }
+        };
+      }
+      return { ok: true };
+    });
+
+    const { authority } = createAuthorityHarness({
+      chromeApi,
+      normalizeSiteConfigs,
+      serverClientOverrides: {
+        heartbeat: vi.fn().mockRejectedValue(new Error("offline"))
+      }
+    });
+
+    const result = await authority.readConfiguredSiteConfigsForAuthority();
+
+    expect(result).toEqual({
+      ok: true,
+      siteConfigs: [
+        {
+          origin: "https://local.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ],
+      sentinel: { rootId: "local-root" }
+    });
+  });
+
+  it("collapses duplicate normalized origins when reading server configured site configs", async () => {
+    const { authority } = createAuthorityHarness({
+      normalizeSiteConfigs,
+      serverClientOverrides: {
+        readConfiguredSiteConfigs: vi.fn().mockResolvedValue({
+          siteConfigs: [
+            {
+              origin: "server.example.com",
+              createdAt: "2026-04-10T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$"]
+            },
+            {
+              origin: "https://server.example.com",
+              createdAt: "2026-04-09T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+            }
+          ],
+          sentinel: { rootId: "server-root" }
+        })
+      }
+    });
+
+    const result = await authority.readConfiguredSiteConfigsForAuthority();
+
+    expect(result).toEqual({
+      ok: true,
+      siteConfigs: [
+        {
+          origin: "https://server.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ],
+      sentinel: { rootId: "server-root" }
     });
   });
 
@@ -306,6 +399,98 @@ describe("background authority data", () => {
     expect(reconcileTabs).toHaveBeenCalled();
   });
 
+  it("writes canonicalized site configs to the local fallback authority", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.type === "fs.ensureRoot") {
+        return {
+          ok: true,
+          sentinel: { rootId: "local-root" },
+          permission: "granted"
+        };
+      }
+      if (message?.type === "fs.writeConfiguredSiteConfigs") {
+        return {
+          ok: true,
+          siteConfigs: message.payload?.siteConfigs ?? [],
+          sentinel: { rootId: "local-root" }
+        };
+      }
+      return { ok: true };
+    });
+
+    const { authority } = createAuthorityHarness({
+      chromeApi,
+      normalizeSiteConfigs,
+      serverClientOverrides: {
+        heartbeat: vi.fn().mockRejectedValue(new Error("offline"))
+      }
+    });
+
+    await authority.writeConfiguredSiteConfigsForAuthority([
+      {
+        origin: "local.example.com",
+        createdAt: "2026-04-10T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      },
+      {
+        origin: "https://local.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+      }
+    ]);
+
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "fs.writeConfiguredSiteConfigs",
+        payload: {
+          siteConfigs: [
+            {
+              origin: "https://local.example.com",
+              createdAt: "2026-04-09T00:00:00.000Z",
+              dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+            }
+          ]
+        }
+      })
+    );
+  });
+
+  it("writes canonicalized site configs to the server authority", async () => {
+    const writeConfiguredSiteConfigs = vi.fn().mockResolvedValue({
+      siteConfigs: [],
+      sentinel: { rootId: "server-root" }
+    });
+    const { authority } = createAuthorityHarness({
+      normalizeSiteConfigs,
+      serverClientOverrides: {
+        writeConfiguredSiteConfigs
+      }
+    });
+
+    await authority.writeConfiguredSiteConfigsForAuthority([
+      {
+        origin: "server.example.com",
+        createdAt: "2026-04-10T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      },
+      {
+        origin: "https://server.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+      }
+    ]);
+
+    expect(writeConfiguredSiteConfigs).toHaveBeenCalledWith([
+      {
+        origin: "https://server.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
+  });
+
   it("refreshes local state from offscreen storage and preserves the prior version when the manifest omits one", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.runtime.getManifest = vi.fn(() => ({}));
@@ -355,5 +540,41 @@ describe("background authority data", () => {
 
     expect(state.localEnabledOrigins).toEqual(["https://local.example.com"]);
     expect(state.extensionVersion).toBe("9.9.9");
+  });
+
+  it("refreshStoredConfig collapses duplicate normalized origins into local state", async () => {
+    const { authority, state } = createAuthorityHarness({
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "local.example.com",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://local.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]),
+      normalizeSiteConfigs
+    });
+
+    await authority.refreshStoredConfig();
+
+    expect(state.localEnabledOrigins).toEqual(["https://local.example.com"]);
+    expect([...state.localSiteConfigsByOrigin.values()]).toEqual([
+      {
+        origin: "https://local.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
+    expect([...state.siteConfigsByOrigin.values()]).toEqual([
+      {
+        origin: "https://local.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
   });
 });

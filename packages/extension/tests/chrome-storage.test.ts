@@ -64,6 +64,31 @@ describe("chrome storage helpers", () => {
     ]);
   });
 
+  it("collapses duplicate normalized site configs on read", async () => {
+    storageGet.mockResolvedValue({
+      [STORAGE_KEYS.SITES]: [
+        {
+          origin: "app.example.com",
+          createdAt: "2026-04-04T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    await expect(getSiteConfigs()).resolves.toEqual([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-03T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
+  });
+
   it("tracks whether legacy site config has already been migrated into a root", async () => {
     storageGet.mockResolvedValueOnce({});
     await expect(getLegacySiteConfigsMigrated()).resolves.toBe(false);
@@ -158,6 +183,31 @@ describe("chrome storage helpers", () => {
     });
     expect(storageSet).toHaveBeenNthCalledWith(3, {
       [STORAGE_KEYS.LAST_SESSION]: snapshot
+    });
+  });
+
+  it("persists canonicalized site configs when duplicate normalized origins are provided", async () => {
+    await setSiteConfigs([
+      {
+        origin: "app.example.com",
+        createdAt: "2026-04-04T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      },
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-03T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+      }
+    ]);
+
+    expect(storageSet).toHaveBeenCalledWith({
+      [STORAGE_KEYS.SITES]: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ]
     });
   });
 

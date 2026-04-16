@@ -8,6 +8,7 @@ import {
   deriveCaptureRootState,
   deriveEditorLaunchState,
   derivePopupStartBlockReason,
+  deriveWorkspaceReadiness,
   deriveWorkspaceStatus,
   resolvePopupAlert
 } from "../src/lib/workspace-open-state.js";
@@ -422,6 +423,352 @@ describe("workspace open state", () => {
         workspaceStatus: missingRootStatus
       })
     ).toBe("missing_root");
+
+    const missingRootAndOriginsStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: false,
+        captureDestination: "none",
+        captureRootPath: "",
+        lastError: ""
+      },
+      captureRootState: { kind: "missing_handle" }
+    });
+    expect(
+      derivePopupStartBlockReason({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        },
+        workspaceStatus: missingRootAndOriginsStatus
+      })
+    ).toBe("missing_root");
+  });
+
+  it("derives readiness for ready, blocked, and live workspace states", () => {
+    const readyServerStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: true,
+        captureDestination: "server",
+        captureRootPath: "/tmp/server-root",
+        lastError: ""
+      },
+      rememberedRootState: {
+        hasHandle: false,
+        permission: "prompt"
+      }
+    });
+    expect(
+      deriveWorkspaceReadiness({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: true,
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root",
+          lastError: ""
+        },
+        workspaceStatus: readyServerStatus,
+        editorLaunchState: deriveEditorLaunchState(
+          DEFAULT_NATIVE_HOST_CONFIG,
+          "cursor"
+        ),
+        editorLabel: "Cursor"
+      })
+    ).toMatchObject({
+      canStartCapture: true,
+      startBlockReason: null,
+      primaryNextAction: "start_session",
+      primaryNextActionLabel: "Ready",
+      primaryNextActionVariant: "success",
+      summaryText: "Ready to start capture in Server Root.",
+      openActionHint: "Open in Cursor uses Server Root."
+    });
+
+    const localStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: true,
+        captureDestination: "local",
+        captureRootPath: "/tmp/local-root",
+        lastError: ""
+      },
+      rememberedRootState: {
+        hasHandle: true,
+        permission: "granted"
+      }
+    });
+    expect(
+      deriveWorkspaceReadiness({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        workspaceStatus: localStatus,
+        editorLaunchState: deriveEditorLaunchState(
+          DEFAULT_NATIVE_HOST_CONFIG,
+          "cursor"
+        ),
+        editorLabel: "Cursor"
+      })
+    ).toMatchObject({
+      canStartCapture: true,
+      primaryNextAction: "start_session",
+      summaryText: "Ready to start capture in Remembered Browser Root.",
+      openActionHint: "Open in Cursor uses Remembered Browser Root."
+    });
+
+    const missingRootStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: false,
+        captureDestination: "none",
+        captureRootPath: "",
+        lastError: ""
+      },
+      rememberedRootState: {
+        hasHandle: true,
+        permission: "prompt"
+      }
+    });
+    expect(
+      deriveWorkspaceReadiness({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        },
+        workspaceStatus: missingRootStatus,
+        editorLaunchState: deriveEditorLaunchState(
+          DEFAULT_NATIVE_HOST_CONFIG,
+          "cursor"
+        ),
+        editorLabel: "Cursor"
+      })
+    ).toMatchObject({
+      canStartCapture: false,
+      startBlockReason: "missing_root",
+      primaryNextAction: "reconnect_root",
+      primaryNextActionLabel: "Next",
+      primaryNextActionVariant: "destructive",
+      summaryText: "Next: Reconnect Root Directory in Settings."
+    });
+
+    const missingOriginsStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: [],
+        rootReady: true,
+        captureDestination: "local",
+        captureRootPath: "/tmp/local-root",
+        lastError: ""
+      },
+      rememberedRootState: {
+        hasHandle: true,
+        permission: "granted"
+      }
+    });
+    expect(
+      deriveWorkspaceReadiness({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: [],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        workspaceStatus: missingOriginsStatus,
+        editorLaunchState: deriveEditorLaunchState(
+          DEFAULT_NATIVE_HOST_CONFIG,
+          "cursor"
+        ),
+        editorLabel: "Cursor"
+      })
+    ).toMatchObject({
+      canStartCapture: false,
+      startBlockReason: "missing_origins",
+      primaryNextAction: "add_origin",
+      summaryText: "Next: Add your first origin in Settings."
+    });
+
+    const activeStatus = deriveWorkspaceStatus({
+      snapshot: {
+        sessionActive: true,
+        attachedTabIds: [4],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: true,
+        captureDestination: "local",
+        captureRootPath: "/tmp/local-root",
+        lastError: ""
+      },
+      rememberedRootState: {
+        hasHandle: true,
+        permission: "granted"
+      }
+    });
+    expect(
+      deriveWorkspaceReadiness({
+        snapshot: {
+          sessionActive: true,
+          attachedTabIds: [4],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        workspaceStatus: activeStatus,
+        editorLaunchState: deriveEditorLaunchState(
+          DEFAULT_NATIVE_HOST_CONFIG,
+          "cursor"
+        ),
+        editorLabel: "Cursor"
+      })
+    ).toMatchObject({
+      canStartCapture: false,
+      primaryNextAction: "session_active",
+      primaryNextActionLabel: "Live",
+      primaryNextActionVariant: "success",
+      summaryText: "Capture is active in Remembered Browser Root."
+    });
+  });
+
+  it("derives editor readiness items for server, local, and no-root contexts", () => {
+    const serverReadiness = deriveWorkspaceReadiness({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: true,
+        captureDestination: "server",
+        captureRootPath: "/tmp/server-root",
+        lastError: ""
+      },
+      workspaceStatus: deriveWorkspaceStatus({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: true,
+          captureDestination: "server",
+          captureRootPath: "/tmp/server-root",
+          lastError: ""
+        },
+        rememberedRootState: {
+          hasHandle: false,
+          permission: "prompt"
+        }
+      }),
+      editorLaunchState: deriveEditorLaunchState(
+        DEFAULT_NATIVE_HOST_CONFIG,
+        "cursor"
+      ),
+      editorLabel: "Cursor"
+    });
+    expect(serverReadiness.items[2]).toMatchObject({
+      label: "Open in Cursor",
+      value: "Uses Server Root",
+      state: "ready"
+    });
+
+    const promptReadiness = deriveWorkspaceReadiness({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: true,
+        captureDestination: "local",
+        captureRootPath: "/tmp/local-root",
+        lastError: ""
+      },
+      workspaceStatus: deriveWorkspaceStatus({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: true,
+          captureDestination: "local",
+          captureRootPath: "/tmp/local-root",
+          lastError: ""
+        },
+        rememberedRootState: {
+          hasHandle: true,
+          permission: "granted"
+        }
+      }),
+      editorLaunchState: deriveEditorLaunchState(
+        DEFAULT_NATIVE_HOST_CONFIG,
+        "cursor"
+      ),
+      editorLabel: "Cursor"
+    });
+    expect(promptReadiness.items[2]).toMatchObject({
+      value: "Prompt handoff",
+      state: "ready"
+    });
+
+    const missingRootReadiness = deriveWorkspaceReadiness({
+      snapshot: {
+        sessionActive: false,
+        attachedTabIds: [],
+        enabledOrigins: ["https://app.example.com"],
+        rootReady: false,
+        captureDestination: "none",
+        captureRootPath: "",
+        lastError: ""
+      },
+      workspaceStatus: deriveWorkspaceStatus({
+        snapshot: {
+          sessionActive: false,
+          attachedTabIds: [],
+          enabledOrigins: ["https://app.example.com"],
+          rootReady: false,
+          captureDestination: "none",
+          captureRootPath: "",
+          lastError: ""
+        },
+        rememberedRootState: {
+          hasHandle: false,
+          permission: "prompt"
+        }
+      }),
+      editorLaunchState: deriveEditorLaunchState(
+        DEFAULT_NATIVE_HOST_CONFIG,
+        "cursor"
+      ),
+      editorLabel: "Cursor"
+    });
+    expect(missingRootReadiness.items[2]).toMatchObject({
+      value: "Waiting on root",
+      state: "needs_attention"
+    });
   });
 
   it("resolves popup alerts by precedence", () => {

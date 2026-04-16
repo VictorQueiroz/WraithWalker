@@ -148,6 +148,9 @@ describe("popup entrypoint", () => {
       expect(screen.getAllByText("Remembered Browser Root")).toHaveLength(2);
       expect(screen.getByText("1 enabled")).toBeTruthy();
       expect(
+        screen.getByText("Capture is active in Remembered Browser Root.")
+      ).toBeTruthy();
+      expect(
         screen.getByText("Open in Cursor uses Remembered Browser Root.")
       ).toBeTruthy();
       expect(
@@ -1281,7 +1284,10 @@ describe("popup entrypoint", () => {
       expect(await screen.findByLabelText("Workspace status")).toBeTruthy();
       expect(await screen.findAllByText("Server Root")).toHaveLength(2);
       expect(
-        await screen.findByText("Open actions use Server Root.")
+        await screen.findByText("Ready to start capture in Server Root.")
+      ).toBeTruthy();
+      expect(
+        await screen.findByText("Open in Cursor uses Server Root.")
       ).toBeTruthy();
       expect(await screen.findByText("/tmp/server-root")).toBeTruthy();
       expect(
@@ -1428,7 +1434,10 @@ describe("popup entrypoint", () => {
       await flushPromises();
 
       expect(await screen.findAllByText("Server Root")).toHaveLength(2);
-      expect(screen.getByText("Open actions use Server Root.")).toBeTruthy();
+      expect(
+        screen.getByText("Ready to start capture in Server Root.")
+      ).toBeTruthy();
+      expect(screen.getByText("Open in Cursor uses Server Root.")).toBeTruthy();
       expect(screen.queryByText("Cursor prompt launch failed.")).toBeNull();
     } finally {
       popup.unmount();
@@ -1499,6 +1508,9 @@ describe("popup entrypoint", () => {
         )
       ).toBeTruthy();
       expect(
+        screen.getByText("Next: Add your first origin in Settings.")
+      ).toBeTruthy();
+      expect(
         (
           screen.getByRole("button", {
             name: "Start Session"
@@ -1543,6 +1555,9 @@ describe("popup entrypoint", () => {
         await screen.findByText(
           "Choose Root Directory in Settings before starting capture."
         )
+      ).toBeTruthy();
+      expect(
+        screen.getByText("Next: Choose Root Directory in Settings.")
       ).toBeTruthy();
       expect(screen.getByText("No Active Root")).toBeTruthy();
       expect(

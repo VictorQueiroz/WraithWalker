@@ -1,19 +1,14 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { createCoverageConfig } from "../../test-support/coverage-config.ts";
-import { preferMtsSourcePlugin } from "../../test-support/vitest-utils.ts";
-
-const coreSrcDir = `${fileURLToPath(new URL("../core/src/", import.meta.url))}`;
+import {
+  createWorkspacePackageAliases,
+  createWorkspaceSourcePlugins
+} from "../../test-support/vitest-utils.ts";
 
 export default defineConfig({
-  plugins: [preferMtsSourcePlugin()],
+  plugins: createWorkspaceSourcePlugins(),
   resolve: {
-    alias: [
-      {
-        find: /^@wraithwalker\/core\/(.+)$/,
-        replacement: `${coreSrcDir}$1.mts`
-      }
-    ]
+    alias: createWorkspacePackageAliases(["core"])
   },
   test: {
     environment: "node",

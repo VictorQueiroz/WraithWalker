@@ -8,9 +8,9 @@ import type {
 import type { PopupRuntimeApi } from "../lib/chrome-api.js";
 import type { NativeHostConfig, SessionSnapshot } from "../lib/types.js";
 import {
-  derivePopupStartBlockReason,
   deriveCaptureRootState,
   deriveEditorLaunchState,
+  deriveWorkspaceReadiness,
   deriveWorkspaceStatus,
   resolvePopupAlert,
   type CaptureRootState,
@@ -109,13 +109,15 @@ export function PopupApp({
       }),
     [captureRootState, snapshot]
   );
-  const startBlockReason = React.useMemo(
+  const workspaceReadiness = React.useMemo(
     () =>
-      derivePopupStartBlockReason({
+      deriveWorkspaceReadiness({
         snapshot,
-        workspaceStatus
+        workspaceStatus,
+        editorLaunchState,
+        editorLabel: preferredEditor.label
       }),
-    [snapshot, workspaceStatus]
+    [editorLaunchState, preferredEditor.label, snapshot, workspaceStatus]
   );
 
   const refreshEnvironment = React.useCallback(async () => {
@@ -184,15 +186,9 @@ export function PopupApp({
     editorLaunchState,
     actionDiagnostic: actionAlert
   });
-  const openActionHint =
-    workspaceStatus.authority === "server"
-      ? `Open actions use ${workspaceStatus.authorityLabel}.`
-      : workspaceStatus.authority === "browser_root"
-        ? `Open in ${preferredEditor.label} uses ${workspaceStatus.authorityLabel}.`
-        : "Choose Root Directory in Settings to give WraithWalker a remembered workspace.";
   const startButtonDisabled =
     busyAction !== null ||
-    (!snapshot?.sessionActive && startBlockReason !== null);
+    (!snapshot?.sessionActive && workspaceReadiness.startBlockReason !== null);
 
   async function handleToggleSession() {
     setBusyAction("toggle");
@@ -307,6 +303,9 @@ export function PopupApp({
                 <span className="break-all">{snapshot.captureRootPath}</span>
               </div>
             ) : null}
+            <div className="rounded-xl border border-border/70 bg-white/70 px-3 py-2 text-sm font-medium text-foreground">
+              {workspaceReadiness.summaryText}
+            </div>
           </div>
 
           {alert ? <Alert variant={alert.variant}>{alert.text}</Alert> : null}
@@ -329,7 +328,9 @@ export function PopupApp({
                 ? "Opening..."
                 : `Open in ${preferredEditor.label}`}
             </Button>
-            <p className="text-xs text-muted-foreground">{openActionHint}</p>
+            <p className="text-xs text-muted-foreground">
+              {workspaceReadiness.openActionHint}
+            </p>
             {snapshot?.captureDestination === "server" ? (
               <Button
                 type="button"

@@ -98,6 +98,33 @@ describe("root config helpers", () => {
     ]);
   });
 
+  it("collapses duplicate normalized root configs on read", async () => {
+    runtime.sendMessage.mockResolvedValueOnce({
+      ok: true,
+      siteConfigs: [
+        {
+          origin: "app.example.com",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        },
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ],
+      sentinel: { rootId: "root-123" }
+    });
+
+    await expect(getConfiguredSiteConfigs(runtime)).resolves.toEqual([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
+  });
+
   it("treats missing or unavailable root configs as empty config lists", async () => {
     runtime.sendMessage
       .mockResolvedValueOnce(null)
@@ -143,6 +170,43 @@ describe("root config helpers", () => {
     expect(runtime.sendMessage).toHaveBeenCalledWith({
       type: "config.writeConfiguredSiteConfigs",
       siteConfigs: []
+    });
+  });
+
+  it("writes canonicalized configured site configs through the background runtime", async () => {
+    runtime.sendMessage.mockResolvedValueOnce({
+      ok: true,
+      siteConfigs: [],
+      sentinel: { rootId: "root-123" }
+    });
+
+    await expect(
+      setConfiguredSiteConfigs(
+        [
+          {
+            origin: "app.example.com",
+            createdAt: "2026-04-10T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$"]
+          },
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-09T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+          }
+        ],
+        runtime
+      )
+    ).resolves.toBeUndefined();
+
+    expect(runtime.sendMessage).toHaveBeenCalledWith({
+      type: "config.writeConfiguredSiteConfigs",
+      siteConfigs: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+        }
+      ]
     });
   });
 });

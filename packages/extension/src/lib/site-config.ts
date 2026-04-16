@@ -10,10 +10,26 @@ import {
   isValidDumpAllowlistPatterns,
   mergeSiteConfigs,
   normalizeDumpAllowlistPatterns,
-  normalizeSiteConfig,
-  normalizeSiteConfigs,
+  normalizeSiteConfig as coreNormalizeSiteConfig,
+  normalizeSiteConfigs as coreNormalizeSiteConfigs,
   shouldDumpRequest
 } from "@wraithwalker/core/site-config";
+import type { SiteConfig } from "./types.js";
+
+type RawSiteConfig = Partial<SiteConfig> & {
+  origin: string;
+  dumpAllowlistPattern?: string;
+};
+
+export function normalizeSiteConfig(siteConfig: RawSiteConfig): SiteConfig {
+  return coreNormalizeSiteConfig(siteConfig);
+}
+
+export function normalizeSiteConfigs(
+  siteConfigs: RawSiteConfig[]
+): SiteConfig[] {
+  return coreNormalizeSiteConfigs(siteConfigs);
+}
 
 export {
   createConfiguredSiteConfig,
@@ -27,7 +43,5 @@ export {
   isValidDumpAllowlistPatterns,
   mergeSiteConfigs,
   normalizeDumpAllowlistPatterns,
-  normalizeSiteConfig,
-  normalizeSiteConfigs,
   shouldDumpRequest
 };

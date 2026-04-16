@@ -122,6 +122,29 @@ describe("site config tool registration", () => {
     ]);
   });
 
+  it("returns canonicalized configured sites when runtime data contains duplicate normalized origins", async () => {
+    const harness = createHarness({
+      initialConfigs: [
+        createSiteConfig("app.example.com", ["\\.js$"]),
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-13T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    const result = await harness.callTool("list-configured-sites", {});
+
+    expect(readJson(result)).toEqual([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-13T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$"]
+      }
+    ]);
+  });
+
   it("rejects invalid origins and avoids rewriting existing whitelist entries", async () => {
     const existing = createSiteConfig("https://app.example.com", ["\\.js$"]);
     const harness = createHarness({
@@ -163,6 +186,31 @@ describe("site config tool registration", () => {
       configuredSites: [existing]
     });
     expect(harness.runtime.writeConfiguredSiteConfigs).not.toHaveBeenCalled();
+  });
+
+  it("removes duplicate normalized origins as a single canonical site write", async () => {
+    const harness = createHarness({
+      initialConfigs: [
+        createSiteConfig("app.example.com", ["\\.js$"]),
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-13T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    const result = await harness.callTool("remove-site", {
+      origin: "https://app.example.com"
+    });
+
+    expect(readJson(result)).toEqual({
+      changed: true,
+      removedOrigin: "https://app.example.com",
+      configuredSites: []
+    });
+    expect(harness.runtime.writeConfiguredSiteConfigs).toHaveBeenCalledWith([]);
+    expect(harness.getConfiguredSiteConfigs()).toEqual([]);
   });
 
   it("surfaces site-pattern validation failures before rewriting configs", async () => {
@@ -259,6 +307,50 @@ describe("site config tool registration", () => {
         })
       })
     );
+  });
+
+  it("updates dump patterns from duplicate normalized origins using one canonical explicit site", async () => {
+    const harness = createHarness({
+      initialConfigs: [
+        createSiteConfig("app.example.com", ["\\.js$"]),
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-13T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$", "\\.js$"]
+        }
+      ]
+    });
+
+    const result = await harness.callTool("update-site-patterns", {
+      origin: "https://app.example.com",
+      mode: "append",
+      dumpPatterns: ["\\.svg$"]
+    });
+
+    expect(readJson(result)).toEqual(
+      expect.objectContaining({
+        changed: true,
+        siteConfig: {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-13T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$", "\\.json$", "\\.svg$"]
+        },
+        configuredSites: [
+          {
+            origin: "https://app.example.com",
+            createdAt: "2026-04-13T00:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.js$", "\\.json$", "\\.svg$"]
+          }
+        ]
+      })
+    );
+    expect(harness.getConfiguredSiteConfigs()).toEqual([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-13T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$", "\\.json$", "\\.svg$"]
+      }
+    ]);
   });
 
   it("reports prepare-site readiness across inactive, ready, and invalid-origin states", async () => {

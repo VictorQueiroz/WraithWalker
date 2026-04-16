@@ -306,8 +306,13 @@ export function createBackgroundContextMenu({
       lastKnownOrigins = result.siteConfigs.map(
         (siteConfig) => siteConfig.origin
       );
-      setLastError("");
-      await updateWhitelistMenuState(UNWHITELIST_MENU_STATE);
+      if (result.outcome === "already_enabled") {
+        setLastError("");
+        await updateWhitelistMenuState(UNWHITELIST_MENU_STATE);
+      } else {
+        setLastError("");
+        await updateWhitelistMenuState(UNWHITELIST_MENU_STATE);
+      }
     } catch (error) {
       setLastError(error instanceof Error ? error.message : String(error));
     }

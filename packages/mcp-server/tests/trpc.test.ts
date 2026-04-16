@@ -318,6 +318,11 @@ describe("tRPC capture backend", () => {
       schemaVersion: 1,
       sites: [
         {
+          origin: "configured.example.com",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.json$"]
+        },
+        {
           origin: "https://configured.example.com",
           createdAt: "2026-04-08T00:00:00.000Z",
           dumpAllowlistPatterns: ["\\.svg$"]
@@ -337,12 +342,17 @@ describe("tRPC capture backend", () => {
         {
           origin: "https://configured.example.com",
           createdAt: "2026-04-08T00:00:00.000Z",
-          dumpAllowlistPatterns: ["\\.svg$"]
+          dumpAllowlistPatterns: ["\\.json$", "\\.svg$"]
         }
       ]);
 
       const updated = await client.config.writeConfiguredSiteConfigs.mutate({
         siteConfigs: [
+          {
+            origin: "server-write.example.com",
+            createdAt: "2026-04-09T12:00:00.000Z",
+            dumpAllowlistPatterns: ["\\.json$"]
+          },
           {
             origin: "https://server-write.example.com",
             createdAt: "2026-04-08T12:00:00.000Z",
@@ -357,7 +367,7 @@ describe("tRPC capture backend", () => {
           {
             origin: "https://server-write.example.com",
             createdAt: "2026-04-08T12:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.css$"]
+            dumpAllowlistPatterns: ["\\.json$", "\\.css$"]
           }
         ]
       });
@@ -369,7 +379,7 @@ describe("tRPC capture backend", () => {
           {
             origin: "https://server-write.example.com",
             createdAt: "2026-04-08T12:00:00.000Z",
-            dumpAllowlistPatterns: ["\\.css$"]
+            dumpAllowlistPatterns: ["\\.json$", "\\.css$"]
           }
         ]
       });

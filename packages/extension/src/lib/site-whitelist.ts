@@ -10,6 +10,7 @@ export interface WhitelistSiteOriginOptions {
 }
 
 export interface WhitelistSiteOriginResult {
+  outcome: "added" | "already_enabled";
   origin: string;
   permissionPattern: string;
   siteConfigs: SiteConfig[];
@@ -30,6 +31,19 @@ export async function whitelistSiteOrigin({
   }
 
   const currentSiteConfigs = await readSiteConfigs();
+  if (
+    currentSiteConfigs.some(
+      (siteConfig) => normalizeSiteInput(siteConfig.origin) === origin
+    )
+  ) {
+    return {
+      outcome: "already_enabled",
+      origin,
+      permissionPattern,
+      siteConfigs: currentSiteConfigs
+    };
+  }
+
   const nextSiteConfigs = [
     ...currentSiteConfigs,
     createConfiguredSiteConfig(origin)
@@ -38,6 +52,7 @@ export async function whitelistSiteOrigin({
   await writeSiteConfigs(nextSiteConfigs);
 
   return {
+    outcome: "added",
     origin,
     permissionPattern,
     siteConfigs: nextSiteConfigs

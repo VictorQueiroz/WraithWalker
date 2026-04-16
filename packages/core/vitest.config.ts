@@ -1,9 +1,9 @@
 import { defineConfig } from "vitest/config";
 import { createCoverageConfig } from "../../test-support/coverage-config.ts";
-import { preferMtsSourcePlugin } from "../../test-support/vitest-utils.ts";
+import { createWorkspaceSourcePlugins } from "../../test-support/vitest-utils.ts";
 
 export default defineConfig({
-  plugins: [preferMtsSourcePlugin()],
+  plugins: createWorkspaceSourcePlugins(),
   test: {
     environment: "node",
     coverage: createCoverageConfig({

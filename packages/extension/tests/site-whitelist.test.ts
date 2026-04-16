@@ -109,4 +109,41 @@ describe("site whitelist lifecycle", () => {
       })
     ]);
   });
+
+  it("returns an already-enabled outcome for a duplicate origin after normalization without writing configs", async () => {
+    const requestHostPermission = vi.fn().mockResolvedValue(true);
+    const readSiteConfigs = vi.fn().mockResolvedValue([
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }
+    ]);
+    const writeSiteConfigs = vi.fn().mockResolvedValue(undefined);
+
+    const result = await whitelistSiteOrigin({
+      originInput: "app.example.com",
+      requestHostPermission,
+      readSiteConfigs,
+      writeSiteConfigs
+    });
+
+    expect(requestHostPermission).toHaveBeenCalledWith(
+      "https://app.example.com/*"
+    );
+    expect(readSiteConfigs).toHaveBeenCalledTimes(1);
+    expect(writeSiteConfigs).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      outcome: "already_enabled",
+      origin: "https://app.example.com",
+      permissionPattern: "https://app.example.com/*",
+      siteConfigs: [
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-08T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
+    });
+  });
 });
