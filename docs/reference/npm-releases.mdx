@@ -1,4 +1,7 @@
-# Package and Extension Releases
+---
+title: Package and Extension Releases
+description: Understand workspace-scoped versioning, Changesets, and release automation.
+---
 
 WraithWalker uses workspace-scoped versioning. The npm packages and the Chrome extension no longer share one lockstep release number.
 
@@ -15,7 +18,7 @@ The Chrome extension package stays private and is not published to npm, but it i
 
 ## Sources of Truth
 
-- The root [`package.json`](../package.json) is private workspace metadata and is **not** the release source of truth.
+- The root [`package.json`](https://github.com/VictorQueiroz/WraithWalker/blob/main/package.json) is private workspace metadata and is **not** the release source of truth.
 - Each workspace package owns its own version in its own `package.json`.
 - The extension version is sourced from `packages/extension/package.json`.
 - `npm run sync:extension-manifest-version` copies that version into `packages/extension/static/manifest.json`.

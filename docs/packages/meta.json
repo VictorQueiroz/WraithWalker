@@ -1,0 +1,4 @@
+{
+  "title": "Packages",
+  "pages": ["cli", "mcp-server", "native-host", "core"]
+}

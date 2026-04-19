@@ -1,4 +1,7 @@
-# `idb` Reference
+---
+title: idb Reference
+description: Why the extension uses idb and how the runtime is packaged for Chrome.
+---
 
 This is a small implementation note for the extension's IndexedDB wrapper. Most users can ignore it unless they are changing browser-side persistence.
 
@@ -15,6 +18,6 @@ This is a small implementation note for the extension's IndexedDB wrapper. Most 
 
 ## Runtime Integration
 
-- Browser-facing source uses [`packages/extension/src/lib/idb.ts`](../packages/extension/src/lib/idb.ts).
+- Browser-facing source uses [`packages/extension/src/lib/idb.ts`](https://github.com/VictorQueiroz/WraithWalker/blob/main/packages/extension/src/lib/idb.ts).
 - Build-time vendoring copies the npm package ESM runtime into `dist/vendor/idb.js` for the packaged extension.
 - This keeps the packaged runtime import relative and Chrome-extension-compatible while still sourcing the implementation from the installed npm package.

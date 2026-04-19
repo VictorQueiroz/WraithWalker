@@ -1,0 +1,55 @@
+---
+title: Deploying the Manual
+description: Ship the WraithWalker manual to Vercel after the docs app is in place.
+---
+
+This manual app is designed to be deployed as a standalone Next.js app from the monorepo.
+
+<Info>
+  Use a preview deployment first. The Vercel linkage step belongs after the docs
+  app is created and verified locally.
+</Info>
+
+## Recommended Vercel shape
+
+- **Framework:** Next.js
+- **Root Directory:** `apps/manual`
+- **Install Command:** `npm ci`
+- **Build Command:** `npm run build`
+- **Node version:** align with the repo's current requirement (`22+`)
+
+## Safe rollout
+
+<Steps>
+  <Step title="Push the repository">
+    Make sure the manual app and repo config are committed to the repository
+    that Vercel will import.
+  </Step>
+  <Step title="Create or link the project">
+    In Vercel, import the repository and set the root directory to
+    `apps/manual`.
+  </Step>
+  <Step title="Set environment variables intentionally">
+    Add `NEXT_PUBLIC_SITE_URL` only when you know the intended preview or
+    production URL. Do not invent domains or secrets.
+  </Step>
+  <Step title="Verify the preview deployment">
+    Check that the home page, docs routes, search, theme toggle, images, and
+    generated OG images all work before promoting to production.
+  </Step>
+</Steps>
+
+## Project-local linkage notes
+
+- Do not copy `.vercel/project.json` from another repository.
+- Recreate linkage for this repo if you use the Vercel CLI.
+- Keep real Vercel `projectId`, `orgId`, domains, and secrets out of source control.
+
+## Pre-deploy checklist
+
+- `npm run lint --workspace=@wraithwalker/manual`
+- `npm run typecheck --workspace=@wraithwalker/manual`
+- `npm run test --workspace=@wraithwalker/manual`
+- `npm run build --workspace=@wraithwalker/manual`
+
+If you deploy from the dashboard instead of the CLI, make sure the same app still builds cleanly in Vercel's preview environment.
