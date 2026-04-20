@@ -463,6 +463,7 @@ describe("background entrypoint", () => {
 
     await runtime.start();
     await flushPromises();
+    chromeApi.runtime.onMessage.addListener(vi.fn());
 
     expect(runtime.state.serverInfo).toBeNull();
 
@@ -483,6 +484,9 @@ describe("background entrypoint", () => {
       captureDestination: "server",
       captureRootPath: "/tmp/server-root",
       rootReady: true
+    });
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith({
+      type: "workspace.statusChanged"
     });
   });
 

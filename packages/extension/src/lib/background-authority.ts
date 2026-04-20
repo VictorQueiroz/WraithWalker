@@ -49,6 +49,7 @@ interface BackgroundAuthorityDependencies {
   syncTraceBindings: () => Promise<void>;
   reconcileTabs: () => Promise<void>;
   onServerHeartbeatSuccess?: () => void;
+  onStatusChanged?: () => void;
 }
 
 interface LocalRootReadyOptions {
@@ -119,7 +120,8 @@ export function createBackgroundAuthority({
   setLastError,
   syncTraceBindings,
   reconcileTabs,
-  onServerHeartbeatSuccess
+  onServerHeartbeatSuccess,
+  onStatusChanged
 }: BackgroundAuthorityDependencies): BackgroundAuthorityApi {
   const localRoot = createBackgroundAuthorityLocalRoot({
     state,
@@ -146,7 +148,8 @@ export function createBackgroundAuthority({
     restoreLocalEffectiveSiteConfigs: () =>
       restoreLocalEffectiveSiteConfigs(state, normalizeSiteConfigs),
     updateEffectiveRootState: () => updateEffectiveRootState(state),
-    onServerHeartbeatSuccess
+    onServerHeartbeatSuccess,
+    onStatusChanged
   });
 
   const data = createBackgroundAuthorityData({

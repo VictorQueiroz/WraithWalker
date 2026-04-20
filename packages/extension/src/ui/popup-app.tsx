@@ -16,6 +16,7 @@ import {
   type CaptureRootState,
   type PopupAlertState
 } from "../lib/workspace-open-state.js";
+import { subscribeToWorkspaceStatusChanges } from "../lib/workspace-status-events.js";
 import {
   DEFAULT_EDITOR_ID,
   DEFAULT_NATIVE_HOST_CONFIG,
@@ -229,6 +230,16 @@ export function PopupApp({
     refreshState,
     setIntervalFn
   ]);
+
+  React.useEffect(
+    () =>
+      subscribeToWorkspaceStatusChanges(runtime, () => {
+        void Promise.all([refreshEnvironment(), refreshState(false)]).catch(
+          () => undefined
+        );
+      }),
+    [refreshEnvironment, refreshState, runtime]
+  );
 
   const alert = resolvePopupAlert({
     snapshot,

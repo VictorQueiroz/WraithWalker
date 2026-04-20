@@ -46,6 +46,7 @@ import type { BackgroundDebuggerRuntimeApi } from "./lib/background-debugger-run
 import { createBackgroundNativeActions } from "./lib/background-native-actions.js";
 import type { BackgroundNativeActionsApi } from "./lib/background-native-actions.js";
 import { createBackgroundContextMenu } from "./lib/background-context-menu.js";
+import { createWorkspaceStatusChangedMessage } from "./lib/workspace-status-events.js";
 
 interface BackgroundDependencies {
   chromeApi?: ChromeApi;
@@ -158,6 +159,32 @@ export function createBackgroundRuntime({
   let sessionController!: SessionControllerApi;
   let debuggerRuntime!: BackgroundDebuggerRuntimeApi;
   let traceService!: BackgroundTraceServiceApi;
+  let workspaceStatusNotificationQueued = false;
+
+  function hasWorkspaceStatusSubscribers(): boolean {
+    const listeners = (chromeApi.runtime.onMessage as { listeners?: unknown[] })
+      .listeners;
+
+    if (!Array.isArray(listeners)) {
+      return true;
+    }
+
+    return listeners.length > 1;
+  }
+
+  function notifyWorkspaceStatusChanged(): void {
+    if (workspaceStatusNotificationQueued || !hasWorkspaceStatusSubscribers()) {
+      return;
+    }
+
+    workspaceStatusNotificationQueued = true;
+    queueMicrotask(() => {
+      workspaceStatusNotificationQueued = false;
+      void Promise.resolve(
+        chromeApi.runtime.sendMessage(createWorkspaceStatusChangedMessage())
+      ).catch(() => undefined);
+    });
+  }
 
   function refreshContextMenus(): void {
     void contextMenu
@@ -199,6 +226,7 @@ export function createBackgroundRuntime({
     setLastError,
     syncTraceBindings: () => traceService.syncTraceBindings(),
     reconcileTabs: () => sessionController.reconcileTabs(),
+    onStatusChanged: notifyWorkspaceStatusChanged,
     onServerHeartbeatSuccess: () =>
       refreshContextMenuForActiveTabWithCurrentOrigins()
   });
@@ -319,6 +347,7 @@ export function createBackgroundRuntime({
       .then(async () => {
         if (changes.nativeHostConfig || changes.preferredEditorId) {
           await authority.refreshStoredConfig();
+          notifyWorkspaceStatusChanged();
         }
       })
       .catch((error: unknown) => {
@@ -354,6 +383,9 @@ export function createBackgroundRuntime({
           message.siteConfigs
         );
         refreshContextMenuForActiveTab();
+        if (result.ok) {
+          notifyWorkspaceStatusChanged();
+        }
         return result;
       }
       case "session.start": {
@@ -362,12 +394,14 @@ export function createBackgroundRuntime({
         const result = await sessionController.startSession();
         authority.queueServerRefresh({ force: true });
         authority.scheduleHeartbeat();
+        notifyWorkspaceStatusChanged();
         return result;
       }
       case "session.stop": {
         const result = await sessionController.stopSession();
         authority.queueServerRefresh({ force: true });
         authority.scheduleHeartbeat();
+        notifyWorkspaceStatusChanged();
         return result;
       }
       case "root.verify": {
@@ -375,6 +409,9 @@ export function createBackgroundRuntime({
           requestPermission: true
         });
         await authority.persistSnapshot();
+        if (result.ok) {
+          notifyWorkspaceStatusChanged();
+        }
         return result;
       }
       case "native.verify": {
@@ -382,6 +419,9 @@ export function createBackgroundRuntime({
           requestPermission: true
         });
         await authority.persistSnapshot();
+        if (result.ok) {
+          notifyWorkspaceStatusChanged();
+        }
         return result;
       }
       case "native.open": {

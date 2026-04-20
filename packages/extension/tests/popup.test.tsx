@@ -73,6 +73,35 @@ function createDeferred<T>() {
   return { promise, resolve };
 }
 
+function createRuntimeMessageEvent() {
+  const listeners: Array<
+    (
+      message: unknown,
+      sender: unknown,
+      sendResponse: (response: unknown) => void
+    ) => boolean | void
+  > = [];
+
+  return {
+    onMessage: {
+      addListener: vi.fn((listener) => {
+        listeners.push(listener);
+      }),
+      removeListener: vi.fn((listener) => {
+        const index = listeners.indexOf(listener);
+        if (index >= 0) {
+          listeners.splice(index, 1);
+        }
+      })
+    },
+    emit(message: unknown) {
+      for (const listener of [...listeners]) {
+        listener(message, {}, () => undefined);
+      }
+    }
+  };
+}
+
 async function loadPopupModule() {
   vi.resetModules();
   globalThis.__WRAITHWALKER_TEST__ = true;
@@ -1454,6 +1483,76 @@ describe("popup entrypoint", () => {
       popup?.unmount();
       await flushPromises();
     }
+  });
+
+  it("reacts to workspace status events without waiting for the polling interval", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const runtimeEvents = createRuntimeMessageEvent();
+    let snapshot = createSnapshot({
+      captureDestination: "none",
+      captureRootPath: "",
+      enabledOrigins: [],
+      rootReady: false
+    });
+    const runtime = {
+      sendMessage: vi.fn(async (message: { type: string }) => {
+        switch (message.type) {
+          case "session.getState":
+            return snapshot;
+          case "session.start":
+          case "session.stop":
+            return snapshot;
+          default:
+            return { ok: true };
+        }
+      }),
+      openOptionsPage: vi.fn(),
+      onMessage: runtimeEvents.onMessage
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(createNativeHostConfig({ launchPath: "" })),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps({ hasHandle: false })
+    });
+
+    try {
+      expect(
+        await screen.findByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeTruthy();
+
+      snapshot = createSnapshot({
+        captureDestination: "server",
+        captureRootPath: "/tmp/server-root",
+        enabledOrigins: ["https://server.example.com"]
+      });
+      runtimeEvents.emit({ type: "workspace.statusChanged" });
+      await flushPromises();
+
+      expect(
+        await screen.findByRole("button", { name: "Open in folder" })
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(
+          "Choose Root Directory in Settings before starting capture."
+        )
+      ).toBeNull();
+      expect(runtime.sendMessage).toHaveBeenCalledWith({
+        type: "session.getState"
+      });
+    } finally {
+      popup.unmount();
+    }
+
+    expect(runtimeEvents.onMessage.removeListener).toHaveBeenCalledTimes(1);
   });
 
   it("disables popup actions while the server-folder reveal is in flight", async () => {

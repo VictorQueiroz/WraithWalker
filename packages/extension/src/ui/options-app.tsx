@@ -16,6 +16,7 @@ import {
   deriveWorkspaceReadiness,
   deriveWorkspaceStatus
 } from "../lib/workspace-open-state.js";
+import { subscribeToWorkspaceStatusChanges } from "../lib/workspace-status-events.js";
 import {
   ensureRootSentinel as defaultEnsureRootSentinel,
   loadStoredRootHandle as defaultLoadStoredRootHandle,
@@ -567,17 +568,58 @@ export function OptionsApp({
     [queryClient]
   );
 
+  const refetchSiteConfigs = React.useCallback(
+    async () =>
+      refetchOptionsQuery(queryClient, optionsQueryKeys.siteConfigs()),
+    [queryClient]
+  );
+
   const refetchScenarioPanel = React.useCallback(
     async () =>
       refetchOptionsQuery(queryClient, optionsQueryKeys.scenarioPanel()),
     [queryClient]
   );
 
+  const refetchAuthorityData = React.useCallback(async () => {
+    await Promise.all([
+      refetchSessionSnapshot(),
+      refetchSiteConfigs(),
+      refetchScenarioPanel()
+    ]);
+  }, [refetchScenarioPanel, refetchSessionSnapshot, refetchSiteConfigs]);
+
   const setSiteConfigsCache = React.useCallback(
     (nextSites: SiteConfig[]) => {
       queryClient.setQueryData(optionsQueryKeys.siteConfigs(), nextSites);
     },
     [queryClient]
+  );
+
+  React.useEffect(
+    () =>
+      subscribeToWorkspaceStatusChanges(chromeApi.runtime, () => {
+        if (siteDraftOrigins.length > 0) {
+          void Promise.all([
+            refetchRememberedRootState(),
+            refetchSessionSnapshot(),
+            refetchScenarioPanel()
+          ]).catch(() => undefined);
+          return;
+        }
+
+        void Promise.all([
+          refetchRememberedRootState(),
+          refetchAuthorityData()
+        ]).catch(() => undefined);
+      }),
+    [
+      chromeApi.runtime,
+      refetchAuthorityData,
+      refetchRememberedRootState,
+      refetchScenarioPanel,
+      refetchSessionSnapshot,
+      siteDraftOrigins.length
+    ]
   );
 
   React.useEffect(() => {
