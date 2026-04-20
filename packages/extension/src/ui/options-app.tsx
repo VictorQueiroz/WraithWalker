@@ -26,6 +26,7 @@ import {
   deriveWorkspaceReadiness,
   deriveWorkspaceStatus
 } from "../lib/workspace-open-state.js";
+import { subscribeToWorkspaceStatusChanges } from "../lib/workspace-status-events.js";
 import {
   createRootDirectoryPickerOptions,
   ensureRootSentinel as defaultEnsureRootSentinel,
@@ -734,6 +735,32 @@ export function OptionsApp({
     siteDraftOrigins.length,
     setIntervalFn
   ]);
+
+  React.useEffect(
+    () =>
+      subscribeToWorkspaceStatusChanges(chromeApi.runtime, () => {
+        if (siteDraftOrigins.length > 0) {
+          void Promise.all([
+            refreshRootState(),
+            refreshSessionSnapshot(),
+            refreshScenarios()
+          ]).catch(() => undefined);
+          return;
+        }
+
+        void Promise.all([refreshRootState(), refreshAuthorityData()]).catch(
+          () => undefined
+        );
+      }),
+    [
+      chromeApi.runtime,
+      refreshAuthorityData,
+      refreshRootState,
+      refreshScenarios,
+      refreshSessionSnapshot,
+      siteDraftOrigins.length
+    ]
+  );
 
   React.useEffect(() => {
     if (!scenarioPanel.activeTrace) {

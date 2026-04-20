@@ -106,6 +106,35 @@ function createScenarioListResult(
   };
 }
 
+function createRuntimeMessageEvent() {
+  const listeners: Array<
+    (
+      message: unknown,
+      sender: unknown,
+      sendResponse: (response: unknown) => void
+    ) => boolean | void
+  > = [];
+
+  return {
+    onMessage: {
+      addListener: vi.fn((listener) => {
+        listeners.push(listener);
+      }),
+      removeListener: vi.fn((listener) => {
+        const index = listeners.indexOf(listener);
+        if (index >= 0) {
+          listeners.splice(index, 1);
+        }
+      })
+    },
+    emit(message: unknown) {
+      for (const listener of [...listeners]) {
+        listener(message, {}, () => undefined);
+      }
+    }
+  };
+}
+
 async function loadOptionsModule() {
   vi.resetModules();
   globalThis.__WRAITHWALKER_TEST__ = true;
@@ -1054,6 +1083,127 @@ describe("options entrypoint", () => {
     }
 
     expect(clearIntervalFn).toHaveBeenCalledWith(intervalId);
+  });
+
+  it("reacts to workspace status events when Server Root comes online later", async () => {
+    renderRoot();
+    const { initOptions } = await loadOptionsModule();
+    const readyRoot = createReadyRootDeps();
+    const localSites = [
+      createStoredSite({ origin: "https://local.example.com" })
+    ];
+    const serverSites = [
+      createStoredSite({ origin: "https://server.example.com" })
+    ];
+    let serverConnected = false;
+    const runtimeEvents = createRuntimeMessageEvent();
+    const runtimeSendMessage = vi.fn(
+      async (message: {
+        type: string;
+        name?: string;
+        description?: string;
+        scenarioA?: string;
+        scenarioB?: string;
+      }) => {
+        switch (message.type) {
+          case "session.getState":
+            return serverConnected
+              ? {
+                  sessionActive: false,
+                  attachedTabIds: [],
+                  enabledOrigins: serverSites.map((site) => site.origin),
+                  rootReady: true,
+                  captureDestination: "server",
+                  captureRootPath: "/tmp/server-root",
+                  lastError: ""
+                }
+              : {
+                  sessionActive: false,
+                  attachedTabIds: [],
+                  enabledOrigins: localSites.map((site) => site.origin),
+                  rootReady: true,
+                  captureDestination: "local",
+                  captureRootPath: "/tmp/browser-root",
+                  lastError: ""
+                };
+          case "scenario.list":
+            return serverConnected
+              ? createScenarioListResult({
+                  snapshots: [],
+                  activeTrace: {
+                    traceId: "trace-live",
+                    status: "armed",
+                    createdAt: "2026-04-03T12:06:00.000Z",
+                    selectedOrigins: ["https://server.example.com"],
+                    extensionClientId: "client-1",
+                    stepCount: 2,
+                    linkedFixtureCount: 1
+                  },
+                  supportsTraceSave: true
+                })
+              : createScenarioListResult({
+                  snapshots: [],
+                  activeTrace: null,
+                  supportsTraceSave: false
+                });
+          case "native.verify":
+            return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
+          default:
+            return { ok: true };
+        }
+      }
+    );
+
+    const options = await initOptions({
+      document,
+      windowRef: createWindowWithDirectoryPicker(
+        vi
+          .fn()
+          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+      ),
+      chromeApi: {
+        permissions: {
+          request: vi.fn().mockResolvedValue(true),
+          remove: vi.fn().mockResolvedValue(true)
+        },
+        runtime: {
+          sendMessage: runtimeSendMessage,
+          onMessage: runtimeEvents.onMessage
+        }
+      },
+      getSiteConfigs: vi
+        .fn()
+        .mockImplementation(async () =>
+          serverConnected ? serverSites : localSites
+        ),
+      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
+      setNativeHostConfig: vi.fn(),
+      setSiteConfigs: vi.fn(),
+      ...readyRoot,
+      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+    });
+
+    try {
+      expect(await screen.findByText("https://local.example.com")).toBeTruthy();
+      expect(screen.queryByText("Save From Active Trace")).toBeNull();
+
+      serverConnected = true;
+      runtimeEvents.emit({ type: "workspace.statusChanged" });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        await screen.findByText(/Editing \/tmp\/server-root\./)
+      ).toBeTruthy();
+      expect(
+        await screen.findByText("https://server.example.com")
+      ).toBeTruthy();
+      expect(screen.queryByText("https://local.example.com")).toBeNull();
+      expect(await screen.findByText("Save From Active Trace")).toBeTruthy();
+    } finally {
+      options.unmount();
+    }
+
+    expect(runtimeEvents.onMessage.removeListener).toHaveBeenCalledTimes(1);
   });
 
   it("writes a Settings-added origin into the live server root config file", async () => {

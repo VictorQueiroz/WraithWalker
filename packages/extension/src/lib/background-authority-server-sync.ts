@@ -36,6 +36,7 @@ interface BackgroundAuthorityServerSyncDependencies {
   restoreLocalEffectiveSiteConfigs: () => boolean;
   updateEffectiveRootState: () => void;
   onServerHeartbeatSuccess?: () => void;
+  onStatusChanged?: () => void;
 }
 
 export function createBackgroundAuthorityServerSync({
@@ -50,7 +51,8 @@ export function createBackgroundAuthorityServerSync({
   applyEffectiveSiteConfigs,
   restoreLocalEffectiveSiteConfigs,
   updateEffectiveRootState,
-  onServerHeartbeatSuccess
+  onServerHeartbeatSuccess,
+  onStatusChanged
 }: BackgroundAuthorityServerSyncDependencies): BackgroundAuthorityServerSyncApi {
   let serverRefreshPromise: Promise<BackgroundServerInfo | null> | null = null;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,6 +120,7 @@ export function createBackgroundAuthorityServerSync({
     if (siteConfigsChanged && state.sessionActive) {
       void reconcileTabs().catch(() => undefined);
     }
+    onStatusChanged?.();
   }
 
   async function runServerCommand(
@@ -225,6 +228,7 @@ export function createBackgroundAuthorityServerSync({
     }
 
     onServerHeartbeatSuccess?.();
+    onStatusChanged?.();
 
     return state.serverInfo;
   }

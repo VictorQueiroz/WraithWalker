@@ -11,6 +11,7 @@ type EventListener<TEvent> = TEvent extends {
 type TestEvent<TEvent extends { addListener(listener: any): void }> = {
   listeners: Array<EventListener<TEvent>>;
   addListener: (listener: EventListener<TEvent>) => void;
+  removeListener?: (listener: EventListener<TEvent>) => void;
 };
 
 function createEvent<
@@ -24,6 +25,12 @@ function createEvent<
     listeners,
     addListener: vi.fn((listener: EventListener<TEvent>) => {
       listeners.push(listener);
+    }),
+    removeListener: vi.fn((listener: EventListener<TEvent>) => {
+      const index = listeners.indexOf(listener);
+      if (index >= 0) {
+        listeners.splice(index, 1);
+      }
     })
   };
 }

@@ -27,6 +27,13 @@ export interface RuntimeApi {
         sendResponse: (response: unknown) => void
       ) => boolean | void
     ): void;
+    removeListener?: (
+      listener: (
+        message: unknown,
+        sender: unknown,
+        sendResponse: (response: unknown) => void
+      ) => boolean | void
+    ) => void;
   };
   onStartup: {
     addListener(listener: () => void): void;
@@ -162,11 +169,13 @@ export interface ChromeApi {
   contextMenus?: ContextMenusApi;
 }
 
-export type MessageRuntimeApi = Pick<RuntimeApi, "sendMessage">;
+export type MessageRuntimeApi = Pick<RuntimeApi, "sendMessage"> &
+  Partial<Pick<RuntimeApi, "onMessage">>;
 export type PopupRuntimeApi = Pick<
   RuntimeApi,
   "sendMessage" | "openOptionsPage"
->;
+> &
+  Partial<Pick<RuntimeApi, "onMessage">>;
 export type OffscreenRuntimeApi = Pick<RuntimeApi, "onMessage">;
 export interface OptionsPermissionsApi extends PermissionsApi {
   remove(options: { origins: string[] }): Promise<boolean>;
