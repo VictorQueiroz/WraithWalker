@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { RuntimeApi } from "../src/lib/chrome-api.ts";
 import {
   createWorkspaceStatusChangedMessage,
   isWorkspaceStatusChangedMessage,
@@ -7,13 +8,14 @@ import {
 } from "../src/lib/workspace-status-events.ts";
 
 function createRuntimeOnMessage() {
-  const listeners: Array<(message: unknown) => unknown> = [];
+  type OnMessageListener = Parameters<RuntimeApi["onMessage"]["addListener"]>[0];
+  const listeners: OnMessageListener[] = [];
 
   return {
-    addListener: vi.fn((listener: (message: unknown) => unknown) => {
+    addListener: vi.fn((listener: OnMessageListener) => {
       listeners.push(listener);
     }),
-    removeListener: vi.fn((listener: (message: unknown) => unknown) => {
+    removeListener: vi.fn((listener: OnMessageListener) => {
       const index = listeners.indexOf(listener);
       if (index >= 0) {
         listeners.splice(index, 1);
@@ -21,7 +23,7 @@ function createRuntimeOnMessage() {
     }),
     emit(message: unknown) {
       for (const listener of [...listeners]) {
-        listener(message);
+        listener(message, {}, () => undefined);
       }
     }
   };
