@@ -1,0 +1,14 @@
+{
+  "title": "WraithWalker Manual",
+  "pages": [
+    "index",
+    "quickstart",
+    "deployment",
+    "---Capture Workflows---",
+    "workflows",
+    "---Packages---",
+    "packages",
+    "---Reference---",
+    "reference"
+  ]
+}

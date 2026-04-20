@@ -3,7 +3,10 @@ coverage/
 dist/
 out/
 .turbo/
+.omx/
 vendor/
+apps/manual/.next/
+apps/manual/.source/
 packages/*/src/**/*.mjs
 packages/*/src/**/*.d.mts
 packages/extension/static/manifest.json

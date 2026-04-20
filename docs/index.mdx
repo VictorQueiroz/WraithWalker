@@ -1,0 +1,88 @@
+---
+title: WraithWalker Manual
+description: Capture running websites into a local fixture workspace, open them in your editor, and expose them over MCP when you need agent workflows.
+---
+
+![WraithWalker banner](/assets/wraithwalker-banner.png)
+
+<Info>
+  WraithWalker turns a running website into a local fixture workspace, opens
+  that workspace in your editor, and can optionally expose the same root over
+  MCP for agent workflows.
+</Info>
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/docs/quickstart">
+    Start with the fastest capture flow, prerequisites, and the two ways
+    WraithWalker works.
+  </Card>
+  <Card
+    title="Capture Workflows"
+    icon="plug"
+    href="/docs/workflows/extension-workflow"
+  >
+    Learn the extension-first and server-backed capture paths.
+  </Card>
+  <Card title="Packages" icon="code" href="/docs/packages/cli">
+    Explore the CLI, MCP server, native host, and shared core package.
+  </Card>
+  <Card title="Deploy the Manual" icon="gear" href="/docs/deployment">
+    Finish with Vercel settings tuned for this monorepo and manual app.
+  </Card>
+</CardGroup>
+
+## Two ways to work
+
+<Tabs>
+  <Tab title="Extension-first">
+    Use the browser extension when you want the fastest route to local capture
+    inside a folder you choose.
+  </Tab>
+  <Tab title="Server-backed">
+    Run `wraithwalker serve` when you want MCP, guided traces, or one shared
+    local root for the CLI and extension.
+  </Tab>
+</Tabs>
+
+## What WraithWalker writes
+
+- readable, editable files stay visible at the root
+- canonical replay data and metadata live under `.wraithwalker/`
+- generated editor context files such as `CLAUDE.md` and `.cursorrules` live alongside the captured workspace
+
+That means you can inspect, edit, diff, snapshot, and replay the same captured workspace without needing the original source repository.
+
+## Explore the monorepo offerings
+
+<CardGroup cols={2}>
+  <Card title="CLI" href="/docs/packages/cli">
+    Root setup, capture config, context generation, imports, scenarios, and the
+    combined local server.
+  </Card>
+  <Card title="MCP Server" href="/docs/packages/mcp-server">
+    Local MCP and tRPC surfaces for agents and browser-backed capture state.
+  </Card>
+  <Card title="Native Host" href="/docs/packages/native-host">
+    OS-level reveal, scenario actions, and local command-based editor workflows.
+  </Card>
+  <Card title="Core" href="/docs/packages/core">
+    Shared domain logic reused across the published packages.
+  </Card>
+</CardGroup>
+
+## Recommended path
+
+<Steps>
+  <Step title="Start with the quick start">
+    Use the setup and first-capture path in{" "}
+    <a href="/docs/quickstart">Quick Start</a>.
+  </Step>
+  <Step title="Choose your workflow">
+    Decide whether you only need extension-first capture or also need the
+    server-backed path with MCP.
+  </Step>
+  <Step title="Go deeper by offering">
+    Move into the CLI, MCP server, native host, and reference sections as your
+    use case expands.
+  </Step>
+</Steps>

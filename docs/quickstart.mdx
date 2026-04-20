@@ -1,0 +1,80 @@
+---
+title: Quick Start
+description: Install the repo, choose a capture mode, and get to your first local fixture workspace quickly.
+---
+
+## Before you start
+
+You will usually want:
+
+- Node `22+`
+- npm `11.11.1+`
+- Google Chrome or another Chromium browser for the extension workflow
+
+Install and validate the repo:
+
+```bash
+npm ci
+npm run build
+npm test
+```
+
+## Choose the fastest path for your goal
+
+<CardGroup cols={2}>
+  <Card
+    title="Fastest first capture"
+    icon="rocket"
+    href="/docs/workflows/extension-workflow"
+  >
+    Load the extension, choose a root folder, start a session, and browse the
+    site you want to capture.
+  </Card>
+  <Card title="Server-backed workflow" icon="plug" href="/docs/packages/cli">
+    Start `wraithwalker serve` when you want MCP, guided traces, and one shared
+    local root for the CLI and extension.
+  </Card>
+</CardGroup>
+
+## Fastest first capture
+
+<Steps>
+  <Step title="Load the extension">
+    Load `packages/extension/dist` as an unpacked Chrome extension.
+  </Step>
+  <Step title="Configure capture">
+    Open **Settings**, add the exact origins you want to capture, and choose a
+    WraithWalker root folder where captured files will be written.
+  </Step>
+  <Step title="Start the session">
+    Start the session from the popup, then browse the target site while the
+    session is running.
+  </Step>
+  <Step title="Open the workspace">
+    Click **Open in Cursor** to open that same folder and send the workspace
+    prompt.
+  </Step>
+</Steps>
+
+<Warning>Nothing is captured unless a session is running.</Warning>
+
+## Server-backed workflow
+
+Use the server-backed path when you want MCP access, guided traces, or one shared local root for the CLI and extension.
+
+```bash
+wraithwalker serve
+```
+
+By default this exposes:
+
+- MCP at `http://127.0.0.1:4319/mcp`
+- the extension capture backend at `http://127.0.0.1:4319/trpc`
+
+When that server is running, the extension automatically prefers the server root for capture, context generation, and editor-open flows. Without it, the extension keeps using the locally selected root folder.
+
+## Next steps
+
+- Continue to <a href="/docs/workflows/extension-workflow">Extension Workflow</a> for the full browser capture model.
+- Use <a href="/docs/workflows/guided-scenario-traces">Guided Scenario Traces</a> when an agent needs click-by-click guidance.
+- Use <a href="/docs/workflows/mcp-clients">MCP Client Setup</a> to connect Codex, Cursor, Windsurf, Claude Code, or another client.

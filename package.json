@@ -5,7 +5,8 @@
   "license": "MIT",
   "packageManager": "npm@11.11.1",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "build": "turbo run build",

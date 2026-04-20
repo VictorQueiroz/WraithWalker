@@ -1,34 +1,16 @@
 # Core
 
-Shared Node-side domain logic for WraithWalker.
+Shared Node-side domain logic for WraithWalker. This package powers the CLI,
+MCP server, and native host.
 
-This package is the shared foundation behind the published WraithWalker packages.
+## When to use it
 
-Most users do not need to install `@wraithwalker/core` directly. Reach for it when you are building tooling or integrations on top of WraithWalker internals.
+Most users do not need to install `@wraithwalker/core` directly. Reach for it
+when building tooling or integrations on top of WraithWalker internals.
 
-It contains:
+## Canonical docs
 
-- fixture root creation and discovery
-- root filesystem helpers and projection helpers
-- explicit and effective site config loading
-- fixture reading and write-if-absent storage
-- scenario snapshots and guided trace storage
-- context generation plus HAR and Chrome Overrides import flows
+- Source of truth for contributors:
+  [`docs/packages/core.mdx`](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/packages/core.mdx)
 
-The CLI and MCP server use most of this surface directly. The native host reuses the root and scenario helpers so its behavior stays aligned with the rest of the toolchain.
-
-## Exported Entry Points
-
-- `@wraithwalker/core/context`
-- `@wraithwalker/core/fixture-layout`
-- `@wraithwalker/core/fixture-repository`
-- `@wraithwalker/core/fixtures`
-- `@wraithwalker/core/har-import`
-- `@wraithwalker/core/overrides-sync`
-- `@wraithwalker/core/project-config`
-- `@wraithwalker/core/root`
-- `@wraithwalker/core/root-fs`
-- `@wraithwalker/core/root-runtime`
-- `@wraithwalker/core/scenario-traces`
-- `@wraithwalker/core/scenarios`
-- `@wraithwalker/core/site-config`
+Edit the docs file above when updating Core package documentation.

@@ -40,7 +40,7 @@ Use this path if you want to capture a site into local files as quickly as possi
 
 Nothing is captured unless a session is running.
 
-More: [Extension workflow](docs/extension-workflow.md)
+More: [Extension workflow](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/workflows/extension-workflow.mdx)
 
 The CLI and Chrome extension version independently. When the extension version changes, the build keeps `packages/extension/package.json`, `packages/extension/static/manifest.json`, and the built `packages/extension/dist/manifest.json` aligned.
 
@@ -61,7 +61,7 @@ By default this exposes:
 
 When that server is running, the extension automatically prefers the server root for capture, context generation, and editor-open flows. Without it, the extension keeps using the locally selected root folder.
 
-More: [Serve command and local server flow](packages/cli/README.md)
+More: [Serve command and local server flow](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/packages/cli.mdx)
 
 ## Guided Tracing Through MCP
 
@@ -75,7 +75,7 @@ When `wraithwalker serve` is running, MCP tools can see whether the extension is
 
 This lets an agent connect user clicks to captured fixtures and explain how a specific part of the app works without guessing from filenames alone.
 
-More: [Guided scenario traces](docs/guided-scenario-traces.md)
+More: [Guided scenario traces](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/workflows/guided-scenario-traces.mdx)
 
 ## What WraithWalker Writes
 
@@ -87,16 +87,16 @@ Each WraithWalker root is a working fixture workspace:
 
 That means you can inspect, edit, diff, snapshot, and replay the same captured workspace without needing the original source repository.
 
-More: [Extension workflow](docs/extension-workflow.md)
+More: [Extension workflow](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/workflows/extension-workflow.mdx)
 
 ## More Docs
 
-- [Extension workflow](docs/extension-workflow.md)
-- [Guided scenario traces](docs/guided-scenario-traces.md)
-- [CLI commands and local server flow](packages/cli/README.md)
-- [MCP server tools and tRPC backend](packages/mcp-server/README.md)
-- [MCP client setup](docs/mcp-clients.md)
-- [Native host setup](packages/native-host/README.md)
-- [npm release process](docs/npm-releases.md)
+- [Extension workflow](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/workflows/extension-workflow.mdx)
+- [Guided scenario traces](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/workflows/guided-scenario-traces.mdx)
+- [CLI commands and local server flow](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/packages/cli.mdx)
+- [MCP server tools and tRPC backend](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/packages/mcp-server.mdx)
+- [MCP client setup](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/workflows/mcp-clients.mdx)
+- [Native host setup](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/packages/native-host.mdx)
+- [npm release process](https://github.com/VictorQueiroz/WraithWalker/blob/main/docs/reference/npm-releases.mdx)
 
-For development and release steps, use the docs in `docs/` as the source of truth.
+For development and release steps, use the MDX files in `docs/` as the source of truth for both the repo docs and the manual app.
