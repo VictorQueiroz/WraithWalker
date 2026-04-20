@@ -568,11 +568,25 @@ export function OptionsApp({
     [queryClient]
   );
 
+  const refetchSiteConfigs = React.useCallback(
+    async () =>
+      refetchOptionsQuery(queryClient, optionsQueryKeys.siteConfigs()),
+    [queryClient]
+  );
+
   const refetchScenarioPanel = React.useCallback(
     async () =>
       refetchOptionsQuery(queryClient, optionsQueryKeys.scenarioPanel()),
     [queryClient]
   );
+
+  const refetchAuthorityData = React.useCallback(async () => {
+    await Promise.all([
+      refetchSessionSnapshot(),
+      refetchSiteConfigs(),
+      refetchScenarioPanel()
+    ]);
+  }, [refetchScenarioPanel, refetchSessionSnapshot, refetchSiteConfigs]);
 
   const setSiteConfigsCache = React.useCallback(
     (nextSites: SiteConfig[]) => {
@@ -586,23 +600,24 @@ export function OptionsApp({
       subscribeToWorkspaceStatusChanges(chromeApi.runtime, () => {
         if (siteDraftOrigins.length > 0) {
           void Promise.all([
-            refreshRootState(),
-            refreshSessionSnapshot(),
-            refreshScenarios()
+            refetchRememberedRootState(),
+            refetchSessionSnapshot(),
+            refetchScenarioPanel()
           ]).catch(() => undefined);
           return;
         }
 
-        void Promise.all([refreshRootState(), refreshAuthorityData()]).catch(
-          () => undefined
-        );
+        void Promise.all([
+          refetchRememberedRootState(),
+          refetchAuthorityData()
+        ]).catch(() => undefined);
       }),
     [
       chromeApi.runtime,
-      refreshAuthorityData,
-      refreshRootState,
-      refreshScenarios,
-      refreshSessionSnapshot,
+      refetchAuthorityData,
+      refetchRememberedRootState,
+      refetchScenarioPanel,
+      refetchSessionSnapshot,
       siteDraftOrigins.length
     ]
   );
