@@ -17,6 +17,7 @@
     "check:offscreen": "npm run build && node --check dist/offscreen.js"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.99.0",
     "@trpc/client": "^11.7.1",
     "@wraithwalker/core": "2.2.1",
     "clsx": "^2.1.1",

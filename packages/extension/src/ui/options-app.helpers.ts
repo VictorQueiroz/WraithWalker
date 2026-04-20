@@ -4,6 +4,22 @@ import {
 } from "../lib/editor-launch.js";
 import type { NativeHostConfig } from "../lib/types.js";
 
+export function isValidScenarioName(value: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value.trim());
+}
+
+export function getScenarioNameError(value: string): string | null {
+  if (!value.trim()) {
+    return "Enter a scenario name.";
+  }
+
+  if (!isValidScenarioName(value)) {
+    return "Use 1-64 letters, numbers, hyphens, or underscores.";
+  }
+
+  return null;
+}
+
 export function getSwitchDialogTargetName<
   TSwitchDialog extends { targetName: string }
 >(switchDialog: TSwitchDialog | null): string | null {

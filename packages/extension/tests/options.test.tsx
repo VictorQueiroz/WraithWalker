@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  within
+} from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { QueryClient } from "@tanstack/react-query";
 
 import {
   DEFAULT_DUMP_ALLOWLIST_PATTERNS,
@@ -282,16 +289,114 @@ function createReadyRootDeps() {
 
 afterEach(async () => {
   cleanup();
+  vi.useRealTimers();
   await new Promise((resolve) => setTimeout(resolve, 0));
   delete globalThis.__WRAITHWALKER_TEST__;
   delete globalThis.chrome;
   vi.doUnmock("../src/lib/chrome-storage.js");
   vi.doUnmock("../src/lib/root-handle.js");
+  vi.doUnmock("../src/ui/options-app.queries.js");
+  vi.doUnmock("../src/ui/options-app.js");
   document.body.innerHTML = "";
   vi.restoreAllMocks();
 });
 
 describe("options entrypoint", () => {
+  it("configures the query timeout provider before creating a query client when custom timers are supplied", async () => {
+    renderRoot();
+    const callOrder: string[] = [];
+    const createOptionsQueryClient = vi.fn(() => {
+      callOrder.push("create_query_client");
+      return new QueryClient();
+    });
+    const setOptionsQueryTimeoutProvider = vi.fn(() => {
+      callOrder.push("set_timeout_provider");
+    });
+    vi.doMock("../src/ui/options-app.queries.js", () => ({
+      createOptionsQueryClient,
+      setOptionsQueryTimeoutProvider
+    }));
+    vi.doMock("../src/ui/options-app.js", () => ({
+      OptionsApp: () => null
+    }));
+
+    try {
+      const { initOptions } = await loadOptionsModule();
+      const setIntervalFn = vi.fn() as unknown as typeof setInterval;
+      const clearIntervalFn = vi.fn() as unknown as typeof clearInterval;
+
+      const options = await initOptions({
+        document,
+        chromeApi: {
+          permissions: {
+            request: vi.fn(),
+            remove: vi.fn()
+          },
+          runtime: {
+            sendMessage: vi.fn()
+          }
+        },
+        setIntervalFn,
+        clearIntervalFn
+      });
+
+      try {
+        expect(setOptionsQueryTimeoutProvider).toHaveBeenCalledWith({
+          setIntervalFn,
+          clearIntervalFn
+        });
+        expect(callOrder).toEqual([
+          "set_timeout_provider",
+          "create_query_client"
+        ]);
+      } finally {
+        options.unmount();
+      }
+    } finally {
+      vi.doUnmock("../src/ui/options-app.queries.js");
+      vi.doUnmock("../src/ui/options-app.js");
+    }
+  });
+
+  it("does not configure a custom query timeout provider when initOptions uses default timers", async () => {
+    renderRoot();
+    const createOptionsQueryClient = vi.fn(() => new QueryClient());
+    const setOptionsQueryTimeoutProvider = vi.fn();
+    vi.doMock("../src/ui/options-app.queries.js", () => ({
+      createOptionsQueryClient,
+      setOptionsQueryTimeoutProvider
+    }));
+    vi.doMock("../src/ui/options-app.js", () => ({
+      OptionsApp: () => null
+    }));
+
+    try {
+      const { initOptions } = await loadOptionsModule();
+      const options = await initOptions({
+        document,
+        chromeApi: {
+          permissions: {
+            request: vi.fn(),
+            remove: vi.fn()
+          },
+          runtime: {
+            sendMessage: vi.fn()
+          }
+        }
+      });
+
+      try {
+        expect(setOptionsQueryTimeoutProvider).not.toHaveBeenCalled();
+        expect(createOptionsQueryClient).toHaveBeenCalledTimes(1);
+      } finally {
+        options.unmount();
+      }
+    } finally {
+      vi.doUnmock("../src/ui/options-app.queries.js");
+      vi.doUnmock("../src/ui/options-app.js");
+    }
+  });
+
   it("throws when the options root container is missing", async () => {
     document.body.innerHTML = "";
     const { initOptions } = await loadOptionsModule();
@@ -925,6 +1030,7 @@ describe("options entrypoint", () => {
   });
 
   it("polls Settings data and updates the active authority when Server Root comes online later", async () => {
+    vi.useFakeTimers();
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const readyRoot = createReadyRootDeps();
@@ -935,16 +1041,6 @@ describe("options entrypoint", () => {
       createStoredSite({ origin: "https://server.example.com" })
     ];
     let serverConnected = false;
-    let intervalHandler: (() => void) | null = null;
-    const intervalId = 17 as unknown as ReturnType<typeof setInterval>;
-    const setIntervalMock = vi.fn((handler: TimerHandler) => {
-      intervalHandler = handler as () => void;
-      return intervalId;
-    });
-    const clearIntervalMock = vi.fn();
-    const setIntervalFn = setIntervalMock as unknown as typeof setInterval;
-    const clearIntervalFn =
-      clearIntervalMock as unknown as typeof clearInterval;
     const runtimeSendMessage = vi.fn(
       async (message: {
         type: string;
@@ -1002,58 +1098,59 @@ describe("options entrypoint", () => {
       }
     );
 
-    const options = await initOptions({
-      document,
-      windowRef: createWindowWithDirectoryPicker(
-        vi
-          .fn()
-          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
-      ),
-      chromeApi: {
-        permissions: {
-          request: vi.fn().mockResolvedValue(true),
-          remove: vi.fn().mockResolvedValue(true)
-        },
-        runtime: {
-          sendMessage: runtimeSendMessage
-        }
-      },
-      setIntervalFn,
-      clearIntervalFn,
-      refreshIntervalMs: 25,
-      getSiteConfigs: vi
-        .fn()
-        .mockImplementation(async () =>
-          serverConnected ? serverSites : localSites
+    let options: Awaited<ReturnType<typeof initOptions>>;
+    await act(async () => {
+      options = await initOptions({
+        document,
+        windowRef: createWindowWithDirectoryPicker(
+          vi.fn().mockResolvedValue({
+            kind: "directory"
+          } as FileSystemDirectoryHandle)
         ),
-      getNativeHostConfig: vi.fn().mockResolvedValue(createNativeHostConfig()),
-      setNativeHostConfig: vi.fn(),
-      setSiteConfigs: vi.fn(),
-      ...readyRoot,
-      getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+        chromeApi: {
+          permissions: {
+            request: vi.fn().mockResolvedValue(true),
+            remove: vi.fn().mockResolvedValue(true)
+          },
+          runtime: {
+            sendMessage: runtimeSendMessage
+          }
+        },
+        refreshIntervalMs: 25,
+        getSiteConfigs: vi
+          .fn()
+          .mockImplementation(async () =>
+            serverConnected ? serverSites : localSites
+          ),
+        getNativeHostConfig: vi
+          .fn()
+          .mockResolvedValue(createNativeHostConfig()),
+        setNativeHostConfig: vi.fn(),
+        setSiteConfigs: vi.fn(),
+        ...readyRoot,
+        getPreferredEditorId: vi.fn().mockResolvedValue("vscode")
+      });
     });
 
     try {
-      expect(await screen.findByText("https://local.example.com")).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25);
+      });
+      expect(screen.getByText("https://local.example.com")).toBeTruthy();
       expect(screen.queryByText("Save From Active Trace")).toBeNull();
 
       serverConnected = true;
-      intervalHandler?.();
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
 
-      expect(
-        await screen.findByText(/Editing \/tmp\/server-root\./)
-      ).toBeTruthy();
-      expect(
-        await screen.findByText("https://server.example.com")
-      ).toBeTruthy();
+      expect(screen.getByText(/Editing \/tmp\/server-root\./)).toBeTruthy();
+      expect(screen.getByText("https://server.example.com")).toBeTruthy();
       expect(screen.queryByText("https://local.example.com")).toBeNull();
-      expect(await screen.findByText("Save From Active Trace")).toBeTruthy();
+      expect(screen.getByText("Save From Active Trace")).toBeTruthy();
     } finally {
-      options.unmount();
+      options!.unmount();
     }
-
-    expect(clearIntervalFn).toHaveBeenCalledWith(intervalId);
   });
 
   it("writes a Settings-added origin into the live server root config file", async () => {
