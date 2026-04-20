@@ -8,7 +8,9 @@ import {
 } from "../src/lib/workspace-status-events.ts";
 
 function createRuntimeOnMessage() {
-  type OnMessageListener = Parameters<RuntimeApi["onMessage"]["addListener"]>[0];
+  type OnMessageListener = Parameters<
+    RuntimeApi["onMessage"]["addListener"]
+  >[0];
   const listeners: OnMessageListener[] = [];
 
   return {
