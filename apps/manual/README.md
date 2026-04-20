@@ -22,10 +22,12 @@ npm run build --workspace=@wraithwalker/manual
 
 ## Vercel
 
+- This manual is the primary Vercel deployment for the repository.
 - Root Directory: `apps/manual`
 - Framework: Next.js
 - Install Command: `npm ci`
 - Build Command: `npm run build`
+- Keep project-specific Vercel config in `apps/manual/vercel.json`.
 - Set `NEXT_PUBLIC_SITE_URL` only when you know the deployed URL.
 
 ## Documentation source of truth
