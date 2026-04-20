@@ -1,5 +1,12 @@
 # @wraithwalker/extension
 
+## 0.3.2
+
+### Patch Changes
+
+- a4fd7f0: Refresh extension workspace status when the WraithWalker server becomes available while popup or settings are already open.
+- c1d0765: Refactor the extension settings UI onto React Query while preserving the existing background-message behavior.
+
 ## 0.3.1
 
 ### Patch Changes
