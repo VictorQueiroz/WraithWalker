@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
 
 import {
   getNativeHostConfig as defaultGetNativeHostConfig,
@@ -26,6 +27,10 @@ import {
   type OptionsChromeApi
 } from "./lib/chrome-api.js";
 import { OptionsApp } from "./ui/options-app.js";
+import {
+  createOptionsQueryClient,
+  setOptionsQueryTimeoutProvider
+} from "./ui/options-app.queries.js";
 
 export interface OptionsDependencies {
   document?: Document;
@@ -81,30 +86,44 @@ export async function initOptions({
   }
 
   const root = createRoot(container);
-  root.render(
-    React.createElement(OptionsApp, {
-      windowRef,
-      chromeApi,
+  if (setIntervalFn !== setInterval || clearIntervalFn !== clearInterval) {
+    setOptionsQueryTimeoutProvider({
       setIntervalFn,
-      clearIntervalFn,
-      refreshIntervalMs,
-      getNativeHostConfig,
-      getSiteConfigs,
-      setNativeHostConfig,
-      setSiteConfigs,
-      ensureRootSentinel,
-      loadStoredRootHandle,
-      queryRootPermission,
-      requestRootPermission,
-      storeRootHandleWithSentinel,
-      writeClipboardText,
-      editorPresets
-    })
+      clearIntervalFn
+    });
+  }
+  const queryClient = createOptionsQueryClient();
+  root.render(
+    React.createElement(
+      QueryClientProvider,
+      {
+        client: queryClient
+      },
+      React.createElement(OptionsApp, {
+        windowRef,
+        chromeApi,
+        setIntervalFn,
+        clearIntervalFn,
+        refreshIntervalMs,
+        getNativeHostConfig,
+        getSiteConfigs,
+        setNativeHostConfig,
+        setSiteConfigs,
+        ensureRootSentinel,
+        loadStoredRootHandle,
+        queryRootPermission,
+        requestRootPermission,
+        storeRootHandleWithSentinel,
+        writeClipboardText,
+        editorPresets
+      })
+    )
   );
 
   return {
     root,
     unmount() {
+      queryClient.clear();
       root.unmount();
     }
   };

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   DEFAULT_DUMP_ALLOWLIST_PATTERNS,
@@ -8,17 +9,6 @@ import {
   type EditorPreset
 } from "../lib/constants.js";
 import { getEditorLaunchOverride } from "../lib/editor-launch.js";
-import type {
-  BackgroundMessage,
-  DiagnosticsResult,
-  ErrorResult,
-  NativeOpenResult,
-  NativeVerifyResult,
-  ScenarioDiffResult,
-  ScenarioListResult,
-  ScenarioListSuccess,
-  ScenarioResult
-} from "../lib/messages.js";
 import type { FixtureDiff } from "@wraithwalker/core/scenarios";
 import { originToPermissionPattern } from "../lib/path-utils.js";
 import {
@@ -27,25 +17,14 @@ import {
   deriveWorkspaceStatus
 } from "../lib/workspace-open-state.js";
 import {
-  createRootDirectoryPickerOptions,
   ensureRootSentinel as defaultEnsureRootSentinel,
   loadStoredRootHandle as defaultLoadStoredRootHandle,
   queryRootPermission as defaultQueryRootPermission,
   requestRootPermission as defaultRequestRootPermission,
   storeRootHandleWithSentinel as defaultStoreRootHandleWithSentinel
 } from "../lib/root-handle.js";
-import {
-  isValidDumpAllowlistPatterns,
-  normalizeSiteConfigs
-} from "../lib/site-config.js";
-import { whitelistSiteOrigin } from "../lib/site-whitelist.js";
-import type { MessageRuntimeApi, OptionsChromeApi } from "../lib/chrome-api.js";
-import type {
-  NativeHostConfig,
-  RootSentinel,
-  SessionSnapshot,
-  SiteConfig
-} from "../lib/types.js";
+import type { OptionsChromeApi } from "../lib/chrome-api.js";
+import type { NativeHostConfig, SiteConfig } from "../lib/types.js";
 import {
   Alert,
   Badge,
@@ -61,148 +40,41 @@ import {
   Textarea
 } from "./components.js";
 import {
+  addSiteAction,
+  chooseOrReconnectRootAction,
+  confirmSwitchScenarioAction,
+  copyDiagnosticsAction,
+  openLaunchFolderAction,
+  prepareSwitchScenarioAction,
+  removeSiteAction,
+  saveLaunchSettingsAction,
+  saveScenarioAction,
+  saveScenarioFromTraceAction,
+  updateSiteAction,
+  verifyHelperAction,
+  type OptionsActionFlash,
+  type ScenarioSwitchDialogState
+} from "./options-app.actions.js";
+import {
+  getScenarioNameError,
+  isValidScenarioName,
   withSwitchDialogTargetName,
   withUpdatedEditorCommandOverride,
   withUpdatedEditorUrlOverride
 } from "./options-app.helpers.js";
+import {
+  EMPTY_SCENARIO_PANEL,
+  createNativeHostConfigQueryOptions,
+  createRememberedRootStateQueryOptions,
+  createScenarioPanelQueryOptions,
+  createSessionSnapshotQueryOptions,
+  createSiteConfigsQueryOptions,
+  optionsQueryKeys,
+  refetchOptionsQuery,
+  type RootState
+} from "./options-app.queries.js";
 
-interface RootState {
-  hasHandle: boolean;
-  permission: PermissionState;
-  sentinel: RootSentinel | null;
-}
-
-interface FlashState {
-  variant: "default" | "success" | "destructive";
-  text: string;
-}
-
-interface ScenarioSwitchDialogState {
-  targetName: string;
-  diff: FixtureDiff | null;
-}
-
-type ScenarioPanelState = Omit<ScenarioListSuccess, "ok">;
-type ScenarioListRuntimeSuccess = Pick<ScenarioListSuccess, "ok"> &
-  Partial<ScenarioPanelState>;
-
-const EMPTY_SCENARIO_PANEL: ScenarioPanelState = {
-  scenarios: [],
-  snapshots: [],
-  activeScenarioName: null,
-  activeScenarioMissing: false,
-  activeTrace: null,
-  supportsTraceSave: false
-};
-
-function normalizeScenarioSnapshotSource(
-  value: unknown
-): ScenarioPanelState["snapshots"][number]["source"] {
-  return value === "manual" || value === "trace" ? value : "unknown";
-}
-
-function normalizeScenarioSnapshot(
-  value: unknown,
-  activeScenarioName: string | null
-): ScenarioPanelState["snapshots"][number] | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const snapshot = value as Partial<ScenarioPanelState["snapshots"][number]>;
-  if (typeof snapshot.name !== "string") {
-    return null;
-  }
-
-  return {
-    name: snapshot.name,
-    ...(typeof snapshot.schemaVersion === "number"
-      ? { schemaVersion: snapshot.schemaVersion }
-      : {}),
-    ...(typeof snapshot.createdAt === "string"
-      ? { createdAt: snapshot.createdAt }
-      : {}),
-    ...(typeof snapshot.rootId === "string" ? { rootId: snapshot.rootId } : {}),
-    source: normalizeScenarioSnapshotSource(snapshot.source),
-    ...(typeof snapshot.description === "string" && snapshot.description.trim()
-      ? { description: snapshot.description.trim() }
-      : {}),
-    ...(snapshot.sourceTrace && typeof snapshot.sourceTrace === "object"
-      ? { sourceTrace: snapshot.sourceTrace }
-      : {}),
-    hasMetadata:
-      typeof snapshot.hasMetadata === "boolean" ? snapshot.hasMetadata : false,
-    isActive:
-      typeof snapshot.isActive === "boolean"
-        ? snapshot.isActive
-        : activeScenarioName === snapshot.name
-  };
-}
-
-function normalizeScenarioPanelState(
-  result: ScenarioListRuntimeSuccess
-): ScenarioPanelState {
-  const activeScenarioName =
-    typeof result.activeScenarioName === "string"
-      ? result.activeScenarioName
-      : null;
-  const scenarios = Array.isArray(result.scenarios)
-    ? result.scenarios.filter(
-        (scenarioName): scenarioName is string =>
-          typeof scenarioName === "string"
-      )
-    : [];
-  const normalizedSnapshots = Array.isArray(result.snapshots)
-    ? result.snapshots
-        .map((snapshot) =>
-          normalizeScenarioSnapshot(snapshot, activeScenarioName)
-        )
-        .filter(
-          (snapshot): snapshot is ScenarioPanelState["snapshots"][number] =>
-            snapshot !== null
-        )
-    : [];
-  const snapshots =
-    normalizedSnapshots.length > 0 || !Array.isArray(result.scenarios)
-      ? normalizedSnapshots
-      : scenarios.map((scenarioName) => ({
-          name: scenarioName,
-          source: "unknown" as const,
-          hasMetadata: false,
-          isActive: activeScenarioName === scenarioName
-        }));
-
-  return {
-    scenarios:
-      scenarios.length > 0
-        ? scenarios
-        : snapshots.map((snapshot) => snapshot.name),
-    snapshots,
-    activeScenarioName,
-    activeScenarioMissing: Boolean(result.activeScenarioMissing),
-    activeTrace:
-      result.activeTrace && typeof result.activeTrace === "object"
-        ? result.activeTrace
-        : null,
-    supportsTraceSave: Boolean(result.supportsTraceSave)
-  };
-}
-
-function isValidScenarioName(value: string): boolean {
-  return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value.trim());
-}
-
-function getScenarioNameError(value: string): string | null {
-  if (!value.trim()) {
-    return "Enter a scenario name.";
-  }
-
-  if (!isValidScenarioName(value)) {
-    return "Use 1-64 letters, numbers, hyphens, or underscores.";
-  }
-
-  return null;
-}
+type FlashState = OptionsActionFlash;
 
 function buildSuggestedScenarioName(
   value: string | undefined,
@@ -258,17 +130,6 @@ export interface OptionsAppProps {
   getPreferredEditorId?: () => Promise<string>;
   setPreferredEditorId?: (editorId: string) => Promise<void>;
   editorPresets?: EditorPreset[];
-}
-
-function getErrorMessage(result: { error?: string }): string {
-  return result.error || "Unknown error.";
-}
-
-function sendMessage<T>(
-  runtime: MessageRuntimeApi,
-  message: BackgroundMessage
-): Promise<T> {
-  return runtime.sendMessage(message) as Promise<T>;
 }
 
 function parseDumpAllowlistPatterns(text: string): string[] {
@@ -507,8 +368,6 @@ function SiteCard({
 export function OptionsApp({
   windowRef = window,
   chromeApi,
-  setIntervalFn = setInterval,
-  clearIntervalFn = clearInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
   getNativeHostConfig,
   getSiteConfigs,
@@ -529,15 +388,9 @@ export function OptionsApp({
   },
   editorPresets = EDITOR_PRESETS
 }: OptionsAppProps) {
-  const [sites, setSites] = React.useState<SiteConfig[]>([]);
   const [siteOriginInput, setSiteOriginInput] = React.useState("");
-  const [rootState, setRootState] = React.useState<RootState | null>(null);
-  const [sessionSnapshot, setSessionSnapshot] =
-    React.useState<SessionSnapshot | null>(null);
   const [nativeHostConfig, setNativeHostConfigState] =
     React.useState<NativeHostConfig | null>(null);
-  const [scenarioPanel, setScenarioPanel] =
-    React.useState(EMPTY_SCENARIO_PANEL);
   const [manualScenarioName, setManualScenarioName] = React.useState("");
   const [manualScenarioDescription, setManualScenarioDescription] =
     React.useState("");
@@ -563,7 +416,51 @@ export function OptionsApp({
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [siteDraftOrigins, setSiteDraftOrigins] = React.useState<string[]>([]);
   const [flash, setFlash] = React.useState<FlashState | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const queryClient = useQueryClient();
+  const pollingInterval =
+    siteDraftOrigins.length > 0 ? false : refreshIntervalMs;
+  const nativeHostConfigQuery = useQuery(
+    createNativeHostConfigQueryOptions({
+      getNativeHostConfig
+    })
+  );
+  const rootStateQuery = useQuery(
+    createRememberedRootStateQueryOptions({
+      ensureRootSentinel,
+      loadStoredRootHandle,
+      queryRootPermission
+    })
+  );
+  const sessionSnapshotQuery = useQuery(
+    createSessionSnapshotQueryOptions({
+      runtime: chromeApi.runtime,
+      refetchIntervalMs: pollingInterval
+    })
+  );
+  const siteConfigsQuery = useQuery(
+    createSiteConfigsQueryOptions({
+      getSiteConfigs,
+      refetchIntervalMs: pollingInterval
+    })
+  );
+  const scenarioPanelQuery = useQuery(
+    createScenarioPanelQueryOptions({
+      runtime: chromeApi.runtime,
+      refetchIntervalMs: pollingInterval
+    })
+  );
+  const sites = siteConfigsQuery.data ?? [];
+  const rootState = rootStateQuery.data ?? null;
+  const sessionSnapshot = sessionSnapshotQuery.data ?? null;
+  const scenarioPanel = scenarioPanelQuery.isError
+    ? EMPTY_SCENARIO_PANEL
+    : (scenarioPanelQuery.data ?? EMPTY_SCENARIO_PANEL);
+  const loading =
+    nativeHostConfigQuery.isPending ||
+    rootStateQuery.isPending ||
+    sessionSnapshotQuery.isPending ||
+    siteConfigsQuery.isPending ||
+    scenarioPanelQuery.isPending;
   const cursorEditor = React.useMemo(
     () =>
       editorPresets.find((preset) => preset.id === DEFAULT_EDITOR_ID) ??
@@ -613,77 +510,6 @@ export function OptionsApp({
     ]
   );
 
-  const refreshSessionSnapshot = React.useCallback(async () => {
-    const snapshot = await sendMessage<SessionSnapshot>(chromeApi.runtime, {
-      type: "session.getState"
-    });
-    setSessionSnapshot(snapshot);
-    return snapshot;
-  }, [chromeApi.runtime]);
-
-  const refreshSiteConfigs = React.useCallback(async () => {
-    const nextSites = normalizeSiteConfigs(await getSiteConfigs());
-    setSites(nextSites);
-    return nextSites;
-  }, [getSiteConfigs]);
-
-  const refreshRootState = React.useCallback(async () => {
-    const rootHandle = await loadStoredRootHandle();
-    if (!rootHandle) {
-      setRootState({
-        hasHandle: false,
-        permission: "prompt",
-        sentinel: null
-      });
-      return;
-    }
-
-    const permission = await queryRootPermission(rootHandle);
-    const sentinel =
-      permission === "granted" ? await ensureRootSentinel(rootHandle) : null;
-
-    setRootState({
-      hasHandle: true,
-      permission,
-      sentinel
-    });
-  }, [ensureRootSentinel, loadStoredRootHandle, queryRootPermission]);
-
-  const refreshScenarios = React.useCallback(async () => {
-    try {
-      const result = await sendMessage<ScenarioListResult>(chromeApi.runtime, {
-        type: "scenario.list"
-      });
-      if (!result.ok) {
-        setScenarioStatus({
-          variant: "destructive",
-          text: getErrorMessage(result as ErrorResult)
-        });
-        setScenarioPanel(EMPTY_SCENARIO_PANEL);
-        return;
-      }
-
-      setScenarioStatus(null);
-      setScenarioPanel(
-        normalizeScenarioPanelState(result as ScenarioListRuntimeSuccess)
-      );
-    } catch (error) {
-      setScenarioStatus({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-      setScenarioPanel(EMPTY_SCENARIO_PANEL);
-    }
-  }, [chromeApi.runtime]);
-
-  const refreshAuthorityData = React.useCallback(async () => {
-    await Promise.all([
-      refreshSessionSnapshot(),
-      refreshSiteConfigs(),
-      refreshScenarios()
-    ]);
-  }, [refreshScenarios, refreshSessionSnapshot, refreshSiteConfigs]);
-
   const handleSiteDraftingChange = React.useCallback(
     (origin: string, isDrafting: boolean) => {
       setSiteDraftOrigins((currentOrigins) => {
@@ -700,40 +526,59 @@ export function OptionsApp({
     []
   );
 
-  const refreshAll = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const nextNativeConfig = await getNativeHostConfig();
-      setNativeHostConfigState(nextNativeConfig);
-      await Promise.all([refreshRootState(), refreshAuthorityData()]);
-    } finally {
-      setLoading(false);
+  React.useEffect(() => {
+    if (nativeHostConfigQuery.data) {
+      setNativeHostConfigState(nativeHostConfigQuery.data);
     }
-  }, [getNativeHostConfig, refreshAuthorityData, refreshRootState]);
+  }, [nativeHostConfigQuery.data]);
 
   React.useEffect(() => {
-    void refreshAll();
-  }, [refreshAll]);
+    if (scenarioPanelQuery.error) {
+      setScenarioStatus({
+        variant: "destructive",
+        text:
+          scenarioPanelQuery.error instanceof Error
+            ? scenarioPanelQuery.error.message
+            : String(scenarioPanelQuery.error)
+      });
+      return;
+    }
 
-  React.useEffect(() => {
-    const intervalId = setIntervalFn(() => {
-      if (siteDraftOrigins.length > 0) {
-        return;
-      }
+    if (scenarioPanelQuery.data) {
+      setScenarioStatus(null);
+    }
+  }, [scenarioPanelQuery.data, scenarioPanelQuery.error]);
 
-      void refreshAuthorityData().catch(() => undefined);
-    }, refreshIntervalMs);
+  const refetchNativeHostConfig = React.useCallback(
+    async () =>
+      refetchOptionsQuery(queryClient, optionsQueryKeys.nativeHostConfig()),
+    [queryClient]
+  );
 
-    return () => {
-      clearIntervalFn(intervalId);
-    };
-  }, [
-    clearIntervalFn,
-    refreshAuthorityData,
-    refreshIntervalMs,
-    siteDraftOrigins.length,
-    setIntervalFn
-  ]);
+  const refetchSessionSnapshot = React.useCallback(
+    async () =>
+      refetchOptionsQuery(queryClient, optionsQueryKeys.sessionSnapshot()),
+    [queryClient]
+  );
+
+  const refetchRememberedRootState = React.useCallback(
+    async () =>
+      refetchOptionsQuery(queryClient, optionsQueryKeys.rememberedRootState()),
+    [queryClient]
+  );
+
+  const refetchScenarioPanel = React.useCallback(
+    async () =>
+      refetchOptionsQuery(queryClient, optionsQueryKeys.scenarioPanel()),
+    [queryClient]
+  );
+
+  const setSiteConfigsCache = React.useCallback(
+    (nextSites: SiteConfig[]) => {
+      queryClient.setQueryData(optionsQueryKeys.siteConfigs(), nextSites);
+    },
+    [queryClient]
+  );
 
   React.useEffect(() => {
     if (!scenarioPanel.activeTrace) {
@@ -756,152 +601,68 @@ export function OptionsApp({
   async function handleAddSite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFlash(null);
-    try {
-      if (!canEditSites) {
-        throw new Error(originsBlockedMessage);
-      }
+    const result = await addSiteAction({
+      originInput: siteOriginInput,
+      canEditSites,
+      originsBlockedMessage,
+      permissions: chromeApi.permissions,
+      sites,
+      setSiteConfigs,
+      setSiteConfigsCache,
+      refetchSessionSnapshot
+    });
 
-      const result = await whitelistSiteOrigin({
-        originInput: siteOriginInput,
-        requestHostPermission: async (permissionPattern) =>
-          chromeApi.permissions.request({
-            origins: [permissionPattern]
-          }),
-        readSiteConfigs: async () => sites,
-        writeSiteConfigs: setSiteConfigs
-      });
-
-      setSites(result.siteConfigs);
-      if (result.outcome === "already_enabled") {
-        setFlash({
-          variant: "default",
-          text: `Origin ${result.origin} is already enabled.`
-        });
-      } else {
-        setSiteOriginInput("");
-        await refreshSessionSnapshot();
-        setFlash({
-          variant: "success",
-          text: "Origin added and host access granted."
-        });
-      }
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    }
+    setFlash(result.flash);
+    setSiteOriginInput(result.nextSiteOriginInput);
   }
 
   async function handleUpdateSite(
     origin: string,
     patch: Pick<SiteConfig, "dumpAllowlistPatterns">
   ) {
-    if (!canEditSites) {
-      setFlash({
-        variant: "destructive",
-        text: originsBlockedMessage
-      });
-      return;
-    }
+    const result = await updateSiteAction({
+      origin,
+      dumpAllowlistPatterns: patch.dumpAllowlistPatterns,
+      canEditSites,
+      originsBlockedMessage,
+      sites,
+      setSiteConfigs,
+      setSiteConfigsCache,
+      refetchSessionSnapshot
+    });
 
-    if (!isValidDumpAllowlistPatterns(patch.dumpAllowlistPatterns)) {
-      setFlash({
-        variant: "destructive",
-        text: "One or more dump allowlist patterns are invalid."
-      });
-      return;
-    }
-
-    try {
-      const nextSites = sites.map((site) =>
-        site.origin === origin
-          ? {
-              ...site,
-              dumpAllowlistPatterns: patch.dumpAllowlistPatterns
-            }
-          : site
-      );
-      await setSiteConfigs(nextSites);
-      setSites(nextSites);
-      await refreshSessionSnapshot();
-      setFlash({
-        variant: "success",
-        text: `Updated ${origin}.`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    }
+    setFlash(result.flash);
   }
 
   async function handleRemoveSite(origin: string) {
     setFlash(null);
-    try {
-      if (!canEditSites) {
-        throw new Error(originsBlockedMessage);
-      }
+    const result = await removeSiteAction({
+      origin,
+      canEditSites,
+      originsBlockedMessage,
+      permissions: chromeApi.permissions,
+      sites,
+      setSiteConfigs,
+      setSiteConfigsCache,
+      refetchSessionSnapshot
+    });
 
-      const permissionPattern = originToPermissionPattern(origin);
-      const nextSites = sites.filter((site) => site.origin !== origin);
-      await setSiteConfigs(nextSites);
-      setSites(nextSites);
-      await Promise.resolve(
-        chromeApi.permissions.remove({ origins: [permissionPattern] })
-      ).catch(() => false);
-      await refreshSessionSnapshot();
-      setFlash({
-        variant: "success",
-        text: `Removed ${origin}.`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    }
+    setFlash(result.flash);
   }
 
   async function handleRootAction() {
     setFlash(null);
-    try {
-      if (!rootState?.hasHandle || rootState.permission === "granted") {
-        const currentHandle = rootState?.hasHandle
-          ? await loadStoredRootHandle()
-          : undefined;
-        const rootHandle = await windowRef.showDirectoryPicker(
-          createRootDirectoryPickerOptions(currentHandle)
-        );
-        const sentinel = await storeRootHandleWithSentinel(rootHandle);
-        await refreshRootState();
-        setFlash({
-          variant: "success",
-          text: `Root directory saved. Root ID: ${sentinel.rootId}.`
-        });
-        return;
-      }
+    const result = await chooseOrReconnectRootAction({
+      rootState,
+      windowRef,
+      loadStoredRootHandle,
+      requestRootPermission,
+      storeRootHandleWithSentinel,
+      refetchRememberedRootState
+    });
 
-      const rootHandle = await loadStoredRootHandle();
-      if (!rootHandle) {
-        throw new Error("Choose a root directory first.");
-      }
-
-      const permission = await requestRootPermission(rootHandle);
-      await refreshRootState();
-      setFlash({
-        variant: permission === "granted" ? "success" : "destructive",
-        text: `Root permission status: ${permission}.`
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
-      }
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
+    if (result.kind !== "noop") {
+      setFlash(result.flash);
     }
   }
 
@@ -911,83 +672,44 @@ export function OptionsApp({
     }
 
     setFlash(null);
-    await setNativeHostConfig(nativeHostConfig);
-    const refreshedConfig = await getNativeHostConfig();
-    setNativeHostConfigState(refreshedConfig);
-    setFlash({
-      variant: "success",
-      text: "Launch settings saved."
+    const result = await saveLaunchSettingsAction({
+      nativeHostConfig,
+      setNativeHostConfig,
+      refetchNativeHostConfig
     });
+    if (result.kind === "success") {
+      setFlash(result.flash);
+    }
   }
 
   async function handleVerifyHelper() {
     setFlash(null);
-    try {
-      const result = await sendMessage<NativeVerifyResult>(chromeApi.runtime, {
-        type: "native.verify"
-      });
-      const refreshedConfig = await getNativeHostConfig();
-      setNativeHostConfigState(refreshedConfig);
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
-      }
-      setFlash({
-        variant: "success",
-        text: `Helper verified at ${result.verifiedAt}.`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    }
+    const result = await verifyHelperAction({
+      runtime: chromeApi.runtime,
+      refetchNativeHostConfig
+    });
+
+    setFlash(result.flash);
   }
 
   async function handleOpenLaunchFolder() {
     setFlash(null);
-    try {
-      const result = await sendMessage<NativeOpenResult>(chromeApi.runtime, {
-        type: "native.revealRoot"
-      });
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
-      }
-      setFlash({
-        variant: "success",
-        text:
-          workspaceStatus.authority === "none"
-            ? "Opened the active root in the OS file manager."
-            : `Opened ${workspaceStatus.authorityLabel} in the OS file manager.`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    }
+    const result = await openLaunchFolderAction({
+      runtime: chromeApi.runtime,
+      workspaceStatus
+    });
+
+    setFlash(result.flash);
   }
 
   async function handleCopyDiagnostics() {
     setFlash(null);
-    try {
-      const result = await sendMessage<DiagnosticsResult>(chromeApi.runtime, {
-        type: "diagnostics.getReport"
-      });
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
-      }
+    const result = await copyDiagnosticsAction({
+      runtime: chromeApi.runtime,
+      writeClipboardText
+    });
 
-      await writeClipboardText(JSON.stringify(result.report, null, 2));
-      setFlash({
-        variant: "success",
-        text: "Support diagnostics copied to clipboard."
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
-    }
+    setFlash(result.flash);
   }
 
   async function handleSaveScenario() {
@@ -1001,28 +723,24 @@ export function OptionsApp({
     setManualScenarioError(null);
     setSavingManualScenario(true);
     try {
-      const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
-        type: "scenario.save",
-        name: manualScenarioName.trim(),
-        ...(manualScenarioDescription.trim()
-          ? { description: manualScenarioDescription.trim() }
-          : {})
+      const result = await saveScenarioAction({
+        runtime: chromeApi.runtime,
+        nameInput: manualScenarioName,
+        descriptionInput: manualScenarioDescription,
+        refetchScenarioPanel
       });
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
+
+      if (result.kind === "validation_error") {
+        setManualScenarioError(result.errorText);
+        return;
       }
-      setManualScenarioName("");
-      setManualScenarioDescription("");
-      await refreshScenarios();
-      setFlash({
-        variant: "success",
-        text: `Scenario "${result.name}" saved.`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
+
+      setManualScenarioError(null);
+      setFlash(result.flash);
+      if (result.kind === "success") {
+        setManualScenarioName(result.nextName);
+        setManualScenarioDescription(result.nextDescription);
+      }
     } finally {
       setSavingManualScenario(false);
     }
@@ -1039,26 +757,20 @@ export function OptionsApp({
     setTraceScenarioError(null);
     setSavingTraceScenario(true);
     try {
-      const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
-        type: "scenario.saveFromTrace",
-        name: traceScenarioName.trim(),
-        ...(traceScenarioDescription.trim()
-          ? { description: traceScenarioDescription.trim() }
-          : {})
+      const result = await saveScenarioFromTraceAction({
+        runtime: chromeApi.runtime,
+        nameInput: traceScenarioName,
+        descriptionInput: traceScenarioDescription,
+        refetchScenarioPanel
       });
-      if (!result.ok) {
-        throw new Error(getErrorMessage(result as ErrorResult));
+
+      if (result.kind === "validation_error") {
+        setTraceScenarioError(result.errorText);
+        return;
       }
-      await refreshScenarios();
-      setFlash({
-        variant: "success",
-        text: `Scenario "${result.name}" saved from the active trace.`
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
+
+      setTraceScenarioError(null);
+      setFlash(result.flash);
     } finally {
       setSavingTraceScenario(false);
     }
@@ -1068,39 +780,19 @@ export function OptionsApp({
     setFlash(null);
     setSwitchBusyName(name);
     try {
-      if (
-        scenarioPanel.activeScenarioName &&
-        !scenarioPanel.activeScenarioMissing &&
-        scenarioPanel.activeScenarioName !== name
-      ) {
-        const diffResult = await sendMessage<ScenarioDiffResult>(
-          chromeApi.runtime,
-          {
-            type: "scenario.diff",
-            scenarioA: scenarioPanel.activeScenarioName,
-            scenarioB: name
-          }
-        );
-        if (!diffResult.ok) {
-          throw new Error(getErrorMessage(diffResult as ErrorResult));
-        }
+      const result = await prepareSwitchScenarioAction({
+        runtime: chromeApi.runtime,
+        targetName: name,
+        activeScenarioName: scenarioPanel.activeScenarioName,
+        activeScenarioMissing: scenarioPanel.activeScenarioMissing
+      });
 
-        setSwitchDialog({
-          targetName: name,
-          diff: diffResult.diff
-        });
+      if (result.kind === "error") {
+        setFlash(result.flash);
         return;
       }
 
-      setSwitchDialog({
-        targetName: name,
-        diff: null
-      });
-    } catch (error) {
-      setFlash({
-        variant: "destructive",
-        text: error instanceof Error ? error.message : String(error)
-      });
+      setSwitchDialog(result.dialog);
     } finally {
       setSwitchBusyName(null);
     }
@@ -1113,24 +805,18 @@ export function OptionsApp({
         setFlash(null);
         setSwitchBusyName(switchTargetName);
         try {
-          const result = await sendMessage<ScenarioResult>(chromeApi.runtime, {
-            type: "scenario.switch",
-            name: switchTargetName
+          const result = await confirmSwitchScenarioAction({
+            runtime: chromeApi.runtime,
+            switchDialog,
+            refetchScenarioPanel
           });
-          if (!result.ok) {
-            throw new Error(getErrorMessage(result as ErrorResult));
+
+          if (result.kind === "success") {
+            setSwitchDialog(null);
+            setFlash(result.flash);
+          } else if (result.kind === "error") {
+            setFlash(result.flash);
           }
-          setSwitchDialog(null);
-          await refreshScenarios();
-          setFlash({
-            variant: "success",
-            text: `Switched to "${result.name}".`
-          });
-        } catch (error) {
-          setFlash({
-            variant: "destructive",
-            text: error instanceof Error ? error.message : String(error)
-          });
         } finally {
           setSwitchBusyName(null);
         }

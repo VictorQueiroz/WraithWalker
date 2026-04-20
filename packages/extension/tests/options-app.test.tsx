@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { QueryClientProvider } from "@tanstack/react-query";
 
 import {
   getSwitchDialogTargetName,
@@ -14,14 +15,18 @@ import {
   DEFAULT_NATIVE_HOST_CONFIG,
   type EditorPreset
 } from "../src/lib/constants.js";
+import type { ScenarioListSuccess } from "../src/lib/messages.js";
 import type { OptionsAppProps } from "../src/ui/options-app.js";
 import { OptionsApp } from "../src/ui/options-app.js";
 import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
+import { createOptionsQueryClient } from "../src/ui/options-app.queries.js";
 import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.doUnmock("react");
+  vi.doUnmock("../src/ui/options-app.actions.js");
   vi.resetModules();
   vi.restoreAllMocks();
 });
@@ -54,25 +59,34 @@ function createSessionSnapshot(
   };
 }
 
+function createScenarioListResult(
+  overrides: Partial<Omit<ScenarioListSuccess, "ok">> = {}
+): ScenarioListSuccess {
+  return {
+    ok: true,
+    scenarios: [],
+    snapshots: [],
+    activeScenarioName: null,
+    activeScenarioMissing: false,
+    activeTrace: null,
+    supportsTraceSave: false,
+    ...overrides
+  };
+}
+
 function createRuntimeSendMessage({
-  sessionSnapshot = createSessionSnapshot()
+  sessionSnapshot = createSessionSnapshot(),
+  scenarioListResult = createScenarioListResult()
 }: {
   sessionSnapshot?: SessionSnapshot;
+  scenarioListResult?: ScenarioListSuccess;
 } = {}) {
   return vi.fn(async (message: { type: string }) => {
     switch (message.type) {
       case "session.getState":
         return sessionSnapshot;
       case "scenario.list":
-        return {
-          ok: true,
-          scenarios: [],
-          snapshots: [],
-          activeScenarioName: null,
-          activeScenarioMissing: false,
-          activeTrace: null,
-          supportsTraceSave: false
-        };
+        return scenarioListResult;
       case "native.verify":
         return { ok: true, verifiedAt: "2026-04-03T12:00:00.000Z" };
       default:
@@ -85,22 +99,28 @@ function createOptionsAppHarness({
   nativeHostConfig = createNativeHostConfig(),
   editorPresets,
   sessionSnapshot,
+  scenarioListResult,
   siteConfigs = [],
+  runtimeSendMessage: runtimeSendMessageOverride,
   setIntervalFn,
   clearIntervalFn
 }: {
   nativeHostConfig?: NativeHostConfig;
   editorPresets?: EditorPreset[];
   sessionSnapshot?: SessionSnapshot;
+  scenarioListResult?: ScenarioListSuccess;
   siteConfigs?: Array<{
     origin: string;
     createdAt: string;
     dumpAllowlistPatterns: string[];
   }>;
+  runtimeSendMessage?: ReturnType<typeof vi.fn>;
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
 } = {}) {
-  const runtimeSendMessage = createRuntimeSendMessage({ sessionSnapshot });
+  const runtimeSendMessage =
+    runtimeSendMessageOverride ??
+    createRuntimeSendMessage({ sessionSnapshot, scenarioListResult });
   const chromeApi = createTestChromeApi({
     runtime: {
       sendMessage: runtimeSendMessage
@@ -140,6 +160,51 @@ function createOptionsAppHarness({
   };
 }
 
+function renderOptionsApp(props: OptionsAppProps) {
+  const queryClient = createOptionsQueryClient();
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <OptionsApp {...props} />
+    </QueryClientProvider>
+  );
+}
+
+async function renderOptionsAppWithActionOverrides({
+  props,
+  actionOverrides
+}: {
+  props: OptionsAppProps;
+  actionOverrides: Partial<
+    Awaited<typeof import("../src/ui/options-app.actions.js")>
+  >;
+}) {
+  vi.resetModules();
+  vi.doMock("../src/ui/options-app.actions.js", async () => {
+    const actual = await vi.importActual<
+      typeof import("../src/ui/options-app.actions.js")
+    >("../src/ui/options-app.actions.js");
+
+    return {
+      ...actual,
+      ...actionOverrides
+    };
+  });
+
+  const [{ OptionsApp: MockedOptionsApp }, { createOptionsQueryClient }] =
+    await Promise.all([
+      import("../src/ui/options-app.js"),
+      import("../src/ui/options-app.queries.js")
+    ]);
+  const queryClient = createOptionsQueryClient();
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MockedOptionsApp {...props} />
+    </QueryClientProvider>
+  );
+}
+
 async function openAdvancedLaunchSettings() {
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "Show" }));
@@ -165,7 +230,7 @@ describe("OptionsApp launch settings", () => {
       ]
     });
 
-    render(<OptionsApp {...props} />);
+    renderOptionsApp(props);
 
     await openAdvancedLaunchSettings();
 
@@ -185,7 +250,7 @@ describe("OptionsApp launch settings", () => {
       })
     });
 
-    render(<OptionsApp {...props} />);
+    renderOptionsApp(props);
 
     const user = await openAdvancedLaunchSettings();
     fireEvent.change(screen.getByLabelText("Custom URL Override For Cursor"), {
@@ -210,16 +275,7 @@ describe("OptionsApp launch settings", () => {
   });
 
   it("does not poll authority data while a site-pattern edit is still dirty", async () => {
-    let intervalHandler: (() => void) | null = null;
-    const intervalId = 23 as unknown as ReturnType<typeof setInterval>;
-    const setIntervalMock = vi.fn((handler: TimerHandler) => {
-      intervalHandler = handler as () => void;
-      return intervalId;
-    });
-    const clearIntervalMock = vi.fn();
-    const setIntervalFn = setIntervalMock as unknown as typeof setInterval;
-    const clearIntervalFn =
-      clearIntervalMock as unknown as typeof clearInterval;
+    vi.useFakeTimers();
     const { props } = createOptionsAppHarness({
       sessionSnapshot: createSessionSnapshot({
         captureDestination: "server",
@@ -233,22 +289,21 @@ describe("OptionsApp launch settings", () => {
           createdAt: "2026-04-14T00:00:00.000Z",
           dumpAllowlistPatterns: ["\\.js$"]
         }
-      ],
-      setIntervalFn,
-      clearIntervalFn
+      ]
     });
-    render(<OptionsApp {...props} />);
+    renderOptionsApp({
+      ...props,
+      refreshIntervalMs: 25
+    });
+    await vi.advanceTimersByTimeAsync(0);
 
-    const patternsInput = await screen.findByLabelText(
-      "Dump Allowlist Patterns"
-    );
+    const patternsInput = screen.getByLabelText("Dump Allowlist Patterns");
     fireEvent.change(patternsInput, { target: { value: "\\.tsx$" } });
 
     const getSiteConfigs = props.getSiteConfigs as ReturnType<typeof vi.fn>;
     const beforeTickCalls = getSiteConfigs.mock.calls.length;
 
-    intervalHandler?.();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(25);
 
     expect(getSiteConfigs).toHaveBeenCalledTimes(beforeTickCalls);
     expect((patternsInput as HTMLTextAreaElement).value).toBe("\\.tsx$");
@@ -275,7 +330,7 @@ describe("OptionsApp launch settings", () => {
       ]
     });
 
-    render(<OptionsApp {...props} />);
+    renderOptionsApp(props);
 
     expect(await screen.findAllByText("https://docs.example.com")).toHaveLength(
       1
@@ -318,7 +373,7 @@ describe("OptionsApp launch settings", () => {
       ]
     });
 
-    render(<OptionsApp {...props} />);
+    renderOptionsApp(props);
 
     expect(await screen.findAllByText("https://docs.example.com")).toHaveLength(
       1
@@ -330,6 +385,100 @@ describe("OptionsApp launch settings", () => {
     expect(props.chromeApi.permissions.remove).toHaveBeenCalledWith({
       origins: ["https://docs.example.com/*"]
     });
+  });
+
+  it("surfaces trace-save validation errors returned by the action layer and clears the busy state", async () => {
+    const saveScenarioFromTraceAction = vi.fn().mockResolvedValue({
+      kind: "validation_error",
+      errorText: "Trace validation failed."
+    });
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        enabledOrigins: ["https://app.example.com"]
+      }),
+      scenarioListResult: createScenarioListResult({
+        supportsTraceSave: true,
+        activeTrace: {
+          traceId: "trace-1",
+          status: "recording",
+          createdAt: "2026-04-18T00:00:00.000Z",
+          selectedOrigins: ["https://app.example.com"],
+          extensionClientId: "client-1",
+          stepCount: 1,
+          linkedFixtureCount: 0,
+          name: "Trace Example"
+        }
+      })
+    });
+
+    await renderOptionsAppWithActionOverrides({
+      props,
+      actionOverrides: {
+        saveScenarioFromTraceAction
+      }
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "Save Trace Snapshot" })
+    );
+
+    expect(saveScenarioFromTraceAction).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Trace validation failed.")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Save Trace Snapshot" })
+    ).toBeTruthy();
+  });
+
+  it("surfaces switch preparation errors from the action layer and clears the busy state", async () => {
+    const prepareSwitchScenarioAction = vi.fn().mockResolvedValue({
+      kind: "error",
+      flash: {
+        variant: "destructive",
+        text: "Diff lookup failed."
+      }
+    });
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        enabledOrigins: ["https://app.example.com"]
+      }),
+      scenarioListResult: createScenarioListResult({
+        scenarios: ["baseline", "candidate"],
+        snapshots: [
+          {
+            name: "baseline",
+            source: "manual",
+            hasMetadata: true,
+            isActive: true
+          },
+          {
+            name: "candidate",
+            source: "manual",
+            hasMetadata: true,
+            isActive: false
+          }
+        ],
+        activeScenarioName: "baseline"
+      })
+    });
+
+    await renderOptionsAppWithActionOverrides({
+      props,
+      actionOverrides: {
+        prepareSwitchScenarioAction
+      }
+    });
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Switch" }));
+
+    expect(prepareSwitchScenarioAction).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Diff lookup failed.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Switch" })).toBeTruthy();
   });
 });
 
