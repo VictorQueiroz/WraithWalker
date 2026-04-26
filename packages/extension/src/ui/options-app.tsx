@@ -2,15 +2,12 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  DEFAULT_DUMP_ALLOWLIST_PATTERNS,
   DEFAULT_EDITOR_ID,
   EDITOR_PRESETS,
   POPUP_REFRESH_INTERVAL_MS,
   type EditorPreset
 } from "../lib/constants.js";
 import { getEditorLaunchOverride } from "../lib/editor-launch.js";
-import type { FixtureDiff } from "@wraithwalker/core/scenarios";
-import { originToPermissionPattern } from "../lib/path-utils.js";
 import {
   deriveEditorLaunchState,
   deriveWorkspaceReadiness,
@@ -26,20 +23,7 @@ import {
 } from "../lib/root-handle.js";
 import type { OptionsChromeApi } from "../lib/chrome-api.js";
 import type { NativeHostConfig, SiteConfig } from "../lib/types.js";
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-  Separator,
-  Textarea
-} from "./components.js";
+import { Alert, Badge } from "./components.js";
 import {
   addSiteAction,
   chooseOrReconnectRootAction,
@@ -59,9 +43,7 @@ import {
 import {
   getScenarioNameError,
   isValidScenarioName,
-  withSwitchDialogTargetName,
-  withUpdatedEditorCommandOverride,
-  withUpdatedEditorUrlOverride
+  withSwitchDialogTargetName
 } from "./options-app.helpers.js";
 import {
   EMPTY_SCENARIO_PANEL,
@@ -74,6 +56,12 @@ import {
   refetchOptionsQuery,
   type RootState
 } from "./options-app.queries.js";
+import { AdvancedNativeHostSection } from "./options-advanced-section.js";
+import { RememberedBrowserRootSection } from "./options-root-section.js";
+import { ScenarioManagerSection } from "./options-scenario-section.js";
+import { EnabledOriginsSection } from "./options-sites-section.js";
+import { ScenarioSwitchDialog } from "./options-switch-dialog.js";
+import { WorkspaceStatusSection } from "./options-workspace-section.js";
 
 type FlashState = OptionsActionFlash;
 
@@ -89,27 +77,6 @@ function buildSuggestedScenarioName(
     .slice(0, 64);
 
   return isValidScenarioName(normalized) ? normalized : fallback;
-}
-
-function buildDiffPreview(diff: FixtureDiff): string[] {
-  const previews = [
-    ...diff.added
-      .slice(0, 2)
-      .map(
-        (entry) => `Added ${entry.method} ${entry.pathname} (${entry.status})`
-      ),
-    ...diff.removed
-      .slice(0, 2)
-      .map(
-        (entry) => `Removed ${entry.method} ${entry.pathname} (${entry.status})`
-      ),
-    ...diff.changed.slice(0, 3).map((entry) => {
-      const suffix = entry.bodyChanged ? ", body changed" : "";
-      return `Changed ${entry.method} ${entry.pathname} (${entry.statusBefore} -> ${entry.statusAfter}${suffix})`;
-    })
-  ];
-
-  return previews.slice(0, 5);
 }
 
 export interface OptionsAppProps {
@@ -133,237 +100,8 @@ export interface OptionsAppProps {
   editorPresets?: EditorPreset[];
 }
 
-function parseDumpAllowlistPatterns(text: string): string[] {
-  const patterns = text
-    .split(/\r\n|\n|\r/)
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return patterns.length > 0 ? patterns : [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
-}
-
-function formatDumpAllowlistPatterns(patterns: string[]): string {
-  return patterns.join("\n");
-}
-
 function hasConfiguredRoot(rootState: RootState | null): boolean {
   return Boolean(rootState?.hasHandle && rootState.permission === "granted");
-}
-
-function WorkspaceStatusTile({
-  label,
-  value
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="grid gap-1 rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-sm font-medium text-foreground">{value}</div>
-    </div>
-  );
-}
-
-function ReadinessChecklistRow({
-  label,
-  value,
-  text,
-  state
-}: {
-  label: string;
-  value: string;
-  text: string;
-  state: "ready" | "needs_attention" | "info";
-}) {
-  const badgeVariant =
-    state === "ready"
-      ? "success"
-      : state === "needs_attention"
-        ? "default"
-        : "muted";
-
-  return (
-    <div className="grid gap-2 rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        <div className="flex items-center gap-2">
-          <Badge variant={badgeVariant}>{value}</Badge>
-        </div>
-      </div>
-      <p className="text-sm text-muted-foreground">{text}</p>
-    </div>
-  );
-}
-
-function RootStatusSummary({
-  rootState,
-  serverConnected,
-  serverRootPath
-}: {
-  rootState: RootState | null;
-  serverConnected: boolean;
-  serverRootPath?: string;
-}) {
-  if (serverConnected && (!rootState || !rootState.hasHandle)) {
-    return (
-      <Alert variant="default">
-        Server Root is active.
-        {serverRootPath
-          ? ` Settings changes are using ${serverRootPath}.`
-          : " Settings changes are using Server Root."}{" "}
-        Choose Root Directory only if you want a Remembered Browser Root
-        fallback.
-      </Alert>
-    );
-  }
-
-  if (!rootState || !rootState.hasHandle) {
-    return (
-      <Alert variant="default">
-        Choose Root Directory to set the Remembered Browser Root fallback.
-      </Alert>
-    );
-  }
-
-  if (rootState.permission !== "granted") {
-    return (
-      <Alert variant="destructive">
-        Reconnect Root Directory to restore the Remembered Browser Root
-        fallback.
-      </Alert>
-    );
-  }
-
-  return (
-    <Alert variant="success">
-      Remembered Browser Root is ready.
-      {rootState.sentinel ? ` Root ID: ${rootState.sentinel.rootId}.` : ""}
-    </Alert>
-  );
-}
-
-function SectionIntro({
-  title,
-  description
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-      <p className="text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
-function SiteCard({
-  siteConfig,
-  disabled = false,
-  onDraftingChange,
-  onSave,
-  onRemove
-}: {
-  siteConfig: SiteConfig;
-  disabled?: boolean;
-  onDraftingChange?: (origin: string, isDrafting: boolean) => void;
-  onSave: (
-    origin: string,
-    patch: Pick<SiteConfig, "dumpAllowlistPatterns">
-  ) => Promise<void>;
-  onRemove: (origin: string) => Promise<void>;
-}) {
-  const formattedPatterns = React.useMemo(
-    () => formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns),
-    [siteConfig.dumpAllowlistPatterns]
-  );
-  const [patternsText, setPatternsText] = React.useState(formattedPatterns);
-  const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
-  const isDrafting = patternsText !== formattedPatterns;
-
-  React.useEffect(() => {
-    if (!isDrafting) {
-      setPatternsText(formattedPatterns);
-    }
-  }, [formattedPatterns, isDrafting]);
-
-  React.useEffect(() => {
-    onDraftingChange?.(siteConfig.origin, isDrafting);
-
-    return () => {
-      onDraftingChange?.(siteConfig.origin, false);
-    };
-  }, [isDrafting, onDraftingChange, siteConfig.origin]);
-
-  return (
-    <Card className="bg-card/80">
-      <CardHeader className="gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle>{siteConfig.origin}</CardTitle>
-            <CardDescription>
-              Granted pattern: {originToPermissionPattern(siteConfig.origin)}
-            </CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busy !== null || disabled}
-              onClick={async () => {
-                setBusy("save");
-                try {
-                  await onSave(siteConfig.origin, {
-                    dumpAllowlistPatterns:
-                      parseDumpAllowlistPatterns(patternsText)
-                  });
-                } finally {
-                  setBusy(null);
-                }
-              }}
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={busy !== null || disabled}
-              onClick={async () => {
-                setBusy("remove");
-                try {
-                  await onRemove(siteConfig.origin);
-                } finally {
-                  setBusy(null);
-                }
-              }}
-            >
-              Remove
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor={`patterns-${siteConfig.origin}`}>
-            Dump Allowlist Patterns
-          </Label>
-          <Textarea
-            id={`patterns-${siteConfig.origin}`}
-            value={patternsText}
-            disabled={disabled}
-            onChange={(event) => setPatternsText(event.currentTarget.value)}
-            placeholder={"\\.m?(js|ts)x?$"}
-          />
-          <p className="text-xs text-muted-foreground">
-            One regular expression per line.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 export function OptionsApp({
@@ -871,9 +609,6 @@ export function OptionsApp({
     : rootState.permission === "granted"
       ? "Change Root Directory"
       : "Reconnect Root Directory";
-  const switchDialogPreview = switchDialog?.diff
-    ? buildDiffPreview(switchDialog.diff)
-    : [];
   const originsBlockedMessage =
     rootActionLabel === "Reconnect Root Directory"
       ? "Reconnect Root Directory above before adding origins, or connect the local WraithWalker server."
@@ -902,732 +637,76 @@ export function OptionsApp({
           {flash ? <Alert variant={flash.variant}>{flash.text}</Alert> : null}
 
           <div className="grid gap-6">
-            <Card>
-              <CardHeader>
-                <SectionIntro
-                  title="Workspace Status"
-                  description="See which workspace is active right now and what needs attention next."
-                />
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <WorkspaceStatusTile
-                    label="Session"
-                    value={workspaceStatus.sessionLabel}
-                  />
-                  <WorkspaceStatusTile
-                    label="Active Root"
-                    value={workspaceStatus.authorityLabel}
-                  />
-                  <WorkspaceStatusTile
-                    label="Remembered Browser Root"
-                    value={workspaceStatus.rememberedRootLabel}
-                  />
-                  <WorkspaceStatusTile
-                    label="Enabled Origins"
-                    value={`${workspaceStatus.enabledOriginCount} enabled`}
-                  />
-                  <WorkspaceStatusTile
-                    label="Active Snapshot"
-                    value={workspaceStatus.activeSnapshotName ?? "None"}
-                  />
-                  <WorkspaceStatusTile
-                    label="Active Trace"
-                    value={
-                      workspaceStatus.activeTraceLabel ??
-                      (workspaceStatus.authority === "server"
-                        ? "None"
-                        : "Server Root only")
-                    }
-                  />
-                </div>
-                {sessionSnapshot?.captureRootPath &&
-                workspaceStatus.authority !== "none" ? (
-                  <div className="text-sm text-muted-foreground">
-                    Current path:{" "}
-                    <span className="break-all text-foreground">
-                      {sessionSnapshot.captureRootPath}
-                    </span>
-                  </div>
-                ) : null}
-                <Alert variant={workspaceReadiness.primaryNextActionVariant}>
-                  <span className="font-medium">
-                    {workspaceReadiness.primaryNextActionLabel}:
-                  </span>{" "}
-                  {workspaceReadiness.primaryNextActionText}
-                </Alert>
-                <div
-                  className="grid gap-3"
-                  aria-label="Capture readiness checklist"
-                >
-                  {workspaceReadiness.items.map((item) => (
-                    <ReadinessChecklistRow
-                      key={item.id}
-                      label={item.label}
-                      value={item.value}
-                      text={item.text}
-                      state={item.state}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <SectionIntro
-                  title="Remembered Browser Root"
-                  description="Chrome can remember this fallback workspace whenever Server Root is not active."
-                />
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <RootStatusSummary
-                  rootState={rootState}
-                  serverConnected={serverConnected}
-                  serverRootPath={sessionSnapshot?.captureRootPath}
-                />
-                {rootState?.sentinel ? (
-                  <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3 text-sm">
-                    <div className="font-medium">Root ID</div>
-                    <div className="mt-1 font-mono text-xs text-muted-foreground">
-                      {rootState.sentinel.rootId}
-                    </div>
-                  </div>
-                ) : null}
-                <Button
-                  className="sm:w-fit"
-                  type="button"
-                  onClick={() => void handleRootAction()}
-                >
-                  {rootActionLabel}
-                </Button>
-                <Button
-                  className="sm:w-fit"
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void handleOpenLaunchFolder()}
-                >
-                  Open Active Root Folder
-                </Button>
-                <Button
-                  className="sm:w-fit"
-                  type="button"
-                  variant="ghost"
-                  onClick={() => void handleCopyDiagnostics()}
-                >
-                  Copy Support Diagnostics
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  The directory picker remembers the browser-side fallback.
-                  Opening the active workspace in Finder or Explorer still goes
-                  through the shared reveal flow below.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <SectionIntro
-                  title="Enabled Origins"
-                  description="Grant exact host access one origin at a time. These rules are stored in Server Root when connected, otherwise in Remembered Browser Root."
-                />
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                {serverConnected ? (
-                  <Alert variant="success">
-                    Server Root is active.
-                    {sessionSnapshot?.captureRootPath
-                      ? ` Editing ${sessionSnapshot.captureRootPath}.`
-                      : " Editing Server Root."}
-                  </Alert>
-                ) : null}
-                <form
-                  className="grid gap-3 sm:grid-cols-[1fr_auto]"
-                  onSubmit={handleAddSite}
-                >
-                  <Input
-                    aria-label="Exact origin"
-                    placeholder="https://app.example.com"
-                    disabled={!canEditSites}
-                    value={siteOriginInput}
-                    onChange={(event) =>
-                      setSiteOriginInput(event.currentTarget.value)
-                    }
-                  />
-                  <Button type="submit" disabled={!canEditSites}>
-                    Add Origin
-                  </Button>
-                </form>
-                <div className="grid gap-3">
-                  {!canEditSites ? (
-                    <Alert variant="default">{originsBlockedMessage}</Alert>
-                  ) : sites.length > 0 ? (
-                    sites.map((siteConfig) => (
-                      <SiteCard
-                        key={siteConfig.origin}
-                        siteConfig={siteConfig}
-                        disabled={!canEditSites}
-                        onDraftingChange={handleSiteDraftingChange}
-                        onSave={handleUpdateSite}
-                        onRemove={handleRemoveSite}
-                      />
-                    ))
-                  ) : (
-                    <Alert variant="default">
-                      Add your first origin above to make capture useful.
-                    </Alert>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <SectionIntro
-                  title="Scenario Manager"
-                  description="Snapshots use Server Root when connected, otherwise Remembered Browser Root."
-                />
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                {scenarioStatus ? (
-                  <Alert variant={scenarioStatus.variant}>
-                    {scenarioStatus.text}
-                  </Alert>
-                ) : null}
-
-                <div className="grid gap-3 rounded-xl border border-border/70 bg-card/70 p-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="default">
-                      Snapshots in {workspaceStatus.authorityLabel}
-                    </Badge>
-                    <Badge
-                      variant={
-                        workspaceStatus.activeSnapshotName ? "success" : "muted"
-                      }
-                    >
-                      Active snapshot:{" "}
-                      {workspaceStatus.activeSnapshotName ?? "None"}
-                    </Badge>
-                    <Badge variant="muted">
-                      Trace:{" "}
-                      {workspaceStatus.activeTraceLabel ??
-                        (workspaceStatus.authority === "server"
-                          ? "None"
-                          : "Server Root only")}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {workspaceStatus.authority === "server"
-                      ? "Trace provenance below belongs to the active Server Root."
-                      : "Trace save becomes available when Server Root is active."}
-                  </p>
-                </div>
-
-                <div className="grid gap-4 rounded-xl border border-border/70 bg-card/70 p-4">
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold">Current Workspace</h3>
-                    <p className="text-sm text-muted-foreground">
-                      The active snapshot marker lives in the active root and
-                      only changes when you switch.
-                    </p>
-                  </div>
-
-                  {scenarioPanel.activeScenarioName ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant={
-                          scenarioPanel.activeScenarioMissing
-                            ? "destructive"
-                            : "success"
-                        }
-                      >
-                        {scenarioPanel.activeScenarioMissing
-                          ? "Active Missing"
-                          : "Active"}
-                      </Badge>
-                      <span className="font-medium">
-                        {scenarioPanel.activeScenarioName}
-                      </span>
-                    </div>
-                  ) : (
-                    <Alert variant="default">
-                      No active snapshot marker is set for this root yet.
-                    </Alert>
-                  )}
-
-                  {scenarioPanel.activeScenarioMissing &&
-                  scenarioPanel.activeScenarioName ? (
-                    <Alert variant="destructive">
-                      The active snapshot marker still points to "
-                      {scenarioPanel.activeScenarioName}", but that snapshot is
-                      missing from this root.
-                    </Alert>
-                  ) : null}
-
-                  <form
-                    className="grid gap-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleSaveScenario();
-                    }}
-                  >
-                    <div className="grid gap-2">
-                      <Label htmlFor="scenario-name">Scenario name</Label>
-                      <Input
-                        id="scenario-name"
-                        aria-label="Scenario name"
-                        placeholder="baseline"
-                        disabled={savingManualScenario}
-                        value={manualScenarioName}
-                        onChange={(event) => {
-                          setManualScenarioName(event.currentTarget.value);
-                          setManualScenarioError(null);
-                        }}
-                      />
-                      {manualScenarioError ? (
-                        <p className="text-xs text-destructive">
-                          {manualScenarioError}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="scenario-description">
-                        Description (optional)
-                      </Label>
-                      <Textarea
-                        id="scenario-description"
-                        aria-label="Scenario description"
-                        placeholder="Saved after refreshing the root fixtures."
-                        disabled={savingManualScenario}
-                        value={manualScenarioDescription}
-                        onChange={(event) =>
-                          setManualScenarioDescription(
-                            event.currentTarget.value
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={savingManualScenario}>
-                        {savingManualScenario ? "Saving..." : "Save Snapshot"}
-                      </Button>
-                    </div>
-                  </form>
-                </div>
-
-                {scenarioPanel.supportsTraceSave &&
-                scenarioPanel.activeTrace ? (
-                  <div className="grid gap-4 rounded-xl border border-border/70 bg-card/70 p-4">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">
-                        Save From Active Trace
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Snapshot the current workspace with trace provenance
-                        attached while the server-backed trace is active.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-2 rounded-xl border border-border/60 bg-background/80 p-3 text-sm">
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="default">
-                          {scenarioPanel.activeTrace.status}
-                        </Badge>
-                        <span className="font-medium">
-                          {scenarioPanel.activeTrace.name ??
-                            scenarioPanel.activeTrace.traceId}
-                        </span>
-                      </div>
-                      {scenarioPanel.activeTrace.goal ? (
-                        <p>{scenarioPanel.activeTrace.goal}</p>
-                      ) : null}
-                      <div className="grid gap-1 text-muted-foreground sm:grid-cols-2">
-                        <span>
-                          Trace ID: {scenarioPanel.activeTrace.traceId}
-                        </span>
-                        <span>
-                          Steps: {scenarioPanel.activeTrace.stepCount}
-                        </span>
-                        <span>
-                          Linked fixtures:{" "}
-                          {scenarioPanel.activeTrace.linkedFixtureCount}
-                        </span>
-                        <span>
-                          Origins:{" "}
-                          {scenarioPanel.activeTrace.selectedOrigins.length}
-                        </span>
-                      </div>
-                    </div>
-
-                    <form
-                      className="grid gap-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleSaveScenarioFromTrace();
-                      }}
-                    >
-                      <div className="grid gap-2">
-                        <Label htmlFor="trace-scenario-name">
-                          Scenario name
-                        </Label>
-                        <Input
-                          id="trace-scenario-name"
-                          aria-label="Trace scenario name"
-                          placeholder="trace_snapshot"
-                          disabled={savingTraceScenario}
-                          value={traceScenarioName}
-                          onChange={(event) => {
-                            setTraceScenarioName(event.currentTarget.value);
-                            setTraceScenarioError(null);
-                          }}
-                        />
-                        {traceScenarioError ? (
-                          <p className="text-xs text-destructive">
-                            {traceScenarioError}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="trace-scenario-description">
-                          Description (optional)
-                        </Label>
-                        <Textarea
-                          id="trace-scenario-description"
-                          aria-label="Trace scenario description"
-                          placeholder="Saved from the active guided trace."
-                          disabled={savingTraceScenario}
-                          value={traceScenarioDescription}
-                          onChange={(event) =>
-                            setTraceScenarioDescription(
-                              event.currentTarget.value
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button type="submit" disabled={savingTraceScenario}>
-                          {savingTraceScenario
-                            ? "Saving..."
-                            : "Save Trace Snapshot"}
-                        </Button>
-                      </div>
-                    </form>
-                  </div>
-                ) : null}
-
-                <div className="grid gap-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-semibold">Saved Snapshots</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Active snapshots stay pinned first, then the rest sort
-                        by newest saved time.
-                      </p>
-                    </div>
-                    <Badge variant="muted">
-                      {scenarioPanel.snapshots.length} saved
-                    </Badge>
-                  </div>
-
-                  {scenarioPanel.snapshots.length > 0 ? (
-                    scenarioPanel.snapshots.map((snapshot) => {
-                      const switchBusy = switchBusyName === snapshot.name;
-
-                      return (
-                        <div
-                          key={snapshot.name}
-                          className="grid gap-3 rounded-xl border border-border/70 bg-card/70 p-4"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-medium">
-                                  {snapshot.name}
-                                </span>
-                                {snapshot.isActive ? (
-                                  <Badge variant="success">Active</Badge>
-                                ) : null}
-                                {snapshot.source === "manual" ? (
-                                  <Badge variant="default">Manual</Badge>
-                                ) : null}
-                                {snapshot.source === "trace" ? (
-                                  <Badge variant="muted">Trace</Badge>
-                                ) : null}
-                                {snapshot.source === "unknown" ? (
-                                  <Badge variant="muted">Legacy</Badge>
-                                ) : null}
-                              </div>
-                              {snapshot.description ? (
-                                <p className="text-sm text-foreground/90">
-                                  {snapshot.description}
-                                </p>
-                              ) : null}
-                              <div className="grid gap-1 text-sm text-muted-foreground">
-                                {snapshot.createdAt ? (
-                                  <span>Created: {snapshot.createdAt}</span>
-                                ) : null}
-                                {snapshot.sourceTrace ? (
-                                  <span>
-                                    Trace {snapshot.sourceTrace.traceId} ·{" "}
-                                    {snapshot.sourceTrace.stepCount} steps ·{" "}
-                                    {snapshot.sourceTrace.linkedFixtureCount}{" "}
-                                    linked fixtures
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              disabled={snapshot.isActive || switchBusy}
-                              onClick={() =>
-                                void handleSwitchScenario(snapshot.name)
-                              }
-                            >
-                              {snapshot.isActive
-                                ? "Active"
-                                : switchBusy
-                                  ? "Working..."
-                                  : "Switch"}
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <Alert variant="default">No snapshots saved yet.</Alert>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="opacity-90">
-              <CardHeader className="gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <CardTitle>Advanced Native Host</CardTitle>
-                    <CardDescription>
-                      Collapsed by default so the main flow stays focused on the
-                      active root and default editor.
-                    </CardDescription>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setAdvancedOpen((value) => !value)}
-                  >
-                    {advancedOpen ? "Hide" : "Show"}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                {!advancedOpen ? (
-                  <Alert variant="default">
-                    Hidden by default so the common flow stays simple. Open this
-                    section when you need native-host verification or editor
-                    overrides.
-                  </Alert>
-                ) : null}
-
-                {advancedOpen && nativeHostConfig ? (
-                  <div className="grid gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="native-host-name">Native Host Name</Label>
-                      <Input
-                        id="native-host-name"
-                        value={nativeHostConfig.hostName}
-                        onChange={(event) => {
-                          const hostName = event.currentTarget.value;
-                          setNativeHostConfigState((current) =>
-                            current ? { ...current, hostName } : current
-                          );
-                        }}
-                        placeholder="com.wraithwalker.host"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="native-root-path">
-                        Shared Editor Launch Path
-                      </Label>
-                      <Input
-                        id="native-root-path"
-                        value={nativeHostConfig.launchPath}
-                        onChange={(event) => {
-                          const launchPath = event.currentTarget.value;
-                          setNativeHostConfigState((current) =>
-                            current ? { ...current, launchPath } : current
-                          );
-                        }}
-                        placeholder="/Users/you/wraithwalker-fixtures"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Needed when you want Cursor to open Remembered Browser
-                        Root directly, or when using the native host fallback.
-                        Without it, Cursor can still launch and receive the
-                        workspace brief through its prompt deeplink, but Chrome
-                        does not expose the absolute local path back to the
-                        extension.
-                      </p>
-                    </div>
-                    <Separator />
-                    <div className="grid gap-2">
-                      <Label htmlFor="editor-url-template">
-                        Custom URL Override For Cursor
-                      </Label>
-                      <Input
-                        id="editor-url-template"
-                        value={cursorOverride.urlTemplate ?? ""}
-                        onChange={(event) => {
-                          const urlTemplate = event.currentTarget.value;
-                          setNativeHostConfigState((current) =>
-                            withUpdatedEditorUrlOverride(
-                              current,
-                              cursorEditor.id,
-                              urlTemplate
-                            )
-                          );
-                        }}
-                        placeholder={
-                          cursorEditor.urlTemplate ||
-                          "custom://open?folder=$DIR_COMPONENT"
-                        }
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="editor-command-template">
-                        Custom Command Override For Cursor
-                      </Label>
-                      <Input
-                        id="editor-command-template"
-                        value={cursorOverride.commandTemplate ?? ""}
-                        onChange={(event) => {
-                          const commandTemplate = event.currentTarget.value;
-                          setNativeHostConfigState((current) =>
-                            withUpdatedEditorCommandOverride(
-                              current,
-                              cursorEditor.id,
-                              commandTemplate
-                            )
-                          );
-                        }}
-                        placeholder={cursorEditor.commandTemplate}
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <Button
-                        type="button"
-                        onClick={() => void handleSaveLaunchSettings()}
-                      >
-                        Save Launch Settings
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => void handleVerifyHelper()}
-                      >
-                        Verify Helper
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
+            <WorkspaceStatusSection
+              sessionSnapshot={sessionSnapshot}
+              workspaceStatus={workspaceStatus}
+              workspaceReadiness={workspaceReadiness}
+            />
+            <RememberedBrowserRootSection
+              rootState={rootState}
+              serverConnected={serverConnected}
+              serverRootPath={sessionSnapshot?.captureRootPath}
+              rootActionLabel={rootActionLabel}
+              onRootAction={handleRootAction}
+              onOpenLaunchFolder={handleOpenLaunchFolder}
+              onCopyDiagnostics={handleCopyDiagnostics}
+            />
+            <EnabledOriginsSection
+              serverConnected={serverConnected}
+              serverRootPath={sessionSnapshot?.captureRootPath}
+              canEditSites={canEditSites}
+              siteOriginInput={siteOriginInput}
+              sites={sites}
+              originsBlockedMessage={originsBlockedMessage}
+              onSiteOriginInputChange={setSiteOriginInput}
+              onAddSite={handleAddSite}
+              onDraftingChange={handleSiteDraftingChange}
+              onSaveSite={handleUpdateSite}
+              onRemoveSite={handleRemoveSite}
+            />
+            <ScenarioManagerSection
+              scenarioStatus={scenarioStatus}
+              workspaceStatus={workspaceStatus}
+              scenarioPanel={scenarioPanel}
+              manualScenarioName={manualScenarioName}
+              manualScenarioDescription={manualScenarioDescription}
+              manualScenarioError={manualScenarioError}
+              savingManualScenario={savingManualScenario}
+              traceScenarioName={traceScenarioName}
+              traceScenarioDescription={traceScenarioDescription}
+              traceScenarioError={traceScenarioError}
+              savingTraceScenario={savingTraceScenario}
+              switchBusyName={switchBusyName}
+              onManualScenarioNameChange={setManualScenarioName}
+              onManualScenarioDescriptionChange={setManualScenarioDescription}
+              onTraceScenarioNameChange={setTraceScenarioName}
+              onTraceScenarioDescriptionChange={setTraceScenarioDescription}
+              onClearManualScenarioError={() => setManualScenarioError(null)}
+              onClearTraceScenarioError={() => setTraceScenarioError(null)}
+              onSaveScenario={handleSaveScenario}
+              onSaveScenarioFromTrace={handleSaveScenarioFromTrace}
+              onSwitchScenario={handleSwitchScenario}
+            />
+            <AdvancedNativeHostSection
+              advancedOpen={advancedOpen}
+              nativeHostConfig={nativeHostConfig}
+              cursorEditor={cursorEditor}
+              cursorOverride={cursorOverride}
+              setAdvancedOpen={setAdvancedOpen}
+              setNativeHostConfigState={setNativeHostConfigState}
+              onSaveLaunchSettings={handleSaveLaunchSettings}
+              onVerifyHelper={handleVerifyHelper}
+            />
           </div>
         </div>
 
         {switchDialog ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6">
-            <Card
-              role="dialog"
-              aria-modal="true"
-              aria-label={`Switch to ${switchDialog.targetName}`}
-              className="w-full max-w-xl"
-            >
-              <CardHeader>
-                <CardTitle>Switch Snapshot</CardTitle>
-                <CardDescription>
-                  {switchDialog.diff
-                    ? `Compare "${switchDialog.diff.scenarioA}" with "${switchDialog.targetName}" before replacing the current workspace.`
-                    : `Replace the current workspace with "${switchDialog.targetName}".`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                {switchDialog.diff ? (
-                  <>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                        <div className="text-xs text-muted-foreground">
-                          Added
-                        </div>
-                        <div className="text-lg font-semibold">
-                          {switchDialog.diff.added.length}
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                        <div className="text-xs text-muted-foreground">
-                          Removed
-                        </div>
-                        <div className="text-lg font-semibold">
-                          {switchDialog.diff.removed.length}
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-3">
-                        <div className="text-xs text-muted-foreground">
-                          Changed
-                        </div>
-                        <div className="text-lg font-semibold">
-                          {switchDialog.diff.changed.length}
-                        </div>
-                      </div>
-                    </div>
-
-                    {switchDialogPreview.length > 0 ? (
-                      <ul className="grid gap-2 text-sm text-foreground/90">
-                        {switchDialogPreview.map((preview) => (
-                          <li
-                            key={preview}
-                            className="rounded-xl border border-border/70 bg-card/70 px-3 py-2"
-                          >
-                            {preview}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <Alert variant="default">
-                        No endpoint differences were detected between these
-                        snapshots.
-                      </Alert>
-                    )}
-                  </>
-                ) : (
-                  <Alert variant="default">
-                    No active snapshot baseline is available, so this switch
-                    will proceed without a diff preview.
-                  </Alert>
-                )}
-
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={switchBusyName === switchDialog.targetName}
-                    onClick={() => setSwitchDialog(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={switchBusyName === switchDialog.targetName}
-                    onClick={() => void handleConfirmSwitchScenario()}
-                  >
-                    {switchBusyName === switchDialog.targetName
-                      ? "Switching..."
-                      : "Confirm Switch"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <ScenarioSwitchDialog
+            dialog={switchDialog}
+            switchBusyName={switchBusyName}
+            onCancel={() => setSwitchDialog(null)}
+            onConfirm={handleConfirmSwitchScenario}
+          />
         ) : null}
       </div>
     </main>
