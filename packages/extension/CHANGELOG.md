@@ -1,5 +1,11 @@
 # @wraithwalker/extension
 
+## 0.3.3
+
+### Patch Changes
+
+- e3c57f0: Split the options settings UI into focused section components.
+
 ## 0.3.2
 
 ### Patch Changes
