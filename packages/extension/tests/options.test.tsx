@@ -611,6 +611,11 @@ describe("options entrypoint", () => {
       expect(
         await screen.findByText("Updated https://app.example.com.")
       ).toBeTruthy();
+      expect(screen.queryByText("Unsaved changes")).toBeNull();
+      expect(
+        (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+          .disabled
+      ).toBe(true);
     } finally {
       options.unmount();
     }

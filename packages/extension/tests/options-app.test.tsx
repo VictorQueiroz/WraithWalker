@@ -347,6 +347,33 @@ describe("OptionsApp launch settings", () => {
     expect((saveButton as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("keeps normalized-equivalent pattern text edits clean", async () => {
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        enabledOrigins: ["https://docs.example.com"]
+      }),
+      siteConfigs: [
+        {
+          origin: "https://docs.example.com",
+          createdAt: "2026-04-14T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
+    });
+
+    renderOptionsApp(props);
+
+    const saveButton = await screen.findByRole("button", { name: "Save" });
+    fireEvent.change(screen.getByLabelText("Dump Allowlist Patterns"), {
+      target: { value: "\\.js$\n\n  " }
+    });
+
+    expect(screen.queryByText("Unsaved changes")).toBeNull();
+    expect((saveButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("renders one site card for duplicate normalized origins and writes a canonical save payload", async () => {
     const { props } = createOptionsAppHarness({
       sessionSnapshot: createSessionSnapshot({

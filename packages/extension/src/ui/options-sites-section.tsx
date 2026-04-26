@@ -30,6 +30,13 @@ function formatDumpAllowlistPatterns(patterns: string[]): string {
   return patterns.join("\n");
 }
 
+function arePatternListsEqual(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((pattern, index) => pattern === right[index])
+  );
+}
+
 function formatCreatedDate(createdAt: string): string {
   const [date] = createdAt.split("T");
   return date || createdAt;
@@ -59,7 +66,14 @@ function SiteCard({
   );
   const [patternsText, setPatternsText] = React.useState(formattedPatterns);
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
-  const isDrafting = patternsText !== formattedPatterns;
+  const parsedPatterns = React.useMemo(
+    () => parseDumpAllowlistPatterns(patternsText),
+    [patternsText]
+  );
+  const isDrafting = !arePatternListsEqual(
+    parsedPatterns,
+    siteConfig.dumpAllowlistPatterns
+  );
   const permissionPattern = originToPermissionPattern(siteConfig.origin);
 
   React.useEffect(() => {
@@ -100,9 +114,9 @@ function SiteCard({
                 setBusy("save");
                 try {
                   await onSave(siteConfig.origin, {
-                    dumpAllowlistPatterns:
-                      parseDumpAllowlistPatterns(patternsText)
+                    dumpAllowlistPatterns: parsedPatterns
                   });
+                  setPatternsText(formatDumpAllowlistPatterns(parsedPatterns));
                 } finally {
                   setBusy(null);
                 }
