@@ -1,5 +1,12 @@
 # @wraithwalker/extension
 
+## 0.3.4
+
+### Patch Changes
+
+- fa67f02: Replace the dump allowlist textarea with a validated regex rule list field.
+- c349f87: Make origin cards show storage and dirty-state details in settings.
+
 ## 0.3.3
 
 ### Patch Changes
