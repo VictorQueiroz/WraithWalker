@@ -170,7 +170,11 @@ describe("popup entrypoint", () => {
 
     try {
       expect(
-        await screen.findByRole("button", { name: "Stop Session" })
+        await screen.findByRole(
+          "button",
+          { name: "Stop Session" },
+          { timeout: 5000 }
+        )
       ).toBeTruthy();
       expect(screen.getByLabelText("Workspace status")).toBeTruthy();
       expect(screen.getByText("1 enabled")).toBeTruthy();

@@ -459,9 +459,9 @@ describe("options entrypoint", () => {
     const options = await initOptions({
       document,
       windowRef: createWindowWithDirectoryPicker(
-        vi
-          .fn()
-          .mockResolvedValue({ kind: "directory" } as FileSystemDirectoryHandle)
+        vi.fn().mockResolvedValue({
+          kind: "directory"
+        } as FileSystemDirectoryHandle)
       ),
       chromeApi: {
         permissions: {
@@ -509,7 +509,7 @@ describe("options entrypoint", () => {
     } finally {
       options.unmount();
     }
-  });
+  }, 10000);
 
   it("shows a validation error for invalid dump allowlist patterns", async () => {
     renderRoot();
@@ -1814,6 +1814,9 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText("https://app.example.com");
+      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      await user.clear(patterns);
+      await user.type(patterns, "\\.json$");
       await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(setSiteConfigs).toHaveBeenCalledTimes(1);

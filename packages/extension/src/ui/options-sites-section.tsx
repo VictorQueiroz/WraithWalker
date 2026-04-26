@@ -5,10 +5,10 @@ import { originToPermissionPattern } from "../lib/path-utils.js";
 import type { SiteConfig } from "../lib/types.js";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Input,
@@ -30,14 +30,21 @@ function formatDumpAllowlistPatterns(patterns: string[]): string {
   return patterns.join("\n");
 }
 
+function formatCreatedDate(createdAt: string): string {
+  const [date] = createdAt.split("T");
+  return date || createdAt;
+}
+
 function SiteCard({
   siteConfig,
+  storageLabel,
   disabled = false,
   onDraftingChange,
   onSave,
   onRemove
 }: {
   siteConfig: SiteConfig;
+  storageLabel: string;
   disabled?: boolean;
   onDraftingChange?: (origin: string, isDrafting: boolean) => void;
   onSave: (
@@ -53,6 +60,7 @@ function SiteCard({
   const [patternsText, setPatternsText] = React.useState(formattedPatterns);
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
   const isDrafting = patternsText !== formattedPatterns;
+  const permissionPattern = originToPermissionPattern(siteConfig.origin);
 
   React.useEffect(() => {
     if (!isDrafting) {
@@ -72,17 +80,22 @@ function SiteCard({
     <Card className="bg-card/80">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
+          <div className="grid gap-2">
             <CardTitle>{siteConfig.origin}</CardTitle>
-            <CardDescription>
-              Granted pattern: {originToPermissionPattern(siteConfig.origin)}
-            </CardDescription>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="success">Configured</Badge>
+              <Badge variant={disabled ? "muted" : "default"}>
+                {disabled ? "Read only" : "Editable"}
+              </Badge>
+              <Badge variant="muted">{storageLabel}</Badge>
+              {isDrafting ? <Badge>Unsaved changes</Badge> : null}
+            </div>
           </div>
           <div className="flex gap-2">
             <Button
               type="button"
               variant="secondary"
-              disabled={busy !== null || disabled}
+              disabled={busy !== null || disabled || !isDrafting}
               onClick={async () => {
                 setBusy("save");
                 try {
@@ -116,6 +129,26 @@ function SiteCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <dl className="grid gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 text-sm sm:grid-cols-3">
+          <div className="grid gap-1">
+            <dt className="text-xs font-medium uppercase text-muted-foreground">
+              Permission Pattern
+            </dt>
+            <dd className="break-all font-mono text-xs">{permissionPattern}</dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-xs font-medium uppercase text-muted-foreground">
+              Added
+            </dt>
+            <dd>{formatCreatedDate(siteConfig.createdAt)}</dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-xs font-medium uppercase text-muted-foreground">
+              Stored In
+            </dt>
+            <dd>{storageLabel}</dd>
+          </div>
+        </dl>
         <div className="grid gap-2">
           <Label htmlFor={`patterns-${siteConfig.origin}`}>
             Dump Allowlist Patterns
@@ -169,7 +202,7 @@ export function EnabledOriginsSection({
       <CardHeader>
         <SectionIntro
           title="Enabled Origins"
-          description="Grant exact host access one origin at a time. These rules are stored in Server Root when connected, otherwise in Remembered Browser Root."
+          description="Review the exact origins WraithWalker can capture, where the rules are stored, and which file patterns each origin can dump."
         />
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -206,6 +239,11 @@ export function EnabledOriginsSection({
               <SiteCard
                 key={siteConfig.origin}
                 siteConfig={siteConfig}
+                storageLabel={
+                  serverConnected
+                    ? "Stored in Server Root"
+                    : "Stored in Remembered Browser Root"
+                }
                 disabled={!canEditSites}
                 onDraftingChange={onDraftingChange}
                 onSave={onSaveSite}

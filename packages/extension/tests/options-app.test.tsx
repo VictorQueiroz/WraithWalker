@@ -309,6 +309,44 @@ describe("OptionsApp launch settings", () => {
     expect((patternsInput as HTMLTextAreaElement).value).toBe("\\.tsx$");
   });
 
+  it("shows origin storage details and only enables save for dirty pattern edits", async () => {
+    const { props } = createOptionsAppHarness({
+      sessionSnapshot: createSessionSnapshot({
+        captureDestination: "server",
+        rootReady: true,
+        captureRootPath: "/tmp/server-root",
+        enabledOrigins: ["https://docs.example.com"]
+      }),
+      siteConfigs: [
+        {
+          origin: "https://docs.example.com",
+          createdAt: "2026-04-14T00:00:00.000Z",
+          dumpAllowlistPatterns: ["\\.js$"]
+        }
+      ]
+    });
+
+    renderOptionsApp(props);
+
+    expect(await screen.findByText("https://docs.example.com")).toBeTruthy();
+    expect(screen.getByText("Configured")).toBeTruthy();
+    expect(screen.getAllByText("Stored in Server Root").length).toBeGreaterThan(
+      0
+    );
+    expect(screen.getByText("https://docs.example.com/*")).toBeTruthy();
+    expect(screen.getByText("2026-04-14")).toBeTruthy();
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    expect((saveButton as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Dump Allowlist Patterns"), {
+      target: { value: "\\.tsx$" }
+    });
+
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
+    expect((saveButton as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("renders one site card for duplicate normalized origins and writes a canonical save payload", async () => {
     const { props } = createOptionsAppHarness({
       sessionSnapshot: createSessionSnapshot({
