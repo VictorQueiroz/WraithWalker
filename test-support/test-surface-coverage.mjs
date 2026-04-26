@@ -80,8 +80,36 @@ export const explicitCoverage = {
   "packages/extension/src/ui/components.tsx": [
     "packages/extension/tests/components.test.tsx"
   ],
+  "packages/extension/src/ui/options-advanced-section.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
+  ],
+  "packages/extension/src/ui/options-app.shared.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
+  ],
   "packages/extension/src/ui/options-app.tsx": [
     "packages/extension/tests/options.test.tsx"
+  ],
+  "packages/extension/src/ui/options-root-section.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
+  ],
+  "packages/extension/src/ui/options-scenario-section.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
+  ],
+  "packages/extension/src/ui/options-sites-section.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
+  ],
+  "packages/extension/src/ui/options-switch-dialog.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
+  ],
+  "packages/extension/src/ui/options-workspace-section.tsx": [
+    "packages/extension/tests/options.test.tsx",
+    "packages/extension/tests/options-app.test.tsx"
   ]
 };
 

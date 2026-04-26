@@ -8,6 +8,14 @@
     "packages/*",
     "apps/*"
   ],
+  "overrides": {
+    "mermaid": {
+      "uuid": "14.0.0"
+    },
+    "next": {
+      "postcss": "8.5.10"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "lint": "prettier . --check",
