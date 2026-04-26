@@ -450,7 +450,11 @@ describe("options entrypoint", () => {
     renderRoot();
     const { initOptions } = await loadOptionsModule();
     const user = userEvent.setup();
-    let sites = [createStoredSite()];
+    let sites = [
+      createStoredSite({
+        dumpAllowlistPatterns: ["\\.js$"]
+      })
+    ];
     const setSiteConfigs = vi.fn(async (nextSites: SiteConfig[]) => {
       sites = nextSites;
     });
@@ -486,7 +490,7 @@ describe("options entrypoint", () => {
       ).toBeTruthy();
       expect(await screen.findByText("https://app.example.com")).toBeTruthy();
 
-      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      const patterns = await screen.findByLabelText("Dump Allowlist Pattern 1");
       await user.clear(patterns);
       await user.type(patterns, "\\.json$");
       await user.click(screen.getByRole("button", { name: "Save" }));
@@ -543,16 +547,17 @@ describe("options entrypoint", () => {
     });
 
     try {
-      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      const patterns = await screen.findByLabelText("Dump Allowlist Pattern 1");
       fireEvent.change(patterns, { target: { value: "[" } });
-      expect((patterns as HTMLTextAreaElement).value).toBe("[");
-      await user.click(screen.getByRole("button", { name: "Save" }));
+      expect((patterns as HTMLInputElement).value).toBe("[");
 
       expect(setSiteConfigs).not.toHaveBeenCalled();
       expect(
-        await screen.findByText(
-          "One or more dump allowlist patterns are invalid."
-        )
+        (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+          .disabled
+      ).toBe(true);
+      expect(
+        await screen.findByText(/Invalid regular expression/i)
       ).toBeTruthy();
     } finally {
       options.unmount();
@@ -598,7 +603,7 @@ describe("options entrypoint", () => {
     });
 
     try {
-      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      const patterns = await screen.findByLabelText("Dump Allowlist Pattern 1");
       await user.clear(patterns);
       await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -905,7 +910,7 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText(/Editing \/tmp\/server-root\./);
-      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      const patterns = await screen.findByLabelText("Dump Allowlist Pattern 1");
       await user.clear(patterns);
       await user.type(patterns, "\\.css$");
       await user.click(screen.getByRole("button", { name: "Save" }));
@@ -1479,9 +1484,14 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText("https://app.example.com");
-      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      const patterns = await screen.findByLabelText("Dump Allowlist Pattern 1");
       await user.clear(patterns);
-      await user.type(patterns, "\\.css$\n\\.json$");
+      await user.type(patterns, "\\.css$");
+      await user.click(screen.getByRole("button", { name: "Add Rule" }));
+      await user.type(
+        screen.getByLabelText("Dump Allowlist Pattern 2"),
+        "\\.json$"
+      );
       await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(
@@ -1819,7 +1829,7 @@ describe("options entrypoint", () => {
 
     try {
       await screen.findByText("https://app.example.com");
-      const patterns = await screen.findByLabelText("Dump Allowlist Patterns");
+      const patterns = await screen.findByLabelText("Dump Allowlist Pattern 1");
       await user.clear(patterns);
       await user.type(patterns, "\\.json$");
       await user.click(screen.getByRole("button", { name: "Save" }));

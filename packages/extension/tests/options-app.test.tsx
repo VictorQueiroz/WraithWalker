@@ -297,7 +297,7 @@ describe("OptionsApp launch settings", () => {
     });
     await vi.advanceTimersByTimeAsync(0);
 
-    const patternsInput = screen.getByLabelText("Dump Allowlist Patterns");
+    const patternsInput = screen.getByLabelText("Dump Allowlist Pattern 1");
     fireEvent.change(patternsInput, { target: { value: "\\.tsx$" } });
 
     const getSiteConfigs = props.getSiteConfigs as ReturnType<typeof vi.fn>;
@@ -306,7 +306,7 @@ describe("OptionsApp launch settings", () => {
     await vi.advanceTimersByTimeAsync(25);
 
     expect(getSiteConfigs).toHaveBeenCalledTimes(beforeTickCalls);
-    expect((patternsInput as HTMLTextAreaElement).value).toBe("\\.tsx$");
+    expect((patternsInput as HTMLInputElement).value).toBe("\\.tsx$");
   });
 
   it("shows origin storage details and only enables save for dirty pattern edits", async () => {
@@ -339,7 +339,7 @@ describe("OptionsApp launch settings", () => {
     const saveButton = screen.getByRole("button", { name: "Save" });
     expect((saveButton as HTMLButtonElement).disabled).toBe(true);
 
-    fireEvent.change(screen.getByLabelText("Dump Allowlist Patterns"), {
+    fireEvent.change(screen.getByLabelText("Dump Allowlist Pattern 1"), {
       target: { value: "\\.tsx$" }
     });
 
@@ -366,9 +366,10 @@ describe("OptionsApp launch settings", () => {
     renderOptionsApp(props);
 
     const saveButton = await screen.findByRole("button", { name: "Save" });
-    fireEvent.change(screen.getByLabelText("Dump Allowlist Patterns"), {
-      target: { value: "\\.js$\n\n  " }
+    fireEvent.change(screen.getByLabelText("Dump Allowlist Pattern 1"), {
+      target: { value: "\\.js$  " }
     });
+    fireEvent.click(screen.getByRole("button", { name: "Add Rule" }));
 
     expect(screen.queryByText("Unsaved changes")).toBeNull();
     expect((saveButton as HTMLButtonElement).disabled).toBe(true);
@@ -401,9 +402,12 @@ describe("OptionsApp launch settings", () => {
       1
     );
     const patternsInput = await screen.findByLabelText(
-      "Dump Allowlist Patterns"
+      "Dump Allowlist Pattern 1"
     );
-    fireEvent.change(patternsInput, { target: { value: "\\.tsx$\n\\.json$" } });
+    fireEvent.change(patternsInput, { target: { value: "\\.tsx$" } });
+    fireEvent.change(screen.getByLabelText("Dump Allowlist Pattern 2"), {
+      target: { value: "\\.json$" }
+    });
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Save" }));

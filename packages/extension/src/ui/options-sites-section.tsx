@@ -11,30 +11,27 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Input,
-  Label,
-  Textarea
+  Input
 } from "./components.js";
 import { SectionIntro } from "./options-app.shared.js";
-
-function parseDumpAllowlistPatterns(text: string): string[] {
-  const patterns = text
-    .split(/\r\n|\n|\r/)
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return patterns.length > 0 ? patterns : [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
-}
-
-function formatDumpAllowlistPatterns(patterns: string[]): string {
-  return patterns.join("\n");
-}
+import {
+  RegexRuleListField,
+  serializeRegexRules
+} from "./regex-rule-list-field.js";
 
 function arePatternListsEqual(left: string[], right: string[]): boolean {
   return (
     left.length === right.length &&
-    left.every((pattern, index) => pattern === right[index])
+    left.every((value, index) => value === right[index])
   );
+}
+
+function getDumpAllowlistPatternsForSave(patterns: string[]): string[] {
+  const serializedPatterns = serializeRegexRules(patterns);
+
+  return serializedPatterns.length > 0
+    ? serializedPatterns
+    : [...DEFAULT_DUMP_ALLOWLIST_PATTERNS];
 }
 
 function formatCreatedDate(createdAt: string): string {
@@ -60,27 +57,25 @@ function SiteCard({
   ) => Promise<void>;
   onRemove: (origin: string) => Promise<void>;
 }) {
-  const formattedPatterns = React.useMemo(
-    () => formatDumpAllowlistPatterns(siteConfig.dumpAllowlistPatterns),
+  const savedPatterns = React.useMemo(
+    () => [...siteConfig.dumpAllowlistPatterns],
     [siteConfig.dumpAllowlistPatterns]
   );
-  const [patternsText, setPatternsText] = React.useState(formattedPatterns);
+  const [draftPatterns, setDraftPatterns] = React.useState(savedPatterns);
+  const [patternsValid, setPatternsValid] = React.useState(true);
   const [busy, setBusy] = React.useState<"save" | "remove" | null>(null);
-  const parsedPatterns = React.useMemo(
-    () => parseDumpAllowlistPatterns(patternsText),
-    [patternsText]
+  const draftPatternsForSave = React.useMemo(
+    () => getDumpAllowlistPatternsForSave(draftPatterns),
+    [draftPatterns]
   );
-  const isDrafting = !arePatternListsEqual(
-    parsedPatterns,
-    siteConfig.dumpAllowlistPatterns
-  );
+  const isDrafting = !arePatternListsEqual(draftPatternsForSave, savedPatterns);
   const permissionPattern = originToPermissionPattern(siteConfig.origin);
 
   React.useEffect(() => {
     if (!isDrafting) {
-      setPatternsText(formattedPatterns);
+      setDraftPatterns(savedPatterns);
     }
-  }, [formattedPatterns, isDrafting]);
+  }, [isDrafting, savedPatterns]);
 
   React.useEffect(() => {
     onDraftingChange?.(siteConfig.origin, isDrafting);
@@ -109,14 +104,20 @@ function SiteCard({
             <Button
               type="button"
               variant="secondary"
-              disabled={busy !== null || disabled || !isDrafting}
+              disabled={
+                busy !== null || disabled || !isDrafting || !patternsValid
+              }
               onClick={async () => {
+                if (!patternsValid) {
+                  return;
+                }
+
                 setBusy("save");
                 try {
                   await onSave(siteConfig.origin, {
-                    dumpAllowlistPatterns: parsedPatterns
+                    dumpAllowlistPatterns: draftPatternsForSave
                   });
-                  setPatternsText(formatDumpAllowlistPatterns(parsedPatterns));
+                  setDraftPatterns(draftPatternsForSave);
                 } finally {
                   setBusy(null);
                 }
@@ -164,19 +165,16 @@ function SiteCard({
           </div>
         </dl>
         <div className="grid gap-2">
-          <Label htmlFor={`patterns-${siteConfig.origin}`}>
-            Dump Allowlist Patterns
-          </Label>
-          <Textarea
+          <RegexRuleListField
             id={`patterns-${siteConfig.origin}`}
-            value={patternsText}
+            label="Dump Allowlist Patterns"
+            ruleLabel="Dump Allowlist Pattern"
+            value={draftPatterns}
             disabled={disabled}
-            onChange={(event) => setPatternsText(event.currentTarget.value)}
             placeholder={"\\.m?(js|ts)x?$"}
+            onChange={setDraftPatterns}
+            onValidityChange={setPatternsValid}
           />
-          <p className="text-xs text-muted-foreground">
-            One regular expression per line.
-          </p>
         </div>
       </CardContent>
     </Card>
