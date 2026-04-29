@@ -20,6 +20,8 @@ import type {
   FixtureSnippetOptions
 } from "./fixtures-types.mjs";
 
+const MIN_UTF8_PAGE_BYTES = 4;
+
 function encodeReadCursor(offset: number): string {
   return Buffer.from(JSON.stringify({ offset }), "utf8").toString("base64url");
 }
@@ -111,13 +113,14 @@ async function readFilePage(
     DEFAULT_READ_MAX_BYTES,
     MAX_READ_MAX_BYTES
   );
+  const effectiveMaxBytes = Math.max(maxBytes, MIN_UTF8_PAGE_BYTES);
   const startByte = decodeReadCursor(options.cursor);
   if (startByte > sizeBytes) {
     throw new Error(`Invalid read cursor: ${options.cursor}`);
   }
 
   const bytesAvailable = sizeBytes - startByte;
-  const readCapacity = Math.min(bytesAvailable, maxBytes + 4);
+  const readCapacity = Math.min(bytesAvailable, effectiveMaxBytes + 4);
   const buffer = Buffer.alloc(readCapacity);
   let bytesRead = 0;
 
@@ -136,7 +139,7 @@ async function readFilePage(
     throw createFixtureReadError(relativePath, "binary");
   }
 
-  const bytesReturned = findUtf8SafeEnd(readBuffer, maxBytes);
+  const bytesReturned = findUtf8SafeEnd(readBuffer, effectiveMaxBytes);
   if (bytesRead > 0 && bytesReturned === 0) {
     throw createFixtureReadError(relativePath, "binary");
   }
@@ -158,7 +161,7 @@ async function readFilePage(
     sizeBytes,
     startByte,
     bytesReturned,
-    maxBytes,
+    maxBytes: effectiveMaxBytes,
     truncated,
     nextCursor: truncated ? encodeReadCursor(nextByte) : null,
     text
@@ -201,8 +204,9 @@ function appendUtf8Bounded(
   }
 
   const buffer = Buffer.from(nextText, "utf8");
+  const bytesToAppend = findUtf8SafeEnd(buffer, remainingBytes);
   return {
-    text: `${currentText}${buffer.subarray(0, remainingBytes).toString("utf8")}`,
+    text: `${currentText}${buffer.subarray(0, bytesToAppend).toString("utf8")}`,
     truncated: true
   };
 }

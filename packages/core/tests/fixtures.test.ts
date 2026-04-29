@@ -1165,6 +1165,76 @@ describe("fixture readers", () => {
     ).rejects.toThrow("Fixture is not a text file");
   }, 15_000);
 
+  it("does not classify tiny UTF-8 page boundaries as binary", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    await root.writeText("cdn.example.com/assets/unicode.txt", "💾abc");
+
+    const firstPage = await readFixtureBody(
+      root.rootPath,
+      "cdn.example.com/assets/unicode.txt",
+      {
+        maxBytes: 1
+      }
+    );
+    expect(firstPage).toEqual(
+      expect.objectContaining({
+        path: "cdn.example.com/assets/unicode.txt",
+        sizeBytes: Buffer.byteLength("💾abc", "utf8"),
+        startByte: 0,
+        bytesReturned: Buffer.byteLength("💾", "utf8"),
+        maxBytes: 4,
+        truncated: true,
+        text: "💾"
+      })
+    );
+    expect(firstPage?.nextCursor).not.toBeNull();
+
+    await expect(
+      readFixtureBody(root.rootPath, "cdn.example.com/assets/unicode.txt", {
+        cursor: firstPage?.nextCursor ?? undefined,
+        maxBytes: 1
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        startByte: Buffer.byteLength("💾", "utf8"),
+        bytesReturned: Buffer.byteLength("abc", "utf8"),
+        maxBytes: 4,
+        truncated: false,
+        nextCursor: null,
+        text: "abc"
+      })
+    );
+  });
+
+  it("drops incomplete UTF-8 characters when snippets hit maxBytes", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    await root.writeText("cdn.example.com/assets/unicode-snippet.txt", "aéz");
+
+    const snippet = await readFixtureSnippet(
+      root.rootPath,
+      "cdn.example.com/assets/unicode-snippet.txt",
+      {
+        startLine: 1,
+        lineCount: 1,
+        maxBytes: 2
+      }
+    );
+
+    expect(snippet).toEqual({
+      path: "cdn.example.com/assets/unicode-snippet.txt",
+      startLine: 1,
+      endLine: 1,
+      truncated: true,
+      text: "a"
+    });
+    expect(Buffer.byteLength(snippet.text, "utf8")).toBeLessThanOrEqual(2);
+    expect(snippet.text).not.toContain("\uFFFD");
+  });
+
   it("reads large fixture bodies as bounded pages", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
