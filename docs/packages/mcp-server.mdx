@@ -127,32 +127,37 @@ Shared fixture, scenario, and context logic lives in `@wraithwalker/core`.
 
 ## Tools
 
-| Tool                     | Parameters                                                         | Description                                                                                                                                                                                       |
-| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser-status`         | —                                                                  | Report whether the browser extension is connected, capture-ready, and currently using the server root                                                                                             |
-| `read-console`           | optional `limit`, optional filters                                 | Read recent browser console and log entries observed by the connected extension                                                                                                                   |
-| `trace-status`           | —                                                                  | Report guided trace readiness plus a compact agent summary of the active trace                                                                                                                    |
-| `start-trace`            | optional `name`, optional `goal`                                   | Start a guided click trace for the connected extension                                                                                                                                            |
-| `stop-trace`             | `traceId`                                                          | Stop a guided click trace and keep it on disk                                                                                                                                                     |
-| `list-traces`            | —                                                                  | List stored guided traces from `.wraithwalker/scenario-traces`                                                                                                                                    |
-| `read-trace`             | `traceId`                                                          | Read one stored guided trace with its steps and linked fixtures                                                                                                                                   |
-| `list-sites`             | optional `search`                                                  | List all captured origins with endpoint counts, asset counts, and manifest presence                                                                                                               |
-| `list-files`             | `origin`, optional filters                                         | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, body availability (`hasBody`, `bodySize`), plus `editable` and `canonicalPath` for projection-backed files |
-| `list-api-routes`        | `origin`                                                           | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath`                                                                     |
-| `search-files`           | `query`, optional filters                                          | Search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, `editable`, `canonicalPath`, and per-file `matchCount`            |
-| `read-api-response`      | `fixtureDir`, optional `pretty`                                    | Read the response metadata and body for a fixture returned by `list-api-routes`                                                                                                                   |
-| `read-file`              | `path`, optional `pretty`                                          | Read a fixture response body by relative path, restricted to the fixture root                                                                                                                     |
-| `read-file-snippet`      | `path`, optional `pretty`, optional bounds                         | Read a bounded text snippet from a fixture file without dumping the full blob                                                                                                                     |
-| `read-site-manifest`     | `origin`                                                           | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch                                                                                                                        |
-| `write-file`             | `path`, `content`                                                  | Overwrite an editable human-facing projection file with UTF-8 text                                                                                                                                |
-| `patch-file`             | `path`, `startLine`, `endLine`, `expectedText`, `replacement`      | Apply a line-range patch to an editable projection file and fail if the expected text no longer matches                                                                                           |
-| `restore-file`           | `path`                                                             | Regenerate the visible projection from its canonical hidden snapshot                                                                                                                              |
-| `checkout-workspace`     | optional `paths`, optional `includeGlobs`, optional `excludeGlobs` | Copy selected projection-backed files into a same-machine local workspace and return its absolute path                                                                                            |
-| `push-workspace`         | `workspaceId`                                                      | Push tracked edits from a projection workspace back into the human-facing root files, skipping conflicts and untracked changes                                                                    |
-| `discard-workspace`      | `workspaceId`                                                      | Remove a previously checked-out projection workspace                                                                                                                                              |
-| `list-snapshots`         | —                                                                  | List saved scenario snapshots with legacy-safe metadata when available                                                                                                                            |
-| `save-trace-as-snapshot` | `traceId`, optional `name`, optional `description`                 | Save the current fixture workspace as a named scenario snapshot and attach trace provenance                                                                                                       |
-| `diff-snapshots`         | `scenarioA`, `scenarioB`                                           | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names                                                                                          |
+| Tool                     | Parameters                                                         | Description                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser-status`         | —                                                                  | Report whether the browser extension is connected, capture-ready, and currently using the server root                                                                                                                 |
+| `read-console`           | optional `limit`, optional filters                                 | Read recent browser console and log entries observed by the connected extension                                                                                                                                       |
+| `trace-status`           | —                                                                  | Report guided trace readiness plus a compact agent summary of the active trace                                                                                                                                        |
+| `start-trace`            | optional `name`, optional `goal`                                   | Start a guided click trace for the connected extension                                                                                                                                                                |
+| `stop-trace`             | `traceId`                                                          | Stop a guided click trace and keep it on disk                                                                                                                                                                         |
+| `list-traces`            | —                                                                  | List stored guided traces from `.wraithwalker/scenario-traces`                                                                                                                                                        |
+| `read-trace`             | `traceId`                                                          | Read one stored guided trace with its steps and linked fixtures                                                                                                                                                       |
+| `list-sites`             | optional `search`                                                  | List all captured origins with endpoint counts, asset counts, and manifest presence                                                                                                                                   |
+| `list-files`             | `origin`, optional filters                                         | List static assets for a specific origin with filtering, pagination, `matchedOrigins`, body availability (`hasBody`, `bodySize`, `displaySizeBytes`), plus `editable` and `canonicalPath` for projection-backed files |
+| `list-api-routes`        | `origin`                                                           | List API endpoints for a specific origin with `matchedOrigins`, plus each endpoint’s `fixtureDir`, `metaPath`, and `bodyPath`                                                                                         |
+| `search-files`           | `query`, optional filters                                          | Stream-search live fixture content across assets, endpoint bodies, and other text-like files, returning `matchedOrigins`, `matchKind`, `editable`, `canonicalPath`, and per-file `matchCount`                         |
+| `read-api-response`      | `fixtureDir`, optional `maxBytes`, optional `cursor`               | Read response metadata plus a bounded body page for a fixture returned by `list-api-routes`                                                                                                                           |
+| `read-file`              | `path`, optional `maxBytes`, optional `cursor`                     | Read a bounded text page by relative path, restricted to the fixture root                                                                                                                                             |
+| `read-file-snippet`      | `path`, optional line/byte bounds                                  | Read a bounded text snippet from a fixture file without dumping the full blob                                                                                                                                         |
+| `read-site-manifest`     | `origin`                                                           | Read the full RESOURCE_MANIFEST.json for an origin as the raw escape hatch                                                                                                                                            |
+| `analyze-js-file`        | `path`                                                             | Analyze a captured JavaScript-like fixture and return compact semantic summaries, source map hints, symbols, strings, selectors, endpoints, notable calls, and `analysisMode`                                         |
+| `search-js`              | `query`, optional `kind`, optional filters                         | Search parsed or text-scanned JavaScript facts across captured script fixtures without dumping raw ASTs                                                                                                               |
+| `suggest-js-seeds`       | optional `kinds`, optional filters                                 | Suggest high-signal endpoint, selector, call, and string seeds for agent navigation without guessing query tokens, including compact captured API-response link metadata for endpoint seeds when available            |
+| `trace-js-pipeline`      | `seed`, `kind`, optional filters                                   | Trace likely JavaScript execution pipelines from a selector, endpoint, symbol, or node id using compact evidence and captured API metadata pointers                                                                   |
+| `read-js-symbol`         | `path`, `symbol` or `nodeId`                                       | Read the smallest useful snippet for a JavaScript symbol or semantic search result                                                                                                                                    |
+| `write-file`             | `path`, `content`                                                  | Overwrite an editable human-facing projection file with UTF-8 text                                                                                                                                                    |
+| `patch-file`             | `path`, `startLine`, `endLine`, `expectedText`, `replacement`      | Apply a line-range patch to an editable projection file and fail if the expected text no longer matches                                                                                                               |
+| `restore-file`           | `path`                                                             | Regenerate the visible projection from its canonical hidden snapshot                                                                                                                                                  |
+| `checkout-workspace`     | optional `paths`, optional `includeGlobs`, optional `excludeGlobs` | Copy selected projection-backed files into a same-machine local workspace and return its absolute path                                                                                                                |
+| `push-workspace`         | `workspaceId`                                                      | Push tracked edits from a projection workspace back into the human-facing root files, skipping conflicts and untracked changes                                                                                        |
+| `discard-workspace`      | `workspaceId`                                                      | Remove a previously checked-out projection workspace                                                                                                                                                                  |
+| `list-snapshots`         | —                                                                  | List saved scenario snapshots with legacy-safe metadata when available                                                                                                                                                |
+| `save-trace-as-snapshot` | `traceId`, optional `name`, optional `description`                 | Save the current fixture workspace as a named scenario snapshot and attach trace provenance                                                                                                                           |
+| `diff-snapshots`         | `scenarioA`, `scenarioB`                                           | Compare two scenarios and report added, removed, and changed endpoints with validation for missing names                                                                                                              |
 
 ## tRPC Backend
 
@@ -193,10 +198,22 @@ These procedures are the extension's local implementation API. The public agent-
 WraithWalker now exposes a progressive-disclosure MCP surface for agents:
 
 1. `list-sites` to discover what has been captured, optionally narrowed with `search`
-2. `list-files` or `list-api-routes` to narrow to the relevant files or API fixtures, using `matchedOrigins` plus `hasBody` / `bodySize` to see what is actually readable
-3. `search-files` to find the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about, using `matchCount` for body hits and `matchKind: "path"` when only the name/path matched
-4. `read-file-snippet` to inspect only the relevant section of a large file, optionally with `pretty: true` for minified chunks
-5. `read-file`, `read-api-response`, or `read-site-manifest` only when you need the full raw payload
+2. `list-files` or `list-api-routes` to narrow to the relevant files or API fixtures, using `matchedOrigins` plus `hasBody`, `bodySize`, and `displaySizeBytes` to see what is actually readable. `bodySize` is the canonical captured body size; `displaySizeBytes` is the file size agents read from the returned `path`.
+3. `search-files` to stream-search the exact chunk, stylesheet, response body, or text file that mentions the behavior you care about, using `matchCount` for body hits and `matchKind: "path"` when only the name/path matched
+4. `read-file` or `read-api-response` to inspect a bounded page, following `nextCursor` only when more context is actually needed
+5. `read-file-snippet` to inspect a known line range while preserving stored file line numbers
+
+For captured JavaScript bundles and chunks, prefer the JS intelligence tools before reading large files:
+
+Agent workflow: `list-sites` / `list-files` -> `suggest-js-seeds` -> `trace-js-pipeline` -> `read-js-symbol` / `read-api-response`.
+
+1. `analyze-js-file(path)` to inspect imports, exports, top-level symbols, source map hints, endpoint-like strings, selector-like strings, and notable browser/API calls
+2. `suggest-js-seeds(kinds?)` to discover high-signal endpoint, selector, call, and string seeds when you do not already know what to search for. Endpoint seeds include compact captured API-response link metadata when available.
+3. `search-js(query, kind?)` to find identifiers, strings, calls, properties, exports, endpoints, and selectors across captured script fixtures
+4. `trace-js-pipeline(seed, kind)` to reconstruct likely selector/event, handler, fetch endpoint, and captured API-response relationships from compact evidence. API-response links are metadata pointers only; use `read-api-response(fixtureDir)` for bounded body inspection.
+5. `read-js-symbol(path, symbol? or nodeId?)` to fetch the smallest useful symbol or enclosing snippet for a prior result
+
+These tools intentionally return semantic summaries and snippets, not raw ASTs. Files at or below the JS parse budget return `analysisMode: "ast"`; oversized bundles return `analysisMode: "text-scan"` with `parse.skipped: true`, source map metadata from a bounded tail read, and approximate endpoint/selector/string/call facts. Oversized JS fact values are returned as bounded previews with `valuePreview`, `valueBytes`, `valueTruncated`, and `valueHash`; use `nodeId` with `read-js-symbol` or bounded file reads for deeper inspection. Source maps are detected and reported when present; original-source remapping is not performed yet.
 
 When `list-files` or `search-files` marks a result as `editable: true`, agents can change the human-facing projection with:
 
@@ -215,7 +232,9 @@ Projection workspaces stay inside `.wraithwalker/agent-workspaces`, only include
 
 `list-files`, `list-api-routes`, and `search-files` treat HTTP and HTTPS origins with the same host and port as one discovery group, and report the concrete origins they matched in `matchedOrigins`.
 
-`read-file` and `read-api-response` reject oversized full reads above 64 KB and direct agents to `read-file-snippet` with `startLine` and `lineCount`.
+`read-file` and `read-api-response` always return bounded JSON pages. They default to 32 KiB, cap requested `maxBytes` at 64 KiB, include `truncated`, and provide `nextCursor` when more text is available.
+
+`search-files` streams text bodies in 64 KiB chunks and keeps only bounded match context in memory, so large captured assets and API bodies can be searched without reading the full body into the agent context or Node heap.
 
 `read-site-manifest` intentionally stays available for full-fidelity debugging, but it should not be the main discovery path for agents.
 
@@ -272,3 +291,25 @@ npm run build      # compile TypeScript to out/
 npm test           # run tests with coverage
 npm run typecheck  # type-check source and tests
 ```
+
+To dogfood the MCP tools as an agent-grade chunk inspection workflow, run the deterministic benchmark:
+
+```bash
+npm run dogfood:agent -w @wraithwalker/mcp-server
+```
+
+To dogfood the same workflow against a private local capture root, run the opt-in live benchmark:
+
+```bash
+WRAITHWALKER_LIVE_DOGFOOD_ROOT=/path/to/capture-root npm run dogfood:live -w @wraithwalker/mcp-server
+```
+
+Both benchmarks stay quiet on passing runs. Set `WRAITHWALKER_AGENT_DOGFOOD_REPORT=1` to print a compact JSON report, or set `WRAITHWALKER_AGENT_DOGFOOD_REPORT_PATH=/path/to/report.json` to write one. Reports include tool timings, returned bytes, truncation counts, analysis modes, seed-discovery observations, trace usefulness, symbol-read usefulness, and huge-bundle safety checks.
+
+To run an LLM-driven model comparison against a private capture root and update the task-success score markdown:
+
+```bash
+npm run dogfood:agent:models -w @wraithwalker/mcp-server -- --root /path/to/capture-root --models deepseek/deepseek-v3.2
+```
+
+The model eval runs labeled tasks for seed discovery, pipeline evidence, huge-bundle safety, and API-response linking. It writes raw JSON reports outside the repo by default and updates `docs/evals/agent-grade-js-tools.md` with sanitized per-task aggregate scores, failure categories, and next-action hints. Source-map recovery is intentionally not part of this score.

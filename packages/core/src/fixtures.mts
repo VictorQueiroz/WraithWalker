@@ -11,6 +11,7 @@ export type {
   AssetListOptions,
   DiscoveryResult,
   EndpointListResult,
+  FixtureReadPage,
   FixtureReadOptions,
   FixtureSnippet,
   FixtureSnippetOptions,

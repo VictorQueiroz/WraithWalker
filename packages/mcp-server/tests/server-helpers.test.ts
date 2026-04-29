@@ -50,14 +50,20 @@ function createToolRecorder() {
 
   return {
     server: {
-      tool: vi.fn(
+      tool: vi.fn(() => {
+        throw new Error("Deprecated server.tool should not be used.");
+      }),
+      registerTool: vi.fn(
         (
           name: string,
-          description: string,
-          schema: unknown,
+          config: { description?: string; inputSchema?: unknown },
           handler: (args: Record<string, unknown>) => Promise<unknown>
         ) => {
-          tools.set(name, { description, schema, handler });
+          tools.set(name, {
+            description: config.description ?? "",
+            schema: config.inputSchema,
+            handler
+          });
         }
       )
     } as any,
@@ -191,7 +197,13 @@ describe("server helper modules", () => {
         canonical.assetDescriptor.projectionPath ??
         canonical.assetDescriptor.bodyPath
     });
-    expect(readTextContent(readFileResult)).toBe(canonical.assetBody);
+    expect(JSON.parse(readTextContent(readFileResult))).toEqual(
+      expect.objectContaining({
+        text: canonical.assetBody,
+        truncated: false,
+        nextCursor: null
+      })
+    );
 
     const listSnapshotsResult = await tools.get("list-snapshots")?.handler({});
     expect(JSON.parse(readTextContent(listSnapshotsResult))).toEqual({

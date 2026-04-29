@@ -63,16 +63,18 @@ export function registerFixtureTools(
     };
   }
 
-  server.tool(
+  server.registerTool(
     "list-sites",
-    "List all captured origins and their fixture summary",
     {
-      search: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe("Optional case-insensitive origin substring filter")
+      description: "List all captured origins and their fixture summary",
+      inputSchema: z.object({
+        search: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Optional case-insensitive origin substring filter")
+      })
     },
     async ({ search }) => {
       const configs = await runtime.readEffectiveSiteConfigs();
@@ -100,42 +102,45 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "list-files",
-    "List captured static assets for an origin with optional filters, pagination, and body availability",
     {
-      origin: z
-        .string()
-        .describe(
-          "The origin to list assets for (e.g., https://app.example.com)"
+      description:
+        "List captured static assets for an origin with optional filters, pagination, and body availability",
+      inputSchema: z.object({
+        origin: z
+          .string()
+          .describe(
+            "The origin to list assets for (e.g., https://app.example.com)"
+          ),
+        resourceTypes: optionalStringArraySchema.describe(
+          "Optional static resource types to include"
         ),
-      resourceTypes: optionalStringArraySchema.describe(
-        "Optional static resource types to include"
-      ),
-      mimeTypes: optionalStringArraySchema.describe(
-        "Optional MIME types to include"
-      ),
-      pathnameContains: z
-        .string()
-        .optional()
-        .describe("Optional case-insensitive pathname substring filter"),
-      requestOrigin: z
-        .string()
-        .optional()
-        .describe("Optional exact request origin filter"),
-      limit: z
-        .number()
-        .int()
-        .positive()
-        .max(200)
-        .optional()
-        .describe("Maximum number of assets to return"),
-      cursor: z
-        .string()
-        .optional()
-        .describe(
-          "Opaque pagination cursor returned by a previous list-files call"
-        )
+        mimeTypes: optionalStringArraySchema.describe(
+          "Optional MIME types to include"
+        ),
+        pathnameContains: z
+          .string()
+          .optional()
+          .describe("Optional case-insensitive pathname substring filter"),
+        requestOrigin: z
+          .string()
+          .optional()
+          .describe("Optional exact request origin filter"),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(200)
+          .optional()
+          .describe("Maximum number of assets to return"),
+        cursor: z
+          .string()
+          .optional()
+          .describe(
+            "Opaque pagination cursor returned by a previous list-files call"
+          )
+      })
     },
     async ({
       origin,
@@ -172,15 +177,17 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "list-api-routes",
-    "List all captured API endpoints for an origin",
     {
-      origin: z
-        .string()
-        .describe(
-          "The origin to list endpoints for (e.g., https://app.example.com)"
-        )
+      description: "List all captured API endpoints for an origin",
+      inputSchema: z.object({
+        origin: z
+          .string()
+          .describe(
+            "The origin to list endpoints for (e.g., https://app.example.com)"
+          )
+      })
     },
     async ({ origin }) => {
       const { configs, matchedConfigs } =
@@ -197,39 +204,42 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "search-files",
-    "Search live fixture content across assets, endpoint bodies, and text-like files, with path fallback when body text is unavailable or misses",
     {
-      query: z
-        .string()
-        .trim()
-        .min(1)
-        .describe("Case-insensitive substring query to search for"),
-      origin: z.string().optional().describe("Optional origin filter"),
-      pathContains: z
-        .string()
-        .optional()
-        .describe("Optional case-insensitive relative path substring filter"),
-      mimeTypes: optionalStringArraySchema.describe(
-        "Optional MIME types to include"
-      ),
-      resourceTypes: optionalStringArraySchema.describe(
-        "Optional resource types to include"
-      ),
-      limit: z
-        .number()
-        .int()
-        .positive()
-        .max(100)
-        .optional()
-        .describe("Maximum number of matches to return"),
-      cursor: z
-        .string()
-        .optional()
-        .describe(
-          "Opaque pagination cursor returned by a previous search-files call"
-        )
+      description:
+        "Search live fixture content across assets, endpoint bodies, and text-like files, with path fallback when body text is unavailable or misses",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .trim()
+          .min(1)
+          .describe("Case-insensitive substring query to search for"),
+        origin: z.string().optional().describe("Optional origin filter"),
+        pathContains: z
+          .string()
+          .optional()
+          .describe("Optional case-insensitive relative path substring filter"),
+        mimeTypes: optionalStringArraySchema.describe(
+          "Optional MIME types to include"
+        ),
+        resourceTypes: optionalStringArraySchema.describe(
+          "Optional resource types to include"
+        ),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(100)
+          .optional()
+          .describe("Maximum number of matches to return"),
+        cursor: z
+          .string()
+          .optional()
+          .describe(
+            "Opaque pagination cursor returned by a previous search-files call"
+          )
+      })
     },
     async ({
       query,
@@ -269,32 +279,45 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "read-file",
-    "Read a fixture response body by its file path relative to the fixture root",
     {
-      path: z
-        .string()
-        .describe(
-          "Relative path to the fixture file (e.g., cdn.example.com/assets/app.js)"
-        ),
-      pretty: z
-        .boolean()
-        .optional()
-        .describe(
-          "Format supported text-like fixtures for easier reading without changing stored bytes"
-        )
+      description:
+        "Read a bounded page from a text fixture file by its path relative to the fixture root",
+      inputSchema: z.object({
+        path: z
+          .string()
+          .describe(
+            "Relative path to the fixture file (e.g., cdn.example.com/assets/app.js)"
+          ),
+        maxBytes: z
+          .number()
+          .int()
+          .positive()
+          .max(65536)
+          .optional()
+          .describe("Maximum UTF-8 bytes to return; defaults to 32768"),
+        cursor: z
+          .string()
+          .optional()
+          .describe(
+            "Opaque pagination cursor returned by a prior read-file call"
+          )
+      })
     },
-    async ({ path: filePath, pretty }) => {
+    async ({ path: filePath, maxBytes, cursor }) => {
       if (!resolveFixturePath(rootPath, filePath)) {
         return renderErrorMessage(
           `Invalid fixture path: ${filePath}. Paths must stay within the fixture root.`
         );
       }
 
-      let content: string | null;
+      let content;
       try {
-        content = await readFixtureBody(rootPath, filePath, { pretty });
+        content = await readFixtureBody(rootPath, filePath, {
+          maxBytes,
+          cursor
+        });
       } catch (error) {
         return renderUnknownError(error);
       }
@@ -302,49 +325,43 @@ export function registerFixtureTools(
         return renderErrorMessage(`File not found: ${filePath}`);
       }
 
-      return {
-        content: [{ type: "text" as const, text: content }]
-      };
+      return renderJson(content);
     }
   );
 
-  server.tool(
+  server.registerTool(
     "read-file-snippet",
-    "Read a bounded text snippet from a fixture file relative to the fixture root",
     {
-      path: z.string().describe("Relative path to the text fixture file"),
-      pretty: z
-        .boolean()
-        .optional()
-        .describe(
-          "Format supported text-like fixtures before slicing lines for easier inspection"
-        ),
-      startLine: z
-        .number()
-        .int()
-        .positive()
-        .max(Number.MAX_SAFE_INTEGER)
-        .optional()
-        .describe("1-based line number to start reading from"),
-      lineCount: z
-        .number()
-        .int()
-        .positive()
-        .max(400)
-        .optional()
-        .describe("Maximum number of lines to return"),
-      maxBytes: z
-        .number()
-        .int()
-        .positive()
-        .max(64000)
-        .optional()
-        .describe("Maximum UTF-8 bytes to return")
+      description:
+        "Read a bounded text snippet from a fixture file relative to the fixture root",
+      inputSchema: z.object({
+        path: z.string().describe("Relative path to the text fixture file"),
+        startLine: z
+          .number()
+          .int()
+          .positive()
+          .max(Number.MAX_SAFE_INTEGER)
+          .optional()
+          .describe("1-based line number to start reading from"),
+        lineCount: z
+          .number()
+          .int()
+          .positive()
+          .max(400)
+          .optional()
+          .describe("Maximum number of lines to return"),
+        maxBytes: z
+          .number()
+          .int()
+          .positive()
+          .max(64000)
+          .optional()
+          .describe("Maximum UTF-8 bytes to return")
+      })
     },
-    async ({ path: filePath, pretty, startLine, lineCount, maxBytes }) => {
+    async ({ path: filePath, startLine, lineCount, maxBytes }) => {
       try {
         const snippet = await readFixtureSnippet(rootPath, filePath, {
-          pretty,
           startLine,
           lineCount,
           maxBytes
@@ -356,21 +373,31 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "read-api-response",
-    "Read the response metadata and body for an API fixture returned by list-api-routes",
     {
-      fixtureDir: z
-        .string()
-        .describe("Fixture directory returned by list-api-routes"),
-      pretty: z
-        .boolean()
-        .optional()
-        .describe(
-          "Format supported text-like response bodies for easier reading without changing stored bytes"
-        )
+      description:
+        "Read response metadata and a bounded body page for an API fixture returned by list-api-routes",
+      inputSchema: z.object({
+        fixtureDir: z
+          .string()
+          .describe("Fixture directory returned by list-api-routes"),
+        maxBytes: z
+          .number()
+          .int()
+          .positive()
+          .max(65536)
+          .optional()
+          .describe("Maximum UTF-8 body bytes to return; defaults to 32768"),
+        cursor: z
+          .string()
+          .optional()
+          .describe(
+            "Opaque body pagination cursor returned by a prior read-api-response call"
+          )
+      })
     },
-    async ({ fixtureDir, pretty }) => {
+    async ({ fixtureDir, maxBytes, cursor }) => {
       if (
         !resolveFixturePath(
           rootPath,
@@ -384,7 +411,10 @@ export function registerFixtureTools(
 
       let fixture;
       try {
-        fixture = await readApiFixture(rootPath, fixtureDir, { pretty });
+        fixture = await readApiFixture(rootPath, fixtureDir, {
+          maxBytes,
+          cursor
+        });
       } catch (error) {
         return renderUnknownError(error);
       }
@@ -400,10 +430,14 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "read-site-manifest",
-    "Read the RESOURCE_MANIFEST.json for an origin",
-    { origin: z.string().describe("The origin to read the manifest for") },
+    {
+      description: "Read the RESOURCE_MANIFEST.json for an origin",
+      inputSchema: z.object({
+        origin: z.string().describe("The origin to read the manifest for")
+      })
+    },
     async ({ origin }) => {
       const { configs, config } = await resolveSiteConfig(origin);
       if (!config) {
@@ -422,18 +456,21 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "write-file",
-    "Overwrite a human-facing captured projection file with UTF-8 text",
     {
-      path: z
-        .string()
-        .describe(
-          "Visible projection path returned by list-files or search-files"
-        ),
-      content: z
-        .string()
-        .describe("Replacement UTF-8 text to write into the projection")
+      description:
+        "Overwrite a human-facing captured projection file with UTF-8 text",
+      inputSchema: z.object({
+        path: z
+          .string()
+          .describe(
+            "Visible projection path returned by list-files or search-files"
+          ),
+        content: z
+          .string()
+          .describe("Replacement UTF-8 text to write into the projection")
+      })
     },
     async ({ path: filePath, content }) => {
       try {
@@ -446,31 +483,34 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "patch-file",
-    "Patch a human-facing captured projection file by line range, with conflict detection",
     {
-      path: z
-        .string()
-        .describe(
-          "Visible projection path returned by list-files or search-files"
-        ),
-      startLine: z
-        .number()
-        .int()
-        .positive()
-        .describe("1-based line number where the replacement starts"),
-      endLine: z
-        .number()
-        .int()
-        .positive()
-        .describe("1-based line number where the replacement ends"),
-      expectedText: z
-        .string()
-        .describe("Current text expected in the selected line range"),
-      replacement: z
-        .string()
-        .describe("Replacement text for the selected line range")
+      description:
+        "Patch a human-facing captured projection file by line range, with conflict detection",
+      inputSchema: z.object({
+        path: z
+          .string()
+          .describe(
+            "Visible projection path returned by list-files or search-files"
+          ),
+        startLine: z
+          .number()
+          .int()
+          .positive()
+          .describe("1-based line number where the replacement starts"),
+        endLine: z
+          .number()
+          .int()
+          .positive()
+          .describe("1-based line number where the replacement ends"),
+        expectedText: z
+          .string()
+          .describe("Current text expected in the selected line range"),
+        replacement: z
+          .string()
+          .describe("Replacement text for the selected line range")
+      })
     },
     async ({
       path: filePath,
@@ -495,15 +535,18 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "restore-file",
-    "Restore a human-facing captured projection file from its canonical hidden snapshot",
     {
-      path: z
-        .string()
-        .describe(
-          "Visible projection path returned by list-files or search-files"
-        )
+      description:
+        "Restore a human-facing captured projection file from its canonical hidden snapshot",
+      inputSchema: z.object({
+        path: z
+          .string()
+          .describe(
+            "Visible projection path returned by list-files or search-files"
+          )
+      })
     },
     async ({ path: filePath }) => {
       try {
@@ -514,19 +557,22 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "checkout-workspace",
-    "Copy selected projection-backed captured files into a local projection workspace for same-machine agent editing",
     {
-      paths: optionalStringArraySchema.describe(
-        "Optional explicit projection-backed file paths returned by list-files or search-files"
-      ),
-      includeGlobs: optionalStringArraySchema.describe(
-        "Optional root-relative glob selectors for projection-backed files"
-      ),
-      excludeGlobs: optionalStringArraySchema.describe(
-        "Optional root-relative glob selectors to exclude from the workspace"
-      )
+      description:
+        "Copy selected projection-backed captured files into a local projection workspace for same-machine agent editing",
+      inputSchema: z.object({
+        paths: optionalStringArraySchema.describe(
+          "Optional explicit projection-backed file paths returned by list-files or search-files"
+        ),
+        includeGlobs: optionalStringArraySchema.describe(
+          "Optional root-relative glob selectors for projection-backed files"
+        ),
+        excludeGlobs: optionalStringArraySchema.describe(
+          "Optional root-relative glob selectors to exclude from the workspace"
+        )
+      })
     },
     async ({ paths, includeGlobs, excludeGlobs }) => {
       try {
@@ -543,15 +589,18 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "push-workspace",
-    "Push tracked edits from a local projection workspace back into the human-facing fixture root",
     {
-      workspaceId: z
-        .string()
-        .trim()
-        .min(1)
-        .describe("Projection workspace id returned by checkout-workspace")
+      description:
+        "Push tracked edits from a local projection workspace back into the human-facing fixture root",
+      inputSchema: z.object({
+        workspaceId: z
+          .string()
+          .trim()
+          .min(1)
+          .describe("Projection workspace id returned by checkout-workspace")
+      })
     },
     async ({ workspaceId }) => {
       try {
@@ -562,15 +611,18 @@ export function registerFixtureTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "discard-workspace",
-    "Remove a local projection workspace after the agent is done with it",
     {
-      workspaceId: z
-        .string()
-        .trim()
-        .min(1)
-        .describe("Projection workspace id returned by checkout-workspace")
+      description:
+        "Remove a local projection workspace after the agent is done with it",
+      inputSchema: z.object({
+        workspaceId: z
+          .string()
+          .trim()
+          .min(1)
+          .describe("Projection workspace id returned by checkout-workspace")
+      })
     },
     async ({ workspaceId }) => {
       try {

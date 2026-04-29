@@ -78,7 +78,16 @@ describe("fixture root contracts", () => {
 
     await expect(
       readFixtureBody(canonical.root.rootPath, assetPath)
-    ).resolves.toBe(canonical.assetBody);
+    ).resolves.toEqual({
+      path: assetPath,
+      sizeBytes: Buffer.byteLength(canonical.assetBody),
+      startByte: 0,
+      bytesReturned: Buffer.byteLength(canonical.assetBody),
+      maxBytes: 32_768,
+      truncated: false,
+      nextCursor: null,
+      text: canonical.assetBody
+    });
 
     const searchMatches = await searchFixtureContent(canonical.root.rootPath, {
       query: "canonical-item"
@@ -191,7 +200,16 @@ describe("fixture root contracts", () => {
           path: assetPath
         }
       });
-      expect(readTextContent(readFileResult)).toBe(canonical.assetBody);
+      expect(JSON.parse(readTextContent(readFileResult))).toEqual({
+        path: assetPath,
+        sizeBytes: Buffer.byteLength(canonical.assetBody),
+        startByte: 0,
+        bytesReturned: Buffer.byteLength(canonical.assetBody),
+        maxBytes: 32_768,
+        truncated: false,
+        nextCursor: null,
+        text: canonical.assetBody
+      });
 
       const snapshotsResult = await mcpClient.callTool({
         name: "list-snapshots",

@@ -1,3 +1,4 @@
+import { createReadStream } from "node:fs";
 import path from "node:path";
 
 import { SCENARIOS_DIR } from "./constants.mjs";
@@ -18,7 +19,6 @@ import {
   normalizeLimit,
   normalizeSearchPath,
   paginateItems,
-  readTextFixture,
   type SearchableFixtureEntry
 } from "./fixtures-shared.mjs";
 import type {
@@ -27,6 +27,9 @@ import type {
   SearchContentOptions
 } from "./fixtures-types.mjs";
 import { createFixtureRootFs } from "./root-fs.mjs";
+
+const SEARCH_STREAM_CHUNK_BYTES = 64 * 1024;
+const SEARCH_EXCERPT_RADIUS = 60;
 
 function createExcerpt(
   text: string,
@@ -84,6 +87,241 @@ function findSubstringMatch(
     matchCount,
     matchLine: line,
     matchColumn: column
+  };
+}
+
+function appendExcerpt(
+  leadingText: string,
+  matchText: string,
+  trailingText: string,
+  hasLeadingOverflow: boolean,
+  hasTrailingOverflow: boolean
+): string {
+  const excerpt = `${leadingText}${matchText}${trailingText}`
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return `${hasLeadingOverflow ? "..." : ""}${excerpt}${
+    hasTrailingOverflow ? "..." : ""
+  }`;
+}
+
+function advanceSearchLocation(
+  char: string,
+  state: {
+    line: number;
+    column: number;
+    previousWasCr: boolean;
+  }
+): void {
+  if (char === "\r") {
+    state.line += 1;
+    state.column = 1;
+    state.previousWasCr = true;
+    return;
+  }
+
+  if (char === "\n") {
+    if (state.previousWasCr) {
+      state.previousWasCr = false;
+      return;
+    }
+
+    state.line += 1;
+    state.column = 1;
+    return;
+  }
+
+  state.previousWasCr = false;
+  state.column += 1;
+}
+
+function advanceSearchLocationByText(
+  start: { line: number; column: number },
+  text: string
+): { line: number; column: number } {
+  const state = {
+    line: start.line,
+    column: start.column,
+    previousWasCr: false
+  };
+
+  for (const char of text) {
+    advanceSearchLocation(char, state);
+  }
+
+  return {
+    line: state.line,
+    column: state.column
+  };
+}
+
+function locationAtSearchIndex(
+  start: { line: number; column: number },
+  text: string,
+  index: number
+): { line: number; column: number } {
+  return advanceSearchLocationByText(start, text.slice(0, Math.max(0, index)));
+}
+
+async function findStreamingSubstringMatch(
+  rootPath: string,
+  relativePath: string,
+  query: string
+): Promise<Omit<
+  SearchContentMatch,
+  | "path"
+  | "sourceKind"
+  | "matchKind"
+  | "origin"
+  | "pathname"
+  | "mimeType"
+  | "resourceType"
+  | "editable"
+  | "canonicalPath"
+> | null> {
+  const rootFs = createFixtureRootFs(rootPath);
+  const absolutePath = rootFs.resolve(relativePath);
+  if (!absolutePath) {
+    return null;
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const queryLength = [...lowerQuery].length;
+  if (queryLength === 0) {
+    return null;
+  }
+
+  const overlapChars = Math.max(queryLength - 1, SEARCH_EXCERPT_RADIUS);
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const stream = createReadStream(absolutePath, {
+    highWaterMark: SEARCH_STREAM_CHUNK_BYTES
+  });
+  let carry = "";
+  let carryStartAbsolute = 0;
+  let carryStartLocation = { line: 1, column: 1 };
+  let matchCount = 0;
+  let nextAllowedStart = 0;
+  let trailingCollectedUntil = 0;
+  let firstMatch: {
+    start: number;
+    end: number;
+    line: number;
+    column: number;
+    leadingText: string;
+    matchText: string;
+  } | null = null;
+
+  const collectTrailing = (combined: string): string => {
+    if (!firstMatch) {
+      return "";
+    }
+
+    const remaining = SEARCH_EXCERPT_RADIUS - trailingChars.length;
+    if (remaining <= 0) {
+      return "";
+    }
+
+    const combinedEnd = carryStartAbsolute + combined.length;
+    const startAbsolute = Math.max(firstMatch.end, trailingCollectedUntil);
+    if (startAbsolute >= combinedEnd) {
+      return "";
+    }
+
+    const startIndex = Math.max(0, startAbsolute - carryStartAbsolute);
+    const trailing = combined.slice(startIndex, startIndex + remaining);
+    trailingCollectedUntil = carryStartAbsolute + startIndex + trailing.length;
+    return trailing;
+  };
+
+  const trailingChars: string[] = [];
+
+  const processText = (text: string, final = false): void => {
+    const combined = `${carry}${text}`;
+    const lowerCombined = combined.toLowerCase();
+    const processUntil = final
+      ? combined.length
+      : Math.max(0, combined.length - overlapChars);
+
+    let searchIndex = 0;
+    while (searchIndex < processUntil) {
+      const matchIndex = lowerCombined.indexOf(lowerQuery, searchIndex);
+      if (matchIndex === -1 || matchIndex >= processUntil) {
+        break;
+      }
+
+      const absoluteMatchIndex = carryStartAbsolute + matchIndex;
+      if (absoluteMatchIndex >= nextAllowedStart) {
+        matchCount += 1;
+        nextAllowedStart = absoluteMatchIndex + queryLength;
+
+        if (!firstMatch) {
+          const loc = locationAtSearchIndex(
+            carryStartLocation,
+            combined,
+            matchIndex
+          );
+          firstMatch = {
+            start: absoluteMatchIndex,
+            end: absoluteMatchIndex + queryLength,
+            line: loc.line,
+            column: loc.column,
+            leadingText: combined.slice(
+              Math.max(0, matchIndex - SEARCH_EXCERPT_RADIUS),
+              matchIndex
+            ),
+            matchText: combined.slice(matchIndex, matchIndex + queryLength)
+          };
+          trailingCollectedUntil = firstMatch.end;
+        }
+      }
+
+      searchIndex = matchIndex + queryLength;
+    }
+
+    const trailing = collectTrailing(combined);
+    if (trailing) {
+      trailingChars.push(trailing);
+    }
+
+    carryStartAbsolute += processUntil;
+    carryStartLocation = advanceSearchLocationByText(
+      carryStartLocation,
+      combined.slice(0, processUntil)
+    );
+    carry = combined.slice(processUntil);
+  };
+
+  try {
+    for await (const chunk of stream) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      if (buffer.includes(0)) {
+        return null;
+      }
+      processText(decoder.decode(buffer, { stream: true }));
+    }
+    processText(decoder.decode(), true);
+  } catch {
+    stream.destroy();
+    return null;
+  }
+
+  if (!firstMatch) {
+    return null;
+  }
+
+  return {
+    excerpt: appendExcerpt(
+      firstMatch.leadingText,
+      firstMatch.matchText,
+      trailingChars.join(""),
+      firstMatch.start > firstMatch.leadingText.length,
+      firstMatch.end + trailingChars.join("").length <
+        carryStartAbsolute + carry.length
+    ),
+    matchCount,
+    matchLine: firstMatch.line,
+    matchColumn: firstMatch.column
   };
 }
 
@@ -269,11 +507,16 @@ export async function searchFixtureContent(
   });
 
   const matches: SearchContentMatch[] = [];
+  const rootFs = createFixtureRootFs(rootPath);
 
   for (const entry of searchableEntries) {
-    const result = await readTextFixture(rootPath, entry.path);
-    if (result.ok) {
-      const match = findSubstringMatch(result.text, query);
+    const stat = await rootFs.stat(entry.path);
+    if (stat?.isFile()) {
+      const match = await findStreamingSubstringMatch(
+        rootPath,
+        entry.path,
+        query
+      );
       if (match) {
         matches.push({
           path: entry.path,

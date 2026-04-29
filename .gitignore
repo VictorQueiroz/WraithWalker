@@ -10,3 +10,4 @@ vendor/
 *.log
 .turbo/
 .vercel
+/.env

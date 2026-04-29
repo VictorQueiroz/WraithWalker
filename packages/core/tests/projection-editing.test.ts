@@ -191,8 +191,14 @@ describe("projection editing", () => {
       editable: true
     });
 
-    await expect(readFixtureBody(root.rootPath, projectionPath)).resolves.toBe(
-      "window.__SEEDED__ = true;\n"
+    await expect(
+      readFixtureBody(root.rootPath, projectionPath)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        text: "window.__SEEDED__ = true;\n",
+        truncated: false,
+        nextCursor: null
+      })
     );
     await expect(
       fs.readFile(root.resolve(canonicalPath), "utf8")
@@ -253,8 +259,14 @@ describe("projection editing", () => {
       })
     );
 
-    await expect(readFixtureBody(root.rootPath, projectionPath)).resolves.toBe(
-      'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}'
+    await expect(
+      readFixtureBody(root.rootPath, projectionPath)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        text: 'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}',
+        truncated: false,
+        nextCursor: null
+      })
     );
   });
 

@@ -38,11 +38,14 @@ export const DEFAULT_ASSET_LIMIT = 50;
 export const MAX_ASSET_LIMIT = 200;
 export const DEFAULT_SEARCH_LIMIT = 20;
 export const MAX_SEARCH_LIMIT = 100;
+export const DEFAULT_READ_MAX_BYTES = 32 * 1024;
+export const MAX_READ_MAX_BYTES = 64 * 1024;
 export const DEFAULT_SNIPPET_LINE_COUNT = 80;
 export const MAX_SNIPPET_LINE_COUNT = 400;
 export const DEFAULT_SNIPPET_MAX_BYTES = 16000;
 export const MAX_SNIPPET_MAX_BYTES = 64000;
-export const MAX_FULL_READ_BYTES = 64 * 1024;
+export const MAX_FULL_READ_BYTES = MAX_READ_MAX_BYTES;
+export const MAX_SEARCH_BODY_READ_BYTES = 2 * 1024 * 1024;
 
 const EDITABLE_PROJECTION_EXTENSIONS = new Set([
   ".cjs",

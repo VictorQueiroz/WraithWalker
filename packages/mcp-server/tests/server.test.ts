@@ -60,11 +60,15 @@ async function loadServerModuleWithMockedExpress({
   );
   const fakeMcpServerInstances: Array<{
     tool: ReturnType<typeof vi.fn>;
+    registerTool: ReturnType<typeof vi.fn>;
     connect: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
   }> = [];
   class FakeMcpServer {
-    tool = vi.fn();
+    tool = vi.fn(() => {
+      throw new Error("Deprecated server.tool should not be used.");
+    });
+    registerTool = vi.fn();
     connect = vi.fn().mockResolvedValue(undefined);
     close = vi.fn().mockResolvedValue(undefined);
 
@@ -144,6 +148,17 @@ function readTextContent(result: unknown): string {
 
 function readJsonContent<T>(result: unknown): T {
   return JSON.parse(readTextContent(result)) as T;
+}
+
+interface FixtureReadPageShape {
+  path: string;
+  sizeBytes: number;
+  startByte: number;
+  bytesReturned: number;
+  maxBytes: number;
+  truncated: boolean;
+  nextCursor: string | null;
+  text: string;
 }
 
 async function connectClient(rootPath: string) {
@@ -494,6 +509,7 @@ describe("mcp server", () => {
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
+        "analyze-js-file",
         "browser-status",
         "checkout-workspace",
         "diff-snapshots",
@@ -511,19 +527,52 @@ describe("mcp server", () => {
         "read-console",
         "read-file",
         "read-file-snippet",
+        "read-js-symbol",
         "read-site-manifest",
         "read-trace",
         "remove-site",
         "restore-file",
         "save-trace-as-snapshot",
         "search-files",
+        "search-js",
         "start-trace",
         "stop-trace",
+        "suggest-js-seeds",
+        "trace-js-pipeline",
         "trace-status",
         "update-site-patterns",
         "whitelist-site",
         "write-file"
       ]);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("describes JS tool workflow affordances for agents", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-server-",
+      rootId: "root-mcp-server"
+    });
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const { tools } = await client.listTools();
+      const descriptions = Object.fromEntries(
+        tools.map((tool) => [tool.name, tool.description ?? ""])
+      );
+
+      expect(descriptions["suggest-js-seeds"]).toContain(
+        "First JS discovery step"
+      );
+      expect(descriptions["suggest-js-seeds"]).toContain("trace-js-pipeline");
+      expect(descriptions["trace-js-pipeline"]).toContain("read-js-symbol");
+      expect(descriptions["trace-js-pipeline"]).toContain("read-api-response");
+      expect(descriptions["read-js-symbol"]).toContain("nodeId");
+      expect(descriptions["read-js-symbol"]).toContain("suggest-js-seeds");
+      expect(descriptions["search-js"]).toContain("suggest-js-seeds");
+      expect(descriptions["analyze-js-file"]).toContain("suggest-js-seeds");
     } finally {
       await client.close();
       await server.close();
@@ -575,6 +624,7 @@ describe("mcp server", () => {
           bodyPath: string;
           hasBody: boolean;
           bodySize: number | null;
+          displaySizeBytes: number | null;
           editable: boolean;
           canonicalPath: string | null;
         }>;
@@ -593,6 +643,10 @@ describe("mcp server", () => {
               ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
             hasBody: true,
             bodySize: Buffer.byteLength(
+              "renderDropdown({ animated: true });",
+              "utf8"
+            ),
+            displaySizeBytes: Buffer.byteLength(
               "renderDropdown({ animated: true });",
               "utf8"
             ),
@@ -648,7 +702,7 @@ describe("mcp server", () => {
       ) as {
         fixtureDir: string;
         meta: { status: number; url: string };
-        body: string | null;
+        body: FixtureReadPageShape | null;
       };
       expect(endpointFixture).toEqual(
         expect.objectContaining({
@@ -657,24 +711,13 @@ describe("mcp server", () => {
             status: 200,
             url: "https://api.example.com/users"
           }),
-          body: '{"users":[{"id":1}],"dropdownTheme":"dark"}'
+          body: expect.objectContaining({
+            path: endpoints.items[0].bodyPath,
+            text: '{"users":[{"id":1}],"dropdownTheme":"dark"}',
+            truncated: false,
+            nextCursor: null
+          })
         })
-      );
-
-      const prettyEndpointFixtureResult = await client.callTool({
-        name: "read-api-response",
-        arguments: {
-          fixtureDir: endpoints.items[0].fixtureDir,
-          pretty: true
-        }
-      });
-      const prettyEndpointFixture = JSON.parse(
-        readTextContent(prettyEndpointFixtureResult)
-      ) as {
-        body: string | null;
-      };
-      expect(prettyEndpointFixture.body).toBe(
-        '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
       );
 
       const searchResult = await client.callTool({
@@ -751,46 +794,106 @@ describe("mcp server", () => {
         name: "read-file",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
-      expect(readTextContent(fixtureResult)).toBe(
-        "renderDropdown({ animated: true });"
+      expect(JSON.parse(readTextContent(fixtureResult))).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/app.js",
+          text: "renderDropdown({ animated: true });",
+          truncated: false,
+          nextCursor: null
+        })
       );
 
-      const prettyFixtureResult = await client.callTool({
-        name: "read-file",
-        arguments: {
-          path: "cdn.example.com/assets/chunk.js",
-          pretty: true
-        }
-      });
-      expect(readTextContent(prettyFixtureResult)).toBe(
-        'function renderMenu() {\n  if (open) {\n    return { variant: "dark" };\n  }\n  return null;\n}'
-      );
-
-      const prettySnippetResult = await client.callTool({
+      const chunkSnippetResult = await client.callTool({
         name: "read-file-snippet",
         arguments: {
           path: "cdn.example.com/assets/chunk.js",
-          pretty: true,
-          startLine: 2,
-          lineCount: 3
+          startLine: 1,
+          lineCount: 1
         }
       });
-      const prettySnippet = JSON.parse(
-        readTextContent(prettySnippetResult)
-      ) as {
+      const chunkSnippet = JSON.parse(readTextContent(chunkSnippetResult)) as {
         path: string;
         startLine: number;
         endLine: number;
         truncated: boolean;
         text: string;
       };
-      expect(prettySnippet).toEqual({
+      expect(chunkSnippet).toEqual({
         path: "cdn.example.com/assets/chunk.js",
-        startLine: 2,
-        endLine: 4,
+        startLine: 1,
+        endLine: 1,
         truncated: false,
-        text: '  if (open) {\n    return { variant: "dark" };\n  }'
+        text: 'function renderMenu(){if(open){return{variant:"dark"}}return null}'
       });
+
+      const jsAnalysisResult = await client.callTool({
+        name: "analyze-js-file",
+        arguments: { path: "cdn.example.com/assets/chunk.js" }
+      });
+      const jsAnalysis = JSON.parse(readTextContent(jsAnalysisResult)) as {
+        parse: { ok: boolean };
+        summary: {
+          topLevelSymbols: Array<{ value: string; nodeId: string }>;
+        };
+      };
+      expect(jsAnalysis.parse.ok).toBe(true);
+      expect(jsAnalysis.summary.topLevelSymbols).toEqual([
+        expect.objectContaining({ value: "renderMenu" })
+      ]);
+
+      const jsSearchResult = await client.callTool({
+        name: "search-js",
+        arguments: {
+          query: "renderMenu",
+          kind: "identifier"
+        }
+      });
+      const jsSearch = JSON.parse(readTextContent(jsSearchResult)) as {
+        items: Array<{ value: string; path: string; nodeId: string }>;
+      };
+      expect(jsSearch.items).toEqual([
+        expect.objectContaining({
+          value: "renderMenu",
+          path: "cdn.example.com/assets/chunk.js"
+        })
+      ]);
+
+      const jsSeedResult = await client.callTool({
+        name: "suggest-js-seeds",
+        arguments: {
+          pathContains: "chunk",
+          kinds: ["string", "call"],
+          limit: 5
+        }
+      });
+      const jsSeeds = JSON.parse(readTextContent(jsSeedResult)) as {
+        items: Array<{ kind: string; value: string; nodeId: string }>;
+      };
+      expect(jsSeeds.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "string",
+            value: "dark",
+            nodeId: expect.any(String)
+          })
+        ])
+      );
+
+      const jsSymbolResult = await client.callTool({
+        name: "read-js-symbol",
+        arguments: {
+          path: "cdn.example.com/assets/chunk.js",
+          symbol: "renderMenu"
+        }
+      });
+      const jsSymbol = JSON.parse(readTextContent(jsSymbolResult)) as {
+        text: string;
+        nodeKind: string;
+      };
+      expect(jsSymbol.nodeKind).toBe("FunctionDeclaration");
+      expect(jsSymbol.text).toBe(
+        'function renderMenu(){if(open){return{variant:"dark"}}return null}'
+      );
 
       const manifestResult = await client.callTool({
         name: "read-site-manifest",
@@ -1410,6 +1513,54 @@ describe("mcp server", () => {
       });
       expect(invalidCursorResult.isError).toBe(true);
       expect(readTextContent(invalidCursorResult)).toContain("Invalid cursor");
+
+      const missingJsPathResult = await client.callTool({
+        name: "analyze-js-file",
+        arguments: { path: "missing.js" }
+      });
+      expect(missingJsPathResult.isError).toBe(true);
+      expect(readTextContent(missingJsPathResult)).toContain(
+        "File not found: missing.js"
+      );
+
+      const invalidJsSearchCursorResult = await client.callTool({
+        name: "search-js",
+        arguments: {
+          query: "dropdown",
+          cursor: "not-a-cursor"
+        }
+      });
+      expect(invalidJsSearchCursorResult.isError).toBe(true);
+      expect(readTextContent(invalidJsSearchCursorResult)).toContain(
+        "Invalid search-js cursor."
+      );
+
+      const invalidJsSeedCursorResult = await client.callTool({
+        name: "suggest-js-seeds",
+        arguments: { cursor: "not-a-cursor" }
+      });
+      expect(invalidJsSeedCursorResult.isError).toBe(true);
+      expect(readTextContent(invalidJsSeedCursorResult)).toContain(
+        "Invalid search-js cursor."
+      );
+
+      const missingJsSymbolArgsResult = await client.callTool({
+        name: "read-js-symbol",
+        arguments: { path: "missing.js" }
+      });
+      expect(missingJsSymbolArgsResult.isError).toBe(true);
+      expect(readTextContent(missingJsSymbolArgsResult)).toContain(
+        "read-js-symbol requires either symbol or nodeId."
+      );
+
+      const missingJsSymbolPathResult = await client.callTool({
+        name: "read-js-symbol",
+        arguments: { path: "missing.js", symbol: "missing" }
+      });
+      expect(missingJsSymbolPathResult.isError).toBe(true);
+      expect(readTextContent(missingJsSymbolPathResult)).toContain(
+        "File not found: missing.js"
+      );
 
       await fs.mkdir(path.dirname(root.resolve("bin/blob.bin")), {
         recursive: true
@@ -2042,24 +2193,40 @@ describe("mcp server", () => {
         name: "read-file",
         arguments: { path: "cdn.example.com/assets/huge.js" }
       });
-      expect(largeFixtureRead.isError).toBe(true);
-      expect(readTextContent(largeFixtureRead)).toContain(
-        "File is too large to read in full: cdn.example.com/assets/huge.js"
+      const largeFixturePage = JSON.parse(
+        readTextContent(largeFixtureRead)
+      ) as FixtureReadPageShape;
+      expect(largeFixturePage).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/huge.js",
+          sizeBytes: largeBody.length,
+          startByte: 0,
+          bytesReturned: 32_768,
+          maxBytes: 32_768,
+          truncated: true,
+          text: "x".repeat(32_768)
+        })
       );
-      expect(readTextContent(largeFixtureRead)).toContain(
-        "Use read-file-snippet with this path and specify startLine and lineCount."
-      );
+      expect(largeFixturePage.nextCursor).not.toBeNull();
 
       const largeEndpointRead = await client.callTool({
         name: "read-api-response",
         arguments: { fixtureDir: largeEndpoint.fixtureDir }
       });
-      expect(largeEndpointRead.isError).toBe(true);
-      expect(readTextContent(largeEndpointRead)).toContain(
-        `Endpoint fixture body is too large to read in full: ${largeEndpoint.bodyPath}`
-      );
-      expect(readTextContent(largeEndpointRead)).toContain(
-        `Use read-file-snippet with path "${largeEndpoint.bodyPath}" and specify startLine and lineCount.`
+      const largeEndpointFixture = JSON.parse(
+        readTextContent(largeEndpointRead)
+      ) as {
+        body: FixtureReadPageShape | null;
+      };
+      expect(largeEndpointFixture.body).toEqual(
+        expect.objectContaining({
+          path: largeEndpoint.bodyPath,
+          sizeBytes: largeBody.length,
+          bytesReturned: 32_768,
+          truncated: true,
+          nextCursor: expect.any(String),
+          text: "x".repeat(32_768)
+        })
       );
     } finally {
       await client.close();
@@ -2067,7 +2234,7 @@ describe("mcp server", () => {
     }
   });
 
-  it("enforces the full-read boundary exactly, including pretty reads", async () => {
+  it("pages file and API reads at the bounded read limits", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-mcp-server-",
       rootId: "root-mcp-server"
@@ -2154,44 +2321,139 @@ describe("mcp server", () => {
     try {
       const exactFixtureResult = await client.callTool({
         name: "read-file",
-        arguments: { path: "cdn.example.com/assets/exact.js" }
+        arguments: {
+          path: "cdn.example.com/assets/exact.js",
+          maxBytes: 65_536
+        }
       });
       expect(exactFixtureResult.isError).not.toBe(true);
-      expect(readTextContent(exactFixtureResult)).toHaveLength(65_536);
+      expect(JSON.parse(readTextContent(exactFixtureResult))).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/exact.js",
+          sizeBytes: 65_536,
+          startByte: 0,
+          bytesReturned: 65_536,
+          maxBytes: 65_536,
+          truncated: false,
+          nextCursor: null,
+          text: exactBody
+        })
+      );
+
+      const defaultFixtureResult = await client.callTool({
+        name: "read-file",
+        arguments: {
+          path: "cdn.example.com/assets/over.js"
+        }
+      });
+      const defaultFixturePage = JSON.parse(
+        readTextContent(defaultFixtureResult)
+      ) as FixtureReadPageShape;
+      expect(defaultFixturePage).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/over.js",
+          sizeBytes: 65_537,
+          startByte: 0,
+          bytesReturned: 32_768,
+          maxBytes: 32_768,
+          truncated: true,
+          text: "y".repeat(32_768)
+        })
+      );
+      expect(defaultFixturePage.nextCursor).not.toBeNull();
 
       const overLimitFixtureResult = await client.callTool({
         name: "read-file",
         arguments: {
           path: "cdn.example.com/assets/over.js",
-          pretty: true
+          maxBytes: 65_536
         }
       });
-      expect(overLimitFixtureResult.isError).toBe(true);
-      expect(readTextContent(overLimitFixtureResult)).toContain(
-        "File is too large to read in full: cdn.example.com/assets/over.js"
+      const overLimitFixturePage = JSON.parse(
+        readTextContent(overLimitFixtureResult)
+      ) as FixtureReadPageShape;
+      expect(overLimitFixturePage).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/over.js",
+          startByte: 0,
+          bytesReturned: 65_536,
+          maxBytes: 65_536,
+          truncated: true,
+          text: "y".repeat(65_536)
+        })
       );
+      expect(overLimitFixturePage.nextCursor).not.toBeNull();
+
+      const overLimitFixtureTailResult = await client.callTool({
+        name: "read-file",
+        arguments: {
+          path: "cdn.example.com/assets/over.js",
+          cursor: overLimitFixturePage.nextCursor
+        }
+      });
+      expect(JSON.parse(readTextContent(overLimitFixtureTailResult))).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/over.js",
+          startByte: 65_536,
+          bytesReturned: 1,
+          truncated: false,
+          nextCursor: null,
+          text: "y"
+        })
+      );
+
+      const tooLargePageRequest = await client.callTool({
+        name: "read-file",
+        arguments: {
+          path: "cdn.example.com/assets/over.js",
+          maxBytes: 65_537
+        }
+      });
+      expect(tooLargePageRequest.isError).toBe(true);
+      expect(readTextContent(tooLargePageRequest)).toContain("65536");
 
       const exactEndpointResult = await client.callTool({
         name: "read-api-response",
-        arguments: { fixtureDir: exactEndpoint.fixtureDir }
+        arguments: { fixtureDir: exactEndpoint.fixtureDir, maxBytes: 65_536 }
       });
       const exactEndpointFixture = JSON.parse(
         readTextContent(exactEndpointResult)
       ) as {
-        body: string | null;
+        body: FixtureReadPageShape | null;
       };
-      expect(exactEndpointFixture.body).toHaveLength(65_536);
+      expect(exactEndpointFixture.body).toEqual(
+        expect.objectContaining({
+          path: exactEndpoint.bodyPath,
+          bytesReturned: 65_536,
+          maxBytes: 65_536,
+          truncated: false,
+          nextCursor: null,
+          text: exactBody
+        })
+      );
 
       const overLimitEndpointResult = await client.callTool({
         name: "read-api-response",
         arguments: {
           fixtureDir: overLimitEndpoint.fixtureDir,
-          pretty: true
+          maxBytes: 65_536
         }
       });
-      expect(overLimitEndpointResult.isError).toBe(true);
-      expect(readTextContent(overLimitEndpointResult)).toContain(
-        `Endpoint fixture body is too large to read in full: ${overLimitEndpoint.bodyPath}`
+      const overLimitEndpointFixture = JSON.parse(
+        readTextContent(overLimitEndpointResult)
+      ) as {
+        body: FixtureReadPageShape | null;
+      };
+      expect(overLimitEndpointFixture.body).toEqual(
+        expect.objectContaining({
+          path: overLimitEndpoint.bodyPath,
+          startByte: 0,
+          bytesReturned: 65_536,
+          maxBytes: 65_536,
+          truncated: true,
+          nextCursor: expect.any(String),
+          text: "y".repeat(65_536)
+        })
       );
     } finally {
       await client.close();
@@ -3052,6 +3314,11 @@ describe("mcp server", () => {
         "read-file",
         "read-file-snippet",
         "read-site-manifest",
+        "analyze-js-file",
+        "search-js",
+        "suggest-js-seeds",
+        "trace-js-pipeline",
+        "read-js-symbol",
         "write-file",
         "patch-file",
         "restore-file",
@@ -3065,6 +3332,7 @@ describe("mcp server", () => {
 
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).sort()).toEqual([
+        "analyze-js-file",
         "browser-status",
         "checkout-workspace",
         "diff-snapshots",
@@ -3082,14 +3350,18 @@ describe("mcp server", () => {
         "read-console",
         "read-file",
         "read-file-snippet",
+        "read-js-symbol",
         "read-site-manifest",
         "read-trace",
         "remove-site",
         "restore-file",
         "save-trace-as-snapshot",
         "search-files",
+        "search-js",
         "start-trace",
         "stop-trace",
+        "suggest-js-seeds",
+        "trace-js-pipeline",
         "trace-status",
         "update-site-patterns",
         "whitelist-site",
@@ -3100,8 +3372,13 @@ describe("mcp server", () => {
         name: "read-file",
         arguments: { path: "cdn.example.com/assets/app.js" }
       });
-      expect(readTextContent(fixtureResult)).toBe(
-        "renderDropdown({ animated: true });"
+      expect(JSON.parse(readTextContent(fixtureResult))).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/app.js",
+          text: "renderDropdown({ animated: true });",
+          truncated: false,
+          nextCursor: null
+        })
       );
 
       const assetResult = await client.callTool({
@@ -3114,13 +3391,16 @@ describe("mcp server", () => {
         name: "read-api-response",
         arguments: {
           fixtureDir:
-            ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def",
-          pretty: true
+            ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/users__q-abc__b-def"
         }
       });
       expect(JSON.parse(readTextContent(endpointResult))).toEqual(
         expect.objectContaining({
-          body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+          body: expect.objectContaining({
+            text: '{"users":[{"id":1}],"dropdownTheme":"dark"}',
+            truncated: false,
+            nextCursor: null
+          })
         })
       );
 
@@ -3136,17 +3416,16 @@ describe("mcp server", () => {
         name: "read-file-snippet",
         arguments: {
           path: "cdn.example.com/assets/chunk.js",
-          pretty: true,
-          startLine: 2,
-          lineCount: 2
+          startLine: 1,
+          lineCount: 1
         }
       });
       expect(JSON.parse(readTextContent(snippetResult))).toEqual({
         path: "cdn.example.com/assets/chunk.js",
-        startLine: 2,
-        endLine: 3,
+        startLine: 1,
+        endLine: 1,
         truncated: false,
-        text: '  if (open) {\n    return { variant: "dark" };'
+        text: 'function renderMenu(){if(open){return{variant:"dark"}}return null}'
       });
 
       const listOriginsResult = await client.callTool({

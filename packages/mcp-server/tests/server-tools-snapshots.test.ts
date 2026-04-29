@@ -17,10 +17,12 @@ type ToolHandler = (args: Record<string, unknown>) => Promise<ToolResult>;
 function createToolRegistry() {
   const handlers = new Map<string, ToolHandler>();
   const server = {
-    tool(
+    tool() {
+      throw new Error("Deprecated server.tool should not be used.");
+    },
+    registerTool(
       name: string,
-      _description: string,
-      _schema: unknown,
+      _config: { description?: string; inputSchema?: unknown },
       handler: ToolHandler
     ) {
       handlers.set(name, handler);

@@ -97,7 +97,14 @@ describe("fixture reader", () => {
       root.rootPath,
       "cdn.example.com/assets/app.js"
     );
-    expect(content).toBe("console.log('hello');");
+    expect(content).toEqual(
+      expect.objectContaining({
+        path: "cdn.example.com/assets/app.js",
+        text: "console.log('hello');",
+        truncated: false,
+        nextCursor: null
+      })
+    );
   });
 
   it("returns null for missing fixture files", async () => {
@@ -133,7 +140,12 @@ describe("fixture reader", () => {
     expect(await readApiFixture(root.rootPath, fixture.fixtureDir)).toEqual(
       expect.objectContaining({
         fixtureDir: fixture.fixtureDir,
-        body: '{"queued":true}',
+        body: expect.objectContaining({
+          path: fixture.bodyPath,
+          text: '{"queued":true}',
+          truncated: false,
+          nextCursor: null
+        }),
         meta: expect.objectContaining({
           status: 202,
           method: "PUT"
