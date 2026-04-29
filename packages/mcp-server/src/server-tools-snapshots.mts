@@ -21,10 +21,12 @@ export function registerSnapshotTools(
     runtime: ReturnType<typeof createServerRootRuntime>;
   }
 ): void {
-  server.tool(
+  server.registerTool(
     "list-snapshots",
-    "List all saved fixture scenarios",
-    {},
+    {
+      description: "List all saved fixture scenarios",
+      inputSchema: z.object({})
+    },
     async () => {
       const snapshots = await listScenarioSnapshots(rootPath);
       return renderJson({
@@ -34,29 +36,32 @@ export function registerSnapshotTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "save-trace-as-snapshot",
-    "Save the current fixture workspace as a named scenario snapshot and attach trace provenance",
     {
-      traceId: z
-        .string()
-        .describe("Trace ID returned by start-trace or list-traces"),
-      name: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe(
-          "Optional snapshot name. Defaults to the trace ID when omitted."
-        ),
-      description: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe(
-          "Optional human-facing description stored in the snapshot metadata"
-        )
+      description:
+        "Save the current fixture workspace as a named scenario snapshot and attach trace provenance",
+      inputSchema: z.object({
+        traceId: z
+          .string()
+          .describe("Trace ID returned by start-trace or list-traces"),
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe(
+            "Optional snapshot name. Defaults to the trace ID when omitted."
+          ),
+        description: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe(
+            "Optional human-facing description stored in the snapshot metadata"
+          )
+      })
     },
     async ({ traceId, name, description }) => {
       const trace = await runtime.readTrace(traceId);
@@ -95,12 +100,15 @@ export function registerSnapshotTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "diff-snapshots",
-    "Compare two scenario snapshots and report differences in API endpoints",
     {
-      scenarioA: z.string().describe("Name of the first scenario"),
-      scenarioB: z.string().describe("Name of the second scenario")
+      description:
+        "Compare two scenario snapshots and report differences in API endpoints",
+      inputSchema: z.object({
+        scenarioA: z.string().describe("Name of the first scenario"),
+        scenarioB: z.string().describe("Name of the second scenario")
+      })
     },
     async ({ scenarioA, scenarioB }) => {
       try {

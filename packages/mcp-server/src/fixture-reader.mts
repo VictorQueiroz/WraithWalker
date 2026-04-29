@@ -23,6 +23,8 @@ export {
   type PatchProjectionFileOptions,
   type ProjectionFileInfo,
   type EndpointListResult,
+  type FixtureReadPage,
+  type FixtureReadOptions,
   type FixtureSnippet,
   type FixtureSnippetOptions,
   type OriginInfo,

@@ -73,16 +73,19 @@ export function registerSiteConfigTools(
     return normalizeSiteConfigs(await runtime.readConfiguredSiteConfigs());
   }
 
-  server.tool(
+  server.registerTool(
     "list-configured-sites",
-    "List the explicit site config entries stored in the current WraithWalker root",
     {
-      search: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe("Optional case-insensitive origin substring filter")
+      description:
+        "List the explicit site config entries stored in the current WraithWalker root",
+      inputSchema: z.object({
+        search: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Optional case-insensitive origin substring filter")
+      })
     },
     async ({ search }) => {
       const normalizedSearch = search?.toLowerCase();
@@ -98,13 +101,16 @@ export function registerSiteConfigTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "whitelist-site",
-    "Ensure an origin is explicitly configured in the current root using the agent-friendly default capture patterns",
     {
-      origin: z
-        .string()
-        .describe("Origin to whitelist (for example https://app.example.com)")
+      description:
+        "Ensure an origin is explicitly configured in the current root using the agent-friendly default capture patterns",
+      inputSchema: z.object({
+        origin: z
+          .string()
+          .describe("Origin to whitelist (for example https://app.example.com)")
+      })
     },
     async ({ origin }) => {
       let normalizedOrigin: string;
@@ -140,13 +146,16 @@ export function registerSiteConfigTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "remove-site",
-    "Remove an explicit site config entry from the current WraithWalker root",
     {
-      origin: z
-        .string()
-        .describe("Origin to remove from the configured site list")
+      description:
+        "Remove an explicit site config entry from the current WraithWalker root",
+      inputSchema: z.object({
+        origin: z
+          .string()
+          .describe("Origin to remove from the configured site list")
+      })
     },
     async ({ origin }) => {
       let normalizedOrigin: string;
@@ -183,19 +192,22 @@ export function registerSiteConfigTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "update-site-patterns",
-    "Replace, append, or reset dump allowlist patterns for an explicitly configured origin",
     {
-      origin: z.string().describe("Configured origin to update"),
-      mode: z
-        .enum(["replace", "append", "reset"])
-        .optional()
-        .describe("How to apply dumpPatterns; defaults to replace"),
-      dumpPatterns: z
-        .array(z.string())
-        .optional()
-        .describe("Regex patterns used when mode is replace or append")
+      description:
+        "Replace, append, or reset dump allowlist patterns for an explicitly configured origin",
+      inputSchema: z.object({
+        origin: z.string().describe("Configured origin to update"),
+        mode: z
+          .enum(["replace", "append", "reset"])
+          .optional()
+          .describe("How to apply dumpPatterns; defaults to replace"),
+        dumpPatterns: z
+          .array(z.string())
+          .optional()
+          .describe("Regex patterns used when mode is replace or append")
+      })
     },
     async ({ origin, mode = "replace", dumpPatterns }) => {
       let normalizedOrigin: string;
@@ -264,11 +276,14 @@ export function registerSiteConfigTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "prepare-site-for-capture",
-    "Ensure an origin is configured in the current root and report whether the connected extension is ready to capture it",
     {
-      origin: z.string().describe("Origin to prepare for capture")
+      description:
+        "Ensure an origin is configured in the current root and report whether the connected extension is ready to capture it",
+      inputSchema: z.object({
+        origin: z.string().describe("Origin to prepare for capture")
+      })
     },
     async ({ origin }) => {
       let normalizedOrigin: string;

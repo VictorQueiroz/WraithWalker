@@ -42,19 +42,25 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x out/bin.mjs",
+    "dogfood:agent": "vitest run tests/agent-effectiveness-dogfood.test.ts --coverage=false",
+    "dogfood:agent:llm": "tsx scripts/agent-grade-llm.mts",
+    "dogfood:agent:models": "tsx scripts/agent-grade-model-eval.mts",
+    "dogfood:live": "vitest run tests/live-agent-dogfood.test.ts --coverage=false",
     "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
+    "@babel/parser": "^7.29.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@trpc/server": "^11.7.1",
     "@wraithwalker/core": "2.2.1",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^3.2.4",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vitest": "^3.2.4"
   }

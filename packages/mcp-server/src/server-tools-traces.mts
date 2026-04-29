@@ -26,24 +26,27 @@ export function registerTraceTools(
     extensionSessions: ReturnType<typeof createExtensionSessionTracker>;
   }
 ): void {
-  server.tool(
+  server.registerTool(
     "start-trace",
-    "Start a guided click-trace that the extension will record into the current WraithWalker root",
     {
-      name: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe("Optional human-friendly name for the trace"),
-      goal: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe(
-          "Optional agent-facing goal for what the trace should capture"
-        )
+      description:
+        "Start a guided click-trace that the extension will record into the current WraithWalker root",
+      inputSchema: z.object({
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe("Optional human-friendly name for the trace"),
+        goal: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe(
+            "Optional agent-facing goal for what the trace should capture"
+          )
+      })
     },
     async ({ name, goal }) => {
       const status = await extensionSessions.getStatus();
@@ -78,11 +81,14 @@ export function registerTraceTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "stop-trace",
-    "Stop a guided click-trace and keep it as a completed scenario trace on disk",
     {
-      traceId: z.string().describe("Trace ID returned by start-trace")
+      description:
+        "Stop a guided click-trace and keep it as a completed scenario trace on disk",
+      inputSchema: z.object({
+        traceId: z.string().describe("Trace ID returned by start-trace")
+      })
     },
     async ({ traceId }) => {
       try {
@@ -97,20 +103,25 @@ export function registerTraceTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "list-traces",
-    "List guided scenario traces stored in the current WraithWalker root",
-    {},
+    {
+      description:
+        "List guided scenario traces stored in the current WraithWalker root",
+      inputSchema: z.object({})
+    },
     async () => renderJson(await runtime.listTraces())
   );
 
-  server.tool(
+  server.registerTool(
     "read-trace",
-    "Read a stored guided scenario trace by ID",
     {
-      traceId: z
-        .string()
-        .describe("Trace ID returned by start-trace or list-traces")
+      description: "Read a stored guided scenario trace by ID",
+      inputSchema: z.object({
+        traceId: z
+          .string()
+          .describe("Trace ID returned by start-trace or list-traces")
+      })
     },
     async ({ traceId }) => {
       const trace = await runtime.readTrace(traceId);

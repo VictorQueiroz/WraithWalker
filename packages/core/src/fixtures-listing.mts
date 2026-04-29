@@ -75,13 +75,17 @@ export async function listAssets(
 
   const items = await Promise.all(
     filteredItems.map(async (entry) => {
-      const stat = await rootFs.stat(entry.bodyPath);
-      const hasBody = Boolean(stat?.isFile());
+      const [bodyStat, displayStat] = await Promise.all([
+        rootFs.stat(entry.bodyPath),
+        rootFs.stat(entry.path)
+      ]);
+      const hasBody = Boolean(bodyStat?.isFile());
 
       return {
         ...entry,
         hasBody,
-        bodySize: hasBody ? stat!.size : null,
+        bodySize: hasBody ? bodyStat!.size : null,
+        displaySizeBytes: displayStat?.isFile() ? displayStat.size : null,
         editable: isEditableProjectionAsset(entry.projectionPath, entry),
         canonicalPath: entry.bodyPath
       };

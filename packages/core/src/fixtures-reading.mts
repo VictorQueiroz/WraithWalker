@@ -1,119 +1,342 @@
+import { createReadStream, promises as fs } from "node:fs";
 import path from "node:path";
 
-import { getFixtureDisplayPath, type ResponseMeta } from "./fixture-layout.mjs";
-import { prettifyFixtureText } from "./fixture-presentation.mjs";
+import { type ResponseMeta } from "./fixture-layout.mjs";
+import { createFixtureRootFs, resolveWithinRoot } from "./root-fs.mjs";
 import {
-  createFixtureRootFs,
-  resolveWithinRoot,
-  type FixtureRootFs
-} from "./root-fs.mjs";
-import {
-  flattenStaticResourceManifest,
-  readOriginInfo,
-  readSiteConfigs
-} from "./fixtures-discovery.mjs";
-import {
+  DEFAULT_READ_MAX_BYTES,
   DEFAULT_SNIPPET_LINE_COUNT,
   DEFAULT_SNIPPET_MAX_BYTES,
-  MAX_FULL_READ_BYTES,
+  MAX_READ_MAX_BYTES,
   MAX_SNIPPET_LINE_COUNT,
   MAX_SNIPPET_MAX_BYTES,
-  normalizeLimit,
-  readTextFixture,
-  truncateUtf8,
-  type FixturePresentationContext
+  normalizeLimit
 } from "./fixtures-shared.mjs";
 import type {
   ApiFixture,
   FixtureReadOptions,
+  FixtureReadPage,
   FixtureSnippet,
   FixtureSnippetOptions
 } from "./fixtures-types.mjs";
 
-async function assertWithinFullReadLimit(
-  rootFs: FixtureRootFs,
-  relativePath: string,
-  createError: (byteLength: number, limit: number) => Error
-): Promise<void> {
-  const stat = await rootFs.stat(relativePath);
-  if (!stat?.isFile()) {
-    return;
+function encodeReadCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ offset }), "utf8").toString("base64url");
+}
+
+function decodeReadCursor(cursor?: string): number {
+  if (!cursor) {
+    return 0;
   }
 
-  if (stat.size > MAX_FULL_READ_BYTES) {
-    throw createError(stat.size, MAX_FULL_READ_BYTES);
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    const offset = Number(value.offset);
+    if (!Number.isInteger(offset) || offset < 0) {
+      throw new Error("invalid offset");
+    }
+    return offset;
+  } catch {
+    throw new Error(`Invalid read cursor: ${cursor}`);
   }
 }
 
-async function findAssetPresentationContext(
-  rootPath: string,
-  relativePath: string
-): Promise<FixturePresentationContext | null> {
-  const configs = await readSiteConfigs(rootPath);
+function createFixtureReadError(
+  relativePath: string,
+  reason: "invalid-path" | "missing" | "binary"
+): Error {
+  switch (reason) {
+    case "invalid-path":
+      return new Error(
+        `Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`
+      );
+    case "missing":
+      return new Error(`File not found: ${relativePath}`);
+    case "binary":
+      return new Error(`Fixture is not a text file: ${relativePath}`);
+  }
+}
 
-  for (const config of configs) {
-    const info = await readOriginInfo(rootPath, config);
-    for (const asset of flattenStaticResourceManifest(info.manifest)) {
-      if (asset.bodyPath !== relativePath) {
-        if (getFixtureDisplayPath(asset) !== relativePath) {
-          continue;
+function utf8SequenceLength(leadByte: number): number {
+  if ((leadByte & 0b1000_0000) === 0) {
+    return 1;
+  }
+  if ((leadByte & 0b1110_0000) === 0b1100_0000) {
+    return 2;
+  }
+  if ((leadByte & 0b1111_0000) === 0b1110_0000) {
+    return 3;
+  }
+  if ((leadByte & 0b1111_1000) === 0b1111_0000) {
+    return 4;
+  }
+  return 0;
+}
+
+function isUtf8Continuation(byte: number): boolean {
+  return (byte & 0b1100_0000) === 0b1000_0000;
+}
+
+function findUtf8SafeEnd(buffer: Buffer, maxBytes: number): number {
+  const desiredEnd = Math.min(buffer.length, maxBytes);
+  if (desiredEnd === 0 || desiredEnd === buffer.length) {
+    return desiredEnd;
+  }
+
+  let leadIndex = desiredEnd - 1;
+  while (leadIndex >= 0 && isUtf8Continuation(buffer[leadIndex])) {
+    leadIndex -= 1;
+  }
+
+  if (leadIndex < 0) {
+    return 0;
+  }
+
+  const sequenceLength = utf8SequenceLength(buffer[leadIndex]);
+  if (sequenceLength > 1 && leadIndex + sequenceLength > desiredEnd) {
+    return leadIndex;
+  }
+
+  return desiredEnd;
+}
+
+async function readFilePage(
+  absolutePath: string,
+  relativePath: string,
+  sizeBytes: number,
+  options: FixtureReadOptions = {}
+): Promise<FixtureReadPage> {
+  const maxBytes = normalizeLimit(
+    options.maxBytes,
+    DEFAULT_READ_MAX_BYTES,
+    MAX_READ_MAX_BYTES
+  );
+  const startByte = decodeReadCursor(options.cursor);
+  if (startByte > sizeBytes) {
+    throw new Error(`Invalid read cursor: ${options.cursor}`);
+  }
+
+  const bytesAvailable = sizeBytes - startByte;
+  const readCapacity = Math.min(bytesAvailable, maxBytes + 4);
+  const buffer = Buffer.alloc(readCapacity);
+  let bytesRead = 0;
+
+  if (readCapacity > 0) {
+    const handle = await fs.open(absolutePath, "r");
+    try {
+      const readResult = await handle.read(buffer, 0, readCapacity, startByte);
+      bytesRead = readResult.bytesRead;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  const readBuffer = buffer.subarray(0, bytesRead);
+  if (readBuffer.includes(0)) {
+    throw createFixtureReadError(relativePath, "binary");
+  }
+
+  const bytesReturned = findUtf8SafeEnd(readBuffer, maxBytes);
+  if (bytesRead > 0 && bytesReturned === 0) {
+    throw createFixtureReadError(relativePath, "binary");
+  }
+
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(
+      readBuffer.subarray(0, bytesReturned)
+    );
+  } catch {
+    throw createFixtureReadError(relativePath, "binary");
+  }
+
+  const nextByte = startByte + bytesReturned;
+  const truncated = nextByte < sizeBytes;
+
+  return {
+    path: relativePath,
+    sizeBytes,
+    startByte,
+    bytesReturned,
+    maxBytes,
+    truncated,
+    nextCursor: truncated ? encodeReadCursor(nextByte) : null,
+    text
+  };
+}
+
+async function readFixturePage(
+  rootPath: string,
+  relativePath: string,
+  options: FixtureReadOptions = {}
+): Promise<FixtureReadPage | null> {
+  const absolutePath = resolveWithinRoot(rootPath, relativePath);
+  if (!absolutePath) {
+    return null;
+  }
+
+  const rootFs = createFixtureRootFs(rootPath);
+  const stat = await rootFs.stat(relativePath);
+  if (!stat?.isFile()) {
+    return null;
+  }
+
+  return readFilePage(absolutePath, relativePath, stat.size, options);
+}
+
+function appendUtf8Bounded(
+  currentText: string,
+  nextText: string,
+  maxBytes: number
+): { text: string; truncated: boolean } {
+  const currentBytes = Buffer.byteLength(currentText, "utf8");
+  const remainingBytes = maxBytes - currentBytes;
+  if (remainingBytes <= 0) {
+    return { text: currentText, truncated: nextText.length > 0 };
+  }
+
+  const nextBytes = Buffer.byteLength(nextText, "utf8");
+  if (nextBytes <= remainingBytes) {
+    return { text: `${currentText}${nextText}`, truncated: false };
+  }
+
+  const buffer = Buffer.from(nextText, "utf8");
+  return {
+    text: `${currentText}${buffer.subarray(0, remainingBytes).toString("utf8")}`,
+    truncated: true
+  };
+}
+
+async function readFixtureSnippetStreaming(
+  rootPath: string,
+  relativePath: string,
+  {
+    startLine,
+    lineCount,
+    maxBytes
+  }: {
+    startLine: number;
+    lineCount: number;
+    maxBytes: number;
+  }
+): Promise<FixtureSnippet> {
+  const absolutePath = resolveWithinRoot(rootPath, relativePath);
+  if (!absolutePath) {
+    throw createFixtureReadError(relativePath, "invalid-path");
+  }
+
+  const rootFs = createFixtureRootFs(rootPath);
+  const stat = await rootFs.stat(relativePath);
+  if (!stat?.isFile()) {
+    throw createFixtureReadError(relativePath, "missing");
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const stream = createReadStream(absolutePath, {
+    highWaterMark: 64 * 1024
+  });
+  const endExclusive = startLine + lineCount;
+  let currentLine = 1;
+  let lastIncludedLine = startLine - 1;
+  let text = "";
+  let truncated = false;
+  let previousWasCr = false;
+
+  const appendIfSelected = (value: string): void => {
+    if (currentLine < startLine || currentLine >= endExclusive || truncated) {
+      return;
+    }
+
+    const appended = appendUtf8Bounded(text, value, maxBytes);
+    text = appended.text;
+    truncated = appended.truncated;
+    if (value.length > 0) {
+      lastIncludedLine = currentLine;
+    }
+  };
+
+  const advanceLine = (lineEnding: "\n" | "\r"): void => {
+    if (currentLine >= startLine && currentLine < endExclusive) {
+      lastIncludedLine = currentLine;
+      if (currentLine + 1 < endExclusive) {
+        appendIfSelected("\n");
+      }
+    }
+
+    currentLine += 1;
+    previousWasCr = lineEnding === "\r";
+  };
+
+  try {
+    for await (const chunk of stream) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      if (buffer.includes(0)) {
+        throw createFixtureReadError(relativePath, "binary");
+      }
+
+      const decoded = decoder.decode(buffer, { stream: true });
+      for (const char of decoded) {
+        if (char === "\n") {
+          if (previousWasCr) {
+            previousWasCr = false;
+            continue;
+          }
+          advanceLine("\n");
+        } else if (char === "\r") {
+          advanceLine("\r");
+        } else {
+          previousWasCr = false;
+          appendIfSelected(char);
+        }
+
+        if (truncated || currentLine >= endExclusive) {
+          stream.destroy();
+          break;
         }
       }
 
-      return {
-        mimeType: asset.mimeType,
-        resourceType: asset.resourceType
-      };
+      if (truncated || currentLine >= endExclusive) {
+        break;
+      }
     }
-  }
 
-  return null;
-}
+    const tail = decoder.decode();
+    for (const char of tail) {
+      if (char === "\n") {
+        if (previousWasCr) {
+          previousWasCr = false;
+          continue;
+        }
+        advanceLine("\n");
+      } else if (char === "\r") {
+        advanceLine("\r");
+      } else {
+        previousWasCr = false;
+        appendIfSelected(char);
+      }
 
-async function resolveFixturePresentationContext(
-  rootPath: string,
-  relativePath: string
-): Promise<FixturePresentationContext | null> {
-  if (path.basename(relativePath) === "response.body") {
-    const metaPath = path.join(
-      path.dirname(relativePath),
-      "response.meta.json"
-    );
-    const meta =
-      await createFixtureRootFs(rootPath).readOptionalJson<ResponseMeta>(
-        metaPath
-      );
-    if (meta) {
-      return {
-        mimeType: meta.mimeType,
-        resourceType: meta.resourceType
-      };
+      if (truncated || currentLine >= endExclusive) {
+        break;
+      }
     }
+  } catch (error) {
+    stream.destroy();
+    if (error instanceof Error && error.message.startsWith("Fixture is not")) {
+      throw error;
+    }
+    if (error instanceof TypeError) {
+      throw createFixtureReadError(relativePath, "binary");
+    }
+    throw error;
   }
 
-  return findAssetPresentationContext(rootPath, relativePath);
-}
-
-async function maybePrettifyFixtureText(
-  rootPath: string,
-  relativePath: string,
-  text: string,
-  options: FixtureReadOptions,
-  context?: FixturePresentationContext | null
-): Promise<string> {
-  if (!options.pretty) {
-    return text;
-  }
-
-  const resolvedContext =
-    context ??
-    (await resolveFixturePresentationContext(rootPath, relativePath));
-  return prettifyFixtureText({
-    relativePath,
-    text,
-    mimeType: resolvedContext?.mimeType,
-    resourceType: resolvedContext?.resourceType
-  });
+  return {
+    path: relativePath,
+    startLine,
+    endLine: text === "" ? startLine - 1 : lastIncludedLine,
+    truncated,
+    text
+  };
 }
 
 export function resolveFixturePath(
@@ -127,23 +350,8 @@ export async function readFixtureBody(
   rootPath: string,
   relativePath: string,
   options: FixtureReadOptions = {}
-): Promise<string | null> {
-  const rootFs = createFixtureRootFs(rootPath);
-  await assertWithinFullReadLimit(
-    rootFs,
-    relativePath,
-    (byteLength, limit) =>
-      new Error(
-        `File is too large to read in full: ${relativePath} (${byteLength} bytes; limit ${limit} bytes). ` +
-          "Use read-file-snippet with this path and specify startLine and lineCount."
-      )
-  );
-  const text = await rootFs.readOptionalText(relativePath);
-  if (text === null) {
-    return null;
-  }
-
-  return maybePrettifyFixtureText(rootPath, relativePath, text, options);
+): Promise<FixtureReadPage | null> {
+  return readFixturePage(rootPath, relativePath, options);
 }
 
 export async function readFixtureSnippet(
@@ -162,44 +370,12 @@ export async function readFixtureSnippet(
     DEFAULT_SNIPPET_MAX_BYTES,
     MAX_SNIPPET_MAX_BYTES
   );
-  const textFixture = await readTextFixture(rootPath, relativePath);
 
-  if ("reason" in textFixture) {
-    switch (textFixture.reason) {
-      case "invalid-path":
-        throw new Error(
-          `Invalid fixture path: ${relativePath}. Paths must stay within the fixture root.`
-        );
-      case "missing":
-        throw new Error(`File not found: ${relativePath}`);
-      case "binary":
-        throw new Error(`Fixture is not a text file: ${relativePath}`);
-    }
-  }
-
-  const renderedText = await maybePrettifyFixtureText(
-    rootPath,
-    relativePath,
-    textFixture.text,
-    options
-  );
-  const allLines = renderedText.split(/\r\n|\n|\r/);
-  const snippetLines = allLines.slice(startLine - 1, startLine - 1 + lineCount);
-  const rawSnippet = snippetLines.join("\n");
-  const truncatedSnippet = truncateUtf8(rawSnippet, maxBytes);
-  const renderedLineCount =
-    truncatedSnippet.text === ""
-      ? 0
-      : truncatedSnippet.text.split(/\r\n|\n|\r/).length;
-
-  return {
-    path: relativePath,
+  return readFixtureSnippetStreaming(rootPath, relativePath, {
     startLine,
-    endLine:
-      renderedLineCount > 0 ? startLine + renderedLineCount - 1 : startLine - 1,
-    truncated: truncatedSnippet.truncated,
-    text: truncatedSnippet.text
-  };
+    lineCount,
+    maxBytes
+  });
 }
 
 export async function readApiFixture(
@@ -225,25 +401,6 @@ export async function readApiFixture(
     metaPath,
     bodyPath,
     meta,
-    body: await (async () => {
-      await assertWithinFullReadLimit(
-        rootFs,
-        bodyPath,
-        (byteLength, limit) =>
-          new Error(
-            `Endpoint fixture body is too large to read in full: ${bodyPath} (${byteLength} bytes; limit ${limit} bytes). ` +
-              `Use read-file-snippet with path "${bodyPath}" and specify startLine and lineCount.`
-          )
-      );
-      const body = await rootFs.readOptionalText(bodyPath);
-      if (body === null) {
-        return null;
-      }
-
-      return maybePrettifyFixtureText(rootPath, bodyPath, body, options, {
-        mimeType: meta.mimeType,
-        resourceType: meta.resourceType
-      });
-    })()
+    body: await readFixtureBody(rootPath, bodyPath, options)
   };
 }

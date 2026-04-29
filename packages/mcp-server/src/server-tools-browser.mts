@@ -72,44 +72,50 @@ export function registerBrowserTools(
     extensionSessions: ReturnType<typeof createExtensionSessionTracker>;
   }
 ): void {
-  server.tool(
+  server.registerTool(
     "browser-status",
-    "Report whether the browser extension is connected to this local server and ready to capture",
-    {},
+    {
+      description:
+        "Report whether the browser extension is connected to this local server and ready to capture",
+      inputSchema: z.object({})
+    },
     async () => renderJson(await extensionSessions.getStatus())
   );
 
-  server.tool(
+  server.registerTool(
     "read-console",
-    "Read recent browser console and log entries observed by the connected extension",
     {
-      limit: z
-        .number()
-        .int()
-        .positive()
-        .max(200)
-        .optional()
-        .describe("Maximum number of recent entries to return"),
-      tabId: z
-        .number()
-        .int()
-        .nonnegative()
-        .optional()
-        .describe("Optional exact tab ID filter"),
-      search: z
-        .string()
-        .trim()
-        .min(1)
-        .optional()
-        .describe(
-          "Optional case-insensitive substring filter on the entry text"
+      description:
+        "Read recent browser console and log entries observed by the connected extension",
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(200)
+          .optional()
+          .describe("Maximum number of recent entries to return"),
+        tabId: z
+          .number()
+          .int()
+          .nonnegative()
+          .optional()
+          .describe("Optional exact tab ID filter"),
+        search: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe(
+            "Optional case-insensitive substring filter on the entry text"
+          ),
+        sources: optionalStringArraySchema.describe(
+          "Optional exact log sources to include"
         ),
-      sources: optionalStringArraySchema.describe(
-        "Optional exact log sources to include"
-      ),
-      levels: optionalStringArraySchema.describe(
-        "Optional exact log levels to include"
-      )
+        levels: optionalStringArraySchema.describe(
+          "Optional exact log levels to include"
+        )
+      })
     },
     async ({ limit, tabId, search, sources, levels }) => {
       const status = await extensionSessions.getStatus();
@@ -132,10 +138,13 @@ export function registerBrowserTools(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "trace-status",
-    "Report guided trace readiness plus an agent-friendly summary of the active trace, if one exists",
-    {},
+    {
+      description:
+        "Report guided trace readiness plus an agent-friendly summary of the active trace, if one exists",
+      inputSchema: z.object({})
+    },
     async () =>
       renderJson(buildTraceStatusView(await extensionSessions.getStatus()))
   );

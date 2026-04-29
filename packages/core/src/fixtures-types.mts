@@ -39,7 +39,7 @@ export interface ApiFixture {
   metaPath: string;
   bodyPath: string;
   meta: ResponseMeta;
-  body: string | null;
+  body: FixtureReadPage | null;
 }
 
 export interface AssetListOptions {
@@ -56,6 +56,7 @@ export interface AssetInfo extends StaticResourceManifestEntry {
   path: string;
   hasBody: boolean;
   bodySize: number | null;
+  displaySizeBytes: number | null;
   editable: boolean;
   canonicalPath: string | null;
 }
@@ -109,14 +110,25 @@ export interface PatchProjectionFileOptions {
 }
 
 export interface FixtureSnippetOptions {
-  pretty?: boolean;
   startLine?: number;
   lineCount?: number;
   maxBytes?: number;
 }
 
 export interface FixtureReadOptions {
-  pretty?: boolean;
+  cursor?: string;
+  maxBytes?: number;
+}
+
+export interface FixtureReadPage {
+  path: string;
+  sizeBytes: number;
+  startByte: number;
+  bytesReturned: number;
+  maxBytes: number;
+  truncated: boolean;
+  nextCursor: string | null;
+  text: string;
 }
 
 export interface FixtureSnippet {

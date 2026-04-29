@@ -137,7 +137,16 @@ describe("fixture readers", () => {
 
     expect(
       await readFixtureBody(root.rootPath, "cdn.example.com/assets/app.js")
-    ).toBe("console.log('hello');");
+    ).toEqual(
+      expect.objectContaining({
+        path: "cdn.example.com/assets/app.js",
+        startByte: 0,
+        bytesReturned: Buffer.byteLength("console.log('hello');", "utf8"),
+        truncated: false,
+        nextCursor: null,
+        text: "console.log('hello');"
+      })
+    );
     expect(await readFixtureBody(root.rootPath, "missing.js")).toBeNull();
     expect(
       resolveFixturePath(root.rootPath, "cdn.example.com/assets/app.js")
@@ -146,7 +155,7 @@ describe("fixture readers", () => {
     expect(await readFixtureBody(root.rootPath, "../package.json")).toBeNull();
   });
 
-  it("prettifies asset and endpoint bodies at read time without mutating stored files", async () => {
+  it("reads stored asset and endpoint body pages without mutating stored files", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
     });
@@ -201,22 +210,24 @@ describe("fixture readers", () => {
     });
 
     expect(
-      await readFixtureBody(root.rootPath, "cdn.example.com/assets/chunk.js", {
-        pretty: true
+      await readFixtureBody(root.rootPath, "cdn.example.com/assets/chunk.js")
+    ).toEqual(
+      expect.objectContaining({
+        path: "cdn.example.com/assets/chunk.js",
+        truncated: false,
+        nextCursor: null,
+        text: 'function renderDropdown(){if(animated){return{theme:"dark"}}return null}'
       })
-    ).toBe(
-      'function renderDropdown() {\n  if (animated) {\n    return { theme: "dark" };\n  }\n  return null;\n}'
     );
-    expect(
-      await readFixtureBody(root.rootPath, apiFixture.bodyPath, {
-        pretty: true
+    expect(await readFixtureBody(root.rootPath, apiFixture.bodyPath)).toEqual(
+      expect.objectContaining({
+        path: apiFixture.bodyPath,
+        truncated: false,
+        nextCursor: null,
+        text: '{"users":[{"id":1}],"dropdownTheme":"dark"}'
       })
-    ).toBe('{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }');
-    expect(
-      await readApiFixture(root.rootPath, apiFixture.fixtureDir, {
-        pretty: true
-      })
-    ).toEqual({
+    );
+    expect(await readApiFixture(root.rootPath, apiFixture.fixtureDir)).toEqual({
       fixtureDir: apiFixture.fixtureDir,
       metaPath: apiFixture.metaPath,
       bodyPath: apiFixture.bodyPath,
@@ -224,24 +235,28 @@ describe("fixture readers", () => {
         status: 200,
         url: "https://api.example.com/users"
       }),
-      body: '{ "users": [{ "id": 1 }], "dropdownTheme": "dark" }'
+      body: expect.objectContaining({
+        path: apiFixture.bodyPath,
+        text: '{"users":[{"id":1}],"dropdownTheme":"dark"}',
+        truncated: false,
+        nextCursor: null
+      })
     });
 
     const snippet = await readFixtureSnippet(
       root.rootPath,
       "cdn.example.com/assets/chunk.js",
       {
-        pretty: true,
-        startLine: 2,
-        lineCount: 3
+        startLine: 1,
+        lineCount: 1
       }
     );
     expect(snippet).toEqual({
       path: "cdn.example.com/assets/chunk.js",
-      startLine: 2,
-      endLine: 4,
+      startLine: 1,
+      endLine: 1,
       truncated: false,
-      text: '  if (animated) {\n    return { theme: "dark" };\n  }'
+      text: 'function renderDropdown(){if(animated){return{theme:"dark"}}return null}'
     });
 
     expect(
@@ -284,7 +299,12 @@ describe("fixture readers", () => {
         method: "POST",
         url: "https://api.example.com/orders"
       }),
-      body: '{"created":true}'
+      body: expect.objectContaining({
+        path: fixture.bodyPath,
+        text: '{"created":true}',
+        truncated: false,
+        nextCursor: null
+      })
     });
     expect(await readApiFixture(root.rootPath, "../escape")).toBeNull();
   });
@@ -477,6 +497,70 @@ describe("fixture readers", () => {
     ]);
   });
 
+  it("reports display file size separately from canonical body size", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-core-fixtures-"
+    });
+    const topOrigin = "https://app.example.com";
+
+    await root.writeManifest({
+      topOrigin,
+      manifest: {
+        schemaVersion: 1,
+        topOrigin,
+        topOriginKey: "https__app.example.com",
+        generatedAt: "2026-04-05T00:00:00.000Z",
+        resourcesByPathname: {
+          "/assets/app.js": [
+            {
+              requestUrl: "https://cdn.example.com/assets/app.js",
+              requestOrigin: "https://cdn.example.com",
+              pathname: "/assets/app.js",
+              search: "",
+              bodyPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
+              projectionPath: "cdn.example.com/assets/app.js",
+              requestPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__request.json",
+              metaPath:
+                ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__response.json",
+              mimeType: "application/javascript",
+              resourceType: "Script",
+              capturedAt: "2026-04-05T00:00:00.000Z"
+            }
+          ]
+        }
+      }
+    });
+
+    await root.writeText(
+      ".wraithwalker/captures/assets/https__app.example.com/cdn.example.com/assets/app.js.__body",
+      "console.log('min');"
+    );
+    await root.writeText(
+      "cdn.example.com/assets/app.js",
+      "console.log('pretty projection');\n"
+    );
+
+    const assets = await listAssets(root.rootPath, { origin: topOrigin });
+    expect(assets.items).toEqual([
+      expect.objectContaining({
+        path: "cdn.example.com/assets/app.js",
+        bodySize: Buffer.byteLength("console.log('min');", "utf8"),
+        displaySizeBytes: Buffer.byteLength(
+          "console.log('pretty projection');\n",
+          "utf8"
+        )
+      })
+    ]);
+
+    const page = await readFixtureBody(
+      root.rootPath,
+      "cdn.example.com/assets/app.js"
+    );
+    expect(page?.sizeBytes).toBe(assets.items[0]?.displaySizeBytes);
+  });
+
   it("searches content across assets, endpoint bodies, and generic files while skipping metadata and binary files", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
@@ -536,6 +620,14 @@ describe("fixture readers", () => {
       "Dropdown guidance lives here."
     );
     await root.writeText(
+      "notes/huge-body.txt",
+      `${"x".repeat(2 * 1024 * 1024 + 1)}dropdown`
+    );
+    await root.writeText(
+      "notes/spanning-boundary.txt",
+      `${"x".repeat(64 * 1024 - 3)}dropdown`
+    );
+    await root.writeText(
       ".wraithwalker/cli.json",
       '{"note":"metadata only dropdown"}'
     );
@@ -543,6 +635,10 @@ describe("fixture readers", () => {
       recursive: true
     });
     await fs.writeFile(root.resolve("bin/blob.bin"), Buffer.from([0, 1, 2, 3]));
+    await fs.writeFile(
+      root.resolve("notes/invalid-utf8.txt"),
+      Buffer.from([0xff, 0xfe, 0xfd])
+    );
 
     const matches = await searchFixtureContent(root.rootPath, {
       query: "dropdown"
@@ -551,17 +647,25 @@ describe("fixture readers", () => {
     expect(matches.items.map((item) => item.sourceKind)).toEqual([
       "endpoint",
       "asset",
+      "file",
+      "file",
       "file"
     ]);
     expect(matches.items.map((item) => item.matchKind)).toEqual([
       "body",
       "body",
+      "body",
+      "body",
       "body"
     ]);
-    expect(matches.items.map((item) => item.matchCount)).toEqual([1, 1, 1]);
+    expect(matches.items.map((item) => item.matchCount)).toEqual([
+      1, 1, 1, 1, 1
+    ]);
     expect(matches.items.map((item) => item.path)).toEqual([
       ".wraithwalker/captures/http/https__app.example.com/origins/https__api.example.com/http/GET/menu__q-abc__b-def/response.body",
       "cdn.example.com/assets/app.js",
+      "notes/huge-body.txt",
+      "notes/spanning-boundary.txt",
       "notes/ui-guidelines.txt"
     ]);
 
@@ -569,7 +673,7 @@ describe("fixture readers", () => {
       query: "dropdown",
       limit: 1
     });
-    expect(firstSearchPage.totalMatched).toBe(3);
+    expect(firstSearchPage.totalMatched).toBe(5);
     expect(firstSearchPage.items).toHaveLength(1);
     expect(firstSearchPage.nextCursor).not.toBeNull();
 
@@ -612,10 +716,42 @@ describe("fixture readers", () => {
       query: "dropdown",
       pathContains: "notes"
     });
-    expect(fileOnly.items).toEqual([
+    expect(fileOnly.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceKind: "file",
+          path: "notes/huge-body.txt",
+          matchKind: "body"
+        }),
+        expect.objectContaining({
+          sourceKind: "file",
+          path: "notes/ui-guidelines.txt",
+          matchKind: "body"
+        })
+      ])
+    );
+
+    const boundaryMatch = await searchFixtureContent(root.rootPath, {
+      query: "dropdown",
+      pathContains: "spanning-boundary"
+    });
+    expect(boundaryMatch.items).toEqual([
       expect.objectContaining({
-        sourceKind: "file",
-        path: "notes/ui-guidelines.txt"
+        path: "notes/spanning-boundary.txt",
+        matchKind: "body",
+        matchCount: 1,
+        matchLine: 1,
+        matchColumn: 64 * 1024 - 2
+      })
+    ]);
+
+    const invalidUtfPathOnly = await searchFixtureContent(root.rootPath, {
+      query: "invalid-utf8"
+    });
+    expect(invalidUtfPathOnly.items).toEqual([
+      expect.objectContaining({
+        path: "notes/invalid-utf8.txt",
+        matchKind: "path"
       })
     ]);
 
@@ -623,7 +759,17 @@ describe("fixture readers", () => {
       query: "metadata only"
     });
     expect(metadataOnly.items).toEqual([]);
-  });
+
+    const oversizedPathOnly = await searchFixtureContent(root.rootPath, {
+      query: "huge-body"
+    });
+    expect(oversizedPathOnly.items).toEqual([
+      expect.objectContaining({
+        path: "notes/huge-body.txt",
+        matchKind: "path"
+      })
+    ]);
+  }, 15_000);
 
   it("falls back to matching asset and endpoint paths when body text is missing or does not match", async () => {
     const root = await createWraithwalkerFixtureRoot({
@@ -970,6 +1116,32 @@ describe("fixture readers", () => {
       text: "line-120\nline-121\nline-122"
     });
 
+    const hugeLines = Array.from(
+      { length: 5000 },
+      (_, index) => `huge-${index + 1}-${"x".repeat(500)}`
+    ).join("\n");
+    await root.writeText("cdn.example.com/assets/huge-lines.js", hugeLines);
+    const expectedHugeSnippet = [
+      `huge-4500-${"x".repeat(500)}`,
+      `huge-4501-${"x".repeat(500)}`
+    ].join("\n");
+    await expect(
+      readFixtureSnippet(
+        root.rootPath,
+        "cdn.example.com/assets/huge-lines.js",
+        {
+          startLine: 4500,
+          lineCount: 2
+        }
+      )
+    ).resolves.toEqual({
+      path: "cdn.example.com/assets/huge-lines.js",
+      startLine: 4500,
+      endLine: 4501,
+      truncated: false,
+      text: expectedHugeSnippet
+    });
+
     const truncated = await readFixtureSnippet(
       root.rootPath,
       "cdn.example.com/assets/app.js",
@@ -991,12 +1163,9 @@ describe("fixture readers", () => {
     await expect(
       readFixtureSnippet(root.rootPath, "bin/blob.bin")
     ).rejects.toThrow("Fixture is not a text file");
-    await expect(
-      readFixtureSnippet(root.rootPath, "bin/blob.bin", { pretty: true })
-    ).rejects.toThrow("Fixture is not a text file");
-  });
+  }, 15_000);
 
-  it("rejects oversized full reads and points agents to bounded snippet reads", async () => {
+  it("reads large fixture bodies as bounded pages", async () => {
     const root = await createWraithwalkerFixtureRoot({
       prefix: "wraithwalker-core-fixtures-"
     });
@@ -1018,25 +1187,82 @@ describe("fixture readers", () => {
       body: largeBody
     });
 
-    await expect(
-      readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")
-    ).rejects.toThrow(
-      "File is too large to read in full: cdn.example.com/assets/huge.js"
+    const firstPage = await readFixtureBody(
+      root.rootPath,
+      "cdn.example.com/assets/huge.js"
     );
-    await expect(
-      readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js")
-    ).rejects.toThrow(
-      "Use read-file-snippet with this path and specify startLine and lineCount."
+    expect(firstPage).toEqual(
+      expect.objectContaining({
+        path: "cdn.example.com/assets/huge.js",
+        sizeBytes: largeBody.length,
+        startByte: 0,
+        bytesReturned: 32_768,
+        maxBytes: 32_768,
+        truncated: true,
+        text: "a".repeat(32_768)
+      })
     );
+    expect(firstPage?.nextCursor).not.toBeNull();
+
+    await expect(
+      readFixtureBody(root.rootPath, "cdn.example.com/assets/huge.js", {
+        cursor: firstPage?.nextCursor ?? undefined,
+        maxBytes: 64_000
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        path: "cdn.example.com/assets/huge.js",
+        startByte: 32_768,
+        bytesReturned: 37_232,
+        maxBytes: 64_000,
+        truncated: false,
+        nextCursor: null,
+        text: "a".repeat(37_232)
+      })
+    );
+
+    await expect(
+      readFixtureSnippet(root.rootPath, "cdn.example.com/assets/huge.js", {
+        maxBytes: 20
+      })
+    ).resolves.toEqual({
+      path: "cdn.example.com/assets/huge.js",
+      startLine: 1,
+      endLine: 1,
+      truncated: true,
+      text: "a".repeat(20)
+    });
+
     await expect(
       readApiFixture(root.rootPath, endpointFixture.fixtureDir)
-    ).rejects.toThrow(
-      `Endpoint fixture body is too large to read in full: ${endpointFixture.bodyPath}`
+    ).resolves.toEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          path: endpointFixture.bodyPath,
+          sizeBytes: largeBody.length,
+          bytesReturned: 32_768,
+          truncated: true,
+          nextCursor: expect.any(String),
+          text: "a".repeat(32_768)
+        })
+      })
     );
     await expect(
-      readApiFixture(root.rootPath, endpointFixture.fixtureDir)
-    ).rejects.toThrow(
-      `Use read-file-snippet with path "${endpointFixture.bodyPath}" and specify startLine and lineCount.`
+      readApiFixture(root.rootPath, endpointFixture.fixtureDir, {
+        cursor: firstPage?.nextCursor ?? undefined,
+        maxBytes: 64_000
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          path: endpointFixture.bodyPath,
+          startByte: 32_768,
+          bytesReturned: 37_232,
+          truncated: false,
+          nextCursor: null,
+          text: "a".repeat(37_232)
+        })
+      })
     );
   });
 
