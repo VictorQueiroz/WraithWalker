@@ -29,6 +29,7 @@ function createFixtureRepository() {
   git(rootDir, "init", "-b", "main");
   git(rootDir, "config", "user.name", "Codex");
   git(rootDir, "config", "user.email", "codex@example.com");
+  git(rootDir, "config", "commit.gpgsign", "false");
   writeFile(
     rootDir,
     "packages/cli/package.json",

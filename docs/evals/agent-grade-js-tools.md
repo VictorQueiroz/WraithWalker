@@ -1,3 +1,7 @@
+---
+title: Agent-Grade JS Inspection Eval
+---
+
 # Agent-Grade JS Inspection Eval
 
 Updated: 2026-04-29T02:15:15.676Z

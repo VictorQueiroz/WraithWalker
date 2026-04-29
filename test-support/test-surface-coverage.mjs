@@ -48,6 +48,9 @@ export const explicitCoverage = {
   "packages/mcp-server/src/server-tools-fixtures.mts": [
     "packages/mcp-server/tests/server-helpers.test.ts"
   ],
+  "packages/mcp-server/src/server-tools-js.mts": [
+    "packages/mcp-server/tests/server.test.ts"
+  ],
   "packages/mcp-server/src/server-tools-snapshots.mts": [
     "packages/mcp-server/tests/server-helpers.test.ts"
   ],
