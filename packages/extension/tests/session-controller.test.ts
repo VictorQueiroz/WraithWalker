@@ -195,6 +195,36 @@ describe("session controller", () => {
     expect(snapshot.lastError).toBe(ROOT_ACCESS_RECONNECT_ERROR);
   });
 
+  it("rethrows unexpected config refresh errors during session start", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"],
+      refreshStoredConfigError: new Error("Config refresh exploded.")
+    });
+
+    await expect(harness.controller.startSession()).rejects.toThrow(
+      "Config refresh exploded."
+    );
+    expect(harness.ensureRootReady).not.toHaveBeenCalled();
+    expect(harness.setLastError).not.toHaveBeenCalledWith(
+      ROOT_ACCESS_RECONNECT_ERROR
+    );
+  });
+
+  it("rethrows unexpected root readiness errors during session start", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"],
+      ensureRootReadyError: new Error("Root readiness exploded.")
+    });
+
+    await expect(harness.controller.startSession()).rejects.toThrow(
+      "Root readiness exploded."
+    );
+    expect(harness.attachTab).not.toHaveBeenCalled();
+    expect(harness.setLastError).not.toHaveBeenCalledWith(
+      ROOT_ACCESS_RECONNECT_ERROR
+    );
+  });
+
   it("stops the session, clears requests, and detaches tabs", async () => {
     const state = createBaseState();
     state.sessionActive = true;
