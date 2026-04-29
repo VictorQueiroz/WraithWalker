@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 import { createSessionController } from "../src/lib/session-controller.js";
 
 function createBaseState() {
@@ -18,6 +19,8 @@ interface ControllerHarnessOverrides {
   enabledOrigins?: string[];
   tabs?: Array<{ id?: number; url?: string }>;
   rootResult?: { ok: boolean; error?: string; sentinel?: { rootId: string } };
+  refreshStoredConfigError?: unknown;
+  ensureRootReadyError?: unknown;
 }
 
 function createControllerHarness(overrides: ControllerHarnessOverrides = {}) {
@@ -29,6 +32,9 @@ function createControllerHarness(overrides: ControllerHarnessOverrides = {}) {
   const attachTab = vi.fn().mockResolvedValue(undefined);
   const detachTab = vi.fn().mockResolvedValue(undefined);
   const refreshStoredConfig = vi.fn().mockImplementation(async () => {
+    if (overrides.refreshStoredConfigError) {
+      throw overrides.refreshStoredConfigError;
+    }
     if (overrides.enabledOrigins) {
       state.enabledOrigins = overrides.enabledOrigins;
     }
@@ -38,6 +44,9 @@ function createControllerHarness(overrides: ControllerHarnessOverrides = {}) {
     .mockResolvedValue(
       overrides.rootResult || { ok: true, sentinel: { rootId: "root-1" } }
     );
+  if (overrides.ensureRootReadyError) {
+    ensureRootReady.mockRejectedValue(overrides.ensureRootReadyError);
+  }
   const closeOffscreenDocument = vi.fn().mockResolvedValue(undefined);
   const persistSnapshot = vi.fn().mockResolvedValue(undefined);
   const setLastError = vi.fn().mockImplementation((message) => {
@@ -147,6 +156,43 @@ describe("session controller", () => {
     expect(harness.attachTab).not.toHaveBeenCalled();
     expect(harness.persistSnapshot).not.toHaveBeenCalled();
     expect(snapshot.sessionActive).toBe(false);
+  });
+
+  it("returns an actionable idle snapshot when config refresh hits a stale root handle", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"],
+      refreshStoredConfigError: new DOMException(
+        "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+        "NotReadableError"
+      )
+    });
+
+    const snapshot = await harness.controller.startSession();
+
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      ROOT_ACCESS_RECONNECT_ERROR
+    );
+    expect(harness.ensureRootReady).not.toHaveBeenCalled();
+    expect(snapshot.sessionActive).toBe(false);
+    expect(snapshot.lastError).toBe(ROOT_ACCESS_RECONNECT_ERROR);
+  });
+
+  it("returns an actionable idle snapshot when root readiness throws a stale-handle read error", async () => {
+    const harness = createControllerHarness({
+      enabledOrigins: ["https://app.example.com"],
+      ensureRootReadyError: new Error(
+        "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired."
+      )
+    });
+
+    const snapshot = await harness.controller.startSession();
+
+    expect(harness.setLastError).toHaveBeenCalledWith(
+      ROOT_ACCESS_RECONNECT_ERROR
+    );
+    expect(harness.attachTab).not.toHaveBeenCalled();
+    expect(snapshot.sessionActive).toBe(false);
+    expect(snapshot.lastError).toBe(ROOT_ACCESS_RECONNECT_ERROR);
   });
 
   it("stops the session, clears requests, and detaches tabs", async () => {

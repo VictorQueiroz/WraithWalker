@@ -17,6 +17,7 @@ import {
   normalizeEffectiveSiteConfigs,
   updateEffectiveRootState
 } from "./background-authority-shared.js";
+import { normalizeRootAccessErrorMessage } from "./root-access-errors.js";
 import type {
   FixtureDescriptor,
   RequestPayload,
@@ -305,8 +306,19 @@ export function createBackgroundAuthorityLocalRoot({
     state.localRootReady = Boolean(result.ok);
     state.localRootSentinel = result.ok ? result.sentinel : null;
     updateEffectiveRootState(state);
+    if (result.ok === false) {
+      const normalizedResult: ErrorResult = {
+        ...result,
+        error: normalizeRootAccessErrorMessage(getErrorMessage(result))
+      };
+      if (!silent) {
+        setLastError(getErrorMessage(normalizedResult));
+      }
+      return normalizedResult;
+    }
+
     if (!silent) {
-      setLastError(result.ok ? "" : getErrorMessage(result as ErrorResult));
+      setLastError("");
     }
     return result;
   }

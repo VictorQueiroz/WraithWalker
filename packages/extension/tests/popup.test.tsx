@@ -6,6 +6,7 @@ import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 
 import { DEFAULT_NATIVE_HOST_CONFIG } from "../src/lib/constants.js";
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
 import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
@@ -453,6 +454,46 @@ describe("popup entrypoint", () => {
         await screen.findByRole("button", { name: "Start Session" })
       );
       expect(await screen.findByText("Session failed hard.")).toBeTruthy();
+    } finally {
+      popup.unmount();
+    }
+  });
+
+  it("shows the reconnect guidance instead of the raw browser file-read error after session start", async () => {
+    renderRoot();
+    const { initPopup } = await loadPopupModule();
+    const user = userEvent.setup();
+    const runtime = {
+      sendMessage: vi
+        .fn()
+        .mockResolvedValueOnce(createSnapshot())
+        .mockResolvedValueOnce(
+          createSnapshot({ lastError: ROOT_ACCESS_RECONNECT_ERROR })
+        ),
+      openOptionsPage: vi.fn()
+    };
+
+    const popup = await initPopup({
+      document,
+      runtime,
+      setIntervalFn: fakeSetInterval,
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(
+          createNativeHostConfig({ launchPath: "/tmp/fixtures" })
+        ),
+      getPreferredEditorId: vi.fn().mockResolvedValue("cursor"),
+      ...createRootDeps()
+    });
+
+    try {
+      await user.click(
+        await screen.findByRole("button", { name: "Start Session" })
+      );
+      expect(await screen.findByText(ROOT_ACCESS_RECONNECT_ERROR)).toBeTruthy();
+      expect(
+        screen.queryByText(/The requested file could not be read/i)
+      ).toBeNull();
     } finally {
       popup.unmount();
     }

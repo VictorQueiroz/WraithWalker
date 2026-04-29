@@ -23,6 +23,7 @@ import {
   createOffscreenRuntimeApi,
   type OffscreenRuntimeApi
 } from "./lib/chrome-api.js";
+import { normalizeRootAccessErrorMessage } from "./lib/root-access-errors.js";
 import type {
   FixtureDescriptor,
   RequestPayload,
@@ -115,7 +116,17 @@ export function createOffscreenRuntime({
       gateway: fileSystemGateway,
       ensureSentinel: ensureRootSentinel
     });
-    const sentinel = await runtime.ensureReady();
+    let sentinel: RootSentinel;
+    try {
+      sentinel = await runtime.ensureReady();
+    } catch (error) {
+      return {
+        ok: false,
+        error: normalizeRootAccessErrorMessage(error),
+        permission
+      };
+    }
+
     return { ok: true, rootHandle, sentinel, permission, runtime };
   }
 
@@ -290,9 +301,16 @@ export function createOffscreenRuntime({
       return undefined;
     }
 
-    return classified.kind === "unknown"
-      ? unknownMessageError(classified)
-      : handleKnownMessage(classified.message);
+    try {
+      return classified.kind === "unknown"
+        ? unknownMessageError(classified)
+        : await handleKnownMessage(classified.message);
+    } catch (error) {
+      return {
+        ok: false,
+        error: normalizeRootAccessErrorMessage(error)
+      };
+    }
   }
 
   function register(): void {
@@ -312,7 +330,7 @@ export function createOffscreenRuntime({
         .catch((error: unknown) => {
           sendResponse({
             ok: false,
-            error: error instanceof Error ? error.message : String(error)
+            error: normalizeRootAccessErrorMessage(error)
           });
         });
 

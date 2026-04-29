@@ -3,6 +3,7 @@ import {
   createMessageRuntimeApi,
   type MessageRuntimeApi
 } from "./chrome-api.js";
+import { isRootAccessUnavailableMessage } from "./root-access-errors.js";
 import { normalizeSiteConfigs } from "./site-config.js";
 import type { SiteConfig } from "./types.js";
 
@@ -14,10 +15,7 @@ function sendMessage<T>(
 }
 
 function isRootConfigUnavailable(message: string): boolean {
-  return (
-    message === "No root directory selected." ||
-    message === "Root directory access is not granted."
-  );
+  return isRootAccessUnavailableMessage(message);
 }
 
 async function readSiteConfigs(

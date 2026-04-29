@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STATIC_RESOURCE_MANIFEST_FILE } from "../src/lib/constants.js";
 import { createFixtureDescriptor } from "../src/lib/fixture-mapper.js";
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 
 class MemoryFileHandle {
   bytes: Uint8Array;
@@ -219,6 +220,37 @@ describe("offscreen entrypoint", () => {
     ).resolves.toEqual({
       ok: true,
       sentinel: { rootId: "root-ensure" },
+      permission: "granted"
+    });
+  });
+
+  it("normalizes stale file-reference errors while ensuring the selected root", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi
+        .fn()
+        .mockRejectedValue(
+          new DOMException(
+            "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+            "NotReadableError"
+          )
+        ),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    await expect(
+      runtime.handleMessage({ target: "offscreen", type: "fs.ensureRoot" })
+    ).resolves.toEqual({
+      ok: false,
+      error: ROOT_ACCESS_RECONNECT_ERROR,
       permission: "granted"
     });
   });
