@@ -1,5 +1,12 @@
 # @wraithwalker/native-host
 
+## 2.1.2
+
+### Patch Changes
+
+- Updated dependencies [dc26225]
+  - @wraithwalker/core@2.3.0
+
 ## 2.1.1
 
 ### Patch Changes
