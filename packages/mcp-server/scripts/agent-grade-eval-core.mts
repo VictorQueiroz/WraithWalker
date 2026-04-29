@@ -1029,5 +1029,5 @@ function formatDuration(ms: number): string {
 }
 
 function escapeMarkdownCell(value: string): string {
-  return value.replace(/\|/g, "\\|");
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
