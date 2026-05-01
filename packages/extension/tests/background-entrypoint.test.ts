@@ -10,6 +10,7 @@ import {
   WHITELIST_SITE_MENU_ID,
   WHITELIST_SITE_MENU_TITLE
 } from "../src/lib/background-context-menu.js";
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 import { installTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
 function createMockServerClient(overrides: Record<string, any> = {}) {
@@ -4914,6 +4915,72 @@ describe("background entrypoint", () => {
 
     expect(chromeApi.runtime.onMessage.addListener).toHaveBeenCalled();
     expect(chromeApi.storage.onChanged.addListener).toHaveBeenCalled();
+  });
+
+  it("returns a session snapshot with reconnect guidance when session start hits a stale root handle", async () => {
+    const { createBackgroundRuntime } = await loadBackgroundModule();
+    const chromeApi = installTestChromeApi();
+    chromeApi.tabs.query.mockResolvedValue([
+      { id: 5, url: "https://app.example.com/dashboard" }
+    ]);
+    chromeApi.runtime.getContexts.mockResolvedValue([]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.target === "offscreen" && message.type === "fs.ensureRoot") {
+        return {
+          ok: false,
+          error:
+            "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+          permission: "granted"
+        };
+      }
+
+      return {
+        ok: false,
+        error: `Unhandled offscreen message: ${String(message?.type)}`
+      };
+    });
+
+    const runtime = createBackgroundRuntime({
+      chromeApi,
+      getSiteConfigs: vi.fn().mockResolvedValue([
+        {
+          origin: "https://app.example.com",
+          createdAt: "2026-04-03T00:00:00.000Z"
+        }
+      ]),
+      getNativeHostConfig: vi
+        .fn()
+        .mockResolvedValue(DEFAULT_NATIVE_HOST_CONFIG),
+      setLastSessionSnapshot: vi.fn().mockResolvedValue(undefined),
+      createRequestLifecycle: vi.fn(() => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }))
+    });
+
+    await runtime.start();
+    const result = await runtime.handleRuntimeMessage({
+      type: "session.start"
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        sessionActive: false,
+        lastError: ROOT_ACCESS_RECONNECT_ERROR
+      })
+    );
+    expect(JSON.stringify(result)).not.toContain(
+      "The requested file could not be read"
+    );
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledWith({
+      target: "offscreen",
+      type: "fs.ensureRoot",
+      payload: { requestPermission: true }
+    });
+    expect(chromeApi.debugger.attach).not.toHaveBeenCalled();
   });
 
   it("uses the real session controller to attach, detach, and reconcile tabs", async () => {

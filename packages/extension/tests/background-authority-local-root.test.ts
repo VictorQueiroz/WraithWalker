@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 import { createAuthorityHarness } from "./helpers/background-authority-test-helpers.js";
 import { createTestChromeApi } from "./helpers/background-service-test-helpers.js";
 
@@ -89,6 +90,25 @@ describe("background authority local root", () => {
       error: "No root directory selected."
     });
     expect(setLastError).toHaveBeenCalledWith("No root directory selected.");
+  });
+
+  it("normalizes stale file-reference root errors from the offscreen document", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockResolvedValue({
+      ok: false,
+      error:
+        "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+      permission: "granted"
+    });
+    const { authority, setLastError } = createAuthorityHarness({ chromeApi });
+
+    await expect(authority.ensureLocalRootReady()).resolves.toEqual({
+      ok: false,
+      error: ROOT_ACCESS_RECONNECT_ERROR,
+      permission: "granted"
+    });
+    expect(setLastError).toHaveBeenCalledWith(ROOT_ACCESS_RECONNECT_ERROR);
   });
 
   it("fails legacy site-config migration when the local write returns no result", async () => {

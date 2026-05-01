@@ -10,6 +10,7 @@ import {
   normalizeConsoleTimestamp,
   toBrowserConsoleEntry
 } from "../src/lib/background-runtime-shared.js";
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -176,6 +177,19 @@ describe("background runtime shared helpers", () => {
       isLocalRootConfigUnavailable({
         ok: false,
         error: "Root directory access is not granted."
+      })
+    ).toBe(true);
+    expect(
+      isLocalRootConfigUnavailable({
+        ok: false,
+        error:
+          "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired."
+      })
+    ).toBe(true);
+    expect(
+      isLocalRootConfigUnavailable({
+        ok: false,
+        error: ROOT_ACCESS_RECONNECT_ERROR
       })
     ).toBe(true);
     expect(

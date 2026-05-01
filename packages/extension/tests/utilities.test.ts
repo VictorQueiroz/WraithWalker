@@ -13,6 +13,7 @@ import {
   getEffectiveSiteConfigs,
   setConfiguredSiteConfigs
 } from "../src/lib/root-config.ts";
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.ts";
 
 describe("dom helpers", () => {
   it("returns a required element and throws when it is missing", () => {
@@ -135,10 +136,15 @@ describe("root config helpers", () => {
       .mockResolvedValueOnce({
         ok: false,
         error: "Root directory access is not granted."
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: ROOT_ACCESS_RECONNECT_ERROR
       });
 
     await expect(getConfiguredSiteConfigs(runtime)).resolves.toEqual([]);
     await expect(getConfiguredSiteConfigs(runtime)).resolves.toEqual([]);
+    await expect(getEffectiveSiteConfigs(runtime)).resolves.toEqual([]);
     await expect(getEffectiveSiteConfigs(runtime)).resolves.toEqual([]);
   });
 

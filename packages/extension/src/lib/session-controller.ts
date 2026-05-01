@@ -1,5 +1,9 @@
 import { findMatchingOrigin } from "./background-helpers.js";
 import type { BrowserTab } from "./chrome-api.js";
+import {
+  isRootAccessUnavailableError,
+  normalizeRootAccessErrorMessage
+} from "./root-access-errors.js";
 import type {
   AttachedTabState,
   RequestEntry,
@@ -82,7 +86,15 @@ export function createSessionController({
   }
 
   async function startSession(): Promise<SessionSnapshot> {
-    await refreshStoredConfig();
+    try {
+      await refreshStoredConfig();
+    } catch (error) {
+      if (!isRootAccessUnavailableError(error)) {
+        throw error;
+      }
+      setLastError(normalizeRootAccessErrorMessage(error));
+      return snapshotState();
+    }
     setLastError("");
 
     if (!state.enabledOrigins.length) {
@@ -90,7 +102,16 @@ export function createSessionController({
       return snapshotState();
     }
 
-    const rootResult = await ensureRootReady({ requestPermission: true });
+    let rootResult: RootReadyResult;
+    try {
+      rootResult = await ensureRootReady({ requestPermission: true });
+    } catch (error) {
+      if (!isRootAccessUnavailableError(error)) {
+        throw error;
+      }
+      setLastError(normalizeRootAccessErrorMessage(error));
+      return snapshotState();
+    }
     if (!rootResult.ok) {
       return snapshotState();
     }

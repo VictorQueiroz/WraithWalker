@@ -1,5 +1,6 @@
 import type { BackgroundMessage, ErrorResult } from "./messages.js";
 import type { BrowserTab, DebuggeeTarget } from "./chrome-api.js";
+import { isRootAccessUnavailableMessage } from "./root-access-errors.js";
 import type {
   AttachedTabState,
   BrowserConsoleEntry,
@@ -271,8 +272,5 @@ export function getErrorMessage(result: unknown): string {
 }
 
 export function isLocalRootConfigUnavailable(result: ErrorResult): boolean {
-  return (
-    result.error === "No root directory selected." ||
-    result.error === "Root directory access is not granted."
-  );
+  return isRootAccessUnavailableMessage(result.error);
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STATIC_RESOURCE_MANIFEST_FILE } from "../src/lib/constants.js";
 import { createFixtureDescriptor } from "../src/lib/fixture-mapper.js";
+import { ROOT_ACCESS_RECONNECT_ERROR } from "../src/lib/root-access-errors.js";
 
 class MemoryFileHandle {
   bytes: Uint8Array;
@@ -219,6 +220,37 @@ describe("offscreen entrypoint", () => {
     ).resolves.toEqual({
       ok: true,
       sentinel: { rootId: "root-ensure" },
+      permission: "granted"
+    });
+  });
+
+  it("normalizes stale file-reference errors while ensuring the selected root", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const rootHandle = new MemoryDirectoryHandle();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi.fn().mockResolvedValue(rootHandle),
+      ensureRootSentinel: vi
+        .fn()
+        .mockRejectedValue(
+          new DOMException(
+            "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+            "NotReadableError"
+          )
+        ),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    await expect(
+      runtime.handleMessage({ target: "offscreen", type: "fs.ensureRoot" })
+    ).resolves.toEqual({
+      ok: false,
+      error: ROOT_ACCESS_RECONNECT_ERROR,
       permission: "granted"
     });
   });
@@ -1230,6 +1262,45 @@ describe("offscreen entrypoint", () => {
     });
   });
 
+  it("normalizes stale file-reference errors thrown by root operations", async () => {
+    vi.doMock("../src/lib/root-runtime.js", () => ({
+      createExtensionRootRuntime: vi.fn(() => ({
+        ensureReady: vi.fn().mockResolvedValue({ rootId: "root-read-error" }),
+        readConfiguredSiteConfigs: vi
+          .fn()
+          .mockRejectedValue(
+            new DOMException(
+              "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+              "NotReadableError"
+            )
+          )
+      }))
+    }));
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn()
+        }
+      },
+      loadStoredRootHandle: vi
+        .fn()
+        .mockResolvedValue(new MemoryDirectoryHandle()),
+      queryRootPermission: vi.fn().mockResolvedValue("granted"),
+      requestRootPermission: vi.fn().mockResolvedValue("granted")
+    });
+
+    await expect(
+      runtime.handleMessage({
+        target: "offscreen",
+        type: "fs.readConfiguredSiteConfigs"
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: ROOT_ACCESS_RECONNECT_ERROR
+    });
+  });
+
   it("registers a runtime listener that forwards responses", async () => {
     const { createOffscreenRuntime } = await loadOffscreenModule();
     const listeners = [];
@@ -1256,6 +1327,33 @@ describe("offscreen entrypoint", () => {
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       error: "No root directory selected."
+    });
+  });
+
+  it("registers a runtime listener that reports unknown offscreen messages", async () => {
+    const { createOffscreenRuntime } = await loadOffscreenModule();
+    const listeners = [];
+    const runtime = createOffscreenRuntime({
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((listener) => listeners.push(listener))
+        }
+      }
+    });
+
+    runtime.register();
+    const sendResponse = vi.fn();
+    const handled = listeners[0](
+      { target: "offscreen", type: "fs.unknown" },
+      {},
+      sendResponse
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(handled).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: "Unknown offscreen message: fs.unknown"
     });
   });
 
