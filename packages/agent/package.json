@@ -1,6 +1,6 @@
 {
   "name": "@wraithwalker/agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Headless AI agent for WraithWalker: Vercel AI Gateway chat, RAG over captured fixtures, and SQLite-backed conversations.",
   "license": "MIT",
   "repository": {
