@@ -11,12 +11,15 @@
     "alarms",
     "offscreen",
     "nativeMessaging",
-    "contextMenus"
+    "contextMenus",
+    "sidePanel"
   ],
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
+  "host_permissions": [
+    "<all_urls>"
   ],
+  "side_panel": {
+    "default_path": "assistant.html"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

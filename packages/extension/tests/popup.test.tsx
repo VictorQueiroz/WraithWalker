@@ -208,7 +208,8 @@ describe("popup entrypoint", () => {
         screen.queryByRole("button", { name: "Open in folder" })
       ).toBeNull();
       expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
-      expect(screen.getAllByRole("button")).toHaveLength(3);
+      expect(screen.getByRole("button", { name: "Assistant" })).toBeTruthy();
+      expect(screen.getAllByRole("button")).toHaveLength(4);
       expect(screen.queryByText("Managed Origins")).toBeNull();
       expect(screen.queryByText("Attached Tabs")).toBeNull();
       expect(runtime.sendMessage).toHaveBeenCalledWith({

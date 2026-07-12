@@ -8,7 +8,7 @@ import {
 export default defineConfig({
   plugins: createWorkspaceSourcePlugins(),
   resolve: {
-    alias: createWorkspacePackageAliases(["core", "mcp-server"])
+    alias: createWorkspacePackageAliases(["core", "mcp-server", "agent"])
   },
   test: {
     environment: "node",

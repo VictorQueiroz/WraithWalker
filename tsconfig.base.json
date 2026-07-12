@@ -46,7 +46,18 @@
       "@wraithwalker/mcp-server/fixture-diff": [
         "packages/mcp-server/src/fixture-diff.mts"
       ],
-      "@wraithwalker/native-host/lib": ["packages/native-host/src/lib.mts"]
+      "@wraithwalker/native-host/lib": ["packages/native-host/src/lib.mts"],
+      "@wraithwalker/agent/env-config": ["packages/agent/src/env-config.mts"],
+      "@wraithwalker/agent/gateway": ["packages/agent/src/gateway.mts"],
+      "@wraithwalker/agent/db": ["packages/agent/src/db.mts"],
+      "@wraithwalker/agent/domains": ["packages/agent/src/domains.mts"],
+      "@wraithwalker/agent/projects": ["packages/agent/src/projects.mts"],
+      "@wraithwalker/agent/indexer": ["packages/agent/src/indexer.mts"],
+      "@wraithwalker/agent/retrieval": ["packages/agent/src/retrieval.mts"],
+      "@wraithwalker/agent/agent": ["packages/agent/src/agent.mts"],
+      "@wraithwalker/agent/tools": ["packages/agent/src/tools.mts"],
+      "@wraithwalker/agent/http": ["packages/agent/src/http.mts"],
+      "@wraithwalker/agent/runtime": ["packages/agent/src/runtime.mts"]
     }
   }
 }

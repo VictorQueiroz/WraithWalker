@@ -30,8 +30,17 @@ describe("extension manifest", () => {
       expect.arrayContaining(["contextMenus"])
     );
     expect(manifest.permissions).not.toContain("permissions");
-    expect(manifest.optional_host_permissions).toEqual(
-      expect.arrayContaining(["http://*/*", "https://*/*"])
-    );
+  });
+
+  it("requires access to all websites so new domains never prompt", () => {
+    expect(manifest.host_permissions).toEqual(["<all_urls>"]);
+    expect(manifest).not.toHaveProperty("optional_host_permissions");
+  });
+
+  it("registers the assistant side panel surface", () => {
+    expect(manifest.permissions).toEqual(expect.arrayContaining(["sidePanel"]));
+    expect(manifest.side_panel).toEqual({
+      default_path: "assistant.html"
+    });
   });
 });

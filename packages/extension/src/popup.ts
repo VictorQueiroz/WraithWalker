@@ -15,6 +15,7 @@ import {
   createPopupRuntimeApi,
   type PopupRuntimeApi
 } from "./lib/chrome-api.js";
+import { createAssistantLauncher } from "./lib/assistant-launch.js";
 import { PopupApp } from "./ui/popup-app.js";
 
 export interface PopupDependencies {
@@ -29,6 +30,7 @@ export interface PopupDependencies {
   loadStoredRootHandle?: typeof defaultLoadStoredRootHandle;
   queryRootPermission?: typeof defaultQueryRootPermission;
   editorPresets?: EditorPreset[];
+  openAssistant?: () => void | Promise<void>;
 }
 
 function isTestMode(): boolean {
@@ -48,7 +50,8 @@ export async function initPopup({
   getNativeHostConfig = defaultGetNativeHostConfig,
   loadStoredRootHandle = defaultLoadStoredRootHandle,
   queryRootPermission = defaultQueryRootPermission,
-  editorPresets = EDITOR_PRESETS
+  editorPresets = EDITOR_PRESETS,
+  openAssistant = () => createAssistantLauncher().openAssistant()
 }: PopupDependencies = {}) {
   void windowRef;
   const container = documentRef.getElementById("root");
@@ -66,7 +69,8 @@ export async function initPopup({
       setIntervalFn,
       clearIntervalFn,
       refreshIntervalMs,
-      editorPresets
+      editorPresets,
+      openAssistant
     })
   );
 

@@ -3,13 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 
-type WorkspacePackageName = "core" | "mcp-server";
+type WorkspacePackageName = "core" | "mcp-server" | "agent";
 
 const workspacePackageSrcDirs: Record<WorkspacePackageName, string> = {
   core: `${fileURLToPath(new URL("../packages/core/src/", import.meta.url))}`,
   "mcp-server": `${fileURLToPath(
     new URL("../packages/mcp-server/src/", import.meta.url)
-  )}`
+  )}`,
+  agent: `${fileURLToPath(new URL("../packages/agent/src/", import.meta.url))}`
 };
 
 function normalizeResolvedId(id: string): string {

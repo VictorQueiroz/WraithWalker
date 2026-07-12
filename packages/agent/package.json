@@ -1,0 +1,65 @@
+{
+  "name": "@wraithwalker/agent",
+  "version": "0.1.0",
+  "description": "Headless AI agent for WraithWalker: Vercel AI Gateway chat, RAG over captured fixtures, and SQLite-backed conversations.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorQueiroz/WraithWalker.git",
+    "directory": "packages/agent"
+  },
+  "homepage": "https://github.com/VictorQueiroz/WraithWalker/tree/main/packages/agent#readme",
+  "bugs": {
+    "url": "https://github.com/VictorQueiroz/WraithWalker/issues"
+  },
+  "keywords": [
+    "wraithwalker",
+    "ai",
+    "rag",
+    "agent",
+    "fixtures"
+  ],
+  "private": false,
+  "type": "module",
+  "files": [
+    "out",
+    "README.md"
+  ],
+  "exports": {
+    "./env-config": "./out/env-config.mjs",
+    "./gateway": "./out/gateway.mjs",
+    "./db": "./out/db.mjs",
+    "./domains": "./out/domains.mjs",
+    "./projects": "./out/projects.mjs",
+    "./indexer": "./out/indexer.mjs",
+    "./retrieval": "./out/retrieval.mjs",
+    "./agent": "./out/agent.mjs",
+    "./tools": "./out/tools.mjs",
+    "./http": "./out/http.mjs",
+    "./runtime": "./out/runtime.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "test": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
+  },
+  "dependencies": {
+    "@wraithwalker/core": "2.3.0",
+    "ai": "^7.0.22",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "3.2.6",
+    "express": "^5.2.1",
+    "typescript": "^6.0.2",
+    "vitest": "3.2.6"
+  }
+}

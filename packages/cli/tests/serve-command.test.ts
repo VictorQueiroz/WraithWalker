@@ -26,6 +26,25 @@ vi.mock("@wraithwalker/mcp-server/server", () => ({
   startHttpServer: mocks.startHttpServer
 }));
 
+vi.mock("@wraithwalker/agent/runtime", () => ({
+  createAgentRuntime: vi.fn(async () => ({
+    rootPath: "/tmp/fixtures",
+    env: {
+      apiKey: null,
+      model: "deepseek/deepseek-v4-pro",
+      embeddingModel: "openai/text-embedding-3-small",
+      reasoningEffort: "xhigh",
+      envFilePath: "/home/user/.config/wraithwalker/.env",
+      loadedFromFile: false
+    },
+    provider: null,
+    db: null,
+    enabled: false,
+    registerRoutes: () => {},
+    close: () => {}
+  }))
+}));
+
 async function loadRunner() {
   vi.resetModules();
   return import("../src/lib/runner.mts");
@@ -150,10 +169,14 @@ describe("serve command", () => {
       )
     ).toBe(0);
 
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
-      host: "0.0.0.0",
-      port: 9876
-    });
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(
+      root.rootPath,
+      expect.objectContaining({
+        host: "0.0.0.0",
+        port: 9876,
+        configureApp: expect.any(Function)
+      })
+    );
 
     const output = capture.logs.join("\n");
     expect(output).toContain("WraithWalker Server Ready");

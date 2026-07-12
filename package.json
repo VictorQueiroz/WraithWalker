@@ -12,14 +12,17 @@
     "mermaid": {
       "uuid": "14.0.0"
     },
-    "next": {
-      "postcss": "8.5.10"
+    "postcss": "8.5.17",
+    "next@16.2.10": {
+      "postcss": "8.5.17"
     }
   },
   "scripts": {
     "build": "turbo run build",
     "lint": "prettier . --check",
     "lint:fix": "prettier . --write",
+    "ai:generate": "rulesync generate",
+    "ai:check": "rulesync generate --check",
     "test": "npm run test:unit && npm run test:contracts && npm run test:smoke",
     "test:unit": "npm run coverage",
     "test:contracts": "node scripts/check-test-surface-coverage.mjs && vitest run --config vitest.contracts.config.ts",
@@ -38,10 +41,13 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
+    "next": "16.3.0-canary.14",
     "playwright": "^1.59.1",
+    "postcss": "8.5.17",
     "prettier": "^3.6.2",
+    "rulesync": "^9.6.3",
     "turbo": "^2.5.4",
     "typescript": "^6.0.2",
-    "vitest": "^3.2.4"
+    "vitest": "3.2.6"
   }
 }

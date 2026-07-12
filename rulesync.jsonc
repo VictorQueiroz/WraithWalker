@@ -1,0 +1,16 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
+
+  // AI tools this repo targets. CLAUDE.md is generated for Claude Code;
+  // AGENTS.md + .codex/config.toml for Codex CLI.
+  "targets": ["claudecode", "codexcli"],
+
+  // Only rules and MCP servers are managed here. Commands/subagents/skills are
+  // left to each tool's own config until we have a reason to share them.
+  "features": ["rules", "mcp"],
+
+  "outputRoots": ["."],
+
+  "delete": true,
+  "verbose": false
+}

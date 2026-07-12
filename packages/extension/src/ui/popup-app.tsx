@@ -39,6 +39,7 @@ export interface PopupAppProps {
   clearIntervalFn?: typeof clearInterval;
   refreshIntervalMs?: number;
   editorPresets?: EditorPreset[];
+  openAssistant?: () => void | Promise<void>;
 }
 
 function getErrorMessage(result: { error?: string }): string {
@@ -115,7 +116,8 @@ export function PopupApp({
   setIntervalFn = setInterval,
   clearIntervalFn = clearInterval,
   refreshIntervalMs = POPUP_REFRESH_INTERVAL_MS,
-  editorPresets = EDITOR_PRESETS
+  editorPresets = EDITOR_PRESETS,
+  openAssistant
 }: PopupAppProps) {
   const [snapshot, setSnapshot] = React.useState<SessionSnapshot | null>(null);
   const [nativeHostConfig, setNativeHostConfig] =
@@ -336,14 +338,26 @@ export function PopupApp({
                 Capture, open the active workspace, or jump to Settings.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
-              onClick={() => runtime.openOptionsPage()}
-            >
-              Settings
-            </Button>
+            <div className="flex shrink-0 gap-1">
+              {openAssistant ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                  onClick={() => void openAssistant()}
+                >
+                  Assistant
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                onClick={() => runtime.openOptionsPage()}
+              >
+                Settings
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-2" aria-label="Workspace status">

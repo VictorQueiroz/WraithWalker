@@ -50,6 +50,17 @@ const PACKAGE_SPECS = {
       "host-manifest.template.json"
     ]
   },
+  agent: {
+    packageName: "@wraithwalker/agent",
+    packageDir: path.join(repoRoot, "packages/agent"),
+    tarballName: "wraithwalker-agent",
+    expectedFiles: [
+      "package.json",
+      "README.md",
+      "out/runtime.mjs",
+      "out/http.mjs"
+    ]
+  },
   cli: {
     packageName: "@wraithwalker/cli",
     packageDir: path.join(repoRoot, "packages/cli"),
@@ -246,6 +257,7 @@ async function getPackedPackages(): Promise<PackedWorkspacePackages> {
             tarballDir,
             PACKAGE_SPECS.nativeHost
           ),
+          agent: await packWorkspacePackage(tarballDir, PACKAGE_SPECS.agent),
           cli: await packWorkspacePackage(tarballDir, PACKAGE_SPECS.cli)
         };
 
@@ -608,11 +620,13 @@ describe("published package install smoke", () => {
       const packageLock = await installTarballs(projectDir, [
         packages.core.tarballPath,
         packages.mcpServer.tarballPath,
+        packages.agent.tarballPath,
         packages.cli.tarballPath
       ]);
       assertLocalWraithwalkerResolution(packageLock, [
         packages.core.packageName,
         packages.mcpServer.packageName,
+        packages.agent.packageName,
         packages.cli.packageName
       ]);
 
