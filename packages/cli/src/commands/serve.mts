@@ -3,6 +3,7 @@ import {
   DEFAULT_HTTP_PORT,
   startHttpServer
 } from "@wraithwalker/mcp-server/server";
+import { createAgentRuntime } from "@wraithwalker/agent/runtime";
 
 import type { CommandSpec } from "../lib/command.mjs";
 import { UsageError } from "../lib/command.mjs";
@@ -15,6 +16,15 @@ interface ServeArgs {
   port: number;
 }
 
+interface ServeAgentInfo {
+  enabled: boolean;
+  model: string;
+  embeddingModel: string;
+  reasoningEffort: string;
+  envFilePath: string;
+  url: string;
+}
+
 interface ServeResult {
   rootPath: string;
   host: string;
@@ -23,6 +33,7 @@ interface ServeResult {
   trpcUrl: string;
   url: string;
   tools: readonly string[];
+  agent: ServeAgentInfo;
 }
 
 function createUsageMessage() {
@@ -97,9 +108,18 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
       homeDir: context.homeDir
     });
 
+    const agentRuntime = await createAgentRuntime({
+      rootPath,
+      envOptions: {
+        env: context.env,
+        ...(context.homeDir ? { homeDir: context.homeDir } : {})
+      }
+    });
+
     const handle = await startHttpServer(rootPath, {
       host: args.host,
-      port: args.port
+      port: args.port,
+      configureApp: (app) => agentRuntime.registerRoutes(app)
     });
 
     return {
@@ -109,17 +129,26 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
       baseUrl: handle.baseUrl,
       trpcUrl: handle.trpcUrl,
       url: handle.url,
-      tools: handle.tools
+      tools: handle.tools,
+      agent: {
+        enabled: agentRuntime.enabled,
+        model: agentRuntime.env.model,
+        embeddingModel: agentRuntime.env.embeddingModel,
+        reasoningEffort: agentRuntime.env.reasoningEffort,
+        envFilePath: agentRuntime.env.envFilePath,
+        url: `${handle.baseUrl}/agent`
+      }
     };
   },
   render(output, result) {
     const routesPanel = [
-      "  one loopback port, two local surfaces, one shared root",
+      "  one loopback port, three local surfaces, one shared root",
       "",
       `  root  ${result.rootPath}`,
       `  base  ${result.baseUrl}`,
       `  mcp   ${result.url}`,
-      `  trpc  ${result.trpcUrl}`
+      `  trpc  ${result.trpcUrl}`,
+      `  agent ${result.agent.url}`
     ].join("\n");
 
     output.banner();
@@ -136,6 +165,20 @@ export const command: CommandSpec<ServeArgs, ServeResult> = {
     output.listItem(
       "While this server is running, the extension automatically prefers this root."
     );
+
+    output.heading("Assistant");
+    if (result.agent.enabled) {
+      output.listItem(
+        `AI assistant enabled: ${result.agent.model} (reasoning ${result.agent.reasoningEffort})`
+      );
+      output.listItem(
+        `RAG embeddings via ${result.agent.embeddingModel}; chat at ${result.agent.url}/chat`
+      );
+    } else {
+      output.listItem(
+        `AI assistant disabled. Add AI_GATEWAY_API_KEY to ${result.agent.envFilePath} to enable it.`
+      );
+    }
 
     output.heading("Tools");
     for (const tool of result.tools) {

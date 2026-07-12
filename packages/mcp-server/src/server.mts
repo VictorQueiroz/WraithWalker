@@ -54,6 +54,7 @@ export interface StartServerOptions {
 export interface StartHttpServerOptions {
   host?: string;
   port?: number;
+  configureApp?: (app: express.Express) => void | Promise<void>;
 }
 
 export interface HttpServerHandle {
@@ -249,6 +250,8 @@ export async function startHttpServer(
       }
     }
   });
+
+  await options.configureApp?.(app);
 
   const listener = await new Promise<HttpServer>((resolve, reject) => {
     const server = app.listen(port, host, () => resolve(server));

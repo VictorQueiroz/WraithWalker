@@ -102,7 +102,8 @@ async function buildRuntime() {
       background: path.join(ROOT, "src", "background.ts"),
       offscreen: path.join(ROOT, "src", "offscreen.ts"),
       popup: path.join(ROOT, "src", "popup.ts"),
-      options: path.join(ROOT, "src", "options.ts")
+      options: path.join(ROOT, "src", "options.ts"),
+      assistant: path.join(ROOT, "src", "assistant.ts")
     },
     format: "esm",
     legalComments: "none",

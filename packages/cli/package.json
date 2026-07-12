@@ -41,13 +41,14 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
+    "@wraithwalker/agent": "0.1.0",
     "@wraithwalker/core": "2.3.0",
     "@wraithwalker/mcp-server": "2.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "3.2.6",
     "typescript": "^6.0.2",
-    "vitest": "^3.2.4"
+    "vitest": "3.2.6"
   }
 }

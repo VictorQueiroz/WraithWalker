@@ -57,6 +57,10 @@ describe("build layout helpers", () => {
       {
         sourcePath: path.join(process.cwd(), ".ts-emit", "offscreen.js"),
         targetPath: path.join(process.cwd(), "dist", "offscreen.js")
+      },
+      {
+        sourcePath: path.join(process.cwd(), ".ts-emit", "assistant.js"),
+        targetPath: path.join(process.cwd(), "dist", "assistant.js")
       }
     ]);
   });
@@ -80,6 +84,10 @@ describe("build layout helpers", () => {
       {
         sourcePath: path.join(process.cwd(), "static", "offscreen.html"),
         targetPath: path.join(process.cwd(), "dist", "offscreen.html")
+      },
+      {
+        sourcePath: path.join(process.cwd(), "static", "assistant.html"),
+        targetPath: path.join(process.cwd(), "dist", "assistant.html")
       },
       {
         sourcePath: path.join(process.cwd(), "static", "assets", "logo.svg"),

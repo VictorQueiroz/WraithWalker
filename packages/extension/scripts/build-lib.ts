@@ -5,13 +5,15 @@ export const ROOT_RUNTIME_FILES = [
   "background.js",
   "popup.js",
   "options.js",
-  "offscreen.js"
+  "offscreen.js",
+  "assistant.js"
 ] as const;
 export const STATIC_EXTENSION_FILES = [
   "manifest.json",
   "popup.html",
   "options.html",
   "offscreen.html",
+  "assistant.html",
   "assets/logo.svg",
   "assets/icons/icon-16.png",
   "assets/icons/icon-32.png",

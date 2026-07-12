@@ -1,0 +1,28 @@
+{
+  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/mcp-schema.json",
+  "mcpServers": {
+    "deepwiki": {
+      "description": "Indexed documentation for GitHub repositories. Required reading before touching Chrome extension / debugger-protocol integration — see the Research Rules in CLAUDE.md.",
+      "type": "http",
+      "url": "https://mcp.deepwiki.com/mcp"
+    },
+    "serena": {
+      "description": "Symbol-level code navigation and editing via a TypeScript language server. Project config lives in .serena/project.yml.",
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--enable-web-dashboard",
+        "false",
+        "--project",
+        "."
+      ],
+      "env": {}
+    }
+  }
+}

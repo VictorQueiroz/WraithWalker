@@ -33,6 +33,25 @@ vi.mock("@wraithwalker/mcp-server/server", () => ({
   startHttpServer: mocks.startHttpServer
 }));
 
+vi.mock("@wraithwalker/agent/runtime", () => ({
+  createAgentRuntime: vi.fn(async () => ({
+    rootPath: "/tmp/fixtures",
+    env: {
+      apiKey: null,
+      model: "deepseek/deepseek-v4-pro",
+      embeddingModel: "openai/text-embedding-3-small",
+      reasoningEffort: "xhigh",
+      envFilePath: "/home/user/.config/wraithwalker/.env",
+      loadedFromFile: false
+    },
+    provider: null,
+    db: null,
+    enabled: false,
+    registerRoutes: () => {},
+    close: () => {}
+  }))
+}));
+
 async function loadRunner() {
   vi.resetModules();
   return import("../src/lib/runner.mts");
@@ -374,10 +393,11 @@ describe("cli runner", () => {
     expect(exitCode).toBe(0);
     expect(mocks.startHttpServer).toHaveBeenCalledWith(
       path.join(homeDir, ".local", "share", "wraithwalker"),
-      {
+      expect.objectContaining({
         host: "127.0.0.1",
-        port: 4319
-      }
+        port: 4319,
+        configureApp: expect.any(Function)
+      })
     );
   });
 
@@ -394,10 +414,14 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
-      host: "127.0.0.1",
-      port: 4319
-    });
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(
+      root.rootPath,
+      expect.objectContaining({
+        host: "127.0.0.1",
+        port: 4319,
+        configureApp: expect.any(Function)
+      })
+    );
   });
 
   it("starts the HTTP MCP server with default connection details", async () => {
@@ -432,12 +456,16 @@ describe("cli runner", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
-      host: "127.0.0.1",
-      port: 4319
-    });
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(
+      root.rootPath,
+      expect.objectContaining({
+        host: "127.0.0.1",
+        port: 4319,
+        configureApp: expect.any(Function)
+      })
+    );
     expect(capture.logs.join("\n")).toContain(
-      "one loopback port, two local surfaces, one shared root"
+      "one loopback port, three local surfaces, one shared root"
     );
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/mcp");
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:4319/trpc");
@@ -477,10 +505,14 @@ describe("cli runner", () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
-      host: "0.0.0.0",
-      port: 8321
-    });
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(
+      root.rootPath,
+      expect.objectContaining({
+        host: "0.0.0.0",
+        port: 8321,
+        configureApp: expect.any(Function)
+      })
+    );
     expect(capture.logs.join("\n")).toContain("http://0.0.0.0:8321/trpc");
   });
 
@@ -512,10 +544,14 @@ describe("cli runner", () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(mocks.startHttpServer).toHaveBeenCalledWith(root.rootPath, {
-      host: "127.0.0.1",
-      port: 5000
-    });
+    expect(mocks.startHttpServer).toHaveBeenCalledWith(
+      root.rootPath,
+      expect.objectContaining({
+        host: "127.0.0.1",
+        port: 5000,
+        configureApp: expect.any(Function)
+      })
+    );
     expect(capture.logs.join("\n")).toContain("http://127.0.0.1:5000/trpc");
   });
 });
