@@ -52,6 +52,99 @@ describe("background debugger runtime", () => {
     expect(state.requests.size).toBe(0);
   });
 
+  it("coalesces concurrent debugger attaches for the same tab", async () => {
+    const state = createBackgroundState();
+    const chromeApi = createTestChromeApi();
+    let resolveAttach!: () => void;
+    chromeApi.debugger.attach
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveAttach = resolve;
+          })
+      )
+      .mockRejectedValueOnce(
+        new Error(
+          "Another debugger is already attached to the tab with id: 1647291363."
+        )
+      );
+    const traceService = {
+      handleBindingCalled: vi.fn().mockResolvedValue(false),
+      disarmTraceForTab: vi.fn().mockResolvedValue(undefined),
+      syncTraceBindings: vi.fn().mockResolvedValue(undefined)
+    };
+    const runtime = createBackgroundDebuggerRuntime({
+      state,
+      chromeApi,
+      setLastError: vi.fn(),
+      persistSnapshot: vi.fn().mockResolvedValue(undefined),
+      stopSession: vi.fn().mockResolvedValue(undefined),
+      requestLifecycle: () => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }),
+      traceService
+    });
+
+    const firstAttach = runtime.attachTab(1647291363, "https://app.example.com");
+    const secondAttach = runtime.attachTab(1647291363, "https://app.example.com");
+
+    resolveAttach();
+    await expect(Promise.all([firstAttach, secondAttach])).resolves.toEqual([
+      undefined,
+      undefined
+    ]);
+
+    expect(chromeApi.debugger.attach).toHaveBeenCalledTimes(1);
+    expect(state.attachedTabs.get(1647291363)).toMatchObject({
+      topOrigin: "https://app.example.com"
+    });
+  });
+
+  it("recovers when Chrome reports the same extension is already attached", async () => {
+    const state = createBackgroundState();
+    const chromeApi = createTestChromeApi();
+    chromeApi.debugger.attach.mockRejectedValueOnce(
+      new Error(
+        "Another debugger is already attached to the tab with id: 1647291363."
+      )
+    );
+    const runtime = createBackgroundDebuggerRuntime({
+      state,
+      chromeApi,
+      setLastError: vi.fn(),
+      persistSnapshot: vi.fn().mockResolvedValue(undefined),
+      stopSession: vi.fn().mockResolvedValue(undefined),
+      requestLifecycle: () => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }),
+      traceService: {
+        handleBindingCalled: vi.fn().mockResolvedValue(false),
+        disarmTraceForTab: vi.fn().mockResolvedValue(undefined),
+        syncTraceBindings: vi.fn().mockResolvedValue(undefined)
+      }
+    });
+
+    await expect(
+      runtime.attachTab(1647291363, "https://app.example.com")
+    ).resolves.toBeUndefined();
+
+    expect(chromeApi.debugger.sendCommand).toHaveBeenCalledWith(
+      { tabId: 1647291363 },
+      "Network.enable"
+    );
+    expect(state.attachedTabs.get(1647291363)).toMatchObject({
+      topOrigin: "https://app.example.com"
+    });
+  });
+
   it("swallows detached-tab debugger races from request lifecycle work", async () => {
     const state = createBackgroundState({
       sessionActive: true,
@@ -108,6 +201,44 @@ describe("background debugger runtime", () => {
     expect(setLastError).not.toHaveBeenCalled();
     expect(state.attachedTabs.has(9)).toBe(false);
     expect(state.requests.has("9:req-1")).toBe(false);
+  });
+
+  it("swallows stale-tab races while attaching tabs", async () => {
+    const state = createBackgroundState();
+    const chromeApi = createTestChromeApi();
+    chromeApi.debugger.attach.mockRejectedValueOnce(
+      new Error("No tab with given id 1647290852.")
+    );
+    const traceService = {
+      handleBindingCalled: vi.fn().mockResolvedValue(false),
+      disarmTraceForTab: vi.fn().mockResolvedValue(undefined),
+      syncTraceBindings: vi.fn().mockResolvedValue(undefined)
+    };
+    const setLastError = vi.fn();
+    const runtime = createBackgroundDebuggerRuntime({
+      state,
+      chromeApi,
+      setLastError,
+      persistSnapshot: vi.fn().mockResolvedValue(undefined),
+      stopSession: vi.fn().mockResolvedValue(undefined),
+      requestLifecycle: () => ({
+        handleFetchRequestPaused: vi.fn(),
+        handleNetworkRequestWillBeSent: vi.fn(),
+        handleNetworkResponseReceived: vi.fn(),
+        handleNetworkLoadingFinished: vi.fn(),
+        handleNetworkLoadingFailed: vi.fn()
+      }),
+      traceService
+    });
+
+    await expect(
+      runtime.attachTab(1647290852, "https://app.example.com")
+    ).resolves.toBeUndefined();
+
+    expect(setLastError).not.toHaveBeenCalled();
+    expect(state.attachedTabs.has(1647290852)).toBe(false);
+    expect(chromeApi.debugger.sendCommand).not.toHaveBeenCalled();
+    expect(traceService.syncTraceBindings).not.toHaveBeenCalled();
   });
 
   it("stops the session and persists a snapshot when the debugger is canceled by the user", async () => {

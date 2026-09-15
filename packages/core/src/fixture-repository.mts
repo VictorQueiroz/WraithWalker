@@ -2,6 +2,7 @@ import {
   createStaticResourceManifest,
   createStaticResourceManifestEntry,
   getStaticResourceManifestPath,
+  sha256Hex,
   upsertStaticResourceManifest,
   type FixtureDescriptor,
   type RequestPayload,
@@ -9,7 +10,7 @@ import {
   type StaticResourceManifest,
   type StoredFixture
 } from "./fixture-layout.mjs";
-import { createProjectedFixturePayload } from "./fixture-presentation.mjs";
+import { createProjectedFixtureArtifacts } from "./fixture-presentation.mjs";
 import type { RootSentinel } from "./root.mjs";
 
 export interface FixtureResponsePayload {
@@ -60,19 +61,14 @@ export function createFixtureRepository<TRoot>({
     };
   }
 
-  async function createProjectionPayload(
-    projectionPath: string,
-    response: FixtureResponsePayload
-  ): Promise<{ body: string; bodyEncoding: "utf8" | "base64" }> {
-    return createProjectedFixturePayload({
-      relativePath: projectionPath,
-      payload: {
-        body: response.body,
-        bodyEncoding: response.bodyEncoding
-      },
-      mimeType: response.meta.mimeType,
-      resourceType: response.meta.resourceType
-    });
+  async function hashBodyPayload(
+    payload: Pick<FixtureResponsePayload, "body" | "bodyEncoding">
+  ): Promise<string> {
+    return sha256Hex(
+      payload.bodyEncoding === "base64"
+        ? Buffer.from(payload.body, "base64")
+        : Buffer.from(payload.body, "utf8")
+    );
   }
 
   async function exists(descriptor: FixtureDescriptor): Promise<boolean> {
@@ -140,7 +136,11 @@ export function createFixtureRepository<TRoot>({
       ]);
 
     const writes: Promise<void>[] = [];
-    let shouldWriteProjection = false;
+    let projectionSourceMapPath: string | null = null;
+    let projectionKind: "prettified" | undefined;
+    const canonicalBodySha256 = descriptor.assetLike
+      ? await hashBodyPayload(response)
+      : undefined;
 
     if (!bodyExists) {
       writes.push(storage.writeBody(root, descriptor.bodyPath, response));
@@ -155,14 +155,36 @@ export function createFixtureRepository<TRoot>({
     }
 
     if (descriptor.projectionPath && !projectionExists) {
-      shouldWriteProjection = true;
       writes.push(
         (async () => {
+          const artifacts = await createProjectedFixtureArtifacts({
+            relativePath: descriptor.projectionPath!,
+            payload: {
+              body: response.body,
+              bodyEncoding: response.bodyEncoding
+            },
+            mimeType: response.meta.mimeType,
+            resourceType: response.meta.resourceType,
+            canonicalBodyPath: descriptor.bodyPath
+          });
+          projectionSourceMapPath = artifacts.sourceMapPath;
+          projectionKind =
+            artifacts.payload.bodyEncoding === "utf8" &&
+            artifacts.payload.body !== response.body
+              ? "prettified"
+              : undefined;
           await storage.writeBody(
             root,
             descriptor.projectionPath!,
-            await createProjectionPayload(descriptor.projectionPath!, response)
+            artifacts.payload
           );
+          if (artifacts.sourceMapPath && artifacts.sourceMap) {
+            await storage.writeJson(
+              root,
+              artifacts.sourceMapPath,
+              artifacts.sourceMap
+            );
+          }
         })()
       );
     }
@@ -188,9 +210,12 @@ export function createFixtureRepository<TRoot>({
         const nextManifest = upsertStaticResourceManifest(
           currentManifest || createStaticResourceManifest(descriptor),
           createStaticResourceManifestEntry(descriptor, response.meta, {
-            projectionPath: shouldWriteProjection
-              ? descriptor.projectionPath!
-              : null
+            projectionPath: !projectionExists
+              ? (descriptor.projectionPath ?? null)
+              : null,
+            projectionSourceMapPath,
+            projectionKind,
+            canonicalBodySha256
           })
         );
         await storage.writeJson(root, manifestPath, nextManifest);

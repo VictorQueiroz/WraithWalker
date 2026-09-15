@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createProjectedFixtureArtifacts,
   createProjectedFixturePayload,
   decodeFixtureBodyText,
   inferPrettyFilepath,
-  prettifyFixtureText
+  prettifyFixtureText,
 } from "../src/fixture-presentation.mts";
 
 describe("fixture presentation", () => {
@@ -19,7 +20,7 @@ describe("fixture presentation", () => {
     await expect(
       prettifyFixtureText({
         relativePath: "cdn.example.com/assets/chunk.js",
-        text: "function renderMenu(){return{open:true}}"
+        text: "function renderMenu(){return{open:true}}",
       })
     ).resolves.toBe("function renderMenu() {\n  return { open: true };\n}");
   });
@@ -29,7 +30,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "payload.txt",
         text: '{"users":[{"id":1}]}',
-        mimeType: "application/json; charset=utf-8"
+        mimeType: "application/json; charset=utf-8",
       })
     ).toBe("payload.json");
 
@@ -37,7 +38,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "styles/theme.body",
         text: ".menu{color:red}",
-        mimeType: "text/css"
+        mimeType: "text/css",
       })
     ).toBe("styles/theme.css");
 
@@ -45,7 +46,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "scripts/runtime.body",
         text: "const value=1",
-        mimeType: "application/ecmascript"
+        mimeType: "application/ecmascript",
       })
     ).toBe("scripts/runtime.js");
 
@@ -53,7 +54,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "types/runtime.body",
         text: "type User={id:number}",
-        mimeType: "application/typescript"
+        mimeType: "application/typescript",
       })
     ).toBe("types/runtime.ts");
   });
@@ -63,7 +64,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "views/page.txt",
         text: "<main><section><p>Hello</p></section></main>",
-        resourceType: "Document"
+        resourceType: "Document",
       })
     ).toBe("views/page.html");
 
@@ -71,7 +72,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "styles/dropdown.txt",
         text: ".dropdown{color:#111}",
-        resourceType: "Stylesheet"
+        resourceType: "Stylesheet",
       })
     ).toBe("styles/dropdown.css");
 
@@ -79,7 +80,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "scripts/app.txt",
         text: "const ready=true",
-        resourceType: "Script"
+        resourceType: "Script",
       })
     ).toBe("scripts/app.js");
 
@@ -87,7 +88,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "components/widget.tsx",
         text: "export const Widget=()=>null",
-        resourceType: "Other"
+        resourceType: "Other",
       })
     ).toBe("components/widget.tsx");
   });
@@ -96,35 +97,35 @@ describe("fixture presentation", () => {
     expect(
       inferPrettyFilepath({
         relativePath: "captures/menu-response",
-        text: '{"ok":true}'
+        text: '{"ok":true}',
       })
     ).toBe("captures/menu-response.json");
 
     expect(
       inferPrettyFilepath({
         relativePath: "captures/menu-markup",
-        text: "<div><span>Menu</span></div>"
+        text: "<div><span>Menu</span></div>",
       })
     ).toBe("captures/menu-markup.html");
 
     expect(
       inferPrettyFilepath({
         relativePath: "captures/broken-response",
-        text: '{"ok":'
+        text: '{"ok":',
       })
     ).toBeNull();
 
     expect(
       inferPrettyFilepath({
         relativePath: "captures/empty",
-        text: "   "
+        text: "   ",
       })
     ).toBeNull();
 
     await expect(
       prettifyFixtureText({
         relativePath: "captures/menu-response",
-        text: '{"ok":true}'
+        text: '{"ok":true}',
       })
     ).resolves.toBe('{ "ok": true }');
   });
@@ -134,7 +135,7 @@ describe("fixture presentation", () => {
       prettifyFixtureText({
         relativePath: "views/page.body",
         text: "<main><section><h1>Title</h1><p>Hello</p></section></main>",
-        mimeType: "text/html"
+        mimeType: "text/html",
       })
     ).resolves.toBe(
       "<main>\n  <section>\n    <h1>Title</h1>\n    <p>Hello</p>\n  </section>\n</main>"
@@ -144,7 +145,7 @@ describe("fixture presentation", () => {
       prettifyFixtureText({
         relativePath: "styles/dropdown.body",
         text: ".dropdown{color:#111;background:#fff}",
-        mimeType: "text/css"
+        mimeType: "text/css",
       })
     ).resolves.toBe(".dropdown {\n  color: #111;\n  background: #fff;\n}");
   });
@@ -154,7 +155,7 @@ describe("fixture presentation", () => {
       inferPrettyFilepath({
         relativePath: "notes/ui-guidelines.txt",
         text: "dropdown guidance",
-        mimeType: "text/plain"
+        mimeType: "text/plain",
       })
     ).toBeNull();
 
@@ -163,7 +164,7 @@ describe("fixture presentation", () => {
       prettifyFixtureText({
         relativePath: "notes/ui-guidelines",
         text: plainText,
-        resourceType: "Other"
+        resourceType: "Other",
       })
     ).resolves.toBe(plainText);
 
@@ -171,16 +172,52 @@ describe("fixture presentation", () => {
     await expect(
       prettifyFixtureText({
         relativePath: "cdn.example.com/assets/broken.js",
-        text: invalidScript
+        text: invalidScript,
       })
     ).resolves.toBe(invalidScript);
+  });
+
+  it("creates JavaScript projection source maps that advance through canonical source lines", async () => {
+    const originalBody =
+      "const one=1;\nconst two=2;\n//# sourceMappingURL=original.js.map";
+
+    await expect(
+      createProjectedFixtureArtifacts({
+        relativePath: "app.example.com/assets/app.js",
+        payload: {
+          body: originalBody,
+          bodyEncoding: "utf8",
+        },
+        mimeType: "application/javascript",
+        canonicalBodyPath: ".wraithwalker/bodies/app.body",
+      })
+    ).resolves.toEqual({
+      payload: {
+        body: 'const one = 1;\nconst two = 2;\n//# sourceMappingURL=app.js.__wraithwalker-original.map',
+        bodyEncoding: "utf8",
+      },
+      sourceMapPath: "app.example.com/assets/app.js.__wraithwalker-original.map",
+      sourceMap: {
+        version: 3,
+        file: "app.example.com/assets/app.js",
+        sources: ["../../.wraithwalker/bodies/app.body"],
+        sourcesContent: [originalBody],
+        names: [],
+        mappings: "AAAA;AACA;AAAA",
+        x_wraithwalker: {
+          kind: "projection-to-canonical",
+          canonicalBodyPath: ".wraithwalker/bodies/app.body",
+          originalSourceMappingURL: "original.js.map",
+        },
+      },
+    });
   });
 
   it("decodes fixture body payloads across utf8, atob, and buffer fallbacks", async () => {
     expect(
       decodeFixtureBodyText({
         body: "plain text",
-        bodyEncoding: "utf8"
+        bodyEncoding: "utf8",
       })
     ).toBe("plain text");
 
@@ -197,7 +234,7 @@ describe("fixture presentation", () => {
       expect(
         decodeFixtureBodyText({
           body: "ignored-base64",
-          bodyEncoding: "base64"
+          bodyEncoding: "base64",
         })
       ).toBe('{"ok":true}');
       expect(capturedInputs).toEqual(["ignored-base64"]);
@@ -211,7 +248,7 @@ describe("fixture presentation", () => {
       expect(
         decodeFixtureBodyText({
           body: Buffer.from('{"buffer":true}', "utf8").toString("base64"),
-          bodyEncoding: "base64"
+          bodyEncoding: "base64",
         })
       ).toBe('{"buffer":true}');
     } finally {
@@ -229,7 +266,7 @@ describe("fixture presentation", () => {
     expect(
       decodeFixtureBodyText({
         body: binaryPayload,
-        bodyEncoding: "base64"
+        bodyEncoding: "base64",
       })
     ).toBeNull();
 
@@ -238,14 +275,14 @@ describe("fixture presentation", () => {
         relativePath: "cdn.example.com/assets/app.wasm",
         payload: {
           body: binaryPayload,
-          bodyEncoding: "base64"
+          bodyEncoding: "base64",
         },
         mimeType: "application/wasm",
-        resourceType: "Other"
+        resourceType: "Other",
       })
     ).resolves.toEqual({
       body: binaryPayload,
-      bodyEncoding: "base64"
+      bodyEncoding: "base64",
     });
   });
 });

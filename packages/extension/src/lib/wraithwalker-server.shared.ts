@@ -19,8 +19,11 @@ import type {
 
 export const DEFAULT_WRAITHWALKER_SERVER_TRPC_URL =
   "http://127.0.0.1:4319/trpc";
+export const WRAITHWALKER_SERVER_FIXTURE_STREAM_PATH = "/fixtures/write-stream";
+export const WRAITHWALKER_SERVER_STREAM_UPLOAD_THRESHOLD_BYTES =
+  8 * 1024 * 1024;
 export const WRAITHWALKER_SERVER_CACHE_TTL_MS = 5_000;
-export const WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS = 750;
+export const WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS = 10_000;
 export const WRAITHWALKER_SERVER_SOURCE_HEADER = "wraithwalker-extension";
 
 export interface WraithWalkerServerClientOptions {

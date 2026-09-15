@@ -134,9 +134,11 @@ export function isDetachedDebuggerCommandMessage(
   tabId: number
 ): boolean {
   const normalized = message.toLowerCase();
+  const tabIdPattern = new RegExp(`\\b${tabId}\\b`);
   return (
-    normalized.includes("debugger is not attached to the tab with id:") &&
-    normalized.includes(String(tabId))
+    tabIdPattern.test(normalized) &&
+    (normalized.includes("debugger is not attached to the tab with id:") ||
+      /\bno tab with(?: given)? id\b/.test(normalized))
   );
 }
 

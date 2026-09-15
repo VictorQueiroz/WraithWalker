@@ -654,7 +654,9 @@ describe("tRPC capture backend", () => {
       ).toBe("console.log('should not overwrite body');");
       expect(
         await fs.readFile(root.resolve(firstDescriptor.projectionPath!), "utf8")
-      ).toBe('console.log("shared body");');
+      ).toBe(
+        'console.log("shared body");\n//# sourceMappingURL=a.js.__wraithwalker-original.map'
+      );
       expect(
         await root.readJson<RequestPayload>(firstDescriptor.requestPath)
       ).toEqual(createRequestPayload(firstDescriptor));
@@ -675,7 +677,7 @@ describe("tRPC capture backend", () => {
           exists: true,
           meta: secondMeta,
           bodyBase64: Buffer.from(
-            'console.log("shared body");',
+            'console.log("shared body");\n//# sourceMappingURL=a.js.__wraithwalker-original.map',
             "utf8"
           ).toString("base64")
         })
@@ -995,6 +997,94 @@ describe("tRPC capture backend", () => {
         }
       });
       expect(deniedPreflight.status).toBe(403);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("accepts large fixture bodies through the streaming upload endpoint", async () => {
+    const root = await createWraithwalkerFixtureRoot({
+      prefix: "wraithwalker-mcp-stream-"
+    });
+    const server = await startHttpServer(root.rootPath, {
+      host: "127.0.0.1",
+      port: 0
+    });
+    const descriptor = await createDescriptor({
+      url: "https://cdn.example.com/assets/large-app.js",
+      resourceType: "Script",
+      mimeType: "application/javascript"
+    });
+    const request = createRequestPayload(descriptor);
+    const meta = createResponseMeta(descriptor, {
+      mimeType: "application/javascript",
+      resourceType: "Script",
+      bodySuggestedExtension: "js"
+    });
+    const envelope = {
+      descriptor,
+      request,
+      response: {
+        bodyEncoding: "utf8",
+        meta
+      }
+    };
+    const streamedBodySize = DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES + 1024;
+    const encoder = new TextEncoder();
+    let sentEnvelope = false;
+    let sentBodyBytes = 0;
+    const bodyStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!sentEnvelope) {
+          sentEnvelope = true;
+          controller.enqueue(encoder.encode(`${JSON.stringify(envelope)}\n`));
+          return;
+        }
+
+        if (sentBodyBytes >= streamedBodySize) {
+          controller.close();
+          return;
+        }
+
+        const chunkSize = Math.min(64 * 1024, streamedBodySize - sentBodyBytes);
+        sentBodyBytes += chunkSize;
+        controller.enqueue(new Uint8Array(chunkSize).fill("x".charCodeAt(0)));
+      }
+    });
+
+    try {
+      const response = await fetch(`${server.baseUrl}/fixtures/write-stream`, {
+        method: "POST",
+        headers: {
+          Origin: "chrome-extension://test-extension-id",
+          "content-type": "application/octet-stream",
+          "x-trpc-source": "wraithwalker-extension"
+        },
+        body: bodyStream,
+        duplex: "half"
+      } as RequestInit);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("access-control-allow-origin")).toBe(
+        "chrome-extension://test-extension-id"
+      );
+      await expect(response.json()).resolves.toEqual({
+        written: true,
+        descriptor,
+        sentinel: expect.objectContaining({
+          rootId: expect.any(String)
+        })
+      });
+
+      await expect(
+        fs.stat(root.resolve(descriptor.bodyPath))
+      ).resolves.toMatchObject({
+        size: streamedBodySize
+      });
+      await expect(root.readJson(descriptor.requestPath)).resolves.toEqual(
+        request
+      );
+      await expect(root.readJson(descriptor.metaPath)).resolves.toEqual(meta);
     } finally {
       await server.close();
     }

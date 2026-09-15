@@ -13,11 +13,13 @@ import {
   DEFAULT_HTTP_HOST,
   DEFAULT_HTTP_PORT,
   DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES,
+  HTTP_FIXTURE_STREAM_PATH,
   HTTP_MCP_PATH,
   MCP_TOOL_NAMES,
   SERVER_NAME,
   SERVER_VERSION
 } from "./server-constants.mjs";
+import { writeFixtureUploadStream } from "./server-fixture-stream.mjs";
 import {
   closeHttpListener,
   closeHttpSession,
@@ -41,6 +43,7 @@ export {
   DEFAULT_HTTP_HOST,
   DEFAULT_HTTP_PORT,
   DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES,
+  HTTP_FIXTURE_STREAM_PATH,
   HTTP_MCP_PATH,
   MCP_TOOL_NAMES
 } from "./server-constants.mjs";
@@ -128,7 +131,7 @@ export async function startHttpServer(
     })
   });
 
-  app.use(HTTP_TRPC_PATH, (req, res, next) => {
+  app.use([HTTP_TRPC_PATH, HTTP_FIXTURE_STREAM_PATH], (req, res, next) => {
     const origin =
       typeof req.headers.origin === "string" ? req.headers.origin : undefined;
     const requestedHeaders =
@@ -162,6 +165,20 @@ export async function startHttpServer(
     }
 
     next();
+  });
+
+  app.post(HTTP_FIXTURE_STREAM_PATH, async (req, res) => {
+    try {
+      const result = await writeFixtureUploadStream({
+        rootPath,
+        sentinel,
+        source: req as unknown as AsyncIterable<Uint8Array | Buffer>
+      });
+      res.status(200).json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ ok: false, error: message });
+    }
   });
 
   app.use(

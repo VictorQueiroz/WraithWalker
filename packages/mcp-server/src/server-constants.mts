@@ -2,6 +2,7 @@ export const SERVER_NAME = "wraithwalker";
 export const SERVER_VERSION = "0.6.1";
 
 export const HTTP_MCP_PATH = "/mcp";
+export const HTTP_FIXTURE_STREAM_PATH = "/fixtures/write-stream";
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 4319;
 export const DEFAULT_HTTP_TRPC_MAX_BODY_SIZE_BYTES = 25 * 1024 * 1024;
@@ -32,6 +33,12 @@ export const MCP_TOOL_NAMES = [
   "suggest-js-seeds",
   "trace-js-pipeline",
   "read-js-symbol",
+  "search-chunk-refs",
+  "create-chunk-ref",
+  "read-chunk-ref",
+  "create-navigation-checkpoint",
+  "read-navigation-checkpoint",
+  "list-navigation-checkpoints",
   "write-file",
   "patch-file",
   "restore-file",

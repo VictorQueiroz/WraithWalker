@@ -609,9 +609,10 @@ describe("request lifecycle integration", () => {
             { name: "Content-Type", value: "application/javascript" },
             { name: "Set-Cookie", value: "a=b" }
           ],
-          body: Buffer.from('console.log("server replay");', "utf8").toString(
-            "base64"
-          )
+          body: Buffer.from(
+            'console.log("server replay");\n//# sourceMappingURL=app.js.__wraithwalker-original.map',
+            "utf8"
+          ).toString("base64")
         }
       );
       expect(

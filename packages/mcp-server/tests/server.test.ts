@@ -34,6 +34,7 @@ async function loadServerModuleWithMockedExpress({
   const fakeApp = {
     use: vi.fn(),
     all: vi.fn(),
+    post: vi.fn(),
     listen: vi.fn()
   };
   const fakeListener = {
@@ -512,11 +513,14 @@ describe("mcp server", () => {
         "analyze-js-file",
         "browser-status",
         "checkout-workspace",
+        "create-chunk-ref",
+        "create-navigation-checkpoint",
         "diff-snapshots",
         "discard-workspace",
         "list-api-routes",
         "list-configured-sites",
         "list-files",
+        "list-navigation-checkpoints",
         "list-sites",
         "list-snapshots",
         "list-traces",
@@ -524,15 +528,18 @@ describe("mcp server", () => {
         "prepare-site-for-capture",
         "push-workspace",
         "read-api-response",
+        "read-chunk-ref",
         "read-console",
         "read-file",
         "read-file-snippet",
         "read-js-symbol",
+        "read-navigation-checkpoint",
         "read-site-manifest",
         "read-trace",
         "remove-site",
         "restore-file",
         "save-trace-as-snapshot",
+        "search-chunk-refs",
         "search-files",
         "search-js",
         "start-trace",
@@ -573,6 +580,11 @@ describe("mcp server", () => {
       expect(descriptions["read-js-symbol"]).toContain("suggest-js-seeds");
       expect(descriptions["search-js"]).toContain("suggest-js-seeds");
       expect(descriptions["analyze-js-file"]).toContain("suggest-js-seeds");
+      expect(descriptions["search-chunk-refs"]).toContain("chunkRef");
+      expect(descriptions["read-chunk-ref"]).toContain("stale");
+      expect(descriptions["create-navigation-checkpoint"]).toContain(
+        "resumable"
+      );
     } finally {
       await client.close();
       await server.close();
@@ -943,6 +955,180 @@ describe("mcp server", () => {
       expect(diffText).toContain("# Fixture Diff: baseline vs candidate");
       expect(diffText).toContain("## Changed Endpoints");
       expect(diffText).toContain("200 → 500");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("creates resumable navigation checkpoints from chunk refs", async () => {
+    const root = await createFixtureRootWithData();
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const searchResult = await client.callTool({
+        name: "search-chunk-refs",
+        arguments: {
+          query: "renderMenu",
+          pathContains: "chunk",
+          lineCount: 1
+        }
+      });
+      const search = readJsonContent<{
+        items: Array<{
+          ref: {
+            path: string;
+            startLine: number;
+            endLine: number;
+            contentHash: string;
+          };
+          verification: { status: string };
+        }>;
+        totalMatched: number;
+      }>(searchResult);
+      expect(search.totalMatched).toBeGreaterThan(0);
+      expect(
+        search.items.find(
+          (item) => item.ref.path === "cdn.example.com/assets/chunk.js"
+        )
+      ).toEqual(
+        expect.objectContaining({
+          verification: expect.objectContaining({ status: "verified" })
+        })
+      );
+
+      const createRefResult = await client.callTool({
+        name: "create-chunk-ref",
+        arguments: {
+          path: "cdn.example.com/assets/chunk.js",
+          startLine: 1,
+          lineCount: 1,
+          kind: "js-symbol",
+          label: "renderMenu"
+        }
+      });
+      const created = readJsonContent<{
+        ref: {
+          path: string;
+          startLine: number;
+          endLine: number;
+          contentHash: string;
+        };
+        verification: {
+          status: string;
+          snippet: { text?: string };
+        };
+      }>(createRefResult);
+      expect(created.ref).toEqual(
+        expect.objectContaining({
+          path: "cdn.example.com/assets/chunk.js",
+          startLine: 1,
+          endLine: 1,
+          contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/)
+        })
+      );
+      expect(created.verification.status).toBe("verified");
+      expect(created.verification.snippet).not.toHaveProperty("text");
+
+      const readRefResult = await client.callTool({
+        name: "read-chunk-ref",
+        arguments: { ref: created.ref }
+      });
+      const readRef = readJsonContent<{
+        status: string;
+        snippet: { text: string };
+      }>(readRefResult);
+      expect(readRef.status).toBe("verified");
+      expect(readRef.snippet.text).toBe(
+        'function renderMenu(){if(open){return{variant:"dark"}}return null}'
+      );
+
+      const checkpointResult = await client.callTool({
+        name: "create-navigation-checkpoint",
+        arguments: {
+          id: "menu-flow",
+          title: "Menu flow",
+          goal: "Track a synthetic menu flow",
+          refs: [created.ref],
+          capabilityNodes: [
+            {
+              id: "menu-entry",
+              label: "Menu entry point",
+              status: "found",
+              refs: [created.ref]
+            }
+          ],
+          nextActions: ["Trace linked API response"]
+        }
+      });
+      const checkpoint = readJsonContent<{
+        checkpoint: {
+          id: string;
+          title: string;
+          refs: unknown[];
+          capabilityNodes: unknown[];
+          nextActions: string[];
+        };
+        verifications: Array<{ status: string }>;
+      }>(checkpointResult);
+      expect(checkpoint.checkpoint).toEqual(
+        expect.objectContaining({
+          id: "menu-flow",
+          title: "Menu flow",
+          refs: [created.ref],
+          nextActions: ["Trace linked API response"]
+        })
+      );
+      expect(checkpoint.checkpoint.capabilityNodes).toHaveLength(1);
+      expect(checkpoint.verifications).toEqual([
+        expect.objectContaining({ status: "verified" })
+      ]);
+
+      const listResult = await client.callTool({
+        name: "list-navigation-checkpoints",
+        arguments: {}
+      });
+      const list = readJsonContent<{
+        checkpoints: Array<{ id: string; refCount: number }>;
+      }>(listResult);
+      expect(list.checkpoints).toEqual([
+        expect.objectContaining({ id: "menu-flow", refCount: 1 })
+      ]);
+
+      const readCheckpointResult = await client.callTool({
+        name: "read-navigation-checkpoint",
+        arguments: { id: "menu-flow", includeText: false }
+      });
+      const readCheckpoint = readJsonContent<{
+        verifications: Array<{
+          status: string;
+          snippet: { text?: string };
+        }>;
+      }>(readCheckpointResult);
+      expect(readCheckpoint.verifications[0]).toEqual(
+        expect.objectContaining({ status: "verified" })
+      );
+      expect(readCheckpoint.verifications[0].snippet).not.toHaveProperty(
+        "text"
+      );
+
+      await root.writeText(
+        "cdn.example.com/assets/chunk.js",
+        "function renderMenu(){return null}"
+      );
+      const staleResult = await client.callTool({
+        name: "read-chunk-ref",
+        arguments: { ref: created.ref, includeText: false }
+      });
+      const stale = readJsonContent<{
+        status: string;
+        expectedHash: string;
+        currentHash: string;
+        snippet: { text?: string };
+      }>(staleResult);
+      expect(stale.status).toBe("stale");
+      expect(stale.currentHash).not.toBe(stale.expectedHash);
+      expect(stale.snippet).not.toHaveProperty("text");
     } finally {
       await client.close();
       await server.close();
@@ -3319,6 +3505,12 @@ describe("mcp server", () => {
         "suggest-js-seeds",
         "trace-js-pipeline",
         "read-js-symbol",
+        "search-chunk-refs",
+        "create-chunk-ref",
+        "read-chunk-ref",
+        "create-navigation-checkpoint",
+        "read-navigation-checkpoint",
+        "list-navigation-checkpoints",
         "write-file",
         "patch-file",
         "restore-file",
@@ -3335,11 +3527,14 @@ describe("mcp server", () => {
         "analyze-js-file",
         "browser-status",
         "checkout-workspace",
+        "create-chunk-ref",
+        "create-navigation-checkpoint",
         "diff-snapshots",
         "discard-workspace",
         "list-api-routes",
         "list-configured-sites",
         "list-files",
+        "list-navigation-checkpoints",
         "list-sites",
         "list-snapshots",
         "list-traces",
@@ -3347,15 +3542,18 @@ describe("mcp server", () => {
         "prepare-site-for-capture",
         "push-workspace",
         "read-api-response",
+        "read-chunk-ref",
         "read-console",
         "read-file",
         "read-file-snippet",
         "read-js-symbol",
+        "read-navigation-checkpoint",
         "read-site-manifest",
         "read-trace",
         "remove-site",
         "restore-file",
         "save-trace-as-snapshot",
+        "search-chunk-refs",
         "search-files",
         "search-js",
         "start-trace",

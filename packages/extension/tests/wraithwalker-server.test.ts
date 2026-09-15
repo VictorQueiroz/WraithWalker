@@ -274,9 +274,9 @@ describe("wraithwalker server client helpers", () => {
     expect(removeEventListenerSpy).toHaveBeenCalledWith("abort", onAbort);
   });
 
-  it("keeps the exported default timeout meaningful for local server probes", () => {
-    expect(WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS).toBeGreaterThan(0);
-    expect(WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS).toBeLessThanOrEqual(1_000);
+  it("keeps the exported default timeout wide enough for local filesystem-backed server requests", () => {
+    expect(WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS).toBeGreaterThan(2_000);
+    expect(WRAITHWALKER_SERVER_REQUEST_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
   });
 
   it("forces POST batching for extension-side local server traffic", async () => {
@@ -522,6 +522,9 @@ describe("wraithwalker server client construction", () => {
       httpBatchLink: httpBatchLinkMock
     }));
     vi.doMock("../src/lib/wraithwalker-server.transport.js", () => ({
+      createTimedFetch: vi.fn(
+        (_: number | undefined, nextFetch: typeof fetch) => nextFetch
+      ),
       createWraithWalkerServerTransportOptions: createTransportOptionsMock
     }));
 
@@ -544,5 +547,104 @@ describe("wraithwalker server client construction", () => {
     expect(createTRPCClientMock).toHaveBeenCalledWith({
       links: [batchLink]
     });
+  });
+
+  it("streams large fixture writes outside the tRPC JSON body", async () => {
+    vi.resetModules();
+
+    const trpc = createTrpcClientDouble().trpc;
+    const createTRPCClientMock = vi.fn(() => trpc as any);
+    const httpBatchLinkMock = vi.fn(() => ({ kind: "batch-link" }) as any);
+    const descriptor: FixtureDescriptor = {
+      topOrigin: "https://app.example.com",
+      topOriginKey: "https__app.example.com",
+      requestOrigin: "https://cdn.example.com",
+      requestOriginKey: "https__cdn.example.com",
+      requestUrl: "https://cdn.example.com/assets/app.js",
+      method: "GET",
+      postDataEncoding: "utf8",
+      queryHash: "query-hash",
+      bodyHash: "body-hash",
+      bodyPath: "cdn.example.com/assets/app.js.__body",
+      projectionPath: "cdn.example.com/assets/app.js",
+      requestPath: "cdn.example.com/assets/app.js.__request.json",
+      metaPath: "cdn.example.com/assets/app.js.__meta.json",
+      manifestPath: null,
+      metadataOptional: false,
+      slug: "app.js",
+      assetLike: true,
+      storageMode: "asset"
+    };
+    const meta: ResponseMeta = {
+      status: 200,
+      statusText: "OK",
+      headers: [{ name: "Content-Type", value: "application/javascript" }],
+      mimeType: "application/javascript",
+      resourceType: "Script",
+      url: descriptor.requestUrl,
+      method: descriptor.method,
+      capturedAt: "2026-04-14T00:00:00.000Z",
+      bodyEncoding: "utf8",
+      bodySuggestedExtension: "js"
+    };
+    const streamResult = {
+      written: true,
+      descriptor,
+      sentinel: { rootId: "root-stream" }
+    };
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify(streamResult), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    );
+
+    vi.doMock("@trpc/client", () => ({
+      createTRPCClient: createTRPCClientMock,
+      httpBatchLink: httpBatchLinkMock
+    }));
+
+    const { createWraithWalkerServerClient } =
+      await import("../src/lib/wraithwalker-server.client.js");
+    const client = createWraithWalkerServerClient(
+      "http://127.0.0.1:4319/trpc",
+      {
+        fetchImpl
+      }
+    );
+
+    const result = await client.writeFixtureIfAbsent({
+      descriptor,
+      request: {
+        topOrigin: descriptor.topOrigin,
+        url: descriptor.requestUrl,
+        method: descriptor.method,
+        headers: [],
+        body: "",
+        bodyEncoding: "utf8",
+        bodyHash: descriptor.bodyHash,
+        queryHash: descriptor.queryHash,
+        capturedAt: "2026-04-14T00:00:00.000Z"
+      },
+      response: {
+        body: "x".repeat(8 * 1024 * 1024 + 1),
+        bodyEncoding: "utf8",
+        meta
+      }
+    });
+
+    expect(result).toEqual(streamResult);
+    expect(trpc.fixtures.writeIfAbsent.mutate).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchImpl.mock.calls[0] as [
+      string,
+      RequestInit & { duplex?: "half" }
+    ];
+    expect(url).toBe("http://127.0.0.1:4319/fixtures/write-stream");
+    expect(init.method).toBe("POST");
+    expect(init.duplex).toBe("half");
+    expect(new Headers(init.headers).get("content-type")).toBe(
+      "application/octet-stream"
+    );
   });
 });

@@ -497,6 +497,49 @@ describe("background authority server sync", () => {
     expect(state.serverInfo?.rootPath).toBe("/tmp/server-root");
   });
 
+  it("keeps the server connected when heartbeat times out but system info responds", async () => {
+    const siteConfigs = [
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-10T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }
+    ];
+    const heartbeat = vi
+      .fn()
+      .mockRejectedValue(new Error("Timed out after 2000ms"));
+    const getSystemInfo = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      siteConfigs
+    });
+    const { authority, state } = createAuthorityHarness({
+      serverClientOverrides: {
+        heartbeat,
+        getSystemInfo
+      }
+    });
+
+    await expect(authority.refreshServerInfo({ force: true })).resolves.toEqual(
+      {
+        rootPath: "/tmp/server-root",
+        sentinel: { rootId: "server-root" },
+        baseUrl: "http://127.0.0.1:4319",
+        mcpUrl: "http://127.0.0.1:4319/mcp",
+        trpcUrl: "http://127.0.0.1:4319/trpc"
+      }
+    );
+
+    expect(heartbeat).toHaveBeenCalledTimes(1);
+    expect(getSystemInfo).toHaveBeenCalledTimes(1);
+    expect(state.rootReady).toBe(true);
+    expect(state.enabledOrigins).toEqual(["https://app.example.com"]);
+  });
+
   it("keeps idle polling alive while the server is connected and stops after the server goes offline", async () => {
     vi.useFakeTimers();
     const heartbeat = vi
