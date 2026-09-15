@@ -65,6 +65,41 @@ describe("background authority local root", () => {
     expect(chromeApi.offscreen.closeDocument).toHaveBeenCalledTimes(1);
   });
 
+  it("recreates a stale offscreen document when runtime messaging has no receiving end", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([]);
+    chromeApi.runtime.sendMessage
+      .mockRejectedValueOnce(
+        new Error(
+          "Could not establish connection. Receiving end does not exist."
+        )
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        sentinel: { rootId: "local-root" },
+        permission: "granted"
+      });
+
+    const { authority } = createAuthorityHarness({ chromeApi });
+
+    await expect(
+      authority.sendOffscreenMessage("fs.ensureRoot", {
+        requestPermission: false
+      })
+    ).resolves.toEqual({
+      ok: true,
+      sentinel: { rootId: "local-root" },
+      permission: "granted"
+    });
+
+    expect(chromeApi.offscreen.closeDocument).toHaveBeenCalledTimes(1);
+    expect(chromeApi.offscreen.createDocument).toHaveBeenCalledTimes(1);
+    expect(chromeApi.runtime.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
   it("propagates unexpected offscreen creation errors", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([]);

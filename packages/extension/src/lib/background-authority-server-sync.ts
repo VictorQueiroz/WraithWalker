@@ -14,6 +14,10 @@ import type { SiteConfig } from "./types.js";
 
 const HEARTBEAT_ALARM_NAME = "wraithwalker-server-heartbeat";
 
+type ServerInfoPayload = Awaited<
+  ReturnType<WraithWalkerServerClient["getSystemInfo"]>
+>;
+
 export interface BackgroundAuthorityServerSyncApi {
   refreshServerInfo(opts?: {
     force?: boolean;
@@ -61,6 +65,11 @@ export function createBackgroundAuthorityServerSync({
     ExtensionServerCommandResult
   >();
   const runningCommandIds = new Set<string>();
+
+  function isServerRequestTimeout(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes("Timed out after");
+  }
 
   function shouldKeepHeartbeatAlive(): boolean {
     return (
@@ -233,6 +242,31 @@ export function createBackgroundAuthorityServerSync({
     return state.serverInfo;
   }
 
+  async function performSystemInfoCycle(): Promise<BackgroundServerInfo> {
+    const info: ServerInfoPayload = await serverClient.getSystemInfo();
+    const siteConfigsChanged = applyEffectiveSiteConfigs(
+      info.siteConfigs ?? [...state.localSiteConfigsByOrigin.values()]
+    );
+    state.serverInfo = {
+      rootPath: info.rootPath,
+      sentinel: info.sentinel,
+      baseUrl: info.baseUrl,
+      mcpUrl: info.mcpUrl,
+      trpcUrl: info.trpcUrl
+    };
+    state.serverCheckedAt = Date.now();
+    updateEffectiveRootState();
+    scheduleHeartbeat();
+    if (siteConfigsChanged && state.sessionActive) {
+      await reconcileTabs();
+    }
+
+    onServerHeartbeatSuccess?.();
+    onStatusChanged?.();
+
+    return state.serverInfo;
+  }
+
   async function refreshServerInfo({
     force = false
   }: { force?: boolean } = {}): Promise<BackgroundServerInfo | null> {
@@ -250,7 +284,14 @@ export function createBackgroundAuthorityServerSync({
           state.extensionClientId = await getOrCreateExtensionClientId();
         }
         return await performHeartbeatCycle();
-      } catch {
+      } catch (error) {
+        if (isServerRequestTimeout(error)) {
+          try {
+            return await performSystemInfoCycle();
+          } catch {
+            // Fall through to the normal offline transition.
+          }
+        }
         markServerOffline();
         return null;
       } finally {

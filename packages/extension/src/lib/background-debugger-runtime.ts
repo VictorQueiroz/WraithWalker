@@ -18,6 +18,20 @@ import type { BackgroundTraceServiceApi } from "./background-trace-service.js";
 
 const DEBUGGER_VERSION = "1.3";
 
+function isAlreadyAttachedDebuggerMessage(
+  message: string,
+  tabId: number
+): boolean {
+  const normalized = message.toLowerCase();
+  const tabIdPattern = new RegExp(`\\b${tabId}\\b`);
+  return (
+    tabIdPattern.test(normalized) &&
+    normalized.includes(
+      "another debugger is already attached to the tab with id:"
+    )
+  );
+}
+
 interface BackgroundDebuggerRuntimeDependencies {
   state: BackgroundState;
   chromeApi: ChromeApi;
@@ -60,6 +74,8 @@ export function createBackgroundDebuggerRuntime({
   requestLifecycle,
   traceService
 }: BackgroundDebuggerRuntimeDependencies): BackgroundDebuggerRuntimeApi {
+  const pendingAttachTabs = new Map<number, Promise<void>>();
+
   function clearTrackedTabState(tabId: number): void {
     state.attachedTabs.delete(tabId);
     for (const key of [...state.requests.keys()]) {
@@ -128,34 +144,76 @@ export function createBackgroundDebuggerRuntime({
       return;
     }
 
-    await chromeApi.debugger.attach(debuggerTarget(tabId), DEBUGGER_VERSION);
-    try {
-      await sendDebuggerCommand(tabId, "Network.enable");
-      await sendDebuggerCommand(tabId, "Runtime.enable");
-      await sendDebuggerCommand(tabId, "Log.enable");
-      await sendDebuggerCommand(tabId, "Page.enable");
-      await sendDebuggerCommand(tabId, "Network.setCacheDisabled", {
-        cacheDisabled: true
-      });
-      await sendDebuggerCommand(tabId, "Fetch.enable", {
-        patterns: [{ urlPattern: "*" }]
-      });
-    } catch (error) {
-      if (error instanceof DetachedDebuggerCommandError) {
-        return;
+    const pendingAttach = pendingAttachTabs.get(tabId);
+    if (pendingAttach) {
+      await pendingAttach;
+      const existing = state.attachedTabs.get(tabId);
+      if (existing) {
+        existing.topOrigin = topOrigin;
+        await traceService.syncTraceBindings();
+      }
+      return;
+    }
+
+    const attachPromise = (async () => {
+      try {
+        await chromeApi.debugger.attach(
+          debuggerTarget(tabId),
+          DEBUGGER_VERSION
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isDetachedDebuggerCommandMessage(message, tabId)) {
+          clearTrackedTabState(tabId);
+          return;
+        }
+        if (!isAlreadyAttachedDebuggerMessage(message, tabId)) {
+          throw error;
+        }
       }
 
-      throw error;
+      try {
+        await sendDebuggerCommand(tabId, "Network.enable");
+        await sendDebuggerCommand(tabId, "Runtime.enable");
+        await sendDebuggerCommand(tabId, "Log.enable");
+        await sendDebuggerCommand(tabId, "Page.enable");
+        await sendDebuggerCommand(tabId, "Network.setCacheDisabled", {
+          cacheDisabled: true
+        });
+        await sendDebuggerCommand(tabId, "Fetch.enable", {
+          patterns: [{ urlPattern: "*" }]
+        });
+      } catch (error) {
+        if (error instanceof DetachedDebuggerCommandError) {
+          return;
+        }
+
+        throw error;
+      }
+      state.attachedTabs.set(tabId, {
+        topOrigin,
+        traceScriptIdentifier: null,
+        traceArmedForTraceId: null
+      });
+      await traceService.syncTraceBindings();
+    })();
+    pendingAttachTabs.set(tabId, attachPromise);
+
+    try {
+      await attachPromise;
+    } finally {
+      if (pendingAttachTabs.get(tabId) === attachPromise) {
+        pendingAttachTabs.delete(tabId);
+      }
     }
-    state.attachedTabs.set(tabId, {
-      topOrigin,
-      traceScriptIdentifier: null,
-      traceArmedForTraceId: null
-    });
-    await traceService.syncTraceBindings();
   }
 
   async function detachTab(tabId: number): Promise<void> {
+    const pendingAttach = pendingAttachTabs.get(tabId);
+    if (pendingAttach) {
+      await pendingAttach.catch(() => undefined);
+    }
+
     if (!state.attachedTabs.has(tabId)) {
       return;
     }

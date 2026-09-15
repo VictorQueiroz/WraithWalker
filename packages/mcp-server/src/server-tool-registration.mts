@@ -6,6 +6,7 @@ import { type createServerRootRuntime } from "./root-runtime.mjs";
 import { registerBrowserTools } from "./server-tools-browser.mjs";
 import { registerFixtureTools } from "./server-tools-fixtures.mjs";
 import { registerJsTools } from "./server-tools-js.mjs";
+import { registerNavigationTools } from "./server-tools-navigation.mjs";
 import { registerSiteConfigTools } from "./server-tools-site-config.mjs";
 import { registerSnapshotTools } from "./server-tools-snapshots.mjs";
 import { registerTraceTools } from "./server-tools-traces.mjs";
@@ -26,6 +27,7 @@ export function registerTools(
   registerSiteConfigTools(server, { runtime, extensionSessions });
   registerFixtureTools(server, rootPath, { runtime });
   registerJsTools(server, rootPath);
+  registerNavigationTools(server, rootPath);
   registerSnapshotTools(server, rootPath, { runtime });
 }
 

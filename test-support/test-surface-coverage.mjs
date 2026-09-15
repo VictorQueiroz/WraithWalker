@@ -36,6 +36,9 @@ export const explicitCoverage = {
     "packages/mcp-server/tests/server.test.ts",
     "packages/mcp-server/tests/bin.test.ts"
   ],
+  "packages/mcp-server/src/server-fixture-stream.mts": [
+    "packages/mcp-server/tests/trpc.test.ts"
+  ],
   "packages/mcp-server/src/server-responses.mts": [
     "packages/mcp-server/tests/server-helpers.test.ts"
   ],
@@ -49,6 +52,9 @@ export const explicitCoverage = {
     "packages/mcp-server/tests/server-helpers.test.ts"
   ],
   "packages/mcp-server/src/server-tools-js.mts": [
+    "packages/mcp-server/tests/server.test.ts"
+  ],
+  "packages/mcp-server/src/server-tools-navigation.mts": [
     "packages/mcp-server/tests/server.test.ts"
   ],
   "packages/mcp-server/src/server-tools-snapshots.mts": [

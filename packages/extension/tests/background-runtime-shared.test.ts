@@ -36,6 +36,21 @@ describe("background runtime shared helpers", () => {
         7
       )
     ).toBe(false);
+    expect(
+      isDetachedDebuggerCommandMessage(
+        "No tab with given id 1647290852.",
+        1647290852
+      )
+    ).toBe(true);
+    expect(
+      isDetachedDebuggerCommandMessage(
+        "No tab with id: 1647290852.",
+        1647290852
+      )
+    ).toBe(true);
+    expect(
+      isDetachedDebuggerCommandMessage("No tab with given id 1647290852.", 164)
+    ).toBe(false);
   });
 
   it("normalizes console timestamps from seconds, milliseconds, and invalid inputs", () => {
