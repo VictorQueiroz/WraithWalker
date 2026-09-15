@@ -157,7 +157,10 @@ export function createBackgroundDebuggerRuntime({
 
     const attachPromise = (async () => {
       try {
-        await chromeApi.debugger.attach(debuggerTarget(tabId), DEBUGGER_VERSION);
+        await chromeApi.debugger.attach(
+          debuggerTarget(tabId),
+          DEBUGGER_VERSION
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (isDetachedDebuggerCommandMessage(message, tabId)) {

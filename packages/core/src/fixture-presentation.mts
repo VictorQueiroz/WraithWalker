@@ -204,7 +204,7 @@ function splitPath(relativePath: string): string[] {
 
 function createRelativeSourcePath(
   sourceMapPath: string,
-  sourcePath: string,
+  sourcePath: string
 ): string {
   const fromParts = splitPath(dirname(sourceMapPath));
   const toParts = splitPath(sourcePath);
@@ -220,7 +220,7 @@ function createRelativeSourcePath(
 
   const upParts = Array.from(
     { length: fromParts.length - commonLength },
-    () => "..",
+    () => ".."
   );
   return [...upParts, ...toParts.slice(commonLength)].join("/") || ".";
 }
@@ -244,13 +244,10 @@ function detectSourceMappingURL(text: string): string | null {
 
 function stripSourceMappingURL(text: string): string {
   return text
-    .replace(
-      /(?:\r?\n)?\/\/[#@]\s*sourceMappingURL=[^\r\n]*(?=\r?\n?$)/,
-      "",
-    )
+    .replace(/(?:\r?\n)?\/\/[#@]\s*sourceMappingURL=[^\r\n]*(?=\r?\n?$)/, "")
     .replace(
       /(?:\r?\n)?\/\*[#@]\s*sourceMappingURL=[\s\S]*?\*\/(?=\r?\n?$)/,
-      "",
+      ""
     );
 }
 
@@ -280,7 +277,7 @@ function encodeVlqSegment(values: number[]): string {
 
 function createLineMappings({
   generatedLineCount,
-  originalLineCount,
+  originalLineCount
 }: {
   generatedLineCount: number;
   originalLineCount: number;
@@ -294,7 +291,7 @@ function createLineMappings({
       0,
       0,
       originalLine - previousOriginalLine,
-      0,
+      0
     ]);
     previousOriginalLine = originalLine;
     return segment;
@@ -303,7 +300,7 @@ function createLineMappings({
 
 function appendProjectionSourceMapComment(
   text: string,
-  sourceMapPath: string,
+  sourceMapPath: string
 ): string {
   return `${text}\n//# sourceMappingURL=${basename(sourceMapPath)}`;
 }
@@ -315,7 +312,7 @@ function createProjectionSourceMap({
   projectedText,
   relativePath,
   sourceMapPath,
-  sourceText,
+  sourceText
 }: {
   canonicalBodyPath: string;
   originalSourceMappingURL: string | null;
@@ -333,13 +330,13 @@ function createProjectionSourceMap({
     names: [],
     mappings: createLineMappings({
       generatedLineCount: countLines(projectedText),
-      originalLineCount: countLines(sourceText),
+      originalLineCount: countLines(sourceText)
     }),
     x_wraithwalker: {
       kind: "projection-to-canonical",
       canonicalBodyPath,
-      originalSourceMappingURL,
-    },
+      originalSourceMappingURL
+    }
   };
 }
 
@@ -421,7 +418,9 @@ export async function createProjectedFixtureArtifacts(
   }
 
   const isJavaScriptProjection = isJavaScriptProjectionFilepath(filepath);
-  const sourceText = isJavaScriptProjection ? stripSourceMappingURL(text) : text;
+  const sourceText = isJavaScriptProjection
+    ? stripSourceMappingURL(text)
+    : text;
   const projectedText = await prettifyFixtureText({
     relativePath: options.relativePath,
     text: sourceText,
@@ -458,8 +457,8 @@ export async function createProjectedFixtureArtifacts(
       projectedText: body,
       relativePath: options.relativePath,
       sourceMapPath,
-      sourceText,
-    }),
+      sourceText
+    })
   };
 }
 

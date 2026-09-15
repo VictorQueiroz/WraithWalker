@@ -409,9 +409,9 @@ describe("shared fixture repository", () => {
       ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
     );
 
-    expect(Buffer.from(root.files.get(descriptor.bodyPath)!).toString("utf8")).toBe(
-      originalBody
-    );
+    expect(
+      Buffer.from(root.files.get(descriptor.bodyPath)!).toString("utf8")
+    ).toBe(originalBody);
     expect(projection).toContain("function a() {");
     expect(projection).toContain(
       "\n//# sourceMappingURL=app.js.__wraithwalker-original.map"

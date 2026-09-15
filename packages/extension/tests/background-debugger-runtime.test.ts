@@ -89,8 +89,14 @@ describe("background debugger runtime", () => {
       traceService
     });
 
-    const firstAttach = runtime.attachTab(1647291363, "https://app.example.com");
-    const secondAttach = runtime.attachTab(1647291363, "https://app.example.com");
+    const firstAttach = runtime.attachTab(
+      1647291363,
+      "https://app.example.com"
+    );
+    const secondAttach = runtime.attachTab(
+      1647291363,
+      "https://app.example.com"
+    );
 
     resolveAttach();
     await expect(Promise.all([firstAttach, secondAttach])).resolves.toEqual([

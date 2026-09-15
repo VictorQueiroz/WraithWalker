@@ -37,10 +37,16 @@ describe("background runtime shared helpers", () => {
       )
     ).toBe(false);
     expect(
-      isDetachedDebuggerCommandMessage("No tab with given id 1647290852.", 1647290852)
+      isDetachedDebuggerCommandMessage(
+        "No tab with given id 1647290852.",
+        1647290852
+      )
     ).toBe(true);
     expect(
-      isDetachedDebuggerCommandMessage("No tab with id: 1647290852.", 1647290852)
+      isDetachedDebuggerCommandMessage(
+        "No tab with id: 1647290852.",
+        1647290852
+      )
     ).toBe(true);
     expect(
       isDetachedDebuggerCommandMessage("No tab with given id 1647290852.", 164)
