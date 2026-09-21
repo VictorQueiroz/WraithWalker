@@ -511,20 +511,20 @@ describe("background authority data", () => {
       }
     });
 
-    await expect(authority.readConfiguredSiteConfigsForAuthority()).resolves.toEqual(
-      {
-        ok: true,
-        siteConfigs: configuredSiteConfigs,
-        sentinel: { rootId: "server-root" }
-      }
-    );
-    await expect(authority.readConfiguredSiteConfigsForAuthority()).resolves.toEqual(
-      {
-        ok: true,
-        siteConfigs: configuredSiteConfigs,
-        sentinel: { rootId: "server-root" }
-      }
-    );
+    await expect(
+      authority.readConfiguredSiteConfigsForAuthority()
+    ).resolves.toEqual({
+      ok: true,
+      siteConfigs: configuredSiteConfigs,
+      sentinel: { rootId: "server-root" }
+    });
+    await expect(
+      authority.readConfiguredSiteConfigsForAuthority()
+    ).resolves.toEqual({
+      ok: true,
+      siteConfigs: configuredSiteConfigs,
+      sentinel: { rootId: "server-root" }
+    });
     expect(heartbeat).toHaveBeenCalledTimes(3);
   });
 

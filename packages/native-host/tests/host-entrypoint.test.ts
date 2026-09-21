@@ -53,7 +53,6 @@ async function loadHostModuleWithArgv(argv: string[]) {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unmock("../src/lib.mjs");
 });
 
 describe("native host entrypoint", () => {

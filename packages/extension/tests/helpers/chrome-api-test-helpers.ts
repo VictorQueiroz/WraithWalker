@@ -14,6 +14,15 @@ type TestEvent<TEvent extends { addListener(listener: any): void }> = {
   removeListener?: (listener: EventListener<TEvent>) => void;
 };
 
+type MockedChromeMethod<T extends (...args: never[]) => unknown> = T &
+  ReturnType<typeof vi.fn>;
+
+function createMock<T extends (...args: never[]) => unknown>(
+  implementation?: T
+): MockedChromeMethod<T> {
+  return vi.fn(implementation) as MockedChromeMethod<T>;
+}
+
 function createEvent<
   TEvent extends {
     addListener(listener: any): void;
@@ -112,26 +121,33 @@ export function createTestChromeApi(
 ): TestChromeApi {
   const defaults: TestChromeApi = {
     runtime: {
-      getURL: vi.fn((path) => path),
-      getManifest: vi.fn(() => ({ version: "0.1.0" })),
-      sendMessage: vi.fn(),
-      sendNativeMessage: vi.fn(),
-      openOptionsPage: vi.fn(),
+      getURL: createMock<ChromeApi["runtime"]["getURL"]>((path) => path),
+      getManifest: createMock<NonNullable<ChromeApi["runtime"]["getManifest"]>>(
+        () => ({ version: "0.1.0" })
+      ),
+      sendMessage: createMock<ChromeApi["runtime"]["sendMessage"]>(),
+      sendNativeMessage:
+        createMock<ChromeApi["runtime"]["sendNativeMessage"]>(),
+      openOptionsPage: createMock<ChromeApi["runtime"]["openOptionsPage"]>(),
       onMessage: createEvent<ChromeApi["runtime"]["onMessage"]>(),
       onStartup: createEvent<ChromeApi["runtime"]["onStartup"]>(),
       onInstalled: createEvent<ChromeApi["runtime"]["onInstalled"]>(),
-      getContexts: vi.fn().mockResolvedValue([])
+      getContexts: createMock<
+        NonNullable<ChromeApi["runtime"]["getContexts"]>
+      >().mockResolvedValue([])
     },
     debugger: {
-      attach: vi.fn(),
-      sendCommand: vi.fn(),
-      detach: vi.fn(),
+      attach: createMock<ChromeApi["debugger"]["attach"]>(),
+      sendCommand: createMock<ChromeApi["debugger"]["sendCommand"]>(),
+      detach: createMock<ChromeApi["debugger"]["detach"]>(),
       onEvent: createEvent<ChromeApi["debugger"]["onEvent"]>(),
       onDetach: createEvent<ChromeApi["debugger"]["onDetach"]>()
     },
     tabs: {
-      query: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({ id: 99 }),
+      query: createMock<ChromeApi["tabs"]["query"]>().mockResolvedValue([]),
+      create: createMock<ChromeApi["tabs"]["create"]>().mockResolvedValue({
+        id: 99
+      }),
       onActivated: createEvent<ChromeApi["tabs"]["onActivated"]>(),
       onUpdated: createEvent<ChromeApi["tabs"]["onUpdated"]>(),
       onRemoved: createEvent<ChromeApi["tabs"]["onRemoved"]>()
@@ -139,30 +155,49 @@ export function createTestChromeApi(
     storage: {
       onChanged: createEvent<NonNullable<ChromeApi["storage"]>["onChanged"]>(),
       local: {
-        get: vi.fn().mockResolvedValue({}),
-        set: vi.fn().mockResolvedValue(undefined)
+        get: createMock<
+          NonNullable<ChromeApi["storage"]["local"]>["get"]
+        >().mockResolvedValue({}),
+        set: createMock<
+          NonNullable<ChromeApi["storage"]["local"]>["set"]
+        >().mockResolvedValue(undefined)
       }
     },
     offscreen: {
-      createDocument: vi.fn(),
-      closeDocument: vi.fn(),
+      createDocument: createMock<ChromeApi["offscreen"]["createDocument"]>(),
+      closeDocument: createMock<ChromeApi["offscreen"]["closeDocument"]>(),
       Reason: {
         BLOBS: "BLOBS"
       }
     },
     alarms: {
-      create: vi.fn(),
-      clear: vi.fn().mockResolvedValue(true),
+      create: createMock<NonNullable<ChromeApi["alarms"]>["create"]>(),
+      clear:
+        createMock<
+          NonNullable<ChromeApi["alarms"]>["clear"]
+        >().mockResolvedValue(true),
       onAlarm: createEvent<NonNullable<ChromeApi["alarms"]>["onAlarm"]>()
     },
     permissions: {
-      request: vi.fn().mockResolvedValue(true),
-      remove: vi.fn().mockResolvedValue(true)
+      request:
+        createMock<
+          NonNullable<ChromeApi["permissions"]>["request"]
+        >().mockResolvedValue(true),
+      remove:
+        createMock<
+          NonNullable<NonNullable<ChromeApi["permissions"]>["remove"]>
+        >().mockResolvedValue(true)
     },
     contextMenus: {
-      create: vi.fn(),
-      update: vi.fn().mockResolvedValue(undefined),
-      removeAll: vi.fn().mockResolvedValue(undefined),
+      create: createMock<NonNullable<ChromeApi["contextMenus"]>["create"]>(),
+      update:
+        createMock<
+          NonNullable<ChromeApi["contextMenus"]>["update"]
+        >().mockResolvedValue(undefined),
+      removeAll:
+        createMock<
+          NonNullable<ChromeApi["contextMenus"]>["removeAll"]
+        >().mockResolvedValue(undefined),
       onClicked:
         createEvent<NonNullable<ChromeApi["contextMenus"]>["onClicked"]>()
     }
