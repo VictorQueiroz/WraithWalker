@@ -418,19 +418,17 @@ export async function createProjectedFixtureArtifacts(
   }
 
   const isJavaScriptProjection = isJavaScriptProjectionFilepath(filepath);
-  const sourceText = isJavaScriptProjection
-    ? stripSourceMappingURL(text)
-    : text;
+  const sourceMapPath =
+    isJavaScriptProjection && options.canonicalBodyPath
+      ? `${options.relativePath}.__wraithwalker-original.map`
+      : null;
+  const sourceText = sourceMapPath ? stripSourceMappingURL(text) : text;
   const projectedText = await prettifyFixtureText({
     relativePath: options.relativePath,
     text: sourceText,
     mimeType: options.mimeType,
     resourceType: options.resourceType
   });
-  const sourceMapPath =
-    isJavaScriptProjection && options.canonicalBodyPath
-      ? `${options.relativePath}.__wraithwalker-original.map`
-      : null;
 
   if (!sourceMapPath || projectedText === text) {
     return {

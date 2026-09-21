@@ -426,12 +426,12 @@ describe("background authority data", () => {
     expect(state.rootReady).toBe(true);
   });
 
-  it("returns the last configured server config instead of a raw timeout when Settings reloads", async () => {
+  it("does not substitute effective configs for a timed out configured read", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);
-    const siteConfigs = [
+    const effectiveSiteConfigs = [
       {
-        origin: "https://settings.example.com",
+        origin: "https://discovered.example.com",
         createdAt: "2026-04-09T00:00:00.000Z",
         dumpAllowlistPatterns: ["\\.json$"]
       }
@@ -444,7 +444,7 @@ describe("background authority data", () => {
       mcpUrl: "http://127.0.0.1:4319/mcp",
       trpcUrl: "http://127.0.0.1:4319/trpc",
       activeTrace: null,
-      siteConfigs
+      siteConfigs: effectiveSiteConfigs
     });
     const readConfiguredSiteConfigs = vi
       .fn()
@@ -460,14 +460,72 @@ describe("background authority data", () => {
     const result = await authority.readConfiguredSiteConfigsForAuthority();
 
     expect(result).toEqual({
-      ok: true,
-      siteConfigs,
-      sentinel: { rootId: "server-root" }
+      ok: false,
+      error: "Timed out after 2000ms"
     });
     expect(heartbeat).toHaveBeenCalledTimes(2);
     expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalled();
     expect(state.serverInfo?.rootPath).toBe("/tmp/server-root");
     expect(state.rootReady).toBe(true);
+  });
+
+  it("returns the last configured server config when a Settings reload times out", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    const configuredSiteConfigs = [
+      {
+        origin: "https://settings.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$"]
+      }
+    ];
+    const effectiveSiteConfigs = [
+      {
+        origin: "https://discovered.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }
+    ];
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null,
+      siteConfigs: effectiveSiteConfigs
+    });
+    const readConfiguredSiteConfigs = vi
+      .fn()
+      .mockResolvedValueOnce({
+        siteConfigs: configuredSiteConfigs,
+        sentinel: { rootId: "server-root" }
+      })
+      .mockRejectedValueOnce(new Error("Timed out after 2000ms"));
+    const { authority } = createAuthorityHarness({
+      chromeApi,
+      serverClientOverrides: {
+        heartbeat,
+        readConfiguredSiteConfigs
+      }
+    });
+
+    await expect(authority.readConfiguredSiteConfigsForAuthority()).resolves.toEqual(
+      {
+        ok: true,
+        siteConfigs: configuredSiteConfigs,
+        sentinel: { rootId: "server-root" }
+      }
+    );
+    await expect(authority.readConfiguredSiteConfigsForAuthority()).resolves.toEqual(
+      {
+        ok: true,
+        siteConfigs: configuredSiteConfigs,
+        sentinel: { rootId: "server-root" }
+      }
+    );
+    expect(heartbeat).toHaveBeenCalledTimes(3);
   });
 
   it("writes configured site configs locally and reconciles active tabs when local mode is active", async () => {

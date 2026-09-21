@@ -84,6 +84,8 @@ export function createBackgroundAuthorityData({
   localRoot,
   serverSync
 }: BackgroundAuthorityDataDependencies): BackgroundAuthorityDataApi {
+  let lastConfiguredServerSiteConfigs: SiteConfig[] | null = null;
+
   async function withServerFallback<T>({
     remoteOperation,
     localOperation
@@ -163,6 +165,29 @@ export function createBackgroundAuthorityData({
     );
   }
 
+  function currentConfiguredServerSiteConfigsResult(
+    serverInfo: BackgroundServerInfo
+  ): SiteConfigsResult | null {
+    if (!lastConfiguredServerSiteConfigs) {
+      return null;
+    }
+
+    return toSiteConfigsResult(
+      lastConfiguredServerSiteConfigs,
+      serverInfo.sentinel,
+      normalizeSiteConfigs
+    );
+  }
+
+  function rememberConfiguredServerSiteConfigs(
+    result: SiteConfigsResult
+  ): SiteConfigsResult {
+    if (result.ok) {
+      lastConfiguredServerSiteConfigs = result.siteConfigs;
+    }
+    return result;
+  }
+
   async function refreshStoredConfig(): Promise<void> {
     const [nativeHostConfig, extensionClientId, legacySiteConfigsMigrated] =
       await Promise.all([
@@ -213,15 +238,22 @@ export function createBackgroundAuthorityData({
 
     try {
       const result = await serverClient.readConfiguredSiteConfigs();
-      return toSiteConfigsResult(
-        result.siteConfigs ?? [],
-        result.sentinel,
-        normalizeSiteConfigs
+      return rememberConfiguredServerSiteConfigs(
+        toSiteConfigsResult(
+          result.siteConfigs ?? [],
+          result.sentinel,
+          normalizeSiteConfigs
+        )
       );
     } catch (error) {
       const revalidatedServerInfo = await revalidateTimedOutServer(error);
       if (revalidatedServerInfo) {
-        return currentServerSiteConfigsResult(revalidatedServerInfo);
+        return (
+          currentConfiguredServerSiteConfigsResult(revalidatedServerInfo) ?? {
+            ok: false,
+            error: asError(error).message
+          }
+        );
       }
       if (isNonFallbackServerRequestError(error)) {
         return {
@@ -329,10 +361,12 @@ export function createBackgroundAuthorityData({
         normalizedSiteConfigs
       );
       await serverSync.refreshServerInfo({ force: true });
-      return toSiteConfigsResult(
-        result.siteConfigs ?? [],
-        result.sentinel,
-        normalizeSiteConfigs
+      return rememberConfiguredServerSiteConfigs(
+        toSiteConfigsResult(
+          result.siteConfigs ?? [],
+          result.sentinel,
+          normalizeSiteConfigs
+        )
       );
     } catch (error) {
       if (await revalidateTimedOutServer(error)) {

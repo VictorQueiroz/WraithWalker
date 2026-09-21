@@ -214,6 +214,26 @@ describe("fixture presentation", () => {
     });
   });
 
+  it("retains an existing JavaScript source-map link without a canonical replacement", async () => {
+    await expect(
+      createProjectedFixtureArtifacts({
+        relativePath: "app.example.com/assets/app.js",
+        payload: {
+          body: "const one=1;\n//# sourceMappingURL=original.js.map",
+          bodyEncoding: "utf8"
+        },
+        mimeType: "application/javascript"
+      })
+    ).resolves.toEqual({
+      payload: {
+        body: "const one = 1;\n//# sourceMappingURL=original.js.map",
+        bodyEncoding: "utf8"
+      },
+      sourceMapPath: null,
+      sourceMap: null
+    });
+  });
+
   it("decodes fixture body payloads across utf8, atob, and buffer fallbacks", async () => {
     expect(
       decodeFixtureBodyText({

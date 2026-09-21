@@ -1102,6 +1102,7 @@ describe("mcp server", () => {
       const readCheckpoint = readJsonContent<{
         verifications: Array<{
           status: string;
+          capabilityNodeId?: string;
           snippet: { text?: string };
         }>;
       }>(readCheckpointResult);
@@ -1110,6 +1111,12 @@ describe("mcp server", () => {
       );
       expect(readCheckpoint.verifications[0].snippet).not.toHaveProperty(
         "text"
+      );
+      expect(readCheckpoint.verifications[1]).toEqual(
+        expect.objectContaining({
+          status: "verified",
+          capabilityNodeId: "menu-entry"
+        })
       );
 
       await root.writeText(
@@ -1129,6 +1136,45 @@ describe("mcp server", () => {
       expect(stale.status).toBe("stale");
       expect(stale.currentHash).not.toBe(stale.expectedHash);
       expect(stale.snippet).not.toHaveProperty("text");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("rejects empty chunk-ref selections", async () => {
+    const root = await createFixtureRootWithData();
+    await root.writeText(
+      "cdn.example.com/assets/empty-lines.js",
+      "first\n\nthird"
+    );
+    const { client, server } = await connectClient(root.rootPath);
+
+    try {
+      const blankLineResult = await client.callTool({
+        name: "create-chunk-ref",
+        arguments: {
+          path: "cdn.example.com/assets/empty-lines.js",
+          startLine: 2,
+          lineCount: 1
+        }
+      });
+      expect(blankLineResult.isError).toBe(true);
+      expect(readTextContent(blankLineResult)).toContain(
+        "No fixture content found at cdn.example.com/assets/empty-lines.js starting at line 2."
+      );
+
+      const beyondEofResult = await client.callTool({
+        name: "create-chunk-ref",
+        arguments: {
+          path: "cdn.example.com/assets/empty-lines.js",
+          startLine: 99
+        }
+      });
+      expect(beyondEofResult.isError).toBe(true);
+      expect(readTextContent(beyondEofResult)).toContain(
+        "No fixture content found at cdn.example.com/assets/empty-lines.js starting at line 99."
+      );
     } finally {
       await client.close();
       await server.close();

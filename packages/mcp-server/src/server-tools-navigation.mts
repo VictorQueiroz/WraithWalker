@@ -87,6 +87,10 @@ interface RefVerification {
   };
 }
 
+interface CapabilityNodeRefVerification extends RefVerification {
+  capabilityNodeId: string;
+}
+
 function normalizeLineCount(ref: ChunkRefInput): number {
   if (ref.endLine && ref.startLine && ref.endLine >= ref.startLine) {
     return Math.min(ref.endLine - ref.startLine + 1, MAX_REF_LINE_COUNT);
@@ -128,6 +132,11 @@ async function createChunkRef(
     startLine: input.startLine,
     lineCount: normalizeLineCount(input)
   });
+  if (snippet.endLine < snippet.startLine) {
+    throw new Error(
+      `No fixture content found at ${input.path} starting at line ${snippet.startLine}.`
+    );
+  }
   const ref: ChunkRefInput = {
     version: CHUNK_REF_SCHEMA_VERSION,
     type: "fixture-snippet",
@@ -575,10 +584,20 @@ export function registerNavigationTools(
             verifyChunkRef(rootPath, ref, { includeText })
           )
         );
+        const capabilityNodeVerifications = await Promise.all(
+          checkpoint.capabilityNodes.flatMap((node) =>
+            (node.refs ?? []).map(
+              async (ref): Promise<CapabilityNodeRefVerification> => ({
+                ...(await verifyChunkRef(rootPath, ref, { includeText })),
+                capabilityNodeId: node.id
+              })
+            )
+          )
+        );
 
         return renderJson({
           checkpoint,
-          verifications
+          verifications: [...verifications, ...capabilityNodeVerifications]
         });
       } catch (error) {
         return renderUnknownError(error);
