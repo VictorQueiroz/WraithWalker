@@ -2,12 +2,98 @@
 
 import { execFileSync } from "node:child_process";
 import process from "node:process";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   getChangedChangesetFiles,
   getDeclaredChangesetPackagesFromFiles,
+  loadWorkspacePackageNames,
   getVersionedPackagesFromChangedFiles
 } from "./versioning-lib.mjs";
+
+const PACKAGE_MANIFEST_RELATIVE_PATH_PATTERN =
+  /^packages\/([^/]+)\/package\.json$/;
+
+function isMissingFileRevisionError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("does not exist in") ||
+    message.includes("exists on disk, but not in")
+  );
+}
+
+function readPackageManifestAtRef(ref, relativePath, cwd = process.cwd()) {
+  try {
+    return JSON.parse(
+      execFileSync("git", ["show", `${ref}:${relativePath}`], {
+        cwd,
+        encoding: "utf8"
+      })
+    );
+  } catch (error) {
+    if (isMissingFileRevisionError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function getReleaseRelevantManifest(manifest) {
+  if (!manifest || typeof manifest !== "object") {
+    return manifest;
+  }
+
+  const { devDependencies, ...releaseRelevantFields } = manifest;
+  return releaseRelevantFields;
+}
+
+function hasReleaseRelevantManifestChange(
+  sinceRef,
+  relativePath,
+  cwd = process.cwd()
+) {
+  const previousManifest = readPackageManifestAtRef(sinceRef, relativePath, cwd);
+  const nextManifest = readPackageManifestAtRef("HEAD", relativePath, cwd);
+
+  if (!previousManifest || !nextManifest) {
+    return true;
+  }
+
+  return !isDeepStrictEqual(
+    getReleaseRelevantManifest(previousManifest),
+    getReleaseRelevantManifest(nextManifest)
+  );
+}
+
+function getReleaseRelevantManifestPackages(
+  changedFiles,
+  sinceRef,
+  rootDir = process.cwd()
+) {
+  const packageNamesByDir = loadWorkspacePackageNames(rootDir);
+  const packageNames = new Set();
+
+  for (const filePath of changedFiles) {
+    const normalizedPath = filePath.replaceAll("\\", "/");
+    const manifestMatch = PACKAGE_MANIFEST_RELATIVE_PATH_PATTERN.exec(
+      normalizedPath
+    );
+    if (!manifestMatch) {
+      continue;
+    }
+
+    const packageName = packageNamesByDir.get(manifestMatch[1]);
+    if (!packageName) {
+      continue;
+    }
+
+    if (hasReleaseRelevantManifestChange(sinceRef, normalizedPath, rootDir)) {
+      packageNames.add(packageName);
+    }
+  }
+
+  return [...packageNames].sort();
+}
 
 function main() {
   const sinceArg = process.argv.find((value) => value.startsWith("--since="));
@@ -24,12 +110,19 @@ function main() {
     .split("\n")
     .map((value) => value.trim())
     .filter(Boolean);
-  const changedPackages = getVersionedPackagesFromChangedFiles(
-    changedFiles,
-    process.cwd()
+  const changedPackages = new Set(
+    getVersionedPackagesFromChangedFiles(changedFiles, process.cwd())
   );
+  for (const packageName of getReleaseRelevantManifestPackages(
+    changedFiles,
+    sinceRef,
+    process.cwd()
+  )) {
+    changedPackages.add(packageName);
+  }
+  const changedPackageList = [...changedPackages].sort();
 
-  if (changedPackages.length === 0) {
+  if (changedPackageList.length === 0) {
     console.log("No versioned package or extension surfaces changed.");
     return;
   }
@@ -39,7 +132,7 @@ function main() {
       getChangedChangesetFiles(changedFiles, process.cwd())
     )
   );
-  const missingPackages = changedPackages.filter(
+  const missingPackages = changedPackageList.filter(
     (packageName) => !declaredPackages.has(packageName)
   );
 
@@ -49,7 +142,7 @@ function main() {
     );
   }
 
-  console.log(`Changesets cover: ${changedPackages.join(", ")}`);
+  console.log(`Changesets cover: ${changedPackageList.join(", ")}`);
 }
 
 try {
