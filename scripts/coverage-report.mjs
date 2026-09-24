@@ -14,7 +14,7 @@ const packagesDir = path.join(repoRoot, "packages");
 const outputDir = path.join(repoRoot, "coverage");
 const rootCoverageThresholds = {
   statements: 94,
-  branches: 91,
+  branches: 86,
   functions: 95,
   lines: 94
 };

@@ -12,9 +12,15 @@
     "mermaid": {
       "uuid": "14.0.0"
     },
-    "postcss": "8.5.17",
-    "next@16.2.10": {
-      "postcss": "8.5.17"
+    "postcss": "8.5.28",
+    "next@16.3.5": {
+      "postcss": "8.5.28"
+    },
+    "tsx": {
+      "esbuild": "0.28.2"
+    },
+    "vite": {
+      "esbuild": "0.28.2"
     }
   },
   "scripts": {
@@ -41,13 +47,16 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
-    "next": "16.3.0-canary.14",
+    "istanbul-lib-coverage": "3.2.2",
+    "istanbul-lib-report": "3.0.1",
+    "istanbul-reports": "3.2.0",
+    "next": "16.3.5",
     "playwright": "^1.59.1",
-    "postcss": "8.5.17",
+    "postcss": "8.5.28",
     "prettier": "^3.6.2",
-    "rulesync": "^9.6.3",
+    "rulesync": "16.39.1",
     "turbo": "^2.5.4",
     "typescript": "^6.0.2",
-    "vitest": "3.2.6"
+    "vitest": "5.0.1"
   }
 }

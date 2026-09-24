@@ -88,6 +88,14 @@ export function createBackgroundAuthorityLocalRoot({
 }: BackgroundAuthorityLocalRootDependencies): BackgroundAuthorityLocalRootApi {
   let offscreenDocumentPromise: Promise<void> | null = null;
 
+  function isReceivingEndMissingError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      message.includes("Could not establish connection.") &&
+      message.includes("Receiving end does not exist.")
+    );
+  }
+
   async function ensureOffscreenDocument(): Promise<void> {
     if (offscreenDocumentPromise) {
       return offscreenDocumentPromise;
@@ -153,12 +161,24 @@ export function createBackgroundAuthorityLocalRoot({
     type: OffscreenMessage["type"],
     payload: Record<string, unknown> = {}
   ): Promise<T> {
-    await ensureOffscreenDocument();
-    return chromeApi.runtime.sendMessage({
+    const message = {
       target: "offscreen",
       type,
       payload
-    } as OffscreenMessage) as Promise<T>;
+    } as OffscreenMessage;
+
+    await ensureOffscreenDocument();
+    try {
+      return (await chromeApi.runtime.sendMessage(message)) as T;
+    } catch (error) {
+      if (!isReceivingEndMissingError(error)) {
+        throw error;
+      }
+
+      await closeOffscreenDocument().catch(() => undefined);
+      await ensureOffscreenDocument();
+      return (await chromeApi.runtime.sendMessage(message)) as T;
+    }
   }
 
   async function readLocalEffectiveSiteConfigs(): Promise<SiteConfig[]> {

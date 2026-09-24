@@ -12,7 +12,6 @@ export const VERSIONED_PACKAGE_FILE_PATTERNS = [
   /^packages\/([^/]+)\/src\//,
   /^packages\/([^/]+)\/scripts\//,
   /^packages\/([^/]+)\/static\//,
-  /^packages\/([^/]+)\/package\.json$/,
   /^packages\/([^/]+)\/host-manifest\.template\.json$/
 ];
 

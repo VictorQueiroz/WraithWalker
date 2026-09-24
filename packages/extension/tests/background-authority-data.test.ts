@@ -276,6 +276,258 @@ describe("background authority data", () => {
     );
   });
 
+  it("surfaces payload-too-large server writes without marking the server unavailable", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    chromeApi.runtime.sendMessage.mockImplementation(async (message) => {
+      if (message?.type === "fs.ensureRoot") {
+        return { ok: false, error: "No root directory selected." };
+      }
+      return { ok: true };
+    });
+    const writeFixtureIfAbsent = vi
+      .fn()
+      .mockRejectedValue(new Error("PAYLOAD_TOO_LARGE"));
+    const { authority, state } = createAuthorityHarness({
+      chromeApi,
+      serverClientOverrides: {
+        writeFixtureIfAbsent
+      },
+      stateOverrides: {
+        serverInfo: {
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc"
+        },
+        serverCheckedAt: Date.now()
+      }
+    });
+    const payload = {
+      descriptor: {
+        requestUrl: "https://cdn.example.com/huge.js",
+        bodyPath: "assets/huge.js"
+      } as any,
+      request: {
+        method: "GET",
+        url: "https://cdn.example.com/huge.js",
+        headers: [],
+        body: "",
+        bodyEncoding: "utf8"
+      } as any,
+      response: {
+        body: "x".repeat(1024),
+        bodyEncoding: "utf8" as const,
+        meta: {
+          status: 200,
+          statusText: "OK",
+          headers: []
+        } as any
+      }
+    };
+
+    await expect(authority.repository.writeIfAbsent(payload)).rejects.toThrow(
+      /^PAYLOAD_TOO_LARGE$/
+    );
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "fs.ensureRoot" })
+    );
+    expect(state.serverInfo?.rootPath).toBe("/tmp/server-root");
+  });
+
+  it("surfaces a server timeout without requiring a fallback root when the server revalidates", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    const localOperation = vi.fn().mockResolvedValue("local");
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null,
+      siteConfigs: []
+    });
+    const { authority, state } = createAuthorityHarness({
+      chromeApi,
+      stateOverrides: {
+        serverInfo: {
+          rootPath: "/tmp/server-root",
+          sentinel: { rootId: "server-root" },
+          baseUrl: "http://127.0.0.1:4319",
+          mcpUrl: "http://127.0.0.1:4319/mcp",
+          trpcUrl: "http://127.0.0.1:4319/trpc"
+        },
+        serverCheckedAt: Date.now()
+      },
+      serverClientOverrides: {
+        heartbeat
+      }
+    });
+
+    await expect(
+      authority.withServerFallback({
+        remoteOperation: async () => {
+          throw new Error("Timed out after 2000ms");
+        },
+        localOperation
+      })
+    ).rejects.toThrow("Timed out after 2000ms");
+
+    expect(localOperation).not.toHaveBeenCalled();
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(state.serverInfo?.rootPath).toBe("/tmp/server-root");
+    expect(state.rootReady).toBe(true);
+  });
+
+  it("returns the last server config instead of a raw timeout when the server revalidates", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    const siteConfigs = [
+      {
+        origin: "https://app.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }
+    ];
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null,
+      siteConfigs
+    });
+    const readEffectiveSiteConfigs = vi
+      .fn()
+      .mockRejectedValue(new Error("Timed out after 2000ms"));
+    const { authority, state } = createAuthorityHarness({
+      chromeApi,
+      serverClientOverrides: {
+        heartbeat,
+        readEffectiveSiteConfigs
+      }
+    });
+
+    const result = await authority.readEffectiveSiteConfigsForAuthority();
+
+    expect(result).toEqual({
+      ok: true,
+      siteConfigs,
+      sentinel: { rootId: "server-root" }
+    });
+    expect(heartbeat).toHaveBeenCalledTimes(2);
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(state.serverInfo?.rootPath).toBe("/tmp/server-root");
+    expect(state.rootReady).toBe(true);
+  });
+
+  it("does not substitute effective configs for a timed out configured read", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    const effectiveSiteConfigs = [
+      {
+        origin: "https://discovered.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$"]
+      }
+    ];
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null,
+      siteConfigs: effectiveSiteConfigs
+    });
+    const readConfiguredSiteConfigs = vi
+      .fn()
+      .mockRejectedValue(new Error("Timed out after 2000ms"));
+    const { authority, state } = createAuthorityHarness({
+      chromeApi,
+      serverClientOverrides: {
+        heartbeat,
+        readConfiguredSiteConfigs
+      }
+    });
+
+    const result = await authority.readConfiguredSiteConfigsForAuthority();
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Timed out after 2000ms"
+    });
+    expect(heartbeat).toHaveBeenCalledTimes(2);
+    expect(chromeApi.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(state.serverInfo?.rootPath).toBe("/tmp/server-root");
+    expect(state.rootReady).toBe(true);
+  });
+
+  it("returns the last configured server config when a Settings reload times out", async () => {
+    const chromeApi = createTestChromeApi();
+    chromeApi.runtime.getContexts.mockResolvedValue([{}]);
+    const configuredSiteConfigs = [
+      {
+        origin: "https://settings.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.json$"]
+      }
+    ];
+    const effectiveSiteConfigs = [
+      {
+        origin: "https://discovered.example.com",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        dumpAllowlistPatterns: ["\\.js$"]
+      }
+    ];
+    const heartbeat = vi.fn().mockResolvedValue({
+      version: "1.0.0",
+      rootPath: "/tmp/server-root",
+      sentinel: { rootId: "server-root" },
+      baseUrl: "http://127.0.0.1:4319",
+      mcpUrl: "http://127.0.0.1:4319/mcp",
+      trpcUrl: "http://127.0.0.1:4319/trpc",
+      activeTrace: null,
+      siteConfigs: effectiveSiteConfigs
+    });
+    const readConfiguredSiteConfigs = vi
+      .fn()
+      .mockResolvedValueOnce({
+        siteConfigs: configuredSiteConfigs,
+        sentinel: { rootId: "server-root" }
+      })
+      .mockRejectedValueOnce(new Error("Timed out after 2000ms"));
+    const { authority } = createAuthorityHarness({
+      chromeApi,
+      serverClientOverrides: {
+        heartbeat,
+        readConfiguredSiteConfigs
+      }
+    });
+
+    await expect(
+      authority.readConfiguredSiteConfigsForAuthority()
+    ).resolves.toEqual({
+      ok: true,
+      siteConfigs: configuredSiteConfigs,
+      sentinel: { rootId: "server-root" }
+    });
+    await expect(
+      authority.readConfiguredSiteConfigsForAuthority()
+    ).resolves.toEqual({
+      ok: true,
+      siteConfigs: configuredSiteConfigs,
+      sentinel: { rootId: "server-root" }
+    });
+    expect(heartbeat).toHaveBeenCalledTimes(3);
+  });
+
   it("writes configured site configs locally and reconciles active tabs when local mode is active", async () => {
     const chromeApi = createTestChromeApi();
     chromeApi.runtime.getContexts.mockResolvedValue([{}]);

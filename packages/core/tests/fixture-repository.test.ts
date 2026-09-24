@@ -349,6 +349,97 @@ describe("shared fixture repository", () => {
     ]);
   });
 
+  it("writes JavaScript projection source maps back to the canonical captured body", async () => {
+    const root = createMemoryRoot();
+    const storage = createMemoryStorage();
+    const descriptor = await createDescriptor();
+    const request = createRequestPayload(descriptor);
+    const meta = createResponseMeta(descriptor, {
+      mimeType: "application/javascript",
+      resourceType: "Script",
+      bodySuggestedExtension: "js"
+    });
+    const repository = createFixtureRepository({
+      root,
+      sentinel,
+      storage
+    });
+    const originalBody =
+      'function a(){return fetch("/api/users").then(r=>r.json())}\n//# sourceMappingURL=app.real.js.map';
+
+    await repository.writeIfAbsent({
+      descriptor,
+      request,
+      response: {
+        body: originalBody,
+        bodyEncoding: "utf8",
+        meta
+      }
+    });
+
+    const projection = Buffer.from(
+      root.files.get(descriptor.projectionPath!) || new Uint8Array()
+    ).toString("utf8");
+    const sourceMapPath = `${descriptor.projectionPath!}.__wraithwalker-original.map`;
+    const sourceMapSource = `../../${descriptor.bodyPath}`;
+    const sourceMap = await storage.readOptionalJson<{
+      version: number;
+      file: string;
+      sources: string[];
+      sourcesContent: string[];
+      names: string[];
+      mappings: string;
+      x_wraithwalker: {
+        kind: string;
+        canonicalBodyPath: string;
+        originalSourceMappingURL: string | null;
+      };
+    }>(root, sourceMapPath);
+    const manifest = await storage.readOptionalJson<{
+      resourcesByPathname: Record<
+        string,
+        Array<{
+          bodyPath: string;
+          projectionPath?: string | null;
+          projectionSourceMapPath?: string | null;
+        }>
+      >;
+    }>(
+      root,
+      ".wraithwalker/manifests/https__app.example.com/RESOURCE_MANIFEST.json"
+    );
+
+    expect(
+      Buffer.from(root.files.get(descriptor.bodyPath)!).toString("utf8")
+    ).toBe(originalBody);
+    expect(projection).toContain("function a() {");
+    expect(projection).toContain(
+      "\n//# sourceMappingURL=app.js.__wraithwalker-original.map"
+    );
+    expect(projection).not.toContain("app.real.js.map");
+    expect(sourceMap).toEqual(
+      expect.objectContaining({
+        version: 3,
+        file: descriptor.projectionPath,
+        sources: [sourceMapSource],
+        sourcesContent: [originalBody],
+        x_wraithwalker: {
+          kind: "projection-to-canonical",
+          canonicalBodyPath: descriptor.bodyPath,
+          originalSourceMappingURL: "app.real.js.map"
+        }
+      })
+    );
+    expect(sourceMap?.mappings).not.toBe("");
+    expect(manifest?.resourcesByPathname["/assets/app.js"]).toEqual([
+      expect.objectContaining({
+        bodyPath: descriptor.bodyPath,
+        projectionPath: descriptor.projectionPath,
+        projectionSourceMapPath: sourceMapPath
+      })
+    ]);
+  });
+
   it("stores query variants canonically while keeping the first visible projection", async () => {
     const root = createMemoryRoot();
     const storage = createMemoryStorage();
@@ -426,7 +517,9 @@ describe("shared fixture repository", () => {
       Buffer.from(
         root.files.get(firstDescriptor.projectionPath!) || new Uint8Array()
       ).toString("utf8")
-    ).toBe('console.log("shared body");');
+    ).toBe(
+      'console.log("shared body");\n//# sourceMappingURL=a.js.__wraithwalker-original.map'
+    );
     expect(
       await storage.readOptionalJson<ResponseMeta>(
         root,
@@ -462,7 +555,9 @@ describe("shared fixture repository", () => {
         (await repository.read(secondDescriptor))!.bodyBase64,
         "base64"
       ).toString("utf8")
-    ).toBe('console.log("shared body");');
+    ).toBe(
+      'console.log("shared body");\n//# sourceMappingURL=a.js.__wraithwalker-original.map'
+    );
 
     const manifest = await storage.readOptionalJson<{
       resourcesByPathname: Record<

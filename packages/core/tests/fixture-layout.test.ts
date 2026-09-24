@@ -419,6 +419,10 @@ describe("fixture layout", () => {
       { name: "content-type", value: "text/plain" },
       { name: "Content-Length", value: "88" },
       { name: "Connection", value: "keep-alive" },
+      { name: "Server-Timing", value: 'cache;desc="hit"\napp;dur=12' },
+      { name: "X-Carriage-Return", value: "one\rtwo" },
+      { name: "X-Null-Byte", value: "one\0two" },
+      { name: "Bad Header", value: "invalid-name" },
       { name: "Set-Cookie", value: "a=b" },
       { name: "set-cookie", value: "c=d" }
     ];
@@ -427,6 +431,10 @@ describe("fixture layout", () => {
       { name: "Content-Type", value: "application/json" },
       { name: "Content-Length", value: "88" },
       { name: "Connection", value: "keep-alive" },
+      { name: "Server-Timing", value: 'cache;desc="hit"\napp;dur=12' },
+      { name: "X-Carriage-Return", value: "one\rtwo" },
+      { name: "X-Null-Byte", value: "one\0two" },
+      { name: "Bad Header", value: "invalid-name" },
       { name: "Set-Cookie", value: "a=b" },
       { name: "set-cookie", value: "c=d" }
     ]);

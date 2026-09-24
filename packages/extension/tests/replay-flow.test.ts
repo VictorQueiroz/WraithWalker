@@ -240,7 +240,7 @@ describe("capture and replay flow", () => {
       "console.log('captured');"
     );
     expect(await readMemoryText(rootHandle, descriptor.projectionPath!)).toBe(
-      'console.log("captured");'
+      'console.log("captured");\n//# sourceMappingURL=app.js.__wraithwalker-original.map'
     );
 
     await writeMemoryFile(

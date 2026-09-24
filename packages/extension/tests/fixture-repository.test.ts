@@ -347,7 +347,9 @@ describe("fixture repository", () => {
     const storedFixture = await repository.read(descriptor);
     expect(
       Buffer.from(storedFixture.bodyBase64, "base64").toString("utf8")
-    ).toBe('console.log("first");');
+    ).toBe(
+      'console.log("first");\n//# sourceMappingURL=app.js.__wraithwalker-original.map'
+    );
   });
 
   it("serves the edited visible projection over the canonical body when reading fixtures", async () => {

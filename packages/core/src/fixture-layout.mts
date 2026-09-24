@@ -75,6 +75,9 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade"
 ]);
 
+const HEADER_NAME_REGEX = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const INVALID_REPLAY_HEADER_VALUE_REGEX = /[\0\r\n]/;
+
 export const STATIC_RESOURCE_MANIFEST_SCHEMA_VERSION = 2;
 
 export interface HeaderEntry {
@@ -161,6 +164,9 @@ export interface StaticResourceManifestEntry {
   search: string;
   bodyPath: string;
   projectionPath?: string | null;
+  projectionSourceMapPath?: string | null;
+  projectionKind?: "prettified";
+  canonicalBodySha256?: string;
   requestPath: string;
   metaPath: string;
   mimeType: string;
@@ -562,7 +568,10 @@ export function replayResponseHeaders(
   return sanitizeResponseHeaders(headers).filter((header) => {
     const lowerName = header.name.toLowerCase();
     return (
-      !BODY_DERIVED_HEADERS.has(lowerName) && !HOP_BY_HOP_HEADERS.has(lowerName)
+      !BODY_DERIVED_HEADERS.has(lowerName) &&
+      !HOP_BY_HOP_HEADERS.has(lowerName) &&
+      HEADER_NAME_REGEX.test(header.name) &&
+      !INVALID_REPLAY_HEADER_VALUE_REGEX.test(header.value)
     );
   });
 }
@@ -629,7 +638,12 @@ export function getStaticResourceManifestPath(descriptor: {
 export function createStaticResourceManifestEntry(
   descriptor: AssetFixtureDescriptor,
   responseMeta: ResponseMeta,
-  options: { projectionPath?: string | null } = {}
+  options: {
+    projectionPath?: string | null;
+    projectionSourceMapPath?: string | null;
+    projectionKind?: "prettified";
+    canonicalBodySha256?: string;
+  } = {}
 ): StaticResourceManifestEntry {
   const requestUrl = new URL(descriptor.requestUrl);
   const projectionPath =
@@ -644,6 +658,15 @@ export function createStaticResourceManifestEntry(
     search: requestUrl.search,
     bodyPath: descriptor.bodyPath,
     ...(projectionPath ? { projectionPath } : {}),
+    ...(options.projectionSourceMapPath
+      ? { projectionSourceMapPath: options.projectionSourceMapPath }
+      : {}),
+    ...(options.projectionKind
+      ? { projectionKind: options.projectionKind }
+      : {}),
+    ...(options.canonicalBodySha256
+      ? { canonicalBodySha256: options.canonicalBodySha256 }
+      : {}),
     requestPath: descriptor.requestPath,
     metaPath: descriptor.metaPath,
     mimeType: responseMeta.mimeType,

@@ -674,7 +674,8 @@ describe("request lifecycle fetch flow", () => {
         responseStatusCode: 200,
         responseHeaders: {
           "Content-Type": "text/css",
-          ETag: '"v1"'
+          ETag: '"v1"',
+          "Server-Timing": 'cache;desc="hit"\napp;dur=12'
         }
       })
     );
@@ -699,6 +700,7 @@ describe("request lifecycle fetch flow", () => {
         )
       })
     );
+    expect(harness.setLastError).not.toHaveBeenCalled();
 
     await harness.lifecycle.handleNetworkLoadingFinished(
       { tabId: 1 },

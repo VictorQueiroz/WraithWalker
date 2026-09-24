@@ -10,6 +10,7 @@ import {
 type NormalizeSiteConfigs = NonNullable<
   Parameters<typeof createBackgroundAuthority>[0]["normalizeSiteConfigs"]
 >;
+type AuthorityDependencies = Parameters<typeof createBackgroundAuthority>[0];
 
 export function createAuthorityHarness({
   stateOverrides = {},
@@ -61,17 +62,24 @@ export function createAuthorityHarness({
     state,
     chromeApi,
     serverClient,
-    getSiteConfigs,
-    getLegacySiteConfigs,
-    getLegacySiteConfigsMigrated,
-    getNativeHostConfig,
-    getOrCreateExtensionClientId,
-    setLegacySiteConfigsMigrated,
-    setLastSessionSnapshot,
+    getSiteConfigs: getSiteConfigs as AuthorityDependencies["getSiteConfigs"],
+    getLegacySiteConfigs:
+      getLegacySiteConfigs as AuthorityDependencies["getLegacySiteConfigs"],
+    getLegacySiteConfigsMigrated:
+      getLegacySiteConfigsMigrated as AuthorityDependencies["getLegacySiteConfigsMigrated"],
+    getNativeHostConfig:
+      getNativeHostConfig as AuthorityDependencies["getNativeHostConfig"],
+    getOrCreateExtensionClientId:
+      getOrCreateExtensionClientId as AuthorityDependencies["getOrCreateExtensionClientId"],
+    setLegacySiteConfigsMigrated:
+      setLegacySiteConfigsMigrated as AuthorityDependencies["setLegacySiteConfigsMigrated"],
+    setLastSessionSnapshot:
+      setLastSessionSnapshot as AuthorityDependencies["setLastSessionSnapshot"],
     normalizeSiteConfigs,
-    setLastError: appliedSetLastError,
-    syncTraceBindings,
-    reconcileTabs
+    setLastError: appliedSetLastError as AuthorityDependencies["setLastError"],
+    syncTraceBindings:
+      syncTraceBindings as AuthorityDependencies["syncTraceBindings"],
+    reconcileTabs: reconcileTabs as AuthorityDependencies["reconcileTabs"]
   });
 
   return {

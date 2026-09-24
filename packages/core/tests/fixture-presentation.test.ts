@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createProjectedFixtureArtifacts,
   createProjectedFixturePayload,
   decodeFixtureBodyText,
   inferPrettyFilepath,
@@ -174,6 +175,63 @@ describe("fixture presentation", () => {
         text: invalidScript
       })
     ).resolves.toBe(invalidScript);
+  });
+
+  it("creates JavaScript projection source maps that advance through canonical source lines", async () => {
+    const originalBody =
+      "const one=1;\nconst two=2;\n//# sourceMappingURL=original.js.map";
+
+    await expect(
+      createProjectedFixtureArtifacts({
+        relativePath: "app.example.com/assets/app.js",
+        payload: {
+          body: originalBody,
+          bodyEncoding: "utf8"
+        },
+        mimeType: "application/javascript",
+        canonicalBodyPath: ".wraithwalker/bodies/app.body"
+      })
+    ).resolves.toEqual({
+      payload: {
+        body: "const one = 1;\nconst two = 2;\n//# sourceMappingURL=app.js.__wraithwalker-original.map",
+        bodyEncoding: "utf8"
+      },
+      sourceMapPath:
+        "app.example.com/assets/app.js.__wraithwalker-original.map",
+      sourceMap: {
+        version: 3,
+        file: "app.example.com/assets/app.js",
+        sources: ["../../.wraithwalker/bodies/app.body"],
+        sourcesContent: [originalBody],
+        names: [],
+        mappings: "AAAA;AACA;AAAA",
+        x_wraithwalker: {
+          kind: "projection-to-canonical",
+          canonicalBodyPath: ".wraithwalker/bodies/app.body",
+          originalSourceMappingURL: "original.js.map"
+        }
+      }
+    });
+  });
+
+  it("retains an existing JavaScript source-map link without a canonical replacement", async () => {
+    await expect(
+      createProjectedFixtureArtifacts({
+        relativePath: "app.example.com/assets/app.js",
+        payload: {
+          body: "const one=1;\n//# sourceMappingURL=original.js.map",
+          bodyEncoding: "utf8"
+        },
+        mimeType: "application/javascript"
+      })
+    ).resolves.toEqual({
+      payload: {
+        body: "const one = 1;\n//# sourceMappingURL=original.js.map",
+        bodyEncoding: "utf8"
+      },
+      sourceMapPath: null,
+      sourceMap: null
+    });
   });
 
   it("decodes fixture body payloads across utf8, atob, and buffer fallbacks", async () => {

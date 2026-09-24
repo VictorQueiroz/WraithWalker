@@ -21,6 +21,12 @@ function writeFile(rootDir, relativePath, contents) {
   fs.writeFileSync(filePath, contents);
 }
 
+function updateJson(rootDir, relativePath, update) {
+  const filePath = path.join(rootDir, relativePath);
+  const currentValue = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  fs.writeFileSync(filePath, `${JSON.stringify(update(currentValue), null, 2)}\n`);
+}
+
 function createFixtureRepository() {
   const rootDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "wraithwalker-check-changeset-")
@@ -33,7 +39,15 @@ function createFixtureRepository() {
   writeFile(
     rootDir,
     "packages/cli/package.json",
-    `${JSON.stringify({ name: "@wraithwalker/cli", version: "1.0.0" }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        name: "@wraithwalker/cli",
+        version: "1.0.0",
+        devDependencies: { vitest: "1.0.0" }
+      },
+      null,
+      2
+    )}\n`
   );
   writeFile(
     rootDir,
@@ -145,4 +159,49 @@ Fresh CLI change.
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Changesets cover: @wraithwalker\/cli/);
+});
+
+test("check-changeset ignores package.json devDependency-only changes", () => {
+  const rootDir = createFixtureRepository();
+  const sinceRef = git(rootDir, "rev-parse", "HEAD");
+
+  updateJson(rootDir, "packages/cli/package.json", (value) => ({
+    ...value,
+    devDependencies: {
+      ...value.devDependencies,
+      vitest: "2.0.0"
+    }
+  }));
+  git(rootDir, "add", ".");
+  git(rootDir, "commit", "-m", "Change CLI devDependency only");
+
+  const result = runCheckChangeset(rootDir, sinceRef);
+
+  assert.equal(result.status, 0);
+  assert.match(
+    result.stdout,
+    /No versioned package or extension surfaces changed/
+  );
+});
+
+test("check-changeset requires coverage for release-relevant package.json changes", () => {
+  const rootDir = createFixtureRepository();
+  const sinceRef = git(rootDir, "rev-parse", "HEAD");
+
+  updateJson(rootDir, "packages/cli/package.json", (value) => ({
+    ...value,
+    dependencies: {
+      "@wraithwalker/core": "1.0.0"
+    }
+  }));
+  git(rootDir, "add", ".");
+  git(rootDir, "commit", "-m", "Change CLI dependency without changeset");
+
+  const result = runCheckChangeset(rootDir, sinceRef);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /Missing changeset coverage for: @wraithwalker\/cli/
+  );
 });

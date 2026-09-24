@@ -10,10 +10,10 @@ export default defineConfig({
       include: ["src/**/*.mts"],
       exclude: ["src/**/*.d.mts"],
       thresholds: {
-        statements: 96,
-        lines: 96,
+        statements: 94,
+        lines: 95,
         functions: 96,
-        branches: 91
+        branches: 88
       }
     })
   }

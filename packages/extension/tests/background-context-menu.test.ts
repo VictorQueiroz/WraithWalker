@@ -8,6 +8,10 @@ import {
 } from "../src/lib/background-context-menu.js";
 import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
+type TestContextMenus = NonNullable<
+  ReturnType<typeof createTestChromeApi>["contextMenus"]
+>;
+
 function createAuthorityStub({
   readConfiguredSiteConfigsForAuthority = vi.fn().mockResolvedValue({
     ok: true,
@@ -57,7 +61,9 @@ function createContextMenuHarness({
     authority,
     getEnabledOrigins: () => enabledOrigins,
     isAuthorityReady: () => isAuthorityReady,
-    setLastError
+    setLastError: setLastError as Parameters<
+      typeof createBackgroundContextMenu
+    >[0]["setLastError"]
   });
 
   return { chromeApi, authority, contextMenu, setLastError };
@@ -139,9 +145,11 @@ describe("background context menu", () => {
     const { chromeApi, contextMenu } = createContextMenuHarness({
       chromeApi: createTestChromeApi({
         contextMenus: {
-          create: vi.fn(),
+          create: vi.fn() as TestContextMenus["create"],
           update: undefined as any,
-          removeAll: vi.fn().mockResolvedValue(undefined),
+          removeAll: vi
+            .fn()
+            .mockResolvedValue(undefined) as TestContextMenus["removeAll"],
           onClicked: {
             listeners: [],
             addListener: vi.fn()
@@ -304,9 +312,11 @@ describe("background context menu", () => {
     const { authority, contextMenu, setLastError } = createContextMenuHarness({
       chromeApi: createTestChromeApi({
         contextMenus: {
-          create: vi.fn(),
+          create: vi.fn() as TestContextMenus["create"],
           update: undefined as any,
-          removeAll: vi.fn().mockResolvedValue(undefined),
+          removeAll: vi
+            .fn()
+            .mockResolvedValue(undefined) as TestContextMenus["removeAll"],
           onClicked: {
             addListener: vi.fn()
           } as any

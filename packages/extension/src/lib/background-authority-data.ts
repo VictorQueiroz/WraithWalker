@@ -9,7 +9,8 @@ import {
   normalizeSiteConfigsResult,
   normalizeEffectiveSiteConfigs,
   toSiteConfigsResult,
-  applyEffectiveSiteConfigs
+  applyEffectiveSiteConfigs,
+  currentEffectiveSiteConfigs
 } from "./background-authority-shared.js";
 import type { BackgroundAuthorityLocalRootApi } from "./background-authority-local-root.js";
 import type { BackgroundAuthorityServerSyncApi } from "./background-authority-server-sync.js";
@@ -83,6 +84,8 @@ export function createBackgroundAuthorityData({
   localRoot,
   serverSync
 }: BackgroundAuthorityDataDependencies): BackgroundAuthorityDataApi {
+  let lastConfiguredServerSiteConfigs: SiteConfig[] | null = null;
+
   async function withServerFallback<T>({
     remoteOperation,
     localOperation
@@ -98,6 +101,13 @@ export function createBackgroundAuthorityData({
     try {
       return await remoteOperation(serverInfo);
     } catch (error) {
+      if (await revalidateTimedOutServer(error)) {
+        throw asError(error);
+      }
+      if (isNonFallbackServerRequestError(error)) {
+        throw asError(error);
+      }
+
       serverSync.markServerOffline();
       const localRootResult = await localRoot.ensureLocalRootReady({
         silent: true
@@ -111,6 +121,71 @@ export function createBackgroundAuthorityData({
         `Local WraithWalker server is unavailable and no fallback root is ready. ${message}`
       );
     }
+  }
+
+  function asError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  function isServerRequestTimeout(error: unknown): boolean {
+    return asError(error).message.includes("Timed out after");
+  }
+
+  function isServerPayloadTooLarge(error: unknown): boolean {
+    const message = asError(error).message.toLowerCase();
+    return (
+      message.includes("payload_too_large") ||
+      message.includes("payload too large") ||
+      message.includes("status code 413") ||
+      message.includes("413 payload")
+    );
+  }
+
+  function isNonFallbackServerRequestError(error: unknown): boolean {
+    return isServerPayloadTooLarge(error);
+  }
+
+  async function revalidateTimedOutServer(
+    error: unknown
+  ): Promise<BackgroundServerInfo | null> {
+    if (!isServerRequestTimeout(error)) {
+      return null;
+    }
+
+    return serverSync.refreshServerInfo({ force: true });
+  }
+
+  function currentServerSiteConfigsResult(
+    serverInfo: BackgroundServerInfo
+  ): SiteConfigsResult {
+    return toSiteConfigsResult(
+      currentEffectiveSiteConfigs(state, normalizeSiteConfigs),
+      serverInfo.sentinel,
+      normalizeSiteConfigs
+    );
+  }
+
+  function currentConfiguredServerSiteConfigsResult(
+    serverInfo: BackgroundServerInfo
+  ): SiteConfigsResult | null {
+    if (!lastConfiguredServerSiteConfigs) {
+      return null;
+    }
+
+    return toSiteConfigsResult(
+      lastConfiguredServerSiteConfigs,
+      serverInfo.sentinel,
+      normalizeSiteConfigs
+    );
+  }
+
+  function rememberConfiguredServerSiteConfigs(
+    result: SiteConfigsResult
+  ): SiteConfigsResult {
+    if (result.ok) {
+      lastConfiguredServerSiteConfigs = result.siteConfigs;
+    }
+    return result;
   }
 
   async function refreshStoredConfig(): Promise<void> {
@@ -163,12 +238,30 @@ export function createBackgroundAuthorityData({
 
     try {
       const result = await serverClient.readConfiguredSiteConfigs();
-      return toSiteConfigsResult(
-        result.siteConfigs ?? [],
-        result.sentinel,
-        normalizeSiteConfigs
+      return rememberConfiguredServerSiteConfigs(
+        toSiteConfigsResult(
+          result.siteConfigs ?? [],
+          result.sentinel,
+          normalizeSiteConfigs
+        )
       );
     } catch (error) {
+      const revalidatedServerInfo = await revalidateTimedOutServer(error);
+      if (revalidatedServerInfo) {
+        return (
+          currentConfiguredServerSiteConfigsResult(revalidatedServerInfo) ?? {
+            ok: false,
+            error: asError(error).message
+          }
+        );
+      }
+      if (isNonFallbackServerRequestError(error)) {
+        return {
+          ok: false,
+          error: asError(error).message
+        };
+      }
+
       serverSync.markServerOffline();
       const localRootResult = await localRoot.ensureLocalRootReady({
         silent: true
@@ -207,6 +300,17 @@ export function createBackgroundAuthorityData({
         normalizeSiteConfigs
       );
     } catch (error) {
+      const revalidatedServerInfo = await revalidateTimedOutServer(error);
+      if (revalidatedServerInfo) {
+        return currentServerSiteConfigsResult(revalidatedServerInfo);
+      }
+      if (isNonFallbackServerRequestError(error)) {
+        return {
+          ok: false,
+          error: asError(error).message
+        };
+      }
+
       serverSync.markServerOffline();
       const localRootResult = await localRoot.ensureLocalRootReady({
         silent: true
@@ -257,12 +361,27 @@ export function createBackgroundAuthorityData({
         normalizedSiteConfigs
       );
       await serverSync.refreshServerInfo({ force: true });
-      return toSiteConfigsResult(
-        result.siteConfigs ?? [],
-        result.sentinel,
-        normalizeSiteConfigs
+      return rememberConfiguredServerSiteConfigs(
+        toSiteConfigsResult(
+          result.siteConfigs ?? [],
+          result.sentinel,
+          normalizeSiteConfigs
+        )
       );
     } catch (error) {
+      if (await revalidateTimedOutServer(error)) {
+        return {
+          ok: false,
+          error: asError(error).message
+        };
+      }
+      if (isNonFallbackServerRequestError(error)) {
+        return {
+          ok: false,
+          error: asError(error).message
+        };
+      }
+
       serverSync.markServerOffline();
       const localRootResult = await localRoot.ensureLocalRootReady({
         silent: true

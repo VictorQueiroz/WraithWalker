@@ -22,6 +22,10 @@ import type { NativeHostConfig, SessionSnapshot } from "../src/lib/types.js";
 import { createOptionsQueryClient } from "../src/ui/options-app.queries.js";
 import { createTestChromeApi } from "./helpers/chrome-api-test-helpers.js";
 
+type RuntimeSendMessage = ReturnType<
+  typeof createTestChromeApi
+>["runtime"]["sendMessage"];
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -80,7 +84,7 @@ function createRuntimeSendMessage({
 }: {
   sessionSnapshot?: SessionSnapshot;
   scenarioListResult?: ScenarioListSuccess;
-} = {}) {
+} = {}): RuntimeSendMessage {
   return vi.fn(async (message: { type: string }) => {
     switch (message.type) {
       case "session.getState":
@@ -92,7 +96,7 @@ function createRuntimeSendMessage({
       default:
         return { ok: true };
     }
-  });
+  }) as RuntimeSendMessage;
 }
 
 function createOptionsAppHarness({
@@ -114,7 +118,7 @@ function createOptionsAppHarness({
     createdAt: string;
     dumpAllowlistPatterns: string[];
   }>;
-  runtimeSendMessage?: ReturnType<typeof vi.fn>;
+  runtimeSendMessage?: RuntimeSendMessage;
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
 } = {}) {
